@@ -9,4 +9,18 @@
 
 ## Run end
 
-(not started — host tests next)
+Host (this Linux agent, 2026-08-31):
+
+```
+npm run proto:check   # ok
+npm run lint          # desk ↛ handler
+npm test --workspace=apps/hub   # 33 passed
+```
+
+Not run here (no Docker, no Xcode, no iPhone):
+
+- `docker compose up` / TigerVNC + uinput against Chromium
+- `xcodebuild -project apps/ios/Computer.xcodeproj -scheme Computer -destination 'platform=iOS Simulator,name=iPhone 16' test`
+- Seven-step cellular verification (pair → chat → Open Computer → seat → paste → I’m done → lock 30s)
+
+No STOP fired. Product finish line is still that iPhone run.

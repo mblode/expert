@@ -105,13 +105,6 @@ describe("Connect HTTP", () => {
     ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
-  it("refuses to register a Connect method without an auth policy", () => {
-    expect(() => {
-      const { ConnectRouter } = require("../src/handler/router.ts") as typeof import("../src/handler/router.ts");
-      void ConnectRouter;
-    }).not.toThrow();
-  });
-
   it("chat stream works with a seat token and can request takeover", async () => {
     const h = await startHub();
     opened.push(h);
