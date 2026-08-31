@@ -3,6 +3,7 @@ import { ComputerError, DISPLAY, type Button } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 import type { SeatService } from "../service/seat.ts";
 import type { AuthRegistry } from "./auth.ts";
+import { withSeatToken } from "./auth.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
 
@@ -14,26 +15,29 @@ export type SeatDeps = {
 };
 
 export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
-  const status = () => ({
+  const status = (token: string) => ({
     state: deps.seat.getState(),
-    vnc_url: deps.vncUrl,
+    vnc_url: withSeatToken(deps.vncUrl, token),
     display: DISPLAY,
   });
 
   router.rpc(SeatMethods.Pair, "pair", async ({ body }) => {
     const o = requireObject(body);
     const token = deps.auth.pair(String(o.code ?? ""));
-    return { token, vnc_url: deps.vncUrl, status: status() };
+    return { token, vnc_url: withSeatToken(deps.vncUrl, token), status: status(token) };
   });
 
-  router.rpc(SeatMethods.Status, "seat", async () => status());
+  router.rpc(SeatMethods.Status, "seat", async (ctx) => {
+    requireSeatToken(ctx);
+    return status(ctx.bearer!);
+  });
 
   router.rpc(SeatMethods.SetPresence, "seat", async (ctx) => {
     requireSeatToken(ctx);
     const o = requireObject(ctx.body);
     if (typeof o.present !== "boolean") throw new ComputerError("VALIDATION", "present must be boolean");
     deps.seat.setPresence(o.present);
-    return status();
+    return status(ctx.bearer!);
   });
 
   router.rpc(SeatMethods.Pointer, "seat", async (ctx) => {

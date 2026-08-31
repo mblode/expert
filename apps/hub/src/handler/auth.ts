@@ -35,13 +35,16 @@ export class AuthRegistry {
       return "agent";
     }
     if (policy === "seat") {
-      if (this.seatTokens.has(bearer) || safeEqual(bearer, this.agentToken)) {
-        // agent token may Status for debug; pointer still needs the seat FSM
-        return this.seatTokens.has(bearer) ? "seat" : "agent";
+      if (!this.seatTokens.has(bearer)) {
+        throw new ComputerError("UNAUTHENTICATED", "seat token required");
       }
-      throw new ComputerError("UNAUTHENTICATED", "bad bearer");
+      return "seat";
     }
     throw new ComputerError("UNAUTHENTICATED", "unknown policy");
+  }
+
+  hasSeatToken(token: string | undefined): boolean {
+    return typeof token === "string" && token.length > 0 && this.seatTokens.has(token);
   }
 
   /** Test helper */
@@ -56,6 +59,32 @@ export function bearerFromHeader(header: string | undefined): string | undefined
   if (!header) return undefined;
   const m = /^Bearer\s+(\S+)/i.exec(header);
   return m?.[1];
+}
+
+/** Seat token from Authorization or `?token=` (WKWebView / noVNC cannot set headers on WS). */
+export function tokenFromRequest(req: { url?: string; headers: { authorization?: string | string[] } }): string | undefined {
+  const auth = Array.isArray(req.headers.authorization)
+    ? req.headers.authorization[0]
+    : req.headers.authorization;
+  const fromHeader = bearerFromHeader(auth);
+  if (fromHeader) return fromHeader;
+  try {
+    return new URL(req.url ?? "/", "http://127.0.0.1").searchParams.get("token") ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export function withSeatToken(base: string, token: string): string {
+  try {
+    const u = new URL(base);
+    u.searchParams.set("view_only", "1");
+    u.searchParams.set("token", token);
+    return u.toString();
+  } catch {
+    const sep = base.includes("?") ? "&" : "?";
+    return `${base}${sep}view_only=1&token=${encodeURIComponent(token)}`;
+  }
 }
 
 function safeEqual(a: string, b: string): boolean {

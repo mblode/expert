@@ -25,7 +25,15 @@ Two services. Four model tools. A seat.
 
 Clipboard, `vncUrl`, and pointer are **not** model tools. VNC is view-only. Input is `Seat.Pointer`.
 
-## Host
+## Compute
+
+Provider-agnostic. The box is “a Linux machine that stays on”:
+
+- **Desk:** one Docker container (TigerVNC, Openbox, Chromium, uinput).
+- **Hub:** one Node process, bound to `127.0.0.1`. Tailscale Serve publishes HTTPS.
+- **Agent LLM:** BYO (`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`). Not tied to a cloud GPU.
+
+There is no Hetzner (or any vendor) API in this repo. [plan.md](plan.md) names a **Hetzner CX43** as a cheap always-on example (~8 vCPU / 16 GB). Any Docker host works: a spare mini PC, a VM, another VPS.
 
 ```sh
 cp .env.example .env

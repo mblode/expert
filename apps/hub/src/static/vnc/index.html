@@ -19,8 +19,10 @@
     <script type="module">
       const params = new URLSearchParams(location.search);
       const viewOnly = params.get("view_only") !== "0";
+      const token = params.get("token") ?? "";
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      const ws = `${proto}://${location.host}/websockify`;
+      const qs = token ? `?token=${encodeURIComponent(token)}` : "";
+      const ws = `${proto}://${location.host}/websockify${qs}`;
       try {
         const { default: RFB } = await import("/novnc/core/rfb.js");
         const rfb = new RFB(document.getElementById("screen"), ws, { wsProtocols: [] });

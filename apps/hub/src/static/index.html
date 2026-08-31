@@ -15,6 +15,10 @@
   <body>
     <header><strong>Debug only.</strong> Product surface is Computer.app on iPhone.</header>
     <p>Pixels are view-only noVNC. Clipboard and presence are Seat RPCs, not RFB.</p>
-    <iframe src="/vnc/index.html?view_only=1" width="1280" height="800" title="desk"></iframe>
+    <iframe id="desk" src="" width="1280" height="800" title="desk"></iframe>
+    <script>
+      const q = location.search;
+      document.getElementById("desk").src = "/vnc/index.html" + (q || "?view_only=1");
+    </script>
   </body>
 </html>

@@ -4,7 +4,7 @@ import { extname, join, resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import { AgentMethods } from "@computer/proto";
 import type { Desk } from "./desk/types.ts";
-import { AuthRegistry } from "./handler/auth.ts";
+import { AuthRegistry, tokenFromRequest } from "./handler/auth.ts";
 import { ConnectRouter, writeError, writeJson } from "./handler/router.ts";
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
@@ -51,10 +51,7 @@ export function createHub(opts: HubOptions): Hub {
   registerSeat(router, { auth, seat, desk: opts.desk, vncUrl: opts.vncUrl });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
-  router.extra("GET", "/healthz", "public", async () => ({
-    ok: true,
-    seat: seat.getState(),
-  }));
+  router.extra("GET", "/healthz", "public", async () => ({ ok: true }));
 
   router.assertAllPolicies();
 
@@ -75,6 +72,10 @@ export function createHub(opts: HubOptions): Hub {
       const handled = await router.handle(req, res);
       if (handled) return;
       if (req.method === "GET" || req.method === "HEAD") {
+        if (needsSeatPixelAuth(url.pathname) && !auth.hasSeatToken(tokenFromRequest(req))) {
+          writeJson(res, 401, { error: { code: "UNAUTHENTICATED", message: "seat token required" } });
+          return;
+        }
         if (serveStatic(req, res, staticDir, url.pathname)) return;
       }
       writeJson(res, 404, { error: { code: "VALIDATION", message: "not found" } });
@@ -83,10 +84,14 @@ export function createHub(opts: HubOptions): Hub {
     }
   });
 
-  const wss = new WebSocketServer({ server });
+  const wss = new WebSocketServer({
+    server,
+    verifyClient: (info) => auth.hasSeatToken(tokenFromRequest(info.req)),
+  });
   attachVncProxy(wss, {
     host: opts.vncHost ?? "127.0.0.1",
     port: opts.vncPort ?? 5900,
+    auth,
   });
 
   return {
@@ -127,11 +132,7 @@ async function handleChat(
     llmModel?: string;
   },
 ): Promise<void> {
-  const { bearerFromHeader } = await import("./handler/auth.ts");
-  const authHeader = Array.isArray(req.headers.authorization)
-    ? req.headers.authorization[0]
-    : req.headers.authorization;
-  const bearer = bearerFromHeader(authHeader);
+  const bearer = tokenFromRequest(req);
   deps.auth.verify("seat", bearer);
 
   const chunks: Buffer[] = [];
@@ -178,6 +179,10 @@ const MIME: Record<string, string> = {
   ".ico": "image/x-icon",
   ".json": "application/json",
 };
+
+function needsSeatPixelAuth(pathname: string): boolean {
+  return pathname === "/" || pathname === "/index.html" || pathname === "/vnc" || pathname.startsWith("/vnc/");
+}
 
 function serveStatic(req: IncomingMessage, res: ServerResponse, dir: string, pathname: string): boolean {
   let rel = pathname === "/" ? "/index.html" : pathname;

@@ -17,6 +17,7 @@ describe("Connect HTTP", () => {
     };
     expect(res.token.length).toBeGreaterThan(10);
     expect(res.vnc_url).toContain("view_only=1");
+    expect(res.vnc_url).toContain(`token=${res.token}`);
     expect(res.status.display.width).toBe(1280);
   });
 
@@ -97,12 +98,67 @@ describe("Connect HTTP", () => {
     expect(again.seat).toBe("AGENT");
   });
 
-  it("does not expose clipboard as a model tool", async () => {
+  it("does not expose clipboard or vncUrl as a model tool", async () => {
     const h = await startHub();
     opened.push(h);
     await expect(
       rpc(h.url, "/computer.v1.Seat/ClipboardGet", {}, h.agent),
     ).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
+    await expect(rpc(h.url, "/computer.v1.Seat/Status", {}, h.agent)).rejects.toMatchObject({
+      code: "UNAUTHENTICATED",
+    });
+    const chat = await fetch(`${h.url}/chat`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${h.agent}`, "content-type": "application/json" },
+      body: JSON.stringify({ message: "hi" }),
+    });
+    expect(chat.status).toBe(401);
+  });
+
+  it("pixels and websockify require a seat token", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const naked = await fetch(`${h.url}/vnc/index.html`);
+    expect(naked.status).toBe(401);
+    const debug = await fetch(`${h.url}/`);
+    expect(debug.status).toBe(401);
+
+    const token = await h.pair();
+    const ok = await fetch(`${h.url}/vnc/index.html?token=${token}`);
+    expect(ok.status).toBe(200);
+
+    const denied = await new Promise<number>((resolve) => {
+      const t = setTimeout(() => resolve(-1), 2000);
+      const ws = new WebSocket(`${h.url.replace("http", "ws")}/websockify`);
+      ws.addEventListener("error", () => {
+        clearTimeout(t);
+        resolve(401);
+      });
+      ws.addEventListener("open", () => {
+        clearTimeout(t);
+        ws.close();
+        resolve(101);
+      });
+    });
+    expect(denied).toBe(401);
+
+    const allowed = await new Promise<number>((resolve) => {
+      const t = setTimeout(() => resolve(-1), 2000);
+      const ws = new WebSocket(`${h.url.replace("http", "ws")}/websockify?token=${token}`);
+      const done = (code: number) => {
+        clearTimeout(t);
+        resolve(code);
+      };
+      ws.addEventListener("open", () => {
+        ws.close();
+        done(101);
+      });
+      ws.addEventListener("error", () => done(401));
+      ws.addEventListener("close", (ev) => {
+        if (ev.code === 4401) done(401);
+      });
+    });
+    expect(allowed).not.toBe(401);
   });
 
   it("chat stream works with a seat token and can request takeover", async () => {
@@ -120,10 +176,13 @@ describe("Connect HTTP", () => {
     expect(h.hub.seat.getState()).toBe("WAITING");
   });
 
-  it("GET /healthz is public", async () => {
+  it("GET /healthz is public and does not leak seat state", async () => {
     const h = await startHub();
     opened.push(h);
     const res = await fetch(`${h.url}/healthz`);
     expect(res.status).toBe(200);
+    const json = (await res.json()) as Record<string, unknown>;
+    expect(json).toEqual({ ok: true });
+    expect(json).not.toHaveProperty("seat");
   });
 });
