@@ -1,4 +1,6 @@
-FROM ubuntu:24.04
+# Debian, not Ubuntu: Ubuntu's `chromium-browser` is a snap stub that cannot
+# run in a container, and Debian ships a real chromium on amd64 and arm64.
+FROM debian:12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:1 \
@@ -7,7 +9,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
-        chromium-browser \
+        chromium \
         dbus-x11 \
         fonts-dejavu-core \
         fonts-liberation \
@@ -23,13 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         xclip \
         xdotool \
         xterm \
-    && rm -rf /var/lib/apt/lists/* \
-    && (command -v chromium-browser >/dev/null || apt-get update && apt-get install -y --no-install-recommends chromium && rm -rf /var/lib/apt/lists/*)
+    && rm -rf /var/lib/apt/lists/*
 
-# Ubuntu 24.04 already has uid 1000 (`ubuntu`). Rename it to `box`.
-RUN usermod -l box ubuntu \
-    && groupmod -n box ubuntu \
-    && usermod -d /home/box -m box \
+RUN useradd --create-home --uid 1000 --shell /bin/bash box \
     && mkdir -p /workspace /home/box/.config/chromium /home/box/.vnc \
     && chown -R box:box /workspace /home/box
 

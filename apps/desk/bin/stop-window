@@ -10,10 +10,12 @@ if ! [[ "$N" =~ ^[0-9]+$ ]] || (( N < 1 || N > 8 )); then
 fi
 
 export HOME="${HOME:-/home/box}"
-ASSIGN="$HOME/.window-assignments.json"
-LOCK="$HOME/.window-assignments.lock"
+ASSIGN="/workspace/.window-assignments.json"
+LOCK="/workspace/.window-assignments.lock"
 
-vncserver -kill ":$N" >/dev/null 2>&1 || true
+# Kill this window's X server; openbox and chromium exit with their display.
+pkill -f "Xvnc :$N " >/dev/null 2>&1 || true
+rm -f "/tmp/.X11-unix/X$N" "/tmp/.X$N-lock" >/dev/null 2>&1 || true
 
 exec 9>"$LOCK"
 flock 9

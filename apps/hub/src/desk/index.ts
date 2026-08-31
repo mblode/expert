@@ -22,7 +22,8 @@ export function createDesk(display = 1): Desk {
 }
 
 function parseBackend(v: string | undefined, display: number): InputBackend | undefined {
-  // Explicit override applies to every window; default is uinput on :1, xtest on forks.
+  // Default is xtest everywhere; uinput is opt-in and only works on a real
+  // Xorg desktop, not the Xvnc the desk container runs.
   if (v === "uinput" || v === "xtest") return v;
   void display;
   return undefined;

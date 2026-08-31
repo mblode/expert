@@ -68,12 +68,16 @@ try {
 async function up() {
   const env = ensureEnv();
 
-  // 1. Desk container (skipped gracefully without Docker).
-  if (has("docker")) {
+  // 1. Desk container (skipped gracefully without a running Docker).
+  if (dockerReady()) {
     console.log("• building the desk (first run takes a few minutes)…");
     run("docker", ["compose", "up", "-d", "--build"]);
+  } else if (has("docker")) {
+    console.log("• docker is installed but its daemon is not running — start Docker Desktop or OrbStack, then re-run `npm run up`");
+    console.log("  continuing with a fake desk so you can still pair and poke around");
+    env.COMPUTER_DESK = "fake";
   } else {
-    console.log("• docker not found — running with a fake desk (install Docker for the real thing)");
+    console.log("• docker not found — running with a fake desk (install Docker or OrbStack for the real thing)");
     env.COMPUTER_DESK = "fake";
   }
 
@@ -252,6 +256,16 @@ function saveEnv(env) {
 function has(bin) {
   try {
     execFileSync(bin, ["--version"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** `docker --version` succeeds with the daemon down; `docker info` does not. */
+function dockerReady() {
+  try {
+    execFileSync("docker", ["info"], { stdio: "ignore" });
     return true;
   } catch {
     return false;

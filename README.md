@@ -16,6 +16,8 @@ npm run up
 
 `up` generates `.env` (random setup code), builds the desk container, publishes the hub over Tailscale Serve, and prints a pairing QR. Scan it from Computer.app. That's the whole setup — there is no config to write.
 
+You need a running Docker daemon (Docker Desktop, OrbStack, colima — anything the `docker` CLI talks to) and, for the phone, [Tailscale](https://tailscale.com/download) on both the box and the phone. Without Tailscale the hub still runs; open `http://127.0.0.1:8787/vnc/index.html?token=…` from a browser on the same machine (`npm run bot -- ls` and the Seat API hand you the URL). The desk is a Debian container running Xvnc at 1280×800 per screen, on amd64 and arm64.
+
 Provision Bots on the fly — each gets its own screen on the shared box and a minted token (shown once):
 
 ```sh
@@ -59,7 +61,7 @@ Two services. Four model tools. A seat per screen.
 | `Agent` | model | Spec, Computer, Shell, ReadFile, WriteFile |
 | `Seat` | iPhone / owner | Pair, Status, SetPresence, Pointer, Type, ClipboardGet, ClipboardSet, CreateBot, DeleteBot |
 
-Clipboard, `vncUrl`, and pointer are **not** model tools. VNC is view-only; input is `Seat.Pointer`.
+Clipboard, `vncUrl`, and pointer are **not** model tools. VNC is view-only — the X server refuses RFB key and pointer events outright, so a viewer cannot touch the box; input arrives only as `Seat.Pointer`/`Seat.Type`, which is what lets the hub enforce the seat.
 
 **Many Bots, one box.** Each Bot owns a screen (window index = X display, `:1`–`:8`, RFB on `5900 + N`); its token is its identity — **agent token → Bot → screen**, the model never names a display. Bots are provisioned at runtime; the roster lives in `data/bots.json` (gitignored — it holds tokens). Bots are **not** security boundaries: one `box` user, shared `/workspace`.
 

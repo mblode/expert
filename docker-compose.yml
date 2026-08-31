@@ -11,10 +11,6 @@ services:
     volumes:
       - workspace:/workspace
       - browser:/home/box/.config/chromium
-    devices:
-      - /dev/uinput:/dev/uinput
-    group_add:
-      - "0" # root group often owns uinput; fallback is the device mount
     ports:
       # One RFB port per window index: 5900 + N (primary :1 → 5901).
       - "127.0.0.1:5901-5908:5901-5908"

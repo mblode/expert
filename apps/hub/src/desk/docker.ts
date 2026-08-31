@@ -10,9 +10,13 @@ export type DockerDeskOptions = {
   /** Window index = X display number. Default 1 (primary). */
   display?: number;
   /**
-   * uinput is kernel-global and cannot address one X display, so it only
-   * fits the primary window. Forks default to XTEST (xdotool) with
-   * DISPLAY=:N — real synthesized input, not XSendEvent.
+   * Default XTEST (xdotool with DISPLAY=:N): real synthesized input at the
+   * X server, honoured by GTK and Chromium, and per-display.
+   *
+   * uinput is kernel-global and injects into the kernel input layer, which
+   * a virtual X server (Xvnc) never reads — verified: `uinputd move` exits
+   * 0 and the pointer does not move. Opt in only for a real Xorg desktop
+   * on hardware. Neither path is XSendEvent, which GTK ignores.
    */
   inputBackend?: InputBackend;
 };
@@ -75,7 +79,7 @@ export class DockerDesk implements Desk {
     this.container = opts.container;
     this.user = opts.user ?? "box";
     this.display = opts.display ?? 1;
-    this.inputBackend = opts.inputBackend ?? (this.display === 1 ? "uinput" : "xtest");
+    this.inputBackend = opts.inputBackend ?? "xtest";
   }
 
   getCursor(): Point {

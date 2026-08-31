@@ -8,7 +8,7 @@ import { ComputerError } from "@computer/shared";
  * bearer never lands on the shared filesystem.
  */
 export interface WindowManager {
-  startWindow(display: number, ownerToken: string, botId: string): Promise<void>;
+  startWindow(display: number, ownerToken: string, botId: string, force?: boolean): Promise<void>;
   stopWindow(display: number): Promise<void>;
 }
 
@@ -22,8 +22,10 @@ export class DockerWindowManager implements WindowManager {
     private readonly user = "box",
   ) {}
 
-  async startWindow(display: number, ownerToken: string, botId: string): Promise<void> {
-    const r = await this.exec(["/usr/local/bin/start-window", String(display), ownerHash(ownerToken), botId]);
+  async startWindow(display: number, ownerToken: string, botId: string, force = false): Promise<void> {
+    const argv = ["/usr/local/bin/start-window", String(display), ownerHash(ownerToken), botId];
+    if (force) argv.push("--force");
+    const r = await this.exec(argv);
     if (r.exit === 9) {
       throw new ComputerError("CONFLICT", `window ${display} claimed by another owner`);
     }
@@ -65,9 +67,11 @@ export class DockerWindowManager implements WindowManager {
 export class NoopWindowManager implements WindowManager {
   started: number[] = [];
   stopped: number[] = [];
+  forced: number[] = [];
   failNext = false;
 
-  async startWindow(display: number): Promise<void> {
+  async startWindow(display: number, _ownerToken?: string, _botId?: string, force = false): Promise<void> {
+    if (force) this.forced.push(display);
     if (this.failNext) {
       this.failNext = false;
       throw new ComputerError("DAEMON_DOWN", `start-window ${display} failed`);

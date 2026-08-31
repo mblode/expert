@@ -37,6 +37,52 @@ stays only as the zero-dependency fallback.
   `request_takeover` → WAITING, `SEAT_HELD` surfaced as a tool error. The
   interactive `npm run eve` REPL needs a model key (AI Gateway) — user-side.
 
+## First run on real hardware (2026-09-01, macOS + OrbStack, arm64)
+
+The box now runs for real. Everything below was found by running it, not by
+reading it, and the fixes are in this branch.
+
+- **The STOP condition is resolved, and the answer is XTEST.** `uinputd move`
+  exits 0 against the desk and the X pointer never moves: uinput injects into
+  the kernel input layer, which a virtual X server (Xvnc) never reads. XTEST
+  via `xdotool` does move it, and drives Chromium — the agent focused the URL
+  bar, typed, pressed Return, and example.com then wikipedia.org loaded. XTEST
+  is not the `XSendEvent` the design refused; it is real input at the X server,
+  which GTK and Chromium honour. Default backend is now `xtest` everywhere;
+  `uinput` stays opt-in for a real Xorg desktop on hardware.
+- **Debian, not Ubuntu.** Ubuntu's `chromium-browser` is a snap transition stub:
+  it installs, and running it prints "requires the chromium snap to be
+  installed". Debian 12 ships a real chromium on amd64 and arm64.
+- **Xvnc directly, not the `vncserver` wrapper.** The wrapper refuses
+  passwordless mode without `--I-KNOW-THIS-IS-INSECURE` and wants a
+  `tigervncpasswd` binary Debian does not ship. Running `Xvnc` also let us set
+  `-AcceptKeyEvents=0 -AcceptPointerEvents=0`, so **view-only is now enforced
+  at the server**: clicking a link inside the noVNC viewer moved nothing on the
+  box. Pixels out, input only through the seat.
+- **flock deadlock.** `start-window` held its lock on fd 9, and the Xvnc it
+  started inherited that fd — so the lock was never released and every later
+  `start-window` blocked until `docker exec` timed out. The claim now runs in a
+  subshell whose fd dies with it.
+- **Stale sockets lie.** After a restart `/tmp/.X11-unix/XN` still exists with
+  no server behind it, and the idempotency check reported a dead desktop as up.
+  It now probes with `xdpyinfo` and clears the socket before restarting.
+- **The box survives a restart.** Claims live on the `/workspace` volume and the
+  entrypoint restores every claimed fork, so `docker compose restart` brings
+  back Eve's screen, not just `:1`. The hub also force-reclaims a stale claim at
+  boot: a lost `data/bots.json` used to brick startup with CONFLICT.
+- `npm run up` now checks `docker info`, not `docker --version`: the CLI
+  succeeds with the daemon stopped, which is the normal state on a Mac.
+
+Verified end to end against the real desk: agent screenshot (1280×800 PNG),
+agent drives Chromium, shell + files on the box, provision `eve` onto screen 2,
+per-screen `SEAT_HELD` (eve blocked, main unaffected), noVNC streaming live in
+a desktop browser, a viewer click refused, a **seat** click navigating the page,
+`I'm done` returning the seat, and Eve's own tools (`apps/eve`) driving the box
+with the screenshot arriving as a vision part.
+
+Still unverified: the iPhone app itself (needs Xcode and a device) and the
+seven-step cellular run.
+
 ## Run end
 
 Host (this Linux agent, 2026-08-31):

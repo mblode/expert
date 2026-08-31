@@ -8,9 +8,13 @@
 # same box user, shared /workspace.
 set -euo pipefail
 
-N="${1:?usage: start-window N [owner-hash] [bot-id]}"
+N="${1:?usage: start-window N [owner-hash] [bot-id] [--force]}"
 OWNER="${2:-}"
 BOT_ID="${3:-}"
+# --force takes a window whose claim belongs to an owner we no longer know.
+# The hub's roster is authoritative at boot; the box's file is a cache.
+FORCE=0
+[[ "${4:-}" == "--force" ]] && FORCE=1
 if ! [[ "$N" =~ ^[0-9]+$ ]] || (( N < 1 || N > 8 )); then
   echo "window index must be 1..8" >&2
   exit 2
@@ -19,23 +23,25 @@ fi
 export HOME="${HOME:-/home/box}"
 DISPLAY_NAME=":$N"
 RFB_PORT=$((5900 + N))
-ASSIGN="$HOME/.window-assignments.json"
-LOCK="$HOME/.window-assignments.lock"
+# On the workspace volume: recreating the container must not cost a Bot
+# its screen, so the claim roster outlives the container filesystem.
+ASSIGN="/workspace/.window-assignments.json"
+LOCK="/workspace/.window-assignments.lock"
 
 mkdir -p "$HOME/.vnc" /workspace
 touch "$ASSIGN"
 
 claim() {
-  python3 - "$ASSIGN" "$N" "$OWNER" "$BOT_ID" <<'PY'
+  python3 - "$ASSIGN" "$N" "$OWNER" "$BOT_ID" "$FORCE" <<'PY'
 import json, sys, time
-path, n, owner, bot_id = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+path, n, owner, bot_id, force = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5] == "1"
 try:
     with open(path) as f:
         data = json.load(f)
 except (ValueError, FileNotFoundError):
     data = {}
 entry = data.get(n)
-if entry and owner and entry.get("owner") and entry["owner"] != owner:
+if not force and entry and owner and entry.get("owner") and entry["owner"] != owner:
     print(f"window {n} claimed by another owner", file=sys.stderr)
     sys.exit(9)
 data[n] = {"owner": owner, "bot_id": bot_id, "claimed_at": int(time.time())}
@@ -44,35 +50,65 @@ with open(path, "w") as f:
 PY
 }
 
-exec 9>"$LOCK"
-flock 9
-claim
+# Claim under an exclusive lock, in a subshell so the lock's fd dies with
+# it. A background X server started while fd 9 is open inherits it and
+# holds the flock for its whole life, deadlocking every later call.
+( exec 9>"$LOCK"; flock 9; claim ) || exit $?
 
-# Already serving this display? Idempotent success.
+# Already serving this display? Idempotent success — but only when the
+# server is really alive. A restart leaves the socket file behind, and
+# trusting it would leave the box with a dead desktop that looks up.
 if [[ -e "/tmp/.X11-unix/X$N" ]]; then
-  echo "window $N up on $DISPLAY_NAME rfb $RFB_PORT"
-  exit 0
+  if DISPLAY="$DISPLAY_NAME" xdpyinfo >/dev/null 2>&1; then
+    echo "window $N up on $DISPLAY_NAME rfb $RFB_PORT"
+    exit 0
+  fi
+  echo "window $N: clearing a stale socket from a previous run" >&2
+  rm -f "/tmp/.X11-unix/X$N" "/tmp/.X${N}-lock"
 fi
 
-vncserver "$DISPLAY_NAME" \
-  -rfbport "$RFB_PORT" \
+# X server for this window. Xvnc directly, not the `vncserver` wrapper:
+# the wrapper refuses passwordless mode and wants a tigervncpasswd binary
+# Debian does not ship.
+#
+# AcceptKeyEvents/AcceptPointerEvents=0 make the RFB channel pixels-out
+# only: a viewer cannot inject input even if it tries. All input arrives
+# as XTEST/uinput from the hub, which is what enforces the seat.
+Xvnc "$DISPLAY_NAME" \
   -geometry 1280x800 \
   -depth 24 \
-  -localhost no \
-  -xstartup /bin/openbox \
+  -rfbport "$RFB_PORT" \
   -SecurityTypes None \
-  || vncserver "$DISPLAY_NAME" -rfbport "$RFB_PORT" -geometry 1280x800 -depth 24 -localhost no
+  -AlwaysShared \
+  -AcceptKeyEvents=0 \
+  -AcceptPointerEvents=0 \
+  -desktop "computer:$N" \
+  >"/tmp/xvnc-$N.log" 2>&1 &
 
+# Wait for the display before anything tries to draw on it.
+for _ in $(seq 1 50); do
+  [[ -e "/tmp/.X11-unix/X$N" ]] && break
+  sleep 0.1
+done
+
+DISPLAY="$DISPLAY_NAME" openbox >"/tmp/openbox-$N.log" 2>&1 &
 sleep 0.4
 
-# Chromium per window. Window 1 keeps the legacy profile dir (volume mount).
-CHROMIUM="$(command -v chromium-browser || command -v chromium || true)"
+# Chromium per window. Window 1 keeps the default profile dir (volume mount).
+# --no-sandbox: the container is the sandbox; Chromium's own needs
+# privileges a desk container should not have.
+CHROMIUM="$(command -v chromium || command -v chromium-browser || true)"
 if [[ -n "$CHROMIUM" ]]; then
   PROFILE="$HOME/.config/chromium"
   if (( N != 1 )); then PROFILE="$HOME/.config/chromium-$N"; fi
   mkdir -p "$PROFILE"
   DISPLAY="$DISPLAY_NAME" "$CHROMIUM" \
     --no-first-run \
+    --no-default-browser-check \
+    --no-sandbox \
+    --test-type \
+    --hide-crash-restore-bubble \
+    --disable-infobars \
     --disable-sync \
     --disable-gpu \
     --user-data-dir="$PROFILE" \

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { ComputerError } from "@computer/shared";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { WindowManager } from "../desk/windows.ts";
@@ -58,7 +59,15 @@ export class ProvisionService {
       this.store.save(this.bots.configs());
     }
     for (const bot of this.bots.all()) {
-      await this.windows.startWindow(bot.display, bot.token, bot.id);
+      try {
+        await this.windows.startWindow(bot.display, bot.token, bot.id);
+      } catch (err) {
+        // A claim left by a roster we no longer have must not brick startup:
+        // at boot the hub's roster is the source of truth, so take the window.
+        if (!(err instanceof ComputerError) || err.code !== "CONFLICT") throw err;
+        console.warn(`window ${bot.display}: reclaiming a stale claim for bot ${bot.id}`);
+        await this.windows.startWindow(bot.display, bot.token, bot.id, true);
+      }
     }
   }
 
