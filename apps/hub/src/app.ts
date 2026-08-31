@@ -8,30 +8,22 @@ import { AuthRegistry, tokenFromRequest } from "./handler/auth.ts";
 import { ConnectRouter, writeError, writeJson } from "./handler/router.ts";
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
-import type { ComputerService } from "./service/computer.ts";
-import type { FileService } from "./service/files.ts";
-import type { SeatService } from "./service/seat.ts";
 import { BotRegistry } from "./service/bots.ts";
+import { ProvisionService, type BotStore } from "./service/provision.ts";
+import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
 import { runChat } from "./service/chat.ts";
 import { attachVncProxy } from "./vnc-proxy.ts";
 
-export type BotOption = {
-  id: string;
-  display: number;
-  token: string;
-  desk?: Desk;
-};
-
 export type HubOptions = {
-  desk: Desk;
   setupCode: string;
-  agentToken?: string;
-  /** Roster: one Bot per screen. Absent = one bot "main" on :1 with agentToken + desk. */
-  bots?: BotOption[];
-  deskFactory?: (display: number) => Desk;
+  /** Builds the per-screen desk driver; the registry mounts one per Bot. */
+  deskFactory: (display: number) => Desk;
+  /** Claims/releases windows on the box; NoopWindowManager outside Docker. */
+  windows: WindowManager;
+  /** Persists the roster; FileBotStore in production, MemoryBotStore in tests. */
+  store: BotStore;
   vncUrl: string;
-  publicUrl?: string;
   vncHost?: string;
   /** RFB port for window N is vncBasePort + N (primary :1 → 5901). */
   vncBasePort?: number;
@@ -45,43 +37,24 @@ export type Hub = {
   wss: WebSocketServer;
   auth: AuthRegistry;
   bots: BotRegistry;
-  /** Primary bot's services — single-bot call sites and tests. */
-  seat: SeatService;
-  computer: ComputerService;
-  files: FileService;
+  provision: ProvisionService;
   router: ConnectRouter;
-  desk: Desk;
+  /** Mounts the stored roster (or provisions "main") and claims windows. */
+  start: () => Promise<void>;
   close: () => Promise<void>;
 };
 
 export function createHub(opts: HubOptions): Hub {
-  const botOptions: BotOption[] = opts.bots ?? [
-    { id: "main", display: 1, token: opts.agentToken ?? "", desk: opts.desk },
-  ];
-  const bots = new BotRegistry(
-    botOptions.map((b) => ({
-      id: b.id,
-      display: b.display,
-      token: b.token,
-      desk:
-        b.desk ??
-        (b.display === 1
-          ? opts.desk
-          : (opts.deskFactory?.(b.display) ??
-            (() => {
-              throw new Error(`bot ${b.id}: no desk for display ${b.display} (pass desk or deskFactory)`);
-            })())),
-    })),
-  );
+  const bots = new BotRegistry(opts.deskFactory, opts.store.load());
+  const provision = new ProvisionService(bots, opts.windows, opts.store);
   const auth = new AuthRegistry({
     setupCode: opts.setupCode,
-    agentTokens: new Map(bots.all().map((b) => [b.token, b.id as string])),
+    agentTokens: () => bots.tokenEntries(),
   });
-  const primary = bots.primary();
   const router = new ConnectRouter(auth);
 
   registerAgent(router, bots);
-  registerSeat(router, { auth, bots, vncUrl: opts.vncUrl });
+  registerSeat(router, { auth, bots, provision, vncUrl: opts.vncUrl });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
   router.extra("GET", "/healthz", "public", async () => ({ ok: true }));
@@ -133,11 +106,9 @@ export function createHub(opts: HubOptions): Hub {
     wss,
     auth,
     bots,
-    seat: primary.seat,
-    computer: primary.computer,
-    files: primary.files,
+    provision,
     router,
-    desk: primary.desk,
+    start: () => provision.start(),
     close: () =>
       new Promise((resolveClose) => {
         wss.close();

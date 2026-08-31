@@ -18,28 +18,25 @@ final class ClientTests: XCTestCase {
         )
     }
 
-    func testPointerMoveEncodesGrab() throws {
-        let data = try JSONEncoder().encode(ComputerV1.PointerRequest.move(dx: 4, dy: -2, grab: true))
+    func testPointerMoveEncodesGrabAndDisplay() throws {
+        let data = try JSONEncoder().encode(ComputerV1.PointerRequest.move(dx: 4, dy: -2, grab: true, display: 2))
         let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         XCTAssertEqual(obj?["type"] as? String, "move")
         XCTAssertEqual(obj?["dx"] as? Int, 4)
         XCTAssertEqual(obj?["dy"] as? Int, -2)
         XCTAssertEqual(obj?["grab"] as? Bool, true)
+        XCTAssertEqual(obj?["display"] as? Int, 2)
+
+        let primary = try JSONEncoder().encode(ComputerV1.PointerRequest.click(button: nil, display: nil))
+        let primaryObj = try JSONSerialization.jsonObject(with: primary) as? [String: Any]
+        XCTAssertNil(primaryObj?["display"])
     }
 
-    func testDisplayScopedMergesDisplayKey() throws {
-        let data = try JSONEncoder().encode(
-            ComputerV1.DisplayScoped(ComputerV1.TypeRequest(text: "hi"), display: 2)
-        )
+    func testTypeRequestCarriesDisplay() throws {
+        let data = try JSONEncoder().encode(ComputerV1.TypeRequest(text: "hi", display: 2))
         let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
         XCTAssertEqual(obj?["text"] as? String, "hi")
         XCTAssertEqual(obj?["display"] as? Int, 2)
-
-        let bare = try JSONEncoder().encode(
-            ComputerV1.DisplayScoped(ComputerV1.TypeRequest(text: "hi"), display: nil)
-        )
-        let bareObj = try JSONSerialization.jsonObject(with: bare) as? [String: Any]
-        XCTAssertNil(bareObj?["display"])
     }
 
     func testBoxStatusDecodesScreens() throws {
@@ -55,26 +52,28 @@ final class ClientTests: XCTestCase {
         }
         """
         let status = try JSONDecoder().decode(ComputerV1.BoxStatus.self, from: Data(json.utf8))
-        XCTAssertEqual(status.screens?.count, 2)
-        XCTAssertEqual(status.screens?[1].botId, "night")
-        XCTAssertEqual(status.screens?[1].display, 2)
-        XCTAssertEqual(status.screens?[1].state, .waiting)
+        XCTAssertEqual(status.screens.count, 2)
+        XCTAssertEqual(status.screens[1].botId, "night")
+        XCTAssertEqual(status.screens[1].display, 2)
+        XCTAssertEqual(status.screens[1].state, .waiting)
     }
 
-    func testBoxStatusDecodesWithoutScreens() throws {
-        // Older single-screen hub omits `screens`.
+    func testBotCredentialsDecode() throws {
         let json = """
-        {"state": "AGENT", "vnc_url": "https://h/vnc", "display": {"width": 1280, "height": 800, "scale": 1}}
+        {"id": "night", "display": 2, "token": "bot_abc"}
         """
-        let status = try JSONDecoder().decode(ComputerV1.BoxStatus.self, from: Data(json.utf8))
-        XCTAssertNil(status.screens)
+        let creds = try JSONDecoder().decode(ComputerV1.BotCredentials.self, from: Data(json.utf8))
+        XCTAssertEqual(creds.id, "night")
+        XCTAssertEqual(creds.display, 2)
+        XCTAssertEqual(creds.token, "bot_abc")
     }
 
     func testSeatStateRoundTrip() throws {
         let status = ComputerV1.BoxStatus(
             state: .waiting,
             vncUrl: "https://h/vnc/index.html?view_only=1",
-            display: ComputerV1.display
+            display: ComputerV1.display,
+            screens: []
         )
         let data = try JSONEncoder().encode(status)
         let back = try JSONDecoder().decode(ComputerV1.BoxStatus.self, from: data)

@@ -85,15 +85,22 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     @available(iOS 13, *)
     func `pointer`(request: Computer_V1_PointerRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_PointerResponse>
 
-    /// Qualified: method name Type otherwise shadows message Type.
     @available(iOS 13, *)
-    func `type`(request: Computer_V1_Type, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_PointerResponse>
+    func `type`(request: Computer_V1_SeatTypeRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_PointerResponse>
 
     @available(iOS 13, *)
     func `clipboardGet`(request: Computer_V1_ClipboardGetRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_Clipboard>
 
     @available(iOS 13, *)
-    func `clipboardSet`(request: Computer_V1_Clipboard, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_Clipboard>
+    func `clipboardSet`(request: Computer_V1_ClipboardSetRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_Clipboard>
+
+    /// Provisioning: a paired seat is the box owner. The hub allocates the
+    /// next free screen and mints the Bot's token — returned exactly once.
+    @available(iOS 13, *)
+    func `createBot`(request: Computer_V1_CreateBotRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BotCredentials>
+
+    @available(iOS 13, *)
+    func `deleteBot`(request: Computer_V1_DeleteBotRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BoxStatus>
 }
 
 /// Concrete implementation of `Computer_V1_SeatClientInterface`.
@@ -125,7 +132,7 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
-    public func `type`(request: Computer_V1_Type, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_PointerResponse> {
+    public func `type`(request: Computer_V1_SeatTypeRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_PointerResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/Type", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
@@ -135,8 +142,18 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
-    public func `clipboardSet`(request: Computer_V1_Clipboard, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_Clipboard> {
+    public func `clipboardSet`(request: Computer_V1_ClipboardSetRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_Clipboard> {
         return await self.client.unary(path: "/computer.v1.Seat/ClipboardSet", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `createBot`(request: Computer_V1_CreateBotRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_BotCredentials> {
+        return await self.client.unary(path: "/computer.v1.Seat/CreateBot", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `deleteBot`(request: Computer_V1_DeleteBotRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_BoxStatus> {
+        return await self.client.unary(path: "/computer.v1.Seat/DeleteBot", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     public enum Metadata {
@@ -148,6 +165,8 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let type = Connect.MethodSpec(name: "Type", service: "computer.v1.Seat", type: .unary)
             public static let clipboardGet = Connect.MethodSpec(name: "ClipboardGet", service: "computer.v1.Seat", type: .unary)
             public static let clipboardSet = Connect.MethodSpec(name: "ClipboardSet", service: "computer.v1.Seat", type: .unary)
+            public static let createBot = Connect.MethodSpec(name: "CreateBot", service: "computer.v1.Seat", type: .unary)
+            public static let deleteBot = Connect.MethodSpec(name: "DeleteBot", service: "computer.v1.Seat", type: .unary)
         }
     }
 }

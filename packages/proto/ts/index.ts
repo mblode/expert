@@ -46,6 +46,8 @@ export const SeatMethods = {
   Type: path(Seat, Seat.method.type),
   ClipboardGet: path(Seat, Seat.method.clipboardGet),
   ClipboardSet: path(Seat, Seat.method.clipboardSet),
+  CreateBot: path(Seat, Seat.method.createBot),
+  DeleteBot: path(Seat, Seat.method.deleteBot),
 } as const;
 
 export const ALL_METHODS = [

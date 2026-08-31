@@ -70,9 +70,8 @@ public enum ComputerV1 {
         public var state: SeatState
         public var vncUrl: String
         public var display: Display
-        /// Absent on a single-screen (or older) hub.
-        public var screens: [ScreenStatus]?
-        public init(state: SeatState, vncUrl: String, display: Display, screens: [ScreenStatus]? = nil) {
+        public var screens: [ScreenStatus]
+        public init(state: SeatState, vncUrl: String, display: Display, screens: [ScreenStatus]) {
             self.state = state
             self.vncUrl = vncUrl
             self.display = display
@@ -113,63 +112,78 @@ public enum ComputerV1 {
         }
     }
 
-    /// Merges an optional `display` (window index) into any Seat request body.
-    public struct DisplayScoped<Body: Encodable & Sendable>: Encodable, Sendable {
-        public var body: Body
+    public struct StatusRequest: Codable, Sendable {
         public var display: Int?
-        public init(_ body: Body, display: Int?) {
-            self.body = body
+        public init(display: Int? = nil) { self.display = display }
+    }
+
+    public struct ClipboardGetRequest: Codable, Sendable {
+        public var display: Int?
+        public init(display: Int? = nil) { self.display = display }
+    }
+
+    public struct ClipboardSetRequest: Codable, Sendable {
+        public var text: String
+        public var display: Int?
+        public init(text: String, display: Int? = nil) {
+            self.text = text
             self.display = display
-        }
-
-        struct DisplayKey: CodingKey {
-            var stringValue: String
-            var intValue: Int? { nil }
-            init?(stringValue: String) { self.stringValue = stringValue }
-            init?(intValue: Int) { return nil }
-        }
-
-        public func encode(to encoder: Encoder) throws {
-            try body.encode(to: encoder)
-            if let display {
-                var c = encoder.container(keyedBy: DisplayKey.self)
-                try c.encode(display, forKey: DisplayKey(stringValue: "display")!)
-            }
         }
     }
 
-    public enum PointerRequest: Codable, Sendable {
-        case move(dx: Int, dy: Int, grab: Bool?)
-        case click(button: String?)
+    public struct CreateBotRequest: Codable, Sendable {
+        public var id: String
+        public init(id: String) { self.id = id }
+    }
 
-        enum CodingKeys: String, CodingKey { case type, dx, dy, grab, button }
+    public struct BotCredentials: Codable, Sendable {
+        public var id: String
+        public var display: Int
+        /// Shown once; the Bot's identity.
+        public var token: String
+    }
+
+    public struct DeleteBotRequest: Codable, Sendable {
+        public var id: String
+        public init(id: String) { self.id = id }
+    }
+
+    public enum PointerRequest: Codable, Sendable {
+        case move(dx: Int, dy: Int, grab: Bool?, display: Int?)
+        case click(button: String?, display: Int?)
+
+        enum CodingKeys: String, CodingKey { case type, dx, dy, grab, button, display }
 
         public func encode(to encoder: Encoder) throws {
             var c = encoder.container(keyedBy: CodingKeys.self)
             switch self {
-            case .move(let dx, let dy, let grab):
+            case .move(let dx, let dy, let grab, let display):
                 try c.encode("move", forKey: .type)
                 try c.encode(dx, forKey: .dx)
                 try c.encode(dy, forKey: .dy)
                 try c.encodeIfPresent(grab, forKey: .grab)
-            case .click(let button):
+                try c.encodeIfPresent(display, forKey: .display)
+            case .click(let button, let display):
                 try c.encode("click", forKey: .type)
                 try c.encodeIfPresent(button, forKey: .button)
+                try c.encodeIfPresent(display, forKey: .display)
             }
         }
 
         public init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
             let type = try c.decode(String.self, forKey: .type)
+            let display = try c.decodeIfPresent(Int.self, forKey: .display)
             switch type {
             case "move":
                 self = .move(
                     dx: try c.decode(Int.self, forKey: .dx),
                     dy: try c.decode(Int.self, forKey: .dy),
-                    grab: try c.decodeIfPresent(Bool.self, forKey: .grab)
+                    grab: try c.decodeIfPresent(Bool.self, forKey: .grab),
+                    display: display
                 )
             case "click":
-                self = .click(button: try c.decodeIfPresent(String.self, forKey: .button))
+                self = .click(button: try c.decodeIfPresent(String.self, forKey: .button), display: display)
             default:
                 throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: type)
             }
@@ -183,7 +197,11 @@ public enum ComputerV1 {
 
     public struct TypeRequest: Codable, Sendable {
         public var text: String
-        public init(text: String) { self.text = text }
+        public var display: Int?
+        public init(text: String, display: Int? = nil) {
+            self.text = text
+            self.display = display
+        }
     }
 
     public struct Clipboard: Codable, Sendable {
@@ -214,6 +232,8 @@ public enum ComputerV1 {
         pointer: "/computer.v1.Seat/Pointer",
         type: "/computer.v1.Seat/Type",
         clipboardGet: "/computer.v1.Seat/ClipboardGet",
-        clipboardSet: "/computer.v1.Seat/ClipboardSet"
+        clipboardSet: "/computer.v1.Seat/ClipboardSet",
+        createBot: "/computer.v1.Seat/CreateBot",
+        deleteBot: "/computer.v1.Seat/DeleteBot"
     )
 }

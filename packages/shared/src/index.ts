@@ -103,7 +103,7 @@ export type BoxStatus = {
   state: SeatState;
   vnc_url: string;
   display: Display;
-  screens?: ScreenStatus[];
+  screens: ScreenStatus[];
 };
 
 export function asPixelX(n: number): PixelX {

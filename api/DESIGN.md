@@ -41,9 +41,11 @@ service Seat {
   rpc Status
   rpc SetPresence
   rpc Pointer
-  rpc Type              // request is message Type; proto writes computer.v1.Type so the name does not shadow
+  rpc Type
   rpc ClipboardGet
   rpc ClipboardSet
+  rpc CreateBot         // provision: next free screen + minted token
+  rpc DeleteBot
 }
 ```
 
@@ -66,6 +68,11 @@ Grok's shape: the machine is shared, the screen is not.
 - `Status` returns `screens: { bot_id, display, state, vnc_url }[]`
   beside the top-level fields (which describe the requested display),
   so a phone can render a screen picker.
+- **Bots are provisioned, not configured.** `Seat.CreateBot { id }`
+  allocates the next free screen, mints the Bot's token (returned
+  exactly once), claims the window, and persists the roster.
+  `Seat.DeleteBot` frees the screen and revokes the token. A paired
+  seat is the box owner; the model cannot provision.
 - Claims live on the box in `~/.window-assignments.json` with sha256
   owner hashes, written by `start-window`/`stop-window`. Window N
   serves RFB on port `5900 + N`.
@@ -232,6 +239,8 @@ looking at the stream.
 `Type` is the iOS keyboard: unicode into the focused field.
 `ClipboardGet` / `ClipboardSet` are UTF-8 only in v1.
 `SetPresence(false)` is `I'm done`.
+`CreateBot` / `DeleteBot` provision Bots (see Screens) — the phone is
+the box owner, so provisioning lives on the seat, never on the model.
 
 The VNC stream is view-only. The phone never sends RFB pointer
 events. Input is `Seat.Pointer` so the hub can enforce the seat.

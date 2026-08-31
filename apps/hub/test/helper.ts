@@ -1,40 +1,68 @@
-import { createHub, type BotOption, type Hub } from "../src/app.ts";
+import { createHub, type Hub } from "../src/app.ts";
 import { FakeDesk } from "../src/desk/fake.ts";
+import { NoopWindowManager } from "../src/desk/windows.ts";
+import { MemoryBotStore } from "../src/service/provision.ts";
+import type { BotConfig } from "../src/service/bots.ts";
 
-export async function startHub(
-  desk = new FakeDesk(),
-  extra: { bots?: BotOption[]; vncBasePort?: number } = {},
-): Promise<{
+export const SETUP_CODE = "setup-code-test";
+export const AGENT_TOKEN = "agent-token-test";
+
+export type StartedHub = {
   hub: Hub;
   desk: FakeDesk;
+  desks: Map<number, FakeDesk>;
+  windows: NoopWindowManager;
+  store: MemoryBotStore;
   url: string;
   agent: string;
   setup: string;
   pair: () => Promise<string>;
   close: () => Promise<void>;
-}> {
-  const setup = "setup-code-test";
-  const agent = "agent-token-test";
+};
+
+/**
+ * Boots a hub on a MemoryBotStore. Default roster: one bot "main" on :1
+ * with AGENT_TOKEN. Pass `bots` for a multi-Bot roster; each display gets
+ * its own FakeDesk (or the one you provide in `desks`).
+ */
+export async function startHub(
+  opts: { bots?: BotConfig[]; desks?: Map<number, FakeDesk>; vncBasePort?: number } = {},
+): Promise<StartedHub> {
+  const configs = opts.bots ?? [{ id: "main", display: 1, token: AGENT_TOKEN }];
+  const desks = opts.desks ?? new Map<number, FakeDesk>();
+  const windows = new NoopWindowManager();
+  const store = new MemoryBotStore();
+  store.save(configs);
   const hub = createHub({
-    desk,
-    setupCode: setup,
-    agentToken: extra.bots ? undefined : agent,
-    bots: extra.bots,
-    vncBasePort: extra.vncBasePort,
+    setupCode: SETUP_CODE,
+    deskFactory: (display) => {
+      const existing = desks.get(display);
+      if (existing) return existing;
+      const desk = new FakeDesk({ display });
+      desks.set(display, desk);
+      return desk;
+    },
+    windows,
+    store,
+    vncBasePort: opts.vncBasePort,
     vncUrl: "http://127.0.0.1/vnc/index.html?view_only=1",
   });
+  await hub.start();
   await new Promise<void>((resolve) => hub.server.listen(0, "127.0.0.1", resolve));
   const addr = hub.server.address();
   if (!addr || typeof addr === "string") throw new Error("no addr");
   const url = `http://127.0.0.1:${addr.port}`;
   return {
     hub,
-    desk,
+    desk: desks.get(1)!,
+    desks,
+    windows,
+    store,
     url,
-    agent,
-    setup,
+    agent: AGENT_TOKEN,
+    setup: SETUP_CODE,
     pair: async () => {
-      const r = await rpc(url, "/computer.v1.Seat/Pair", { code: setup });
+      const r = await rpc(url, "/computer.v1.Seat/Pair", { code: SETUP_CODE });
       return (r as { token: string }).token;
     },
     close: () => hub.close(),

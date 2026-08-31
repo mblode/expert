@@ -1,6 +1,5 @@
 import { ComputerError, MAX_DISPLAYS, PRIMARY_DISPLAY, type BotId, asBotId } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
-import type { WindowManager } from "../desk/windows.ts";
 import { ComputerService } from "./computer.ts";
 import { FileService } from "./files.ts";
 import { SeatService } from "./seat.ts";
@@ -27,46 +26,85 @@ export type Bot = {
   chatBusy: boolean;
 };
 
+const ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
+
 export class BotRegistry {
   private readonly bots: Bot[] = [];
 
-  constructor(configs: { id: string; display: number; token: string; desk: Desk }[]) {
-    if (configs.length === 0) throw new Error("at least one bot is required");
-    const ids = new Set<string>();
-    const displays = new Set<number>();
-    const tokens = new Set<string>();
-    for (const c of configs) {
-      if (!c.id) throw new Error("bot id is required");
-      if (!c.token) throw new Error(`bot ${c.id}: token is required`);
-      if (!Number.isInteger(c.display) || c.display < 1 || c.display > MAX_DISPLAYS) {
-        throw new Error(`bot ${c.id}: display must be 1..${MAX_DISPLAYS}`);
-      }
-      if (ids.has(c.id)) throw new Error(`duplicate bot id ${c.id}`);
-      if (displays.has(c.display)) throw new Error(`duplicate bot display ${c.display}`);
-      if (tokens.has(c.token)) throw new Error(`duplicate bot token (${c.id})`);
-      ids.add(c.id);
-      displays.add(c.display);
-      tokens.add(c.token);
-      const seat = new SeatService();
-      this.bots.push({
-        id: asBotId(c.id),
-        display: c.display,
-        token: c.token,
-        desk: c.desk,
-        seat,
-        computer: new ComputerService(c.desk, seat),
-        files: new FileService(c.desk, seat),
-        chatBusy: false,
-      });
+  constructor(
+    private readonly deskFactory: (display: number) => Desk,
+    configs: BotConfig[] = [],
+  ) {
+    for (const c of configs) this.add(c);
+  }
+
+  /** Validate and mount a Bot. Throws ComputerError so RPC callers get clean envelopes. */
+  add(c: BotConfig): Bot {
+    if (!ID_RE.test(c.id)) {
+      throw new ComputerError("VALIDATION", "bot id must be 1-32 chars of a-z 0-9 - (start alphanumeric)");
     }
+    if (!c.token) throw new ComputerError("VALIDATION", `bot ${c.id}: token is required`);
+    if (!Number.isInteger(c.display) || c.display < 1 || c.display > MAX_DISPLAYS) {
+      throw new ComputerError("VALIDATION", `bot ${c.id}: display must be 1..${MAX_DISPLAYS}`);
+    }
+    if (this.bots.some((b) => b.id === c.id)) {
+      throw new ComputerError("CONFLICT", `bot ${c.id} already exists`);
+    }
+    if (this.bots.some((b) => b.display === c.display)) {
+      throw new ComputerError("CONFLICT", `display ${c.display} is taken`);
+    }
+    if (this.bots.some((b) => b.token === c.token)) {
+      throw new ComputerError("CONFLICT", `token already in use (${c.id})`);
+    }
+    const desk = this.deskFactory(c.display);
+    const seat = new SeatService();
+    const bot: Bot = {
+      id: asBotId(c.id),
+      display: c.display,
+      token: c.token,
+      desk,
+      seat,
+      computer: new ComputerService(desk, seat),
+      files: new FileService(desk, seat),
+      chatBusy: false,
+    };
+    this.bots.push(bot);
+    return bot;
+  }
+
+  remove(id: string, opts: { allowPrimary?: boolean } = {}): Bot {
+    const i = this.bots.findIndex((b) => b.id === id);
+    if (i < 0) throw new ComputerError("VALIDATION", `unknown bot ${id}`);
+    if (!opts.allowPrimary && this.bots[i]!.display === PRIMARY_DISPLAY) {
+      throw new ComputerError("VALIDATION", "the primary bot cannot be deleted");
+    }
+    return this.bots.splice(i, 1)[0]!;
+  }
+
+  /** Lowest free window index, or CONFLICT when all screens are in use. */
+  allocateDisplay(): number {
+    for (let d = 1; d <= MAX_DISPLAYS; d++) {
+      if (!this.bots.some((b) => b.display === d)) return d;
+    }
+    throw new ComputerError("CONFLICT", `all ${MAX_DISPLAYS} screens are in use — delete a bot first`);
   }
 
   all(): readonly Bot[] {
     return this.bots;
   }
 
+  configs(): BotConfig[] {
+    return this.bots.map((b) => ({ id: b.id as string, display: b.display, token: b.token }));
+  }
+
+  tokenEntries(): [token: string, botId: string][] {
+    return this.bots.map((b) => [b.token, b.id as string]);
+  }
+
   primary(): Bot {
-    return this.bots.find((b) => b.display === PRIMARY_DISPLAY) ?? this.bots[0]!;
+    const bot = this.bots.find((b) => b.display === PRIMARY_DISPLAY) ?? this.bots[0];
+    if (!bot) throw new ComputerError("DAEMON_DOWN", "no bots mounted");
+    return bot;
   }
 
   byId(id: string): Bot {
@@ -84,30 +122,4 @@ export class BotRegistry {
   hasDisplay(display: number): boolean {
     return this.bots.some((b) => b.display === display);
   }
-
-  /** Idempotently claim each configured window on the box. */
-  async ensureWindows(windows: WindowManager): Promise<void> {
-    for (const bot of this.bots) {
-      await windows.startWindow(bot.display, bot.token, bot.id);
-    }
-  }
-}
-
-/** COMPUTER_BOTS env JSON: [{"id":"main","display":1,"token":"…"}] */
-export function parseBotConfigs(raw: string): BotConfig[] {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    throw new Error("COMPUTER_BOTS must be JSON");
-  }
-  if (!Array.isArray(parsed)) throw new Error("COMPUTER_BOTS must be a JSON array");
-  return parsed.map((v) => {
-    const o = v as Record<string, unknown>;
-    return {
-      id: String(o.id ?? ""),
-      display: Number(o.display ?? 0),
-      token: String(o.token ?? ""),
-    };
-  });
 }

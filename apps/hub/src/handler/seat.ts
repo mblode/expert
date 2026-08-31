@@ -1,6 +1,7 @@
 import { SeatMethods } from "@computer/proto";
 import { ComputerError, DISPLAY, PRIMARY_DISPLAY, parseDisplay, type BoxStatus, type Button } from "@computer/shared";
 import type { Bot, BotRegistry } from "../service/bots.ts";
+import type { ProvisionService } from "../service/provision.ts";
 import type { AuthRegistry } from "./auth.ts";
 import { withSeatToken } from "./auth.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
@@ -9,6 +10,7 @@ import { requireObject } from "./router.ts";
 export type SeatDeps = {
   auth: AuthRegistry;
   bots: BotRegistry;
+  provision: ProvisionService;
   vncUrl: string;
 };
 
@@ -123,6 +125,28 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     if (typeof o.text !== "string") throw new ComputerError("VALIDATION", "text is required");
     await bot.desk.clipboardSet(o.text);
     return { text: o.text };
+  });
+
+  // Provisioning: a paired seat is the box owner.
+  router.rpc(SeatMethods.CreateBot, "seat", async (ctx) => {
+    requireSeatToken(ctx);
+    const o = requireObject(ctx.body);
+    if (typeof o.id !== "string" || o.id.length === 0) {
+      throw new ComputerError("VALIDATION", "id is required, e.g. {\"id\":\"night\"}");
+    }
+    const bot = await deps.provision.create(o.id);
+    // The token appears exactly once, here.
+    return { id: bot.id, display: bot.display, token: bot.token };
+  });
+
+  router.rpc(SeatMethods.DeleteBot, "seat", async (ctx) => {
+    requireSeatToken(ctx);
+    const o = requireObject(ctx.body);
+    if (typeof o.id !== "string" || o.id.length === 0) {
+      throw new ComputerError("VALIDATION", "id is required");
+    }
+    await deps.provision.remove(o.id);
+    return status(ctx.bearer!);
   });
 }
 

@@ -65,8 +65,13 @@ export class DockerWindowManager implements WindowManager {
 export class NoopWindowManager implements WindowManager {
   started: number[] = [];
   stopped: number[] = [];
+  failNext = false;
 
   async startWindow(display: number): Promise<void> {
+    if (this.failNext) {
+      this.failNext = false;
+      throw new ComputerError("DAEMON_DOWN", `start-window ${display} failed`);
+    }
     this.started.push(display);
   }
 

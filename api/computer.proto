@@ -18,10 +18,13 @@ service Seat {
   rpc Status(StatusRequest) returns (BoxStatus);
   rpc SetPresence(SetPresenceRequest) returns (BoxStatus);
   rpc Pointer(PointerRequest) returns (PointerResponse);
-  // Qualified: method name Type otherwise shadows message Type.
-  rpc Type(computer.v1.Type) returns (PointerResponse);
+  rpc Type(SeatTypeRequest) returns (PointerResponse);
   rpc ClipboardGet(ClipboardGetRequest) returns (Clipboard);
-  rpc ClipboardSet(Clipboard) returns (Clipboard);
+  rpc ClipboardSet(ClipboardSetRequest) returns (Clipboard);
+  // Provisioning: a paired seat is the box owner. The hub allocates the
+  // next free screen and mints the Bot's token — returned exactly once.
+  rpc CreateBot(CreateBotRequest) returns (BotCredentials);
+  rpc DeleteBot(DeleteBotRequest) returns (BoxStatus);
 }
 
 // --- shared ---
@@ -285,8 +288,34 @@ message PointerResponse {
   SeatState seat = 2;
 }
 
-message ClipboardGetRequest {}
+message SeatTypeRequest {
+  string text = 1;
+  int32 display = 2; // 0/absent = primary
+}
+
+message ClipboardGetRequest {
+  int32 display = 1; // 0/absent = primary
+}
+
+message ClipboardSetRequest {
+  string text = 1;
+  int32 display = 2; // 0/absent = primary
+}
 
 message Clipboard {
   string text = 1;
+}
+
+message CreateBotRequest {
+  string id = 1; // short name, e.g. "night"
+}
+
+message BotCredentials {
+  string id = 1;
+  int32 display = 2;
+  string token = 3; // shown once; the Bot's identity
+}
+
+message DeleteBotRequest {
+  string id = 1;
 }

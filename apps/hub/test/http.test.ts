@@ -173,7 +173,7 @@ describe("Connect HTTP", () => {
     expect(res.ok).toBe(true);
     const text = await res.text();
     expect(text).toContain("waiting");
-    expect(h.hub.seat.getState()).toBe("WAITING");
+    expect(h.hub.bots.primary().seat.getState()).toBe("WAITING");
   });
 
   it("GET /healthz is public and does not leak seat state", async () => {

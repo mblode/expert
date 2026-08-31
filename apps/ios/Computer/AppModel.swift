@@ -61,7 +61,7 @@ final class AppModel: ObservableObject {
             status = s
             // Keep the selection pinned to the same Bot across refreshes.
             if let sel = selectedScreen {
-                selectedScreen = s.screens?.first(where: { $0.botId == sel.botId })
+                selectedScreen = s.screens.first(where: { $0.botId == sel.botId })
             }
             waiting = (currentScreen?.state ?? s.state) == .waiting
         } catch {
@@ -72,6 +72,15 @@ final class AppModel: ObservableObject {
     func selectScreen(_ screen: ComputerV1.ScreenStatus) {
         selectedScreen = screen
         waiting = screen.state == .waiting
+    }
+
+    /// Provision a Bot on the fly. The hub allocates the screen and mints
+    /// the token; it is returned exactly once for the caller to show.
+    func createBot(id: String) async throws -> ComputerV1.BotCredentials {
+        guard let client else { throw URLError(.userAuthenticationRequired) }
+        let creds = try await client.createBot(id: id)
+        await refreshStatus()
+        return creds
     }
 
     func sendChat(_ text: String) async {

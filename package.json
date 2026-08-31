@@ -8,6 +8,9 @@
     "packages/proto"
   ],
   "scripts": {
+    "up": "node scripts/computer.mjs up",
+    "qr": "node scripts/computer.mjs qr",
+    "bot": "node scripts/computer.mjs bot",
     "proto:gen": "buf generate",
     "proto:check": "node scripts/proto-check.mjs",
     "lint": "node scripts/lint-layers.mjs",
@@ -20,5 +23,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
   }
 }

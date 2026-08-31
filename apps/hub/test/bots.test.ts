@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { createServer, type Server } from "node:net";
 import { FakeDesk } from "../src/desk/fake.ts";
-import { NoopWindowManager, ownerHash } from "../src/desk/windows.ts";
+import { ownerHash } from "../src/desk/windows.ts";
 import { BotRegistry } from "../src/service/bots.ts";
 import { rpc, startHub } from "./helper.ts";
 
@@ -12,11 +12,15 @@ type Opened = Awaited<ReturnType<typeof startHub>>;
 async function startTwoBots() {
   const deskA = new FakeDesk({ display: 1 });
   const deskB = new FakeDesk({ display: 2 });
-  const h = await startHub(deskA, {
+  const h = await startHub({
     bots: [
-      { id: "a", display: 1, token: "token-a", desk: deskA },
-      { id: "b", display: 2, token: "token-b", desk: deskB },
+      { id: "a", display: 1, token: "token-a" },
+      { id: "b", display: 2, token: "token-b" },
     ],
+    desks: new Map([
+      [1, deskA],
+      [2, deskB],
+    ]),
   });
   return { ...h, deskA, deskB };
 }
@@ -157,47 +161,136 @@ describe("bots: one shared box, one screen per Bot", () => {
     expect(await rb.text()).toContain("Hub is up");
   });
 
-  it("registry rejects duplicate displays, ids, and tokens", () => {
-    const desk = () => new FakeDesk();
-    expect(
-      () =>
-        new BotRegistry([
-          { id: "a", display: 1, token: "t1", desk: desk() },
-          { id: "a", display: 2, token: "t2", desk: desk() },
-        ]),
-    ).toThrow(/duplicate bot id/);
-    expect(
-      () =>
-        new BotRegistry([
-          { id: "a", display: 1, token: "t1", desk: desk() },
-          { id: "b", display: 1, token: "t2", desk: desk() },
-        ]),
-    ).toThrow(/duplicate bot display/);
-    expect(
-      () =>
-        new BotRegistry([
-          { id: "a", display: 1, token: "t1", desk: desk() },
-          { id: "b", display: 2, token: "t1", desk: desk() },
-        ]),
-    ).toThrow(/duplicate bot token/);
-    expect(() => new BotRegistry([{ id: "a", display: 9, token: "t1", desk: desk() }])).toThrow(/display must be/);
-  });
-
-  it("ensureWindows claims each configured display", async () => {
-    const desk = () => new FakeDesk();
-    const bots = new BotRegistry([
-      { id: "a", display: 1, token: "t1", desk: desk() },
-      { id: "b", display: 2, token: "t2", desk: desk() },
-    ]);
-    const windows = new NoopWindowManager();
-    await bots.ensureWindows(windows);
-    expect(windows.started).toEqual([1, 2]);
+  it("registry rejects duplicates, bad ids, and out-of-range displays", () => {
+    const factory = (display: number) => new FakeDesk({ display });
+    const make = (configs: Parameters<typeof BotRegistry.prototype.add>[0][]) =>
+      new BotRegistry(factory, configs);
+    expect(() =>
+      make([
+        { id: "a", display: 1, token: "t1" },
+        { id: "a", display: 2, token: "t2" },
+      ]),
+    ).toThrow(/already exists/);
+    expect(() =>
+      make([
+        { id: "a", display: 1, token: "t1" },
+        { id: "b", display: 1, token: "t2" },
+      ]),
+    ).toThrow(/display 1 is taken/);
+    expect(() =>
+      make([
+        { id: "a", display: 1, token: "t1" },
+        { id: "b", display: 2, token: "t1" },
+      ]),
+    ).toThrow(/token already in use/);
+    expect(() => make([{ id: "a", display: 9, token: "t1" }])).toThrow(/display must be/);
+    expect(() => make([{ id: "Bad Name!", display: 1, token: "t1" }])).toThrow(/bot id must be/);
   });
 
   it("owner hash is a sha256, never the raw token", () => {
     const h = ownerHash("token-a");
     expect(h).toMatch(/^[0-9a-f]{64}$/);
     expect(h).not.toContain("token-a");
+  });
+});
+
+describe("provisioning: computer as a service", () => {
+  const opened: Opened[] = [];
+  afterEach(async () => {
+    while (opened.length) await opened.pop()!.close();
+  });
+
+  it("boots an empty store into a primary bot with a minted token", async () => {
+    const h = await startHub({ bots: [] });
+    opened.push(h);
+    const bots = h.hub.bots.all();
+    expect(bots).toHaveLength(1);
+    expect(bots[0]!.id).toBe("main");
+    expect(bots[0]!.display).toBe(1);
+    expect(bots[0]!.token).toMatch(/^bot_/);
+    expect(h.store.load()).toHaveLength(1);
+    expect(h.windows.started).toEqual([1]);
+  });
+
+  it("CreateBot allocates the next screen, mints a token, claims the window, persists", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+
+    const r = (await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "night" }, token)) as {
+      id: string;
+      display: number;
+      token: string;
+    };
+    expect(r.id).toBe("night");
+    expect(r.display).toBe(2);
+    expect(r.token).toMatch(/^bot_/);
+    expect(h.windows.started).toContain(2);
+    expect(h.store.load().map((b) => b.id)).toEqual(["main", "night"]);
+
+    // The minted token drives the new screen immediately.
+    await rpc(h.url, "/computer.v1.Agent/Computer", { request_id: "r1", actions: [{ type: "click", x: 1, y: 1 }] }, r.token);
+    expect(h.desks.get(2)!.log).toContain("click left 1,1");
+  });
+
+  it("DeleteBot releases the screen and revokes the token", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    const r = (await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "night" }, token)) as { token: string };
+
+    await rpc(h.url, "/computer.v1.Seat/DeleteBot", { id: "night" }, token);
+    expect(h.windows.stopped).toEqual([2]);
+    expect(h.store.load().map((b) => b.id)).toEqual(["main"]);
+    await expect(rpc(h.url, "/computer.v1.Agent/Spec", {}, r.token)).rejects.toMatchObject({
+      code: "UNAUTHENTICATED",
+    });
+    // The display is free again.
+    const again = (await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "day" }, token)) as { display: number };
+    expect(again.display).toBe(2);
+  });
+
+  it("refuses duplicates, bad ids, deleting the primary, and requires a seat token", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    await expect(rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "main" }, token)).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    await expect(rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "Bad Name!" }, token)).rejects.toMatchObject({
+      code: "VALIDATION",
+    });
+    await expect(rpc(h.url, "/computer.v1.Seat/DeleteBot", { id: "main" }, token)).rejects.toMatchObject({
+      code: "VALIDATION",
+    });
+    await expect(rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "x" }, h.agent)).rejects.toMatchObject({
+      code: "UNAUTHENTICATED",
+    });
+  });
+
+  it("caps the box at 8 screens with a CONFLICT that names the fix", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    for (let i = 2; i <= 8; i++) {
+      await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: `bot-${i}` }, token);
+    }
+    await expect(rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "one-more" }, token)).rejects.toMatchObject({
+      code: "CONFLICT",
+      message: expect.stringContaining("delete a bot"),
+    });
+  });
+
+  it("a failed window claim rolls the bot back", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    h.windows.failNext = true;
+    await expect(rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "night" }, token)).rejects.toMatchObject({
+      code: "DAEMON_DOWN",
+    });
+    expect(h.hub.bots.all().map((b) => b.id)).toEqual(["main"]);
+    expect(h.store.load().map((b) => b.id)).toEqual(["main"]);
   });
 });
 
@@ -248,18 +341,16 @@ describe("vnc proxy display routing", () => {
     // Reserve two adjacent ports by binding throwaway servers, then reuse.
     const a = await fakeRfb("rfb-display-1");
     const basePort = a.port - 1;
-    const deskA = new FakeDesk({ display: 1 });
-    const deskB = new FakeDesk({ display: 2 });
     const b = await new Promise<Server>((resolve, reject) => {
       const server = createServer((sock) => sock.write("rfb-display-2"));
       servers.push(server);
       server.once("error", reject);
       server.listen(basePort + 2, "127.0.0.1", () => resolve(server));
     }).catch(() => null);
-    const h = await startHub(deskA, {
+    const h = await startHub({
       bots: [
-        { id: "a", display: 1, token: "token-a", desk: deskA },
-        { id: "b", display: 2, token: "token-b", desk: deskB },
+        { id: "a", display: 1, token: "token-a" },
+        { id: "b", display: 2, token: "token-b" },
       ],
       vncBasePort: basePort,
     });

@@ -8,6 +8,10 @@ struct ComputerView: View {
     @State private var showKeyboard = false
     @State private var typed = ""
     @State private var showMenu = false
+    @State private var showNewBot = false
+    @State private var newBotId = ""
+    @State private var newBotResult: String?
+    @State private var newBotToken: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -108,22 +112,55 @@ struct ComputerView: View {
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
             }
-            if model.screens.count > 1 {
-                Menu {
-                    ForEach(model.screens) { screen in
-                        Button {
-                            model.selectScreen(screen)
-                        } label: {
-                            if screen.display == model.currentScreen?.display {
-                                Label(screen.botId, systemImage: "checkmark")
-                            } else {
-                                Text(screen.botId)
-                            }
+            Menu {
+                ForEach(model.screens) { screen in
+                    Button {
+                        model.selectScreen(screen)
+                    } label: {
+                        if screen.display == model.currentScreen?.display {
+                            Label(screen.botId, systemImage: "checkmark")
+                        } else {
+                            Text(screen.botId)
                         }
                     }
-                } label: {
-                    Label("Screen", systemImage: "rectangle.on.rectangle")
                 }
+                Divider()
+                Button {
+                    showNewBot = true
+                } label: {
+                    Label("New Bot…", systemImage: "plus")
+                }
+            } label: {
+                Label("Screen", systemImage: "rectangle.on.rectangle")
+            }
+            .alert("New Bot", isPresented: $showNewBot) {
+                TextField("name, e.g. night", text: $newBotId)
+                    .textInputAutocapitalization(.never)
+                Button("Create") {
+                    let id = newBotId.trimmingCharacters(in: .whitespaces)
+                    newBotId = ""
+                    Task {
+                        do {
+                            let creds = try await model.createBot(id: id)
+                            newBotToken = creds.token
+                            newBotResult = "\(creds.id) is live on screen \(creds.display).\n\nToken (shown once):\n\(creds.token)"
+                        } catch {
+                            newBotToken = nil
+                            newBotResult = error.localizedDescription
+                        }
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Gets its own screen on the shared box.")
+            }
+            .alert("Bot", isPresented: .init(get: { newBotResult != nil }, set: { if !$0 { newBotResult = nil } })) {
+                if newBotToken != nil {
+                    Button("Copy token") { UIPasteboard.general.string = newBotToken }
+                }
+                Button("Done", role: .cancel) {}
+            } message: {
+                Text(newBotResult ?? "")
             }
             Spacer()
             Button {
@@ -159,7 +196,7 @@ final class SeatController: ObservableObject {
     func move(dx: Int, dy: Int, grab: Bool = false) async {
         guard let client else { return }
         do {
-            let r = try await client.pointer(.move(dx: dx, dy: dy, grab: grab), display: display)
+            let r = try await client.pointer(.move(dx: dx, dy: dy, grab: grab, display: display))
             cursor = r.cursor
         } catch { }
     }
@@ -167,7 +204,7 @@ final class SeatController: ObservableObject {
     func click(button: String = "left") async {
         guard let client else { return }
         do {
-            let r = try await client.pointer(.click(button: button), display: display)
+            let r = try await client.pointer(.click(button: button, display: display))
             cursor = r.cursor
         } catch { }
     }

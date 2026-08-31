@@ -31,27 +31,35 @@ struct ComputerClient: Sendable {
     }
 
     func status(display: Int? = nil) async throws -> ComputerV1.BoxStatus {
-        try await post(ComputerV1.seatPaths.status, ComputerV1.DisplayScoped([String: String](), display: display))
+        try await post(ComputerV1.seatPaths.status, ComputerV1.StatusRequest(display: display))
     }
 
     func setPresence(present: Bool, display: Int? = nil) async throws -> ComputerV1.BoxStatus {
         try await post(ComputerV1.seatPaths.setPresence, ComputerV1.SetPresenceRequest(present: present, display: display))
     }
 
-    func pointer(_ req: ComputerV1.PointerRequest, display: Int? = nil) async throws -> ComputerV1.PointerResponse {
-        try await post(ComputerV1.seatPaths.pointer, ComputerV1.DisplayScoped(req, display: display))
+    func pointer(_ req: ComputerV1.PointerRequest) async throws -> ComputerV1.PointerResponse {
+        try await post(ComputerV1.seatPaths.pointer, req)
     }
 
     func type(_ text: String, display: Int? = nil) async throws -> ComputerV1.PointerResponse {
-        try await post(ComputerV1.seatPaths.type, ComputerV1.DisplayScoped(ComputerV1.TypeRequest(text: text), display: display))
+        try await post(ComputerV1.seatPaths.type, ComputerV1.TypeRequest(text: text, display: display))
     }
 
     func clipboardGet(display: Int? = nil) async throws -> ComputerV1.Clipboard {
-        try await post(ComputerV1.seatPaths.clipboardGet, ComputerV1.DisplayScoped([String: String](), display: display))
+        try await post(ComputerV1.seatPaths.clipboardGet, ComputerV1.ClipboardGetRequest(display: display))
     }
 
     func clipboardSet(_ text: String, display: Int? = nil) async throws -> ComputerV1.Clipboard {
-        try await post(ComputerV1.seatPaths.clipboardSet, ComputerV1.DisplayScoped(ComputerV1.Clipboard(text: text), display: display))
+        try await post(ComputerV1.seatPaths.clipboardSet, ComputerV1.ClipboardSetRequest(text: text, display: display))
+    }
+
+    func createBot(id: String) async throws -> ComputerV1.BotCredentials {
+        try await post(ComputerV1.seatPaths.createBot, ComputerV1.CreateBotRequest(id: id))
+    }
+
+    func deleteBot(id: String) async throws -> ComputerV1.BoxStatus {
+        try await post(ComputerV1.seatPaths.deleteBot, ComputerV1.DeleteBotRequest(id: id))
     }
 
     func chat(message: String, botId: String? = nil, onEvent: @escaping @Sendable (ChatEvent) -> Void) async throws {

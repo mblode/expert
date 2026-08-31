@@ -1,0 +1,23 @@
+#cloud-config
+# Computer on a fresh Ubuntu 24.04 VM (Hetzner CX33 works well) in one paste.
+#
+#   1. Create the server with this file as cloud-init user data.
+#   2. ssh in, run: tailscale up
+#   3. cd /opt/computer && npm run up
+#   4. Scan the QR from Computer.app. Done.
+#
+# The hub stays on loopback; Tailscale Serve is the only way in.
+
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - git
+
+runcmd:
+  - curl -fsSL https://get.docker.com | sh
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  - apt-get install -y nodejs
+  - git clone https://github.com/mblode/expert-computer /opt/computer
+  - cd /opt/computer && npm install

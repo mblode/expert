@@ -8,16 +8,16 @@ export type Verified = { kind: TokenKind | "public"; botId?: string };
 
 export class AuthRegistry {
   private readonly setupCode: string;
-  /** token → bot id. One entry per Bot; the token identifies the Bot. */
-  private readonly agentTokens: Map<string, string>;
+  /** Live view of the roster: [token, botId] pairs. Provisioning needs no auth sync. */
+  private readonly agentTokens: () => Iterable<[string, string]>;
   private readonly seatTokens = new Set<string>();
 
-  constructor(opts: { setupCode: string; agentToken?: string; agentTokens?: Map<string, string> }) {
-    if (!opts.setupCode) throw new Error("COMPUTER_SETUP_CODE is required");
+  constructor(opts: { setupCode: string; agentTokens: () => Iterable<[string, string]> }) {
+    if (!opts.setupCode) {
+      throw new Error("COMPUTER_SETUP_CODE is required — run `npm run up` to generate one");
+    }
     this.setupCode = opts.setupCode;
-    this.agentTokens = new Map(opts.agentTokens ?? []);
-    if (opts.agentToken) this.agentTokens.set(opts.agentToken, "main");
-    if (this.agentTokens.size === 0) throw new Error("COMPUTER_AGENT_TOKEN is required");
+    this.agentTokens = opts.agentTokens;
   }
 
   pair(code: string): string {
@@ -35,11 +35,11 @@ export class AuthRegistry {
     if (policy === "agent") {
       // Constant-time compare against every entry; no early exit on match.
       let botId: string | undefined;
-      for (const [token, id] of this.agentTokens) {
+      for (const [token, id] of this.agentTokens()) {
         if (safeEqual(bearer, token)) botId = id;
       }
       if (botId === undefined) {
-        throw new ComputerError("UNAUTHENTICATED", "bad bearer");
+        throw new ComputerError("UNAUTHENTICATED", "bad bearer — a bot token comes from CreateBot or `npm run bot -- token <id>`");
       }
       return { kind: "agent", botId };
     }

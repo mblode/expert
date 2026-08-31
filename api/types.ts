@@ -104,6 +104,9 @@ export interface Seat {
   type(req: { text: string; display?: number }): Promise<{ cursor: Point; seat: SeatState }>;
   clipboardGet(req?: { display?: number }): Promise<{ text: string }>;
   clipboardSet(req: { text: string; display?: number }): Promise<{ text: string }>;
+  /** Provisioning: a paired seat is the box owner. The token appears exactly once. */
+  createBot(req: { id: string }): Promise<{ id: string; display: number; token: string }>;
+  deleteBot(req: { id: string }): Promise<BoxStatus>;
 }
 
 /** Window index = X display number. Primary is :1; forks are :2+. */
@@ -121,5 +124,5 @@ export type BoxStatus = {
   state: SeatState;
   vnc_url: string;
   display: Display;
-  screens?: ScreenStatus[];
+  screens: ScreenStatus[];
 };
