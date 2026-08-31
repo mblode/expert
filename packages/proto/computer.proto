@@ -18,7 +18,8 @@ service Seat {
   rpc Status(StatusRequest) returns (BoxStatus);
   rpc SetPresence(SetPresenceRequest) returns (BoxStatus);
   rpc Pointer(PointerRequest) returns (PointerResponse);
-  rpc Type(Type) returns (PointerResponse);
+  // Qualified: method name Type otherwise shadows message Type.
+  rpc Type(computer.v1.Type) returns (PointerResponse);
   rpc ClipboardGet(ClipboardGetRequest) returns (Clipboard);
   rpc ClipboardSet(Clipboard) returns (Clipboard);
 }

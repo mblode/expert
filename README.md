@@ -12,7 +12,7 @@ Protocol: [api/DESIGN.md](api/DESIGN.md). This is a clean-room Apache-2.0 implem
 apps/hub/       ConnectRPC, noVNC static, agent loop
 apps/desk/      Ubuntu + Openbox + Chromium + TigerVNC + uinput
 apps/ios/       Computer.xcodeproj (SwiftUI, iOS 18+)
-packages/proto  computer.proto → TS + Swift
+packages/proto  buf generate (protoc-gen-es + Swift) from api/computer.proto
 packages/shared branded IDs, error codes
 ```
 
@@ -66,6 +66,9 @@ The product proof is cellular, lid shut: pair → chat → Open Computer → tak
 ## Checks
 
 ```sh
-npm run proto:check
+npm run proto:gen      # buf lint is included in proto:check
+npm run proto:check    # copy + buf lint + generate + gen/ is committed
 npm test --workspace=apps/hub
 ```
+
+`api/computer.proto` is the source of truth. `buf.yaml` compiles it; `packages/proto/gen` is the committed output (TypeScript + Swift).

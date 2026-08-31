@@ -8,6 +8,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "^2.10.0",
     "@computer/proto": "*",
     "@computer/shared": "*",
     "@novnc/novnc": "^1.6.0",

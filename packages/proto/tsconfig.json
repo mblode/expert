@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "noEmit": true,
-    "rootDir": "ts"
+    "rootDir": ".",
+    "allowJs": false
   },
-  "include": ["ts"]
+  "include": ["ts", "gen/es"]
 }

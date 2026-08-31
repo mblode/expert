@@ -1,5 +1,6 @@
-// computer.v1 — Swift view of api/computer.proto / DESIGN.md
-// Hand-written Codable (no protobuf plugin). Keep in lockstep with packages/proto/ts.
+// computer.v1 — Codable JSON view for Computer.app (Connect-JSON).
+// Buf output (SwiftProtobuf + Connect-Swift): ../gen/swift
+// Keep field names in lockstep with api/computer.proto.
 
 import Foundation
 

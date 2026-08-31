@@ -41,7 +41,7 @@ service Seat {
   rpc Status
   rpc SetPresence
   rpc Pointer
-  rpc Type
+  rpc Type              // request is message Type; proto writes computer.v1.Type so the name does not shadow
   rpc ClipboardGet
   rpc ClipboardSet
 }
