@@ -116,8 +116,11 @@ async function bot(args) {
       console.log("");
       console.log(`  token: ${r.token}`);
       console.log("");
-      console.log("This token is the Bot's identity — it is shown once. Point your agent at it:");
-      console.log(`  curl -X POST ${env.COMPUTER_PUBLIC_URL}/computer.v1.Agent/Spec -H "Authorization: Bearer ${r.token}"`);
+      console.log("This token is the Bot's identity — it is shown once.");
+      console.log("Give it a brain — paste into apps/eve/.env and `npm run eve`:");
+      console.log("");
+      console.log(`  COMPUTER_URL=http://127.0.0.1:${env.COMPUTER_PORT}`);
+      console.log(`  COMPUTER_BOT_TOKEN=${r.token}`);
       break;
     }
     case "rm": {

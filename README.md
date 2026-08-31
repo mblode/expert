@@ -26,13 +26,26 @@ npm run bot -- rm night    # frees the screen
 
 The phone can do the same: `Seat.CreateBot` / `Seat.DeleteBot` — a paired seat is the box owner.
 
+## Eve as the harness
+
+[Eve](https://eve.dev) (Vercel's agent framework) is the brain; this box is the body. `apps/eve/` is an Eve agent whose four tools are the computer — `computer` even hands the model screenshots as vision input — plus a persona (`agent/instructions.md`) and a computer-use playbook (`agent/skills/computer-use.md`).
+
+```sh
+npm run bot -- new eve      # prints the two lines for apps/eve/.env
+cd apps/eve && cp .env.example .env   # paste token, set AI_GATEWAY_API_KEY
+npm run eve                 # (from the root) talk to Eve in the dev REPL
+```
+
+Eve runs **on the box**, beside the hub, over loopback — nothing public. She keeps her state in `/workspace`, drives her own screen, and when she hits a 2FA prompt she calls `request_takeover`: your phone banners, you take the seat, tap I'm done, she continues. Her first `shell` call each session asks you once (Eve's approval gate); everything else flows. Requires Node ≥24 for the Eve runtime (the hub itself runs on ≥20). Deploying Eve to Vercel instead works but needs Tailscale Funnel to reach the box — deliberately not the default.
+
 Fresh cloud box instead? Paste [deploy/cloud-init.yaml](deploy/cloud-init.yaml) into a new Ubuntu 24.04 VM (a Hetzner CX33 at €8.49/mo is plenty), `tailscale up`, `npm run up`.
 
 ## Shape
 
 ```
-apps/hub/       ConnectRPC, noVNC static, agent loop, provisioning
+apps/hub/       ConnectRPC, noVNC static, fallback chat loop, provisioning
 apps/desk/      Ubuntu + Openbox + Chromium + TigerVNC + uinput/XTEST
+apps/eve/       Eve agent (eve.dev): the harness — persona, skills, computer tools
 apps/ios/       Computer.xcodeproj (SwiftUI, iOS 18+)
 packages/proto  buf generate (protoc-gen-es + Swift) from api/computer.proto
 packages/shared branded IDs, error codes

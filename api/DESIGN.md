@@ -258,6 +258,11 @@ Native is the protocol. Hosted CUAs wrap it.
 A 64-tool MCP server is not an adapter. It is the thing this design
 refuses.
 
+The reference external harness is `apps/eve` (eve.dev): four `defineTool`
+wrappers over the Agent RPCs, screenshots forwarded as vision input via
+`toModelOutput`. Any harness that can hold a bearer token and POST JSON
+can be a Bot's brain.
+
 ## Version
 
 `computer.v1`. Additive fields are fine. New actions require v2.

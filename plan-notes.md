@@ -19,6 +19,24 @@ below is the only contract.
 - Fork displays (`:2+`) use XTEST via `xdotool` with `DISPLAY=:N` (uinput is kernel-global and cannot target one X display). Primary keeps uinputd; `COMPUTER_INPUT_BACKEND` overrides.
 - Owner identity on the box is `sha256(bot token)` in `~/.window-assignments.json` — raw bearers never land on the shared filesystem.
 
+## Eve run (2026-08-31)
+
+Eve (eve.dev, Vercel's agent framework) is now the reference harness; this
+supersedes the briefly-started "persistent per-Bot threads in the hub" idea —
+Eve's durable workflows are the persistent thread, and the hub's chat loop
+stays only as the zero-dependency fallback.
+
+- `apps/eve/` is a standalone Eve app (deliberately NOT a root npm workspace:
+  the eve runtime needs Node ≥24 while the hub runs ≥20, and its package
+  depends on `eve` which would collide with workspace linking).
+- The four tools wrap the Agent RPCs; `computer` uses `toModelOutput` to hand
+  every screenshot/zoom image to the model as vision input while keeping the
+  text summary image-free. `shell` carries Eve's `once()` approval gate.
+- Verified with the tool executors driven directly against a fake-desk hub:
+  write/read round-trip, shell echo, screenshot→vision parts,
+  `request_takeover` → WAITING, `SEAT_HELD` surfaced as a tool error. The
+  interactive `npm run eve` REPL needs a model key (AI Gateway) — user-side.
+
 ## Run end
 
 Host (this Linux agent, 2026-08-31):
