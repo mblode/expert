@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+export DISPLAY="${DISPLAY:-:1}"
+out="$(mktemp /tmp/shot.XXXXXX.png)"
+cleanup() { rm -f "$out"; }
+trap cleanup EXIT
+
+if [[ -n "${1:-}" ]]; then
+  # crop WxH+X+Y from a full 1280×800 shot — zoom does not rematch coords
+  IFS=',' read -r x y w h <<<"$1"
+  import -window root -crop "${w}x${h}+${x}+${y}" "png:$out"
+else
+  import -window root "png:$out"
+fi
+cat "$out"

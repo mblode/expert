@@ -1,0 +1,24 @@
+services:
+  desk:
+    image: computer-desk
+    container_name: computer-desk
+    build:
+      context: ./apps/desk
+    hostname: desk
+    restart: unless-stopped
+    environment:
+      DISPLAY: ":1"
+    volumes:
+      - workspace:/workspace
+      - browser:/home/box/.config/chromium
+    devices:
+      - /dev/uinput:/dev/uinput
+    group_add:
+      - "0" # root group often owns uinput; fallback is the device mount
+    ports:
+      - "127.0.0.1:5900:5900"
+    shm_size: "1gb"
+
+volumes:
+  workspace:
+  browser:

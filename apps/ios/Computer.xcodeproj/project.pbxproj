@@ -1,0 +1,457 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B10000000000000000000001 /* ComputerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000001 /* ComputerApp.swift */; };
+		B10000000000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000002 /* AppModel.swift */; };
+		B10000000000000000000003 /* KeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000003 /* KeychainStore.swift */; };
+		B10000000000000000000004 /* ComputerClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000004 /* ComputerClient.swift */; };
+		B10000000000000000000005 /* CoordinateMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* CoordinateMap.swift */; };
+		B10000000000000000000006 /* ComputerV1.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* ComputerV1.swift */; };
+		B10000000000000000000007 /* PairView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000007 /* PairView.swift */; };
+		B10000000000000000000008 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000008 /* QRScanner.swift */; };
+		B10000000000000000000009 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000009 /* ChatView.swift */; };
+		B1000000000000000000000A /* ComputerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000A /* ComputerView.swift */; };
+		B1000000000000000000000B /* VncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000B /* VncView.swift */; };
+		B1000000000000000000000C /* GestureOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000C /* GestureOverlay.swift */; };
+		B1000000000000000000000D /* DesktopGestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000D /* DesktopGestures.swift */; };
+		B1000000000000000000000E /* ClipboardSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000E /* ClipboardSheet.swift */; };
+		B1000000000000000000000F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000F /* Assets.xcassets */; };
+		B10000000000000000000020 /* CoordinateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000020 /* CoordinateTests.swift */; };
+		B10000000000000000000021 /* PairTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000021 /* PairTests.swift */; };
+		B10000000000000000000022 /* ClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000022 /* ClientTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		D10000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A10000000000000000000010;
+			remoteInfo = Computer;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		C10000000000000000000001 /* ComputerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerApp.swift; sourceTree = "<group>"; };
+		C10000000000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		C10000000000000000000003 /* KeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainStore.swift; sourceTree = "<group>"; };
+		C10000000000000000000004 /* ComputerClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerClient.swift; sourceTree = "<group>"; };
+		C10000000000000000000005 /* CoordinateMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinateMap.swift; sourceTree = "<group>"; };
+		C10000000000000000000006 /* ComputerV1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerV1.swift; sourceTree = "<group>"; };
+		C10000000000000000000007 /* PairView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairView.swift; sourceTree = "<group>"; };
+		C10000000000000000000008 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
+		C10000000000000000000009 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		C1000000000000000000000A /* ComputerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerView.swift; sourceTree = "<group>"; };
+		C1000000000000000000000B /* VncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VncView.swift; sourceTree = "<group>"; };
+		C1000000000000000000000C /* GestureOverlay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GestureOverlay.swift; sourceTree = "<group>"; };
+		C1000000000000000000000D /* DesktopGestures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopGestures.swift; sourceTree = "<group>"; };
+		C1000000000000000000000E /* ClipboardSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSheet.swift; sourceTree = "<group>"; };
+		C1000000000000000000000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		C10000000000000000000020 /* CoordinateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinateTests.swift; sourceTree = "<group>"; };
+		C10000000000000000000021 /* PairTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairTests.swift; sourceTree = "<group>"; };
+		C10000000000000000000022 /* ClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientTests.swift; sourceTree = "<group>"; };
+		C10000000000000000000030 /* Computer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Computer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C10000000000000000000031 /* ComputerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ComputerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E10000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E10000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A10000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				A10000000000000000000004 /* Computer */,
+				A10000000000000000000008 /* ComputerTests */,
+				A10000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A10000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				C10000000000000000000030 /* Computer.app */,
+				C10000000000000000000031 /* ComputerTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000004 /* Computer */ = {
+			isa = PBXGroup;
+			children = (
+				C10000000000000000000001 /* ComputerApp.swift */,
+				C10000000000000000000002 /* AppModel.swift */,
+				A10000000000000000000005 /* Models */,
+				A10000000000000000000006 /* Screens */,
+				A10000000000000000000007 /* Views */,
+				C1000000000000000000000F /* Assets.xcassets */,
+			);
+			path = Computer;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000005 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				C10000000000000000000003 /* KeychainStore.swift */,
+				C10000000000000000000004 /* ComputerClient.swift */,
+				C10000000000000000000005 /* CoordinateMap.swift */,
+				C10000000000000000000006 /* ComputerV1.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000006 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				C10000000000000000000007 /* PairView.swift */,
+				C10000000000000000000008 /* QRScanner.swift */,
+				C10000000000000000000009 /* ChatView.swift */,
+				C1000000000000000000000A /* ComputerView.swift */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				C1000000000000000000000B /* VncView.swift */,
+				C1000000000000000000000C /* GestureOverlay.swift */,
+				C1000000000000000000000D /* DesktopGestures.swift */,
+				C1000000000000000000000E /* ClipboardSheet.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A10000000000000000000008 /* ComputerTests */ = {
+			isa = PBXGroup;
+			children = (
+				C10000000000000000000020 /* CoordinateTests.swift */,
+				C10000000000000000000021 /* PairTests.swift */,
+				C10000000000000000000022 /* ClientTests.swift */,
+			);
+			path = ComputerTests;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A10000000000000000000010 /* Computer */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F10000000000000000000001 /* Build configuration list for PBXNativeTarget "Computer" */;
+			buildPhases = (
+				P10000000000000000000001 /* Sources */,
+				E10000000000000000000001 /* Frameworks */,
+				R10000000000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Computer;
+			productName = Computer;
+			productReference = C10000000000000000000030 /* Computer.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A10000000000000000000011 /* ComputerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = F10000000000000000000002 /* Build configuration list for PBXNativeTarget "ComputerTests" */;
+			buildPhases = (
+				P10000000000000000000002 /* Sources */,
+				E10000000000000000000002 /* Frameworks */,
+				R10000000000000000000002 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				T10000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = ComputerTests;
+			productName = ComputerTests;
+			productReference = C10000000000000000000031 /* ComputerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A10000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A10000000000000000000010 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					A10000000000000000000011 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A10000000000000000000010;
+					};
+				};
+			};
+			buildConfigurationList = F10000000000000000000000 /* Build configuration list for PBXProject "Computer" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A10000000000000000000002;
+			productRefGroup = A10000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A10000000000000000000010 /* Computer */,
+				A10000000000000000000011 /* ComputerTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		R10000000000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B1000000000000000000000F /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		R10000000000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		P10000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000001 /* ComputerApp.swift in Sources */,
+				B10000000000000000000002 /* AppModel.swift in Sources */,
+				B10000000000000000000003 /* KeychainStore.swift in Sources */,
+				B10000000000000000000004 /* ComputerClient.swift in Sources */,
+				B10000000000000000000005 /* CoordinateMap.swift in Sources */,
+				B10000000000000000000006 /* ComputerV1.swift in Sources */,
+				B10000000000000000000007 /* PairView.swift in Sources */,
+				B10000000000000000000008 /* QRScanner.swift in Sources */,
+				B10000000000000000000009 /* ChatView.swift in Sources */,
+				B1000000000000000000000A /* ComputerView.swift in Sources */,
+				B1000000000000000000000B /* VncView.swift in Sources */,
+				B1000000000000000000000C /* GestureOverlay.swift in Sources */,
+				B1000000000000000000000D /* DesktopGestures.swift in Sources */,
+				B1000000000000000000000E /* ClipboardSheet.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		P10000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B10000000000000000000020 /* CoordinateTests.swift in Sources */,
+				B10000000000000000000021 /* PairTests.swift in Sources */,
+				B10000000000000000000022 /* ClientTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		T10000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A10000000000000000000010 /* Computer */;
+			targetProxy = D10000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		G10000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_TESTABILITY = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		G10000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_VERSION = 5.0;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		G10000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Computer;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan a pairing QR code from the hub.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Reach the Computer hub on your tailnet.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.blode.computer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		G10000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = Computer;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan a pairing QR code from the hub.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Reach the Computer hub on your tailnet.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.blode.computer;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		G10000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.blode.computer.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Computer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Computer";
+			};
+			name = Debug;
+		};
+		G10000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = co.blode.computer.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Computer.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Computer";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F10000000000000000000000 /* Build configuration list for PBXProject "Computer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G10000000000000000000001 /* Debug */,
+				G10000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F10000000000000000000001 /* Build configuration list for PBXNativeTarget "Computer" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G10000000000000000000003 /* Debug */,
+				G10000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		F10000000000000000000002 /* Build configuration list for PBXNativeTarget "ComputerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				G10000000000000000000005 /* Debug */,
+				G10000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A10000000000000000000001 /* Project object */;
+}

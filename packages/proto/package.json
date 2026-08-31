@@ -1,0 +1,11 @@
+{
+  "name": "@computer/proto",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./ts/index.ts"
+  },
+  "dependencies": {
+    "@computer/shared": "*"
+  }
+}

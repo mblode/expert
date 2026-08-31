@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Computer debug viewer</title>
+    <style>
+      :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+      body { margin: 0; background: #111; color: #eee; }
+      header { padding: 12px 16px; background: #1b1b1b; border-bottom: 1px solid #333; }
+      header strong { color: #f5c16c; }
+      iframe { border: 0; width: 1280px; height: 800px; background: #000; }
+      p { margin: 8px 16px; max-width: 72ch; color: #aaa; }
+    </style>
+  </head>
+  <body>
+    <header><strong>Debug only.</strong> Product surface is Computer.app on iPhone.</header>
+    <p>Pixels are view-only noVNC. Clipboard and presence are Seat RPCs, not RFB.</p>
+    <iframe src="/vnc/index.html?view_only=1" width="1280" height="800" title="desk"></iframe>
+  </body>
+</html>
