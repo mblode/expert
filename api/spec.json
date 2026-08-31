@@ -1,0 +1,243 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "id": "computer.v1",
+  "version": "1.0.0",
+  "title": "Computer",
+  "display": { "width": 1280, "height": 800, "scale": 1, "origin": "top-left" },
+  "workspace": "/workspace",
+  "auth": { "type": "bearer", "header": "Authorization" },
+  "error": {
+    "shape": { "error": { "code": "string", "message": "string" } },
+    "codes": [
+      "UNAUTHENTICATED",
+      "SEAT_HELD",
+      "OUT_OF_BOUNDS",
+      "PATH_REJECTED",
+      "DAEMON_DOWN",
+      "VALIDATION",
+      "CONFLICT"
+    ]
+  },
+  "seat": {
+    "states": ["AGENT", "WAITING", "HUMAN"],
+    "transitions": [
+      { "from": "AGENT", "to": "WAITING", "via": "computer.request_takeover" },
+      { "from": "WAITING", "to": "HUMAN", "via": "Seat.Pointer | Seat.ClipboardGet | Seat.ClipboardSet" },
+      { "from": "WAITING", "to": "AGENT", "via": "Seat.SetPresence present=false" },
+      { "from": "HUMAN", "to": "AGENT", "via": "Seat.SetPresence present=false" }
+    ]
+  },
+  "services": {
+    "Agent": {
+      "audience": "model",
+      "rpcs": ["Spec", "Computer", "Shell", "ReadFile", "WriteFile"]
+    },
+    "Seat": {
+      "audience": "iphone",
+      "rpcs": ["Pair", "Status", "SetPresence", "Pointer", "Type", "ClipboardGet", "ClipboardSet"]
+    }
+  },
+  "tools": [
+    {
+      "name": "computer",
+      "description": "Use the desktop. Actions run in order on a 1280×800 display. Coordinates are pixels of the last full-display screenshot, origin top-left. A zoomed image does not change the coordinate space. On the first failing action the rest are skipped. If the seat is WAITING or HUMAN the call fails with SEAT_HELD.",
+      "input": {
+        "type": "object",
+        "required": ["request_id", "actions"],
+        "additionalProperties": false,
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Idempotency key. Retry with the same id to receive the first response."
+          },
+          "actions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": { "$ref": "#/$defs/action" }
+          }
+        }
+      }
+    },
+    {
+      "name": "shell",
+      "description": "Run argv in /workspace. Not a login shell.",
+      "input": {
+        "type": "object",
+        "required": ["request_id", "argv"],
+        "additionalProperties": false,
+        "properties": {
+          "request_id": { "type": "string", "minLength": 1 },
+          "argv": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 32,
+            "items": { "type": "string" }
+          },
+          "cwd": { "type": "string" },
+          "timeout_sec": { "type": "integer", "minimum": 1, "maximum": 120, "default": 30 }
+        }
+      }
+    },
+    {
+      "name": "read_file",
+      "description": "Read a utf-8 file under /workspace.",
+      "input": {
+        "type": "object",
+        "required": ["path"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    {
+      "name": "write_file",
+      "description": "Write a utf-8 file under /workspace. Creates parents.",
+      "input": {
+        "type": "object",
+        "required": ["path", "content"],
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string", "minLength": 1 },
+          "content": { "type": "string" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "point": {
+      "type": "object",
+      "required": ["x", "y"],
+      "additionalProperties": false,
+      "properties": {
+        "x": { "type": "integer", "minimum": 0, "maximum": 1279 },
+        "y": { "type": "integer", "minimum": 0, "maximum": 799 }
+      }
+    },
+    "button": {
+      "type": "string",
+      "enum": ["left", "right", "middle", "back", "forward"],
+      "default": "left"
+    },
+    "action": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": { "type": { "const": "screenshot" } }
+        },
+        {
+          "type": "object",
+          "required": ["type", "x", "y"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "click" },
+            "x": { "type": "integer", "minimum": 0, "maximum": 1279 },
+            "y": { "type": "integer", "minimum": 0, "maximum": 799 },
+            "button": { "$ref": "#/$defs/button" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "x", "y"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "double_click" },
+            "x": { "type": "integer", "minimum": 0, "maximum": 1279 },
+            "y": { "type": "integer", "minimum": 0, "maximum": 799 },
+            "button": { "$ref": "#/$defs/button" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "x", "y", "dx", "dy"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "scroll" },
+            "x": { "type": "integer", "minimum": 0, "maximum": 1279 },
+            "y": { "type": "integer", "minimum": 0, "maximum": 799 },
+            "dx": { "type": "integer", "minimum": -20, "maximum": 20 },
+            "dy": { "type": "integer", "minimum": -20, "maximum": 20 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "keys"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "keypress" },
+            "keys": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 5,
+              "items": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "text"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "type" },
+            "text": { "type": "string", "minLength": 1, "maxLength": 4000 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "x", "y"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "move" },
+            "x": { "type": "integer", "minimum": 0, "maximum": 1279 },
+            "y": { "type": "integer", "minimum": 0, "maximum": 799 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "path"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "drag" },
+            "path": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 32,
+              "items": { "$ref": "#/$defs/point" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "ms"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "wait" },
+            "ms": { "type": "integer", "minimum": 1, "maximum": 8000 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type", "x", "y", "w", "h"],
+          "additionalProperties": false,
+          "properties": {
+            "type": { "const": "zoom" },
+            "x": { "type": "integer", "minimum": 0, "maximum": 1279 },
+            "y": { "type": "integer", "minimum": 0, "maximum": 799 },
+            "w": { "type": "integer", "minimum": 1, "maximum": 1280 },
+            "h": { "type": "integer", "minimum": 1, "maximum": 800 }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["type"],
+          "additionalProperties": false,
+          "properties": { "type": { "const": "request_takeover" } }
+        }
+      ]
+    }
+  }
+}
