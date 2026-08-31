@@ -8,3 +8,6 @@ node_modules
 dist
 .DS_Store
 *.tsbuildinfo
+
+# keep the example checked in
+!.env.example
