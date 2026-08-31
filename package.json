@@ -1,0 +1,24 @@
+{
+  "name": "computer",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/hub",
+    "packages/shared",
+    "packages/proto"
+  ],
+  "scripts": {
+    "proto:gen": "buf generate",
+    "proto:check": "node scripts/proto-check.mjs",
+    "lint": "node scripts/lint-layers.mjs",
+    "test": "npm test --workspace=apps/hub",
+    "hub": "npm run start --workspace=apps/hub"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.57.2",
+    "@bufbuild/protoc-gen-es": "^2.10.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>desk</title>
+    <style>
+      html, body, #screen { margin: 0; height: 100%; background: #000; overflow: hidden; }
+      #missing { color: #ccc; font: 14px/1.4 ui-sans-serif, system-ui, sans-serif; padding: 24px; }
+    </style>
+  </head>
+  <body>
+    <div id="screen"></div>
+    <p id="missing" hidden>
+      noVNC assets are not installed. From the repo root run
+      <code>npm install @novnc/novnc --workspace=apps/hub</code>
+      then reload. Input is still Seat.Pointer — this page is pixels only.
+    </p>
+    <script type="module">
+      const params = new URLSearchParams(location.search);
+      const viewOnly = params.get("view_only") !== "0";
+      const token = params.get("token") ?? "";
+      const proto = location.protocol === "https:" ? "wss" : "ws";
+      const qs = token ? `?token=${encodeURIComponent(token)}` : "";
+      const ws = `${proto}://${location.host}/websockify${qs}`;
+      try {
+        const { default: RFB } = await import("/novnc/core/rfb.js");
+        const rfb = new RFB(document.getElementById("screen"), ws, { wsProtocols: [] });
+        rfb.viewOnly = viewOnly;
+        rfb.scaleViewport = true;
+        rfb.clipViewport = true;
+      } catch (err) {
+        document.getElementById("missing").hidden = false;
+        console.warn(err);
+      }
+    </script>
+  </body>
+</html>
