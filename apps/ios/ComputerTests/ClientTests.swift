@@ -27,6 +27,49 @@ final class ClientTests: XCTestCase {
         XCTAssertEqual(obj?["grab"] as? Bool, true)
     }
 
+    func testDisplayScopedMergesDisplayKey() throws {
+        let data = try JSONEncoder().encode(
+            ComputerV1.DisplayScoped(ComputerV1.TypeRequest(text: "hi"), display: 2)
+        )
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        XCTAssertEqual(obj?["text"] as? String, "hi")
+        XCTAssertEqual(obj?["display"] as? Int, 2)
+
+        let bare = try JSONEncoder().encode(
+            ComputerV1.DisplayScoped(ComputerV1.TypeRequest(text: "hi"), display: nil)
+        )
+        let bareObj = try JSONSerialization.jsonObject(with: bare) as? [String: Any]
+        XCTAssertNil(bareObj?["display"])
+    }
+
+    func testBoxStatusDecodesScreens() throws {
+        let json = """
+        {
+          "state": "AGENT",
+          "vnc_url": "https://h/vnc/index.html?view_only=1",
+          "display": {"width": 1280, "height": 800, "scale": 1},
+          "screens": [
+            {"bot_id": "main", "display": 1, "state": "AGENT", "vnc_url": "https://h/vnc/index.html?view_only=1"},
+            {"bot_id": "night", "display": 2, "state": "WAITING", "vnc_url": "https://h/vnc/index.html?view_only=1&display=2"}
+          ]
+        }
+        """
+        let status = try JSONDecoder().decode(ComputerV1.BoxStatus.self, from: Data(json.utf8))
+        XCTAssertEqual(status.screens?.count, 2)
+        XCTAssertEqual(status.screens?[1].botId, "night")
+        XCTAssertEqual(status.screens?[1].display, 2)
+        XCTAssertEqual(status.screens?[1].state, .waiting)
+    }
+
+    func testBoxStatusDecodesWithoutScreens() throws {
+        // Older single-screen hub omits `screens`.
+        let json = """
+        {"state": "AGENT", "vnc_url": "https://h/vnc", "display": {"width": 1280, "height": 800, "scale": 1}}
+        """
+        let status = try JSONDecoder().decode(ComputerV1.BoxStatus.self, from: Data(json.utf8))
+        XCTAssertNil(status.screens)
+    }
+
     func testSeatStateRoundTrip() throws {
         let status = ComputerV1.BoxStatus(
             state: .waiting,

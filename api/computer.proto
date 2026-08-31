@@ -239,16 +239,28 @@ message PairResponse {
   BoxStatus status = 3;
 }
 
-message StatusRequest {}
+message StatusRequest {
+  int32 display = 1; // window index (X display number), 0/absent = primary
+}
+
+// One Bot's screen on the shared box. Window index = X display number.
+message ScreenStatus {
+  string bot_id = 1;
+  int32 display = 2;
+  SeatState state = 3;
+  string vnc_url = 4;
+}
 
 message BoxStatus {
   SeatState state = 1;
   string vnc_url = 2;
   Display display = 3;
+  repeated ScreenStatus screens = 4;
 }
 
 message SetPresenceRequest {
   bool present = 1;
+  int32 display = 2; // 0/absent = primary
 }
 
 message PointerRequest {
@@ -256,6 +268,7 @@ message PointerRequest {
     PointerMove move = 1;
     PointerClick click = 2;
   }
+  int32 display = 3; // 0/absent = primary
 }
 
 message PointerMove {

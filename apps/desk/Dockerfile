@@ -35,13 +35,17 @@ RUN usermod -l box ubuntu \
 
 COPY bin/uinputd.py /usr/local/bin/uinputd
 COPY bin/desk-shot /usr/local/bin/desk-shot
+COPY bin/start-window /usr/local/bin/start-window
+COPY bin/stop-window /usr/local/bin/stop-window
 COPY bin/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod 755 /usr/local/bin/uinputd /usr/local/bin/desk-shot /usr/local/bin/entrypoint.sh \
+RUN chmod 755 /usr/local/bin/uinputd /usr/local/bin/desk-shot \
+        /usr/local/bin/start-window /usr/local/bin/stop-window /usr/local/bin/entrypoint.sh \
     && usermod -aG input box || true
 
 USER box
 WORKDIR /workspace
-EXPOSE 5900
+# One RFB port per window index: 5900 + N
+EXPOSE 5901-5908
 VOLUME ["/workspace", "/home/box/.config/chromium"]
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

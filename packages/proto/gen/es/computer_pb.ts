@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file computer.proto.
  */
 export const file_computer: GenFile = /*@__PURE__*/
-  fileDesc("Cg5jb21wdXRlci5wcm90bxILY29tcHV0ZXIudjEiNwoHRGlzcGxheRINCgV3aWR0aBgBIAEoBRIOCgZoZWlnaHQYAiABKAUSDQoFc2NhbGUYAyABKAUiHQoFUG9pbnQSCQoBeBgBIAEoBRIJCgF5GAIgASgFIhQKBUltYWdlEgsKA3BuZxgBIAEoDCI+CgVFcnJvchIkCgRjb2RlGAEgASgOMhYuY29tcHV0ZXIudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAiABKAkiOQoMUGVuZGluZ0NoZWNrEgoKAmlkGAEgASgJEgwKBGNvZGUYAiABKAkSDwoHbWVzc2FnZRgDIAEoCSINCgtTcGVjUmVxdWVzdCJ0CgxTcGVjUmVzcG9uc2USCgoCaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoCRIlCgdkaXNwbGF5GAMgASgLMhQuY29tcHV0ZXIudjEuRGlzcGxheRIRCgl3b3Jrc3BhY2UYBCABKAkSDQoFdG9vbHMYBSADKAkiSwoPQ29tcHV0ZXJSZXF1ZXN0EhIKCnJlcXVlc3RfaWQYASABKAkSJAoHYWN0aW9ucxgCIAMoCzITLmNvbXB1dGVyLnYxLkFjdGlvbiLRAwoGQWN0aW9uEi0KCnNjcmVlbnNob3QYASABKAsyFy5jb21wdXRlci52MS5TY3JlZW5zaG90SAASIwoFY2xpY2sYAiABKAsyEi5jb21wdXRlci52MS5DbGlja0gAEjAKDGRvdWJsZV9jbGljaxgDIAEoCzIYLmNvbXB1dGVyLnYxLkRvdWJsZUNsaWNrSAASJQoGc2Nyb2xsGAQgASgLMhMuY29tcHV0ZXIudjEuU2Nyb2xsSAASKQoIa2V5cHJlc3MYBSABKAsyFS5jb21wdXRlci52MS5LZXlwcmVzc0gAEiEKBHR5cGUYBiABKAsyES5jb21wdXRlci52MS5UeXBlSAASIQoEbW92ZRgHIAEoCzIRLmNvbXB1dGVyLnYxLk1vdmVIABIhCgRkcmFnGAggASgLMhEuY29tcHV0ZXIudjEuRHJhZ0gAEiEKBHdhaXQYCSABKAsyES5jb21wdXRlci52MS5XYWl0SAASIQoEem9vbRgKIAEoCzIRLmNvbXB1dGVyLnYxLlpvb21IABI4ChByZXF1ZXN0X3Rha2VvdmVyGAsgASgLMhwuY29tcHV0ZXIudjEuUmVxdWVzdFRha2VvdmVySABCBgoEYm9keSIMCgpTY3JlZW5zaG90IkIKBUNsaWNrEgkKAXgYASABKAUSCQoBeRgCIAEoBRIjCgZidXR0b24YAyABKA4yEy5jb21wdXRlci52MS5CdXR0b24iSAoLRG91YmxlQ2xpY2sSCQoBeBgBIAEoBRIJCgF5GAIgASgFEiMKBmJ1dHRvbhgDIAEoDjITLmNvbXB1dGVyLnYxLkJ1dHRvbiI2CgZTY3JvbGwSCQoBeBgBIAEoBRIJCgF5GAIgASgFEgoKAmR4GAMgASgFEgoKAmR5GAQgASgFIhgKCEtleXByZXNzEgwKBGtleXMYASADKAkiFAoEVHlwZRIMCgR0ZXh0GAEgASgJIhwKBE1vdmUSCQoBeBgBIAEoBRIJCgF5GAIgASgFIigKBERyYWcSIAoEcGF0aBgBIAMoCzISLmNvbXB1dGVyLnYxLlBvaW50IhIKBFdhaXQSCgoCbXMYASABKAUiMgoEWm9vbRIJCgF4GAEgASgFEgkKAXkYAiABKAUSCQoBdxgDIAEoBRIJCgFoGAQgASgFIhEKD1JlcXVlc3RUYWtlb3ZlciKuAgoQQ29tcHV0ZXJSZXNwb25zZRIqCgdyZXN1bHRzGAEgAygLMhkuY29tcHV0ZXIudjEuQWN0aW9uUmVzdWx0EisKCnNjcmVlbnNob3QYAiABKAsyEi5jb21wdXRlci52MS5JbWFnZUgAiAEBEiUKB2Rpc3BsYXkYAyABKAsyFC5jb21wdXRlci52MS5EaXNwbGF5EicKBmN1cnNvchgEIAEoCzISLmNvbXB1dGVyLnYxLlBvaW50SAGIAQESJAoEc2VhdBgFIAEoDjIWLmNvbXB1dGVyLnYxLlNlYXRTdGF0ZRIxCg5wZW5kaW5nX2NoZWNrcxgGIAMoCzIZLmNvbXB1dGVyLnYxLlBlbmRpbmdDaGVja0INCgtfc2NyZWVuc2hvdEIJCgdfY3Vyc29yIpUBCgxBY3Rpb25SZXN1bHQSIwoCb2sYASABKAsyFS5jb21wdXRlci52MS5BY3Rpb25Pa0gAEikKBWVycm9yGAIgASgLMhguY29tcHV0ZXIudjEuQWN0aW9uRXJyb3JIABItCgdza2lwcGVkGAMgASgLMhouY29tcHV0ZXIudjEuQWN0aW9uU2tpcHBlZEgAQgYKBGJvZHkiUQoIQWN0aW9uT2sSEwoLZHVyYXRpb25fbXMYASABKAUSJgoFaW1hZ2UYAiABKAsyEi5jb21wdXRlci52MS5JbWFnZUgAiAEBQggKBl9pbWFnZSJZCgtBY3Rpb25FcnJvchITCgtkdXJhdGlvbl9tcxgBIAEoBRIkCgRjb2RlGAIgASgOMhYuY29tcHV0ZXIudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAyABKAkiHwoNQWN0aW9uU2tpcHBlZBIOCgZyZWFzb24YASABKAkiXwoMU2hlbGxSZXF1ZXN0EhIKCnJlcXVlc3RfaWQYASABKAkSDAoEYXJndhgCIAMoCRIQCgNjd2QYAyABKAlIAIgBARITCgt0aW1lb3V0X3NlYxgEIAEoBUIGCgRfY3dkInEKDVNoZWxsUmVzcG9uc2USDAoEZXhpdBgBIAEoBRIOCgZzdGRvdXQYAiABKAkSDgoGc3RkZXJyGAMgASgJEhgKEHN0ZG91dF90cnVuY2F0ZWQYBCABKAgSGAoQc3RkZXJyX3RydW5jYXRlZBgFIAEoCCIfCg9SZWFkRmlsZVJlcXVlc3QSDAoEcGF0aBgBIAEoCSIjChBSZWFkRmlsZVJlc3BvbnNlEg8KB2NvbnRlbnQYASABKAkiMQoQV3JpdGVGaWxlUmVxdWVzdBIMCgRwYXRoGAEgASgJEg8KB2NvbnRlbnQYAiABKAkiIgoRV3JpdGVGaWxlUmVzcG9uc2USDQoFYnl0ZXMYASABKAUiGwoLUGFpclJlcXVlc3QSDAoEY29kZRgBIAEoCSJWCgxQYWlyUmVzcG9uc2USDQoFdG9rZW4YASABKAkSDwoHdm5jX3VybBgCIAEoCRImCgZzdGF0dXMYAyABKAsyFi5jb21wdXRlci52MS5Cb3hTdGF0dXMiDwoNU3RhdHVzUmVxdWVzdCJqCglCb3hTdGF0dXMSJQoFc3RhdGUYASABKA4yFi5jb21wdXRlci52MS5TZWF0U3RhdGUSDwoHdm5jX3VybBgCIAEoCRIlCgdkaXNwbGF5GAMgASgLMhQuY29tcHV0ZXIudjEuRGlzcGxheSIlChJTZXRQcmVzZW5jZVJlcXVlc3QSDwoHcHJlc2VudBgBIAEoCCJuCg5Qb2ludGVyUmVxdWVzdBIoCgRtb3ZlGAEgASgLMhguY29tcHV0ZXIudjEuUG9pbnRlck1vdmVIABIqCgVjbGljaxgCIAEoCzIZLmNvbXB1dGVyLnYxLlBvaW50ZXJDbGlja0gAQgYKBGJvZHkiJQoLUG9pbnRlck1vdmUSCgoCZHgYASABKAUSCgoCZHkYAiABKAUiMwoMUG9pbnRlckNsaWNrEiMKBmJ1dHRvbhgBIAEoDjITLmNvbXB1dGVyLnYxLkJ1dHRvbiJbCg9Qb2ludGVyUmVzcG9uc2USIgoGY3Vyc29yGAEgASgLMhIuY29tcHV0ZXIudjEuUG9pbnQSJAoEc2VhdBgCIAEoDjIWLmNvbXB1dGVyLnYxLlNlYXRTdGF0ZSIVChNDbGlwYm9hcmRHZXRSZXF1ZXN0IhkKCUNsaXBib2FyZBIMCgR0ZXh0GAEgASgJKmsKCVNlYXRTdGF0ZRIaChZTRUFUX1NUQVRFX1VOU1BFQ0lGSUVEEAASFAoQU0VBVF9TVEFURV9BR0VOVBABEhYKElNFQVRfU1RBVEVfV0FJVElORxACEhQKEFNFQVRfU1RBVEVfSFVNQU4QAyrtAQoJRXJyb3JDb2RlEhoKFkVSUk9SX0NPREVfVU5TUEVDSUZJRUQQABIeChpFUlJPUl9DT0RFX1VOQVVUSEVOVElDQVRFRBABEhgKFEVSUk9SX0NPREVfU0VBVF9IRUxEEAISHAoYRVJST1JfQ09ERV9PVVRfT0ZfQk9VTkRTEAMSHAoYRVJST1JfQ09ERV9QQVRIX1JFSkVDVEVEEAQSGgoWRVJST1JfQ09ERV9EQUVNT05fRE9XThAFEhkKFUVSUk9SX0NPREVfVkFMSURBVElPThAGEhcKE0VSUk9SX0NPREVfQ09ORkxJQ1QQByp7CgZCdXR0b24SFgoSQlVUVE9OX1VOU1BFQ0lGSUVEEAASDwoLQlVUVE9OX0xFRlQQARIQCgxCVVRUT05fUklHSFQQAhIRCg1CVVRUT05fTUlERExFEAMSDwoLQlVUVE9OX0JBQ0sQBBISCg5CVVRUT05fRk9SV0FSRBAFMuICCgVBZ2VudBI7CgRTcGVjEhguY29tcHV0ZXIudjEuU3BlY1JlcXVlc3QaGS5jb21wdXRlci52MS5TcGVjUmVzcG9uc2USRwoIQ29tcHV0ZXISHC5jb21wdXRlci52MS5Db21wdXRlclJlcXVlc3QaHS5jb21wdXRlci52MS5Db21wdXRlclJlc3BvbnNlEj4KBVNoZWxsEhkuY29tcHV0ZXIudjEuU2hlbGxSZXF1ZXN0GhouY29tcHV0ZXIudjEuU2hlbGxSZXNwb25zZRJHCghSZWFkRmlsZRIcLmNvbXB1dGVyLnYxLlJlYWRGaWxlUmVxdWVzdBodLmNvbXB1dGVyLnYxLlJlYWRGaWxlUmVzcG9uc2USSgoJV3JpdGVGaWxlEh0uY29tcHV0ZXIudjEuV3JpdGVGaWxlUmVxdWVzdBoeLmNvbXB1dGVyLnYxLldyaXRlRmlsZVJlc3BvbnNlMtIDCgRTZWF0EjsKBFBhaXISGC5jb21wdXRlci52MS5QYWlyUmVxdWVzdBoZLmNvbXB1dGVyLnYxLlBhaXJSZXNwb25zZRI8CgZTdGF0dXMSGi5jb21wdXRlci52MS5TdGF0dXNSZXF1ZXN0GhYuY29tcHV0ZXIudjEuQm94U3RhdHVzEkYKC1NldFByZXNlbmNlEh8uY29tcHV0ZXIudjEuU2V0UHJlc2VuY2VSZXF1ZXN0GhYuY29tcHV0ZXIudjEuQm94U3RhdHVzEkQKB1BvaW50ZXISGy5jb21wdXRlci52MS5Qb2ludGVyUmVxdWVzdBocLmNvbXB1dGVyLnYxLlBvaW50ZXJSZXNwb25zZRI3CgRUeXBlEhEuY29tcHV0ZXIudjEuVHlwZRocLmNvbXB1dGVyLnYxLlBvaW50ZXJSZXNwb25zZRJICgxDbGlwYm9hcmRHZXQSIC5jb21wdXRlci52MS5DbGlwYm9hcmRHZXRSZXF1ZXN0GhYuY29tcHV0ZXIudjEuQ2xpcGJvYXJkEj4KDENsaXBib2FyZFNldBIWLmNvbXB1dGVyLnYxLkNsaXBib2FyZBoWLmNvbXB1dGVyLnYxLkNsaXBib2FyZGIGcHJvdG8z");
+  fileDesc("Cg5jb21wdXRlci5wcm90bxILY29tcHV0ZXIudjEiNwoHRGlzcGxheRINCgV3aWR0aBgBIAEoBRIOCgZoZWlnaHQYAiABKAUSDQoFc2NhbGUYAyABKAUiHQoFUG9pbnQSCQoBeBgBIAEoBRIJCgF5GAIgASgFIhQKBUltYWdlEgsKA3BuZxgBIAEoDCI+CgVFcnJvchIkCgRjb2RlGAEgASgOMhYuY29tcHV0ZXIudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAiABKAkiOQoMUGVuZGluZ0NoZWNrEgoKAmlkGAEgASgJEgwKBGNvZGUYAiABKAkSDwoHbWVzc2FnZRgDIAEoCSINCgtTcGVjUmVxdWVzdCJ0CgxTcGVjUmVzcG9uc2USCgoCaWQYASABKAkSDwoHdmVyc2lvbhgCIAEoCRIlCgdkaXNwbGF5GAMgASgLMhQuY29tcHV0ZXIudjEuRGlzcGxheRIRCgl3b3Jrc3BhY2UYBCABKAkSDQoFdG9vbHMYBSADKAkiSwoPQ29tcHV0ZXJSZXF1ZXN0EhIKCnJlcXVlc3RfaWQYASABKAkSJAoHYWN0aW9ucxgCIAMoCzITLmNvbXB1dGVyLnYxLkFjdGlvbiLRAwoGQWN0aW9uEi0KCnNjcmVlbnNob3QYASABKAsyFy5jb21wdXRlci52MS5TY3JlZW5zaG90SAASIwoFY2xpY2sYAiABKAsyEi5jb21wdXRlci52MS5DbGlja0gAEjAKDGRvdWJsZV9jbGljaxgDIAEoCzIYLmNvbXB1dGVyLnYxLkRvdWJsZUNsaWNrSAASJQoGc2Nyb2xsGAQgASgLMhMuY29tcHV0ZXIudjEuU2Nyb2xsSAASKQoIa2V5cHJlc3MYBSABKAsyFS5jb21wdXRlci52MS5LZXlwcmVzc0gAEiEKBHR5cGUYBiABKAsyES5jb21wdXRlci52MS5UeXBlSAASIQoEbW92ZRgHIAEoCzIRLmNvbXB1dGVyLnYxLk1vdmVIABIhCgRkcmFnGAggASgLMhEuY29tcHV0ZXIudjEuRHJhZ0gAEiEKBHdhaXQYCSABKAsyES5jb21wdXRlci52MS5XYWl0SAASIQoEem9vbRgKIAEoCzIRLmNvbXB1dGVyLnYxLlpvb21IABI4ChByZXF1ZXN0X3Rha2VvdmVyGAsgASgLMhwuY29tcHV0ZXIudjEuUmVxdWVzdFRha2VvdmVySABCBgoEYm9keSIMCgpTY3JlZW5zaG90IkIKBUNsaWNrEgkKAXgYASABKAUSCQoBeRgCIAEoBRIjCgZidXR0b24YAyABKA4yEy5jb21wdXRlci52MS5CdXR0b24iSAoLRG91YmxlQ2xpY2sSCQoBeBgBIAEoBRIJCgF5GAIgASgFEiMKBmJ1dHRvbhgDIAEoDjITLmNvbXB1dGVyLnYxLkJ1dHRvbiI2CgZTY3JvbGwSCQoBeBgBIAEoBRIJCgF5GAIgASgFEgoKAmR4GAMgASgFEgoKAmR5GAQgASgFIhgKCEtleXByZXNzEgwKBGtleXMYASADKAkiFAoEVHlwZRIMCgR0ZXh0GAEgASgJIhwKBE1vdmUSCQoBeBgBIAEoBRIJCgF5GAIgASgFIigKBERyYWcSIAoEcGF0aBgBIAMoCzISLmNvbXB1dGVyLnYxLlBvaW50IhIKBFdhaXQSCgoCbXMYASABKAUiMgoEWm9vbRIJCgF4GAEgASgFEgkKAXkYAiABKAUSCQoBdxgDIAEoBRIJCgFoGAQgASgFIhEKD1JlcXVlc3RUYWtlb3ZlciKuAgoQQ29tcHV0ZXJSZXNwb25zZRIqCgdyZXN1bHRzGAEgAygLMhkuY29tcHV0ZXIudjEuQWN0aW9uUmVzdWx0EisKCnNjcmVlbnNob3QYAiABKAsyEi5jb21wdXRlci52MS5JbWFnZUgAiAEBEiUKB2Rpc3BsYXkYAyABKAsyFC5jb21wdXRlci52MS5EaXNwbGF5EicKBmN1cnNvchgEIAEoCzISLmNvbXB1dGVyLnYxLlBvaW50SAGIAQESJAoEc2VhdBgFIAEoDjIWLmNvbXB1dGVyLnYxLlNlYXRTdGF0ZRIxCg5wZW5kaW5nX2NoZWNrcxgGIAMoCzIZLmNvbXB1dGVyLnYxLlBlbmRpbmdDaGVja0INCgtfc2NyZWVuc2hvdEIJCgdfY3Vyc29yIpUBCgxBY3Rpb25SZXN1bHQSIwoCb2sYASABKAsyFS5jb21wdXRlci52MS5BY3Rpb25Pa0gAEikKBWVycm9yGAIgASgLMhguY29tcHV0ZXIudjEuQWN0aW9uRXJyb3JIABItCgdza2lwcGVkGAMgASgLMhouY29tcHV0ZXIudjEuQWN0aW9uU2tpcHBlZEgAQgYKBGJvZHkiUQoIQWN0aW9uT2sSEwoLZHVyYXRpb25fbXMYASABKAUSJgoFaW1hZ2UYAiABKAsyEi5jb21wdXRlci52MS5JbWFnZUgAiAEBQggKBl9pbWFnZSJZCgtBY3Rpb25FcnJvchITCgtkdXJhdGlvbl9tcxgBIAEoBRIkCgRjb2RlGAIgASgOMhYuY29tcHV0ZXIudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAyABKAkiHwoNQWN0aW9uU2tpcHBlZBIOCgZyZWFzb24YASABKAkiXwoMU2hlbGxSZXF1ZXN0EhIKCnJlcXVlc3RfaWQYASABKAkSDAoEYXJndhgCIAMoCRIQCgNjd2QYAyABKAlIAIgBARITCgt0aW1lb3V0X3NlYxgEIAEoBUIGCgRfY3dkInEKDVNoZWxsUmVzcG9uc2USDAoEZXhpdBgBIAEoBRIOCgZzdGRvdXQYAiABKAkSDgoGc3RkZXJyGAMgASgJEhgKEHN0ZG91dF90cnVuY2F0ZWQYBCABKAgSGAoQc3RkZXJyX3RydW5jYXRlZBgFIAEoCCIfCg9SZWFkRmlsZVJlcXVlc3QSDAoEcGF0aBgBIAEoCSIjChBSZWFkRmlsZVJlc3BvbnNlEg8KB2NvbnRlbnQYASABKAkiMQoQV3JpdGVGaWxlUmVxdWVzdBIMCgRwYXRoGAEgASgJEg8KB2NvbnRlbnQYAiABKAkiIgoRV3JpdGVGaWxlUmVzcG9uc2USDQoFYnl0ZXMYASABKAUiGwoLUGFpclJlcXVlc3QSDAoEY29kZRgBIAEoCSJWCgxQYWlyUmVzcG9uc2USDQoFdG9rZW4YASABKAkSDwoHdm5jX3VybBgCIAEoCRImCgZzdGF0dXMYAyABKAsyFi5jb21wdXRlci52MS5Cb3hTdGF0dXMiIAoNU3RhdHVzUmVxdWVzdBIPCgdkaXNwbGF5GAEgASgFImcKDFNjcmVlblN0YXR1cxIOCgZib3RfaWQYASABKAkSDwoHZGlzcGxheRgCIAEoBRIlCgVzdGF0ZRgDIAEoDjIWLmNvbXB1dGVyLnYxLlNlYXRTdGF0ZRIPCgd2bmNfdXJsGAQgASgJIpYBCglCb3hTdGF0dXMSJQoFc3RhdGUYASABKA4yFi5jb21wdXRlci52MS5TZWF0U3RhdGUSDwoHdm5jX3VybBgCIAEoCRIlCgdkaXNwbGF5GAMgASgLMhQuY29tcHV0ZXIudjEuRGlzcGxheRIqCgdzY3JlZW5zGAQgAygLMhkuY29tcHV0ZXIudjEuU2NyZWVuU3RhdHVzIjYKElNldFByZXNlbmNlUmVxdWVzdBIPCgdwcmVzZW50GAEgASgIEg8KB2Rpc3BsYXkYAiABKAUifwoOUG9pbnRlclJlcXVlc3QSKAoEbW92ZRgBIAEoCzIYLmNvbXB1dGVyLnYxLlBvaW50ZXJNb3ZlSAASKgoFY2xpY2sYAiABKAsyGS5jb21wdXRlci52MS5Qb2ludGVyQ2xpY2tIABIPCgdkaXNwbGF5GAMgASgFQgYKBGJvZHkiJQoLUG9pbnRlck1vdmUSCgoCZHgYASABKAUSCgoCZHkYAiABKAUiMwoMUG9pbnRlckNsaWNrEiMKBmJ1dHRvbhgBIAEoDjITLmNvbXB1dGVyLnYxLkJ1dHRvbiJbCg9Qb2ludGVyUmVzcG9uc2USIgoGY3Vyc29yGAEgASgLMhIuY29tcHV0ZXIudjEuUG9pbnQSJAoEc2VhdBgCIAEoDjIWLmNvbXB1dGVyLnYxLlNlYXRTdGF0ZSIVChNDbGlwYm9hcmRHZXRSZXF1ZXN0IhkKCUNsaXBib2FyZBIMCgR0ZXh0GAEgASgJKmsKCVNlYXRTdGF0ZRIaChZTRUFUX1NUQVRFX1VOU1BFQ0lGSUVEEAASFAoQU0VBVF9TVEFURV9BR0VOVBABEhYKElNFQVRfU1RBVEVfV0FJVElORxACEhQKEFNFQVRfU1RBVEVfSFVNQU4QAyrtAQoJRXJyb3JDb2RlEhoKFkVSUk9SX0NPREVfVU5TUEVDSUZJRUQQABIeChpFUlJPUl9DT0RFX1VOQVVUSEVOVElDQVRFRBABEhgKFEVSUk9SX0NPREVfU0VBVF9IRUxEEAISHAoYRVJST1JfQ09ERV9PVVRfT0ZfQk9VTkRTEAMSHAoYRVJST1JfQ09ERV9QQVRIX1JFSkVDVEVEEAQSGgoWRVJST1JfQ09ERV9EQUVNT05fRE9XThAFEhkKFUVSUk9SX0NPREVfVkFMSURBVElPThAGEhcKE0VSUk9SX0NPREVfQ09ORkxJQ1QQByp7CgZCdXR0b24SFgoSQlVUVE9OX1VOU1BFQ0lGSUVEEAASDwoLQlVUVE9OX0xFRlQQARIQCgxCVVRUT05fUklHSFQQAhIRCg1CVVRUT05fTUlERExFEAMSDwoLQlVUVE9OX0JBQ0sQBBISCg5CVVRUT05fRk9SV0FSRBAFMuICCgVBZ2VudBI7CgRTcGVjEhguY29tcHV0ZXIudjEuU3BlY1JlcXVlc3QaGS5jb21wdXRlci52MS5TcGVjUmVzcG9uc2USRwoIQ29tcHV0ZXISHC5jb21wdXRlci52MS5Db21wdXRlclJlcXVlc3QaHS5jb21wdXRlci52MS5Db21wdXRlclJlc3BvbnNlEj4KBVNoZWxsEhkuY29tcHV0ZXIudjEuU2hlbGxSZXF1ZXN0GhouY29tcHV0ZXIudjEuU2hlbGxSZXNwb25zZRJHCghSZWFkRmlsZRIcLmNvbXB1dGVyLnYxLlJlYWRGaWxlUmVxdWVzdBodLmNvbXB1dGVyLnYxLlJlYWRGaWxlUmVzcG9uc2USSgoJV3JpdGVGaWxlEh0uY29tcHV0ZXIudjEuV3JpdGVGaWxlUmVxdWVzdBoeLmNvbXB1dGVyLnYxLldyaXRlRmlsZVJlc3BvbnNlMtIDCgRTZWF0EjsKBFBhaXISGC5jb21wdXRlci52MS5QYWlyUmVxdWVzdBoZLmNvbXB1dGVyLnYxLlBhaXJSZXNwb25zZRI8CgZTdGF0dXMSGi5jb21wdXRlci52MS5TdGF0dXNSZXF1ZXN0GhYuY29tcHV0ZXIudjEuQm94U3RhdHVzEkYKC1NldFByZXNlbmNlEh8uY29tcHV0ZXIudjEuU2V0UHJlc2VuY2VSZXF1ZXN0GhYuY29tcHV0ZXIudjEuQm94U3RhdHVzEkQKB1BvaW50ZXISGy5jb21wdXRlci52MS5Qb2ludGVyUmVxdWVzdBocLmNvbXB1dGVyLnYxLlBvaW50ZXJSZXNwb25zZRI3CgRUeXBlEhEuY29tcHV0ZXIudjEuVHlwZRocLmNvbXB1dGVyLnYxLlBvaW50ZXJSZXNwb25zZRJICgxDbGlwYm9hcmRHZXQSIC5jb21wdXRlci52MS5DbGlwYm9hcmRHZXRSZXF1ZXN0GhYuY29tcHV0ZXIudjEuQ2xpcGJvYXJkEj4KDENsaXBib2FyZFNldBIWLmNvbXB1dGVyLnYxLkNsaXBib2FyZBoWLmNvbXB1dGVyLnYxLkNsaXBib2FyZGIGcHJvdG8z");
 
 /**
  * @generated from message computer.v1.Display
@@ -869,6 +869,12 @@ export const PairResponseSchema: GenMessage<PairResponse> = /*@__PURE__*/
  * @generated from message computer.v1.StatusRequest
  */
 export type StatusRequest = Message<"computer.v1.StatusRequest"> & {
+  /**
+   * window index (X display number), 0/absent = primary
+   *
+   * @generated from field: int32 display = 1;
+   */
+  display: number;
 };
 
 /**
@@ -877,6 +883,40 @@ export type StatusRequest = Message<"computer.v1.StatusRequest"> & {
  */
 export const StatusRequestSchema: GenMessage<StatusRequest> = /*@__PURE__*/
   messageDesc(file_computer, 33);
+
+/**
+ * One Bot's screen on the shared box. Window index = X display number.
+ *
+ * @generated from message computer.v1.ScreenStatus
+ */
+export type ScreenStatus = Message<"computer.v1.ScreenStatus"> & {
+  /**
+   * @generated from field: string bot_id = 1;
+   */
+  botId: string;
+
+  /**
+   * @generated from field: int32 display = 2;
+   */
+  display: number;
+
+  /**
+   * @generated from field: computer.v1.SeatState state = 3;
+   */
+  state: SeatState;
+
+  /**
+   * @generated from field: string vnc_url = 4;
+   */
+  vncUrl: string;
+};
+
+/**
+ * Describes the message computer.v1.ScreenStatus.
+ * Use `create(ScreenStatusSchema)` to create a new message.
+ */
+export const ScreenStatusSchema: GenMessage<ScreenStatus> = /*@__PURE__*/
+  messageDesc(file_computer, 34);
 
 /**
  * @generated from message computer.v1.BoxStatus
@@ -896,6 +936,11 @@ export type BoxStatus = Message<"computer.v1.BoxStatus"> & {
    * @generated from field: computer.v1.Display display = 3;
    */
   display?: Display | undefined;
+
+  /**
+   * @generated from field: repeated computer.v1.ScreenStatus screens = 4;
+   */
+  screens: ScreenStatus[];
 };
 
 /**
@@ -903,7 +948,7 @@ export type BoxStatus = Message<"computer.v1.BoxStatus"> & {
  * Use `create(BoxStatusSchema)` to create a new message.
  */
 export const BoxStatusSchema: GenMessage<BoxStatus> = /*@__PURE__*/
-  messageDesc(file_computer, 34);
+  messageDesc(file_computer, 35);
 
 /**
  * @generated from message computer.v1.SetPresenceRequest
@@ -913,6 +958,13 @@ export type SetPresenceRequest = Message<"computer.v1.SetPresenceRequest"> & {
    * @generated from field: bool present = 1;
    */
   present: boolean;
+
+  /**
+   * 0/absent = primary
+   *
+   * @generated from field: int32 display = 2;
+   */
+  display: number;
 };
 
 /**
@@ -920,7 +972,7 @@ export type SetPresenceRequest = Message<"computer.v1.SetPresenceRequest"> & {
  * Use `create(SetPresenceRequestSchema)` to create a new message.
  */
 export const SetPresenceRequestSchema: GenMessage<SetPresenceRequest> = /*@__PURE__*/
-  messageDesc(file_computer, 35);
+  messageDesc(file_computer, 36);
 
 /**
  * @generated from message computer.v1.PointerRequest
@@ -942,6 +994,13 @@ export type PointerRequest = Message<"computer.v1.PointerRequest"> & {
     value: PointerClick;
     case: "click";
   } | { case: undefined; value?: undefined };
+
+  /**
+   * 0/absent = primary
+   *
+   * @generated from field: int32 display = 3;
+   */
+  display: number;
 };
 
 /**
@@ -949,7 +1008,7 @@ export type PointerRequest = Message<"computer.v1.PointerRequest"> & {
  * Use `create(PointerRequestSchema)` to create a new message.
  */
 export const PointerRequestSchema: GenMessage<PointerRequest> = /*@__PURE__*/
-  messageDesc(file_computer, 36);
+  messageDesc(file_computer, 37);
 
 /**
  * @generated from message computer.v1.PointerMove
@@ -971,7 +1030,7 @@ export type PointerMove = Message<"computer.v1.PointerMove"> & {
  * Use `create(PointerMoveSchema)` to create a new message.
  */
 export const PointerMoveSchema: GenMessage<PointerMove> = /*@__PURE__*/
-  messageDesc(file_computer, 37);
+  messageDesc(file_computer, 38);
 
 /**
  * @generated from message computer.v1.PointerClick
@@ -988,7 +1047,7 @@ export type PointerClick = Message<"computer.v1.PointerClick"> & {
  * Use `create(PointerClickSchema)` to create a new message.
  */
 export const PointerClickSchema: GenMessage<PointerClick> = /*@__PURE__*/
-  messageDesc(file_computer, 38);
+  messageDesc(file_computer, 39);
 
 /**
  * @generated from message computer.v1.PointerResponse
@@ -1010,7 +1069,7 @@ export type PointerResponse = Message<"computer.v1.PointerResponse"> & {
  * Use `create(PointerResponseSchema)` to create a new message.
  */
 export const PointerResponseSchema: GenMessage<PointerResponse> = /*@__PURE__*/
-  messageDesc(file_computer, 39);
+  messageDesc(file_computer, 40);
 
 /**
  * @generated from message computer.v1.ClipboardGetRequest
@@ -1023,7 +1082,7 @@ export type ClipboardGetRequest = Message<"computer.v1.ClipboardGetRequest"> & {
  * Use `create(ClipboardGetRequestSchema)` to create a new message.
  */
 export const ClipboardGetRequestSchema: GenMessage<ClipboardGetRequest> = /*@__PURE__*/
-  messageDesc(file_computer, 40);
+  messageDesc(file_computer, 41);
 
 /**
  * @generated from message computer.v1.Clipboard
@@ -1040,7 +1099,7 @@ export type Clipboard = Message<"computer.v1.Clipboard"> & {
  * Use `create(ClipboardSchema)` to create a new message.
  */
 export const ClipboardSchema: GenMessage<Clipboard> = /*@__PURE__*/
-  messageDesc(file_computer, 41);
+  messageDesc(file_computer, 42);
 
 /**
  * @generated from enum computer.v1.SeatState

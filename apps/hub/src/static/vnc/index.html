@@ -20,8 +20,12 @@
       const params = new URLSearchParams(location.search);
       const viewOnly = params.get("view_only") !== "0";
       const token = params.get("token") ?? "";
+      const display = params.get("display") ?? "";
       const proto = location.protocol === "https:" ? "wss" : "ws";
-      const qs = token ? `?token=${encodeURIComponent(token)}` : "";
+      const wsParams = new URLSearchParams();
+      if (token) wsParams.set("token", token);
+      if (display) wsParams.set("display", display);
+      const qs = wsParams.size ? `?${wsParams}` : "";
       const ws = `${proto}://${location.host}/websockify${qs}`;
       try {
         const { default: RFB } = await import("/novnc/core/rfb.js");

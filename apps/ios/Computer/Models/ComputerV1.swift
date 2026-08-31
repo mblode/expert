@@ -44,20 +44,46 @@ public enum ComputerV1 {
         }
     }
 
+    /// One Bot's screen on the shared box. Window index = X display number.
+    public struct ScreenStatus: Codable, Equatable, Sendable, Identifiable {
+        public var botId: String
+        public var display: Int
+        public var state: SeatState
+        public var vncUrl: String
+        public var id: Int { display }
+        public init(botId: String, display: Int, state: SeatState, vncUrl: String) {
+            self.botId = botId
+            self.display = display
+            self.state = state
+            self.vncUrl = vncUrl
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case botId = "bot_id"
+            case display
+            case state
+            case vncUrl = "vnc_url"
+        }
+    }
+
     public struct BoxStatus: Codable, Sendable {
         public var state: SeatState
         public var vncUrl: String
         public var display: Display
-        public init(state: SeatState, vncUrl: String, display: Display) {
+        /// Absent on a single-screen (or older) hub.
+        public var screens: [ScreenStatus]?
+        public init(state: SeatState, vncUrl: String, display: Display, screens: [ScreenStatus]? = nil) {
             self.state = state
             self.vncUrl = vncUrl
             self.display = display
+            self.screens = screens
         }
 
         enum CodingKeys: String, CodingKey {
             case state
             case vncUrl = "vnc_url"
             case display
+            case screens
         }
     }
 
@@ -80,7 +106,36 @@ public enum ComputerV1 {
 
     public struct SetPresenceRequest: Codable, Sendable {
         public var present: Bool
-        public init(present: Bool) { self.present = present }
+        public var display: Int?
+        public init(present: Bool, display: Int? = nil) {
+            self.present = present
+            self.display = display
+        }
+    }
+
+    /// Merges an optional `display` (window index) into any Seat request body.
+    public struct DisplayScoped<Body: Encodable & Sendable>: Encodable, Sendable {
+        public var body: Body
+        public var display: Int?
+        public init(_ body: Body, display: Int?) {
+            self.body = body
+            self.display = display
+        }
+
+        struct DisplayKey: CodingKey {
+            var stringValue: String
+            var intValue: Int? { nil }
+            init?(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { return nil }
+        }
+
+        public func encode(to encoder: Encoder) throws {
+            try body.encode(to: encoder)
+            if let display {
+                var c = encoder.container(keyedBy: DisplayKey.self)
+                try c.encode(display, forKey: DisplayKey(stringValue: "display")!)
+            }
+        }
     }
 
     public enum PointerRequest: Codable, Sendable {

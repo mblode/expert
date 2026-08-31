@@ -16,7 +16,7 @@ packages/proto  buf generate (protoc-gen-es + Swift) from api/computer.proto
 packages/shared branded IDs, error codes
 ```
 
-Two services. Four model tools. A seat.
+Two services. Four model tools. A seat per screen.
 
 | Service | Audience | RPCs |
 |---|---|---|
@@ -24,6 +24,8 @@ Two services. Four model tools. A seat.
 | `Seat` | iPhone | Pair, Status, SetPresence, Pointer, Type, ClipboardGet, ClipboardSet |
 
 Clipboard, `vncUrl`, and pointer are **not** model tools. VNC is view-only. Input is `Seat.Pointer`.
+
+**Many Bots, one box.** Each Bot owns a screen (window index = X display, `:1`–`:8`, RFB on `5900 + N`); its agent token is its identity. Seat calls take an additive `display`; `Status.screens` lists every screen for the phone's picker. Configure the roster with `COMPUTER_BOTS` (JSON array of `{id, display, token}`) — absent, you get one Bot `main` on `:1` with `COMPUTER_AGENT_TOKEN`, exactly the old behaviour. Bots are **not** security boundaries: one `box` user, shared `/workspace`.
 
 ## Compute
 

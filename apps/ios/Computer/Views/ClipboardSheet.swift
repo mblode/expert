@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct ClipboardSheet: View {
     var client: ComputerClient
+    var display: Int?
     @Environment(\.dismiss) private var dismiss
     @State private var box = ""
     @State private var error: String?
@@ -25,7 +26,7 @@ struct ClipboardSheet: View {
                         Task {
                             if let t = UIPasteboard.general.string {
                                 do {
-                                    _ = try await client.clipboardSet(t)
+                                    _ = try await client.clipboardSet(t, display: display)
                                     box = t
                                 } catch { self.error = error.localizedDescription }
                             }
@@ -40,7 +41,7 @@ struct ClipboardSheet: View {
                 }
             }
             .task {
-                do { box = try await client.clipboardGet().text }
+                do { box = try await client.clipboardGet(display: display).text }
                 catch { self.error = error.localizedDescription }
             }
         }

@@ -855,6 +855,28 @@ public nonisolated struct Computer_V1_StatusRequest: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
+  /// window index (X display number), 0/absent = primary
+  public var display: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// One Bot's screen on the shared box. Window index = X display number.
+public nonisolated struct Computer_V1_ScreenStatus: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var botID: String = String()
+
+  public var display: Int32 = 0
+
+  public var state: Computer_V1_SeatState = .unspecified
+
+  public var vncURL: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -878,6 +900,8 @@ public nonisolated struct Computer_V1_BoxStatus: Sendable {
   /// Clears the value of `display`. Subsequent reads from it will return its default value.
   public mutating func clearDisplay() {self._display = nil}
 
+  public var screens: [Computer_V1_ScreenStatus] = []
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -891,6 +915,9 @@ public nonisolated struct Computer_V1_SetPresenceRequest: Sendable {
   // methods supported on all messages.
 
   public var present: Bool = false
+
+  /// 0/absent = primary
+  public var display: Int32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -919,6 +946,9 @@ public nonisolated struct Computer_V1_PointerRequest: Sendable {
     }
     set {body = .click(newValue)}
   }
+
+  /// 0/absent = primary
+  public var display: Int32 = 0
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2441,18 +2471,74 @@ nonisolated extension Computer_V1_PairResponse: SwiftProtobuf.Message, SwiftProt
 
 nonisolated extension Computer_V1_StatusRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".StatusRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}display\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    // Load everything into unknown fields
-    while try decoder.nextFieldNumber() != nil {}
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
+      default: break
+      }
+    }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.display != 0 {
+      try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 1)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Computer_V1_StatusRequest, rhs: Computer_V1_StatusRequest) -> Bool {
+    if lhs.display != rhs.display {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ScreenStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ScreenStatus"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}bot_id\0\u{1}display\0\u{1}state\0\u{3}vnc_url\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.botID) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
+      case 3: try { try decoder.decodeSingularEnumField(value: &self.state) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.vncURL) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.botID.isEmpty {
+      try visitor.visitSingularStringField(value: self.botID, fieldNumber: 1)
+    }
+    if self.display != 0 {
+      try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 2)
+    }
+    if self.state != .unspecified {
+      try visitor.visitSingularEnumField(value: self.state, fieldNumber: 3)
+    }
+    if !self.vncURL.isEmpty {
+      try visitor.visitSingularStringField(value: self.vncURL, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ScreenStatus, rhs: Computer_V1_ScreenStatus) -> Bool {
+    if lhs.botID != rhs.botID {return false}
+    if lhs.display != rhs.display {return false}
+    if lhs.state != rhs.state {return false}
+    if lhs.vncURL != rhs.vncURL {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2460,7 +2546,7 @@ nonisolated extension Computer_V1_StatusRequest: SwiftProtobuf.Message, SwiftPro
 
 nonisolated extension Computer_V1_BoxStatus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".BoxStatus"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}state\0\u{3}vnc_url\0\u{1}display\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}state\0\u{3}vnc_url\0\u{1}display\0\u{1}screens\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2471,6 +2557,7 @@ nonisolated extension Computer_V1_BoxStatus: SwiftProtobuf.Message, SwiftProtobu
       case 1: try { try decoder.decodeSingularEnumField(value: &self.state) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.vncURL) }()
       case 3: try { try decoder.decodeSingularMessageField(value: &self._display) }()
+      case 4: try { try decoder.decodeRepeatedMessageField(value: &self.screens) }()
       default: break
       }
     }
@@ -2490,6 +2577,9 @@ nonisolated extension Computer_V1_BoxStatus: SwiftProtobuf.Message, SwiftProtobu
     try { if let v = self._display {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
     } }()
+    if !self.screens.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.screens, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2497,6 +2587,7 @@ nonisolated extension Computer_V1_BoxStatus: SwiftProtobuf.Message, SwiftProtobu
     if lhs.state != rhs.state {return false}
     if lhs.vncURL != rhs.vncURL {return false}
     if lhs._display != rhs._display {return false}
+    if lhs.screens != rhs.screens {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2504,7 +2595,7 @@ nonisolated extension Computer_V1_BoxStatus: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Computer_V1_SetPresenceRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SetPresenceRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}present\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}present\0\u{1}display\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2513,6 +2604,7 @@ nonisolated extension Computer_V1_SetPresenceRequest: SwiftProtobuf.Message, Swi
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBoolField(value: &self.present) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
       default: break
       }
     }
@@ -2522,11 +2614,15 @@ nonisolated extension Computer_V1_SetPresenceRequest: SwiftProtobuf.Message, Swi
     if self.present != false {
       try visitor.visitSingularBoolField(value: self.present, fieldNumber: 1)
     }
+    if self.display != 0 {
+      try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Computer_V1_SetPresenceRequest, rhs: Computer_V1_SetPresenceRequest) -> Bool {
     if lhs.present != rhs.present {return false}
+    if lhs.display != rhs.display {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2534,7 +2630,7 @@ nonisolated extension Computer_V1_SetPresenceRequest: SwiftProtobuf.Message, Swi
 
 nonisolated extension Computer_V1_PointerRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PointerRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}move\0\u{1}click\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}move\0\u{1}click\0\u{1}display\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2568,6 +2664,7 @@ nonisolated extension Computer_V1_PointerRequest: SwiftProtobuf.Message, SwiftPr
           self.body = .click(v)
         }
       }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
       default: break
       }
     }
@@ -2589,11 +2686,15 @@ nonisolated extension Computer_V1_PointerRequest: SwiftProtobuf.Message, SwiftPr
     }()
     case nil: break
     }
+    if self.display != 0 {
+      try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Computer_V1_PointerRequest, rhs: Computer_V1_PointerRequest) -> Bool {
     if lhs.body != rhs.body {return false}
+    if lhs.display != rhs.display {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

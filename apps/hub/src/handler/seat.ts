@@ -1,7 +1,6 @@
 import { SeatMethods } from "@computer/proto";
-import { ComputerError, DISPLAY, type Button } from "@computer/shared";
-import type { Desk } from "../desk/types.ts";
-import type { SeatService } from "../service/seat.ts";
+import { ComputerError, DISPLAY, PRIMARY_DISPLAY, parseDisplay, type BoxStatus, type Button } from "@computer/shared";
+import type { Bot, BotRegistry } from "../service/bots.ts";
 import type { AuthRegistry } from "./auth.ts";
 import { withSeatToken } from "./auth.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
@@ -9,93 +8,127 @@ import { requireObject } from "./router.ts";
 
 export type SeatDeps = {
   auth: AuthRegistry;
-  seat: SeatService;
-  desk: Desk;
+  bots: BotRegistry;
   vncUrl: string;
 };
 
+/**
+ * Seat RPCs take an additive `display` (window index). Absent = primary.
+ * Any paired seat token may view/take any screen — one human, many Bots;
+ * the seat FSM, not the token, is per screen.
+ */
 export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
-  const status = (token: string) => ({
-    state: deps.seat.getState(),
-    vnc_url: withSeatToken(deps.vncUrl, token),
-    display: DISPLAY,
-  });
+  const vncUrlFor = (display: number): string => {
+    if (display === PRIMARY_DISPLAY) return deps.vncUrl;
+    const sep = deps.vncUrl.includes("?") ? "&" : "?";
+    return `${deps.vncUrl}${sep}display=${display}`;
+  };
+
+  const status = (token: string, display = PRIMARY_DISPLAY): BoxStatus => {
+    const bot = deps.bots.byDisplay(display);
+    return {
+      state: bot.seat.getState(),
+      vnc_url: withSeatToken(vncUrlFor(display), token),
+      display: DISPLAY,
+      screens: deps.bots.all().map((b) => ({
+        bot_id: b.id,
+        display: b.display,
+        state: b.seat.getState(),
+        vnc_url: withSeatToken(vncUrlFor(b.display), token),
+      })),
+    };
+  };
+
+  const botFor = (ctx: RpcContext, o: Record<string, unknown>): Bot =>
+    deps.bots.byDisplay(parseDisplay(o.display));
 
   router.rpc(SeatMethods.Pair, "pair", async ({ body }) => {
     const o = requireObject(body);
     const token = deps.auth.pair(String(o.code ?? ""));
-    return { token, vnc_url: withSeatToken(deps.vncUrl, token), status: status(token) };
+    return { token, vnc_url: withSeatToken(vncUrlFor(PRIMARY_DISPLAY), token), status: status(token) };
   });
 
   router.rpc(SeatMethods.Status, "seat", async (ctx) => {
     requireSeatToken(ctx);
-    return status(ctx.bearer!);
+    const o = requireObject(ctx.body);
+    return status(ctx.bearer!, parseDisplay(o.display));
   });
 
   router.rpc(SeatMethods.SetPresence, "seat", async (ctx) => {
     requireSeatToken(ctx);
     const o = requireObject(ctx.body);
     if (typeof o.present !== "boolean") throw new ComputerError("VALIDATION", "present must be boolean");
-    deps.seat.setPresence(o.present);
-    return status(ctx.bearer!);
+    const display = parseDisplay(o.display);
+    deps.bots.byDisplay(display).seat.setPresence(o.present);
+    return status(ctx.bearer!, display);
   });
 
   router.rpc(SeatMethods.Pointer, "seat", async (ctx) => {
     requireSeatToken(ctx);
-    deps.seat.requireHumanContact();
-    await deps.desk.ping();
     const o = requireObject(ctx.body);
+    const bot = botFor(ctx, o);
+    bot.seat.requireHumanContact();
+    await bot.desk.ping();
     const type = o.type ?? (o.move ? "move" : o.click ? "click" : o.scroll ? "scroll" : undefined);
     if (type === "scroll") {
       const dx = Number(o.dx ?? 0);
       const dy = Number(o.dy ?? 0);
-      const c = deps.desk.getCursor();
-      await deps.desk.scroll(c.x, c.y, Math.trunc(dx), Math.trunc(dy));
-      return { cursor: deps.desk.getCursor(), seat: deps.seat.getState() };
+      const c = bot.desk.getCursor();
+      await bot.desk.scroll(c.x, c.y, Math.trunc(dx), Math.trunc(dy));
+      return { cursor: bot.desk.getCursor(), seat: bot.seat.getState() };
     }
     if (type === "move" || (o.dx !== undefined && type !== "click")) {
       const dx = Number(o.dx ?? (o.move as { dx?: number } | undefined)?.dx ?? 0);
       const dy = Number(o.dy ?? (o.move as { dy?: number } | undefined)?.dy ?? 0);
       const grab = Boolean(o.grab);
-      const cursor = await deps.desk.pointerDelta(dx, dy, grab);
-      return { cursor, seat: deps.seat.getState() };
+      const cursor = await bot.desk.pointerDelta(dx, dy, grab);
+      return { cursor, seat: bot.seat.getState() };
     }
-    if (type === "click" || o.button !== undefined || Object.keys(o).length === 0) {
+    if (type === "click" || o.button !== undefined || pointerBodyEmpty(o)) {
       const button = parseButton(o.button);
-      const cursor = await deps.desk.pointerClick(button);
-      return { cursor, seat: deps.seat.getState() };
+      const cursor = await bot.desk.pointerClick(button);
+      return { cursor, seat: bot.seat.getState() };
     }
     throw new ComputerError("VALIDATION", "pointer must be move or click");
   });
 
   router.rpc(SeatMethods.Type, "seat", async (ctx) => {
     requireSeatToken(ctx);
-    deps.seat.requireHumanContact();
-    await deps.desk.ping();
     const o = requireObject(ctx.body);
+    const bot = botFor(ctx, o);
+    bot.seat.requireHumanContact();
+    await bot.desk.ping();
     if (typeof o.text !== "string" || o.text.length < 1) {
       throw new ComputerError("VALIDATION", "text is required");
     }
-    await deps.desk.type(o.text);
-    return { cursor: deps.desk.getCursor(), seat: deps.seat.getState() };
+    await bot.desk.type(o.text);
+    return { cursor: bot.desk.getCursor(), seat: bot.seat.getState() };
   });
 
   router.rpc(SeatMethods.ClipboardGet, "seat", async (ctx) => {
     requireSeatToken(ctx);
-    deps.seat.requireHumanContact();
-    await deps.desk.ping();
-    return { text: await deps.desk.clipboardGet() };
+    const o = requireObject(ctx.body);
+    const bot = botFor(ctx, o);
+    bot.seat.requireHumanContact();
+    await bot.desk.ping();
+    return { text: await bot.desk.clipboardGet() };
   });
 
   router.rpc(SeatMethods.ClipboardSet, "seat", async (ctx) => {
     requireSeatToken(ctx);
-    deps.seat.requireHumanContact();
-    await deps.desk.ping();
     const o = requireObject(ctx.body);
+    const bot = botFor(ctx, o);
+    bot.seat.requireHumanContact();
+    await bot.desk.ping();
     if (typeof o.text !== "string") throw new ComputerError("VALIDATION", "text is required");
-    await deps.desk.clipboardSet(o.text);
+    await bot.desk.clipboardSet(o.text);
     return { text: o.text };
   });
+}
+
+/** `{}` and `{display: N}` alone both mean a plain left click. */
+function pointerBodyEmpty(o: Record<string, unknown>): boolean {
+  return Object.keys(o).every((k) => k === "display");
 }
 
 function requireSeatToken(ctx: RpcContext): void {

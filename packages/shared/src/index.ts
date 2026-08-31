@@ -10,6 +10,16 @@ export type RequestId = string & { readonly __brand: "RequestId" };
 export const DISPLAY = { width: 1280, height: 800, scale: 1 } as const;
 export type Display = typeof DISPLAY;
 
+/** Window index = X display number. Primary is :1; forks are :2+. */
+export const MAX_DISPLAYS = 8 as const;
+export const PRIMARY_DISPLAY = 1 as const;
+
+export type BotId = string & { readonly __brand: "BotId" };
+
+export function asBotId(s: string): BotId {
+  return s as BotId;
+}
+
 export const WORKSPACE = "/workspace" as const;
 export const SPEC_ID = "computer.v1" as const;
 export const SPEC_VERSION = "1.0.0" as const;
@@ -82,10 +92,18 @@ export type PendingCheck = {
   message: string;
 };
 
+export type ScreenStatus = {
+  bot_id: BotId;
+  display: number;
+  state: SeatState;
+  vnc_url: string;
+};
+
 export type BoxStatus = {
   state: SeatState;
   vnc_url: string;
   display: Display;
+  screens?: ScreenStatus[];
 };
 
 export function asPixelX(n: number): PixelX {
@@ -144,6 +162,16 @@ export function resolveWorkspacePath(input: string): string {
     throw new ComputerError("PATH_REJECTED", `path escapes ${WORKSPACE}`);
   }
   return resolved;
+}
+
+/** Seat JSON `display` param: default primary, VALIDATION outside 1..MAX_DISPLAYS. */
+export function parseDisplay(v: unknown): number {
+  if (v === undefined || v === null) return PRIMARY_DISPLAY;
+  const n = Number(v);
+  if (!Number.isInteger(n) || n < 1 || n > MAX_DISPLAYS) {
+    throw new ComputerError("VALIDATION", `display must be 1..${MAX_DISPLAYS}`);
+  }
+  return n;
 }
 
 export function clampCursor(x: number, y: number): Point {

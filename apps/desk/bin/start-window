@@ -1,0 +1,84 @@
+#!/bin/bash
+# start-window N [owner-hash] [bot-id]
+#
+# Claim window index N (X display :N, RFB port 5900+N) for a Bot.
+# Assignments live in $HOME/.window-assignments.json with sha256 owner
+# hashes, never raw tokens. Re-claim by the same owner is idempotent;
+# a different owner gets exit 9. Bots are not security boundaries —
+# same box user, shared /workspace.
+set -euo pipefail
+
+N="${1:?usage: start-window N [owner-hash] [bot-id]}"
+OWNER="${2:-}"
+BOT_ID="${3:-}"
+if ! [[ "$N" =~ ^[0-9]+$ ]] || (( N < 1 || N > 8 )); then
+  echo "window index must be 1..8" >&2
+  exit 2
+fi
+
+export HOME="${HOME:-/home/box}"
+DISPLAY_NAME=":$N"
+RFB_PORT=$((5900 + N))
+ASSIGN="$HOME/.window-assignments.json"
+LOCK="$HOME/.window-assignments.lock"
+
+mkdir -p "$HOME/.vnc" /workspace
+touch "$ASSIGN"
+
+claim() {
+  python3 - "$ASSIGN" "$N" "$OWNER" "$BOT_ID" <<'PY'
+import json, sys, time
+path, n, owner, bot_id = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+try:
+    with open(path) as f:
+        data = json.load(f)
+except (ValueError, FileNotFoundError):
+    data = {}
+entry = data.get(n)
+if entry and owner and entry.get("owner") and entry["owner"] != owner:
+    print(f"window {n} claimed by another owner", file=sys.stderr)
+    sys.exit(9)
+data[n] = {"owner": owner, "bot_id": bot_id, "claimed_at": int(time.time())}
+with open(path, "w") as f:
+    json.dump(data, f, indent=2, sort_keys=True)
+PY
+}
+
+exec 9>"$LOCK"
+flock 9
+claim
+
+# Already serving this display? Idempotent success.
+if [[ -e "/tmp/.X11-unix/X$N" ]]; then
+  echo "window $N up on $DISPLAY_NAME rfb $RFB_PORT"
+  exit 0
+fi
+
+vncserver "$DISPLAY_NAME" \
+  -rfbport "$RFB_PORT" \
+  -geometry 1280x800 \
+  -depth 24 \
+  -localhost no \
+  -xstartup /bin/openbox \
+  -SecurityTypes None \
+  || vncserver "$DISPLAY_NAME" -rfbport "$RFB_PORT" -geometry 1280x800 -depth 24 -localhost no
+
+sleep 0.4
+
+# Chromium per window. Window 1 keeps the legacy profile dir (volume mount).
+CHROMIUM="$(command -v chromium-browser || command -v chromium || true)"
+if [[ -n "$CHROMIUM" ]]; then
+  PROFILE="$HOME/.config/chromium"
+  if (( N != 1 )); then PROFILE="$HOME/.config/chromium-$N"; fi
+  mkdir -p "$PROFILE"
+  DISPLAY="$DISPLAY_NAME" "$CHROMIUM" \
+    --no-first-run \
+    --disable-sync \
+    --disable-gpu \
+    --user-data-dir="$PROFILE" \
+    --window-size=1280,800 \
+    --window-position=0,0 \
+    about:blank >"/tmp/chromium-$N.log" 2>&1 &
+fi
+
+echo "window $N up on $DISPLAY_NAME rfb $RFB_PORT"

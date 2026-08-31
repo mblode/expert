@@ -24,8 +24,8 @@ iPhone ── Seat ── hub ── desk
 Model  ── Agent ─┘
 ```
 
-Two ConnectRPC services on one hub. One box. One seat. One display
-at 1280×800.
+Two ConnectRPC services on one hub. One box. Many Bots, one screen
+per Bot. Every screen is 1280×800.
 
 ```
 service Agent {
@@ -49,6 +49,29 @@ service Seat {
 
 `GET /spec` is the HTTP view of `Agent.Spec`. An agent that can fetch
 JSON does not need the proto.
+
+## Screens
+
+One shared box; each Bot owns one **screen** — a window index that is
+an X display number. Primary is `:1`; forks are `:2`–`:8`. This is
+Grok's shape: the machine is shared, the screen is not.
+
+- **Agent token → Bot → screen.** The model never names a display; its
+  bearer token identifies its Bot, and the hub routes to that Bot's
+  screen. Agent messages are unchanged.
+- **Seat calls take an additive `display`** (absent = primary). Any
+  paired seat token may view or take any screen — one human, many
+  Bots. The seat FSM below runs **per screen**; `SEAT_HELD` on one
+  screen says nothing about another.
+- `Status` returns `screens: { bot_id, display, state, vnc_url }[]`
+  beside the top-level fields (which describe the requested display),
+  so a phone can render a screen picker.
+- Claims live on the box in `~/.window-assignments.json` with sha256
+  owner hashes, written by `start-window`/`stop-window`. Window N
+  serves RFB on port `5900 + N`.
+- **Bots are not security boundaries.** Same box user, shared
+  `/workspace`, and the X clipboard is per display but the box is one
+  trust domain. Do not split trust across Bots.
 
 ## Seat
 
@@ -201,7 +224,8 @@ HTTP status follows the code: 401, 409, 400, 400, 503, 400, 409.
 ## What the phone does
 
 `Pair` exchanges the setup code for a bearer and a `vncUrl`.
-`Status` returns `{ state, vncUrl, display }`.
+`Status` returns `{ state, vncUrl, display, screens }`.
+Seat calls take an additive `display` to pick a screen (see Screens).
 `Pointer` is the trackpad: `move` deltas or `click` at the current
 pointer. It does not take screenshot coordinates — the human is
 looking at the stream.

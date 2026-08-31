@@ -83,25 +83,43 @@ export interface Agent {
   writeFile(req: { path: string; content: string }): Promise<{ bytes: number }>;
 }
 
-/** iPhone. The model never calls these. */
+/**
+ * iPhone. The model never calls these.
+ * `display` selects a screen (window index = X display number, 1..MAX_DISPLAYS).
+ * Omitted means the primary screen (:1). The seat FSM is per screen.
+ */
 export interface Seat {
   pair(req: { code: string }): Promise<{
     token: string;
     vnc_url: string;
     status: BoxStatus;
   }>;
-  status(): Promise<BoxStatus>;
-  setPresence(req: { present: boolean }): Promise<BoxStatus>;
+  status(req?: { display?: number }): Promise<BoxStatus>;
+  setPresence(req: { present: boolean; display?: number }): Promise<BoxStatus>;
   pointer(
-    req: { type: "move"; dx: number; dy: number } | { type: "click"; button?: Button },
+    req:
+      | { type: "move"; dx: number; dy: number; display?: number }
+      | { type: "click"; button?: Button; display?: number },
   ): Promise<{ cursor: Point; seat: SeatState }>;
-  type(req: { text: string }): Promise<{ cursor: Point; seat: SeatState }>;
-  clipboardGet(): Promise<{ text: string }>;
-  clipboardSet(req: { text: string }): Promise<{ text: string }>;
+  type(req: { text: string; display?: number }): Promise<{ cursor: Point; seat: SeatState }>;
+  clipboardGet(req?: { display?: number }): Promise<{ text: string }>;
+  clipboardSet(req: { text: string; display?: number }): Promise<{ text: string }>;
 }
+
+/** Window index = X display number. Primary is :1; forks are :2+. */
+export const MAX_DISPLAYS = 8 as const;
+
+/** One Bot's screen on the shared box. Bots are not security boundaries. */
+export type ScreenStatus = {
+  bot_id: string;
+  display: number;
+  state: SeatState;
+  vnc_url: string;
+};
 
 export type BoxStatus = {
   state: SeatState;
   vnc_url: string;
   display: Display;
+  screens?: ScreenStatus[];
 };

@@ -80,11 +80,11 @@ One Docker image. TigerVNC 1280×800. Chromium. Persistent volume. Non-root `box
 - **Frame:** clean-room box. 0.18 is the spec, not a fork. No shipped renderer, no asar.
 - **Pixels = VNC, not WebRTC.** 0.18 already does this. iOS uses the same `vncUrl`.
 - **iOS ships in the first tracer.** Pair → see desktop → take seat → paste from iPhone → I’m done → agent continues. Laptop web viewer is debug-only (`apps/hub` static page), not a product.
-- **One box, one seat, one Bot.** Window-index forks (`/home/box/.sand-window-assignments.json`) wait until a second Bot exists.
+- **One box, many Bots, one screen per Bot.** Window index = X display: primary `:1`, forks `:2`–`:8`, RFB on `5900 + N`. Claims live in `~/.window-assignments.json` on the box with sha256 owner hashes. Agent token → Bot → screen; the seat FSM is per screen. Default config is still exactly one Bot on `:1`.
 - **Protocol is [api/DESIGN.md](api/DESIGN.md).** One action union, Claude skip-the-rest, pixel coords, seat FSM. Not a 64-tool MCP server. Not Gemini 0–999.
 - **1280×800.** Agent and iOS share that sentence; do not add resolution settings.
 - **uinput for pointer.** TigerVNC `XSendEvent` is ignored by GTK; Wine/Chrome need real input.
-- **No Next.js, Vercel, or Fly.** Constraint is a standing Linux desktop. Deploy: Docker Compose on a Hetzner CX43 (or any always-on Docker host) + Tailscale.
+- **No Next.js, Vercel, or Fly.** Constraint is a standing Linux desktop. Deploy: Docker Compose on a Hetzner box (CX33 €8.49/mo is the sweet spot; CX43 €15.99/mo post the June-2026 price rise) or any always-on Docker host + Tailscale. Cloudflare Tunnel + Access browser-rendered VNC is a clientless alternative front door — noted, not adopted.
 - **TypeScript monorepo for hub/proto only.** iOS is Xcode; desk is a Dockerfile. Do not invent a shared React Native client.
 
 ## Repo shape
@@ -103,9 +103,9 @@ Hub modules: `handler` (Connect adapters) → `service` (seat, clipboard, agent)
 
 ## Out of scope
 
-- Named Bot roster, routines, teach-by-demo, plugins marketplace
+- Named Bot roster UI, routines, teach-by-demo, plugins marketplace
 - Driving the user’s MacBook
-- Multi-seat / per-Bot displays
+- Per-Bot security isolation (Bots share the box and are not security boundaries)
 - App Store submission
 - Poke/Town/OpenClaw features (inbox, iMessage, camera node)
 - Forking or vendoring 0.18 reconstructed sources

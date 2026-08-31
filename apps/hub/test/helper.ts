@@ -1,7 +1,10 @@
-import { createHub, type Hub } from "../src/app.ts";
+import { createHub, type BotOption, type Hub } from "../src/app.ts";
 import { FakeDesk } from "../src/desk/fake.ts";
 
-export async function startHub(desk = new FakeDesk()): Promise<{
+export async function startHub(
+  desk = new FakeDesk(),
+  extra: { bots?: BotOption[]; vncBasePort?: number } = {},
+): Promise<{
   hub: Hub;
   desk: FakeDesk;
   url: string;
@@ -15,7 +18,9 @@ export async function startHub(desk = new FakeDesk()): Promise<{
   const hub = createHub({
     desk,
     setupCode: setup,
-    agentToken: agent,
+    agentToken: extra.bots ? undefined : agent,
+    bots: extra.bots,
+    vncBasePort: extra.vncBasePort,
     vncUrl: "http://127.0.0.1/vnc/index.html?view_only=1",
   });
   await new Promise<void>((resolve) => hub.server.listen(0, "127.0.0.1", resolve));

@@ -11,9 +11,11 @@ type FileEntry = { content: string };
 
 export type FakeDeskOptions = {
   failPing?: boolean;
+  display?: number;
 };
 
 export class FakeDesk implements Desk {
+  readonly display: number;
   cursor: Point = asPoint(640, 400);
   clipboard = "";
   files = new Map<string, FileEntry>();
@@ -26,6 +28,7 @@ export class FakeDesk implements Desk {
 
   constructor(opts: FakeDeskOptions = {}) {
     this.failPing = opts.failPing ?? false;
+    this.display = opts.display ?? 1;
   }
 
   async ping(): Promise<boolean> {

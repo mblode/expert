@@ -2,9 +2,19 @@ import { spawn } from "node:child_process";
 import { ComputerError, clampCursor, asPoint, type Button, type Point } from "@computer/shared";
 import type { Desk, FocusHint, ShellResult } from "./types.ts";
 
+export type InputBackend = "uinput" | "xtest";
+
 export type DockerDeskOptions = {
   container: string;
   user?: string;
+  /** Window index = X display number. Default 1 (primary). */
+  display?: number;
+  /**
+   * uinput is kernel-global and cannot address one X display, so it only
+   * fits the primary window. Forks default to XTEST (xdotool) with
+   * DISPLAY=:N — real synthesized input, not XSendEvent.
+   */
+  inputBackend?: InputBackend;
 };
 
 const BUTTON_TO_UINPUT: Record<Button, string> = {
@@ -15,19 +25,57 @@ const BUTTON_TO_UINPUT: Record<Button, string> = {
   forward: "forward",
 };
 
+const BUTTON_TO_XDOTOOL: Record<Button, string> = {
+  left: "1",
+  middle: "2",
+  right: "3",
+  back: "8",
+  forward: "9",
+};
+
+/** Agent key names → X keysyms for xdotool. Unlisted names pass through. */
+const KEY_TO_KEYSYM: Record<string, string> = {
+  enter: "Return",
+  return: "Return",
+  esc: "Escape",
+  escape: "Escape",
+  backspace: "BackSpace",
+  tab: "Tab",
+  space: "space",
+  delete: "Delete",
+  home: "Home",
+  end: "End",
+  pageup: "Page_Up",
+  pagedown: "Page_Down",
+  up: "Up",
+  down: "Down",
+  left: "Left",
+  right: "Right",
+  ctrl: "ctrl",
+  alt: "alt",
+  shift: "shift",
+  super: "super",
+  cmd: "super",
+};
+
 /**
- * Desk driver: docker exec into the box.
- * Pointer goes through /usr/local/bin/uinputd (not XSendEvent).
+ * Desk driver for one window (X display) of the box: docker exec in.
+ * Pointer goes through uinputd on the primary window and XTEST on forks
+ * (never XSendEvent).
  */
 export class DockerDesk implements Desk {
   private readonly container: string;
   private readonly user: string;
+  readonly display: number;
+  readonly inputBackend: InputBackend;
   private cursor = asPoint(640, 400);
   private held = false;
 
   constructor(opts: DockerDeskOptions) {
     this.container = opts.container;
     this.user = opts.user ?? "box";
+    this.display = opts.display ?? 1;
+    this.inputBackend = opts.inputBackend ?? (this.display === 1 ? "uinput" : "xtest");
   }
 
   getCursor(): Point {
@@ -36,8 +84,11 @@ export class DockerDesk implements Desk {
 
   async ping(): Promise<boolean> {
     try {
-      const r = await this.exec(["/usr/local/bin/uinputd", "ping"], { timeoutMs: 5000 });
-      if (r.exit !== 0) throw new Error(r.stderr);
+      const r =
+        this.inputBackend === "uinput"
+          ? await this.exec(["/usr/local/bin/uinputd", "ping"], { timeoutMs: 5000 })
+          : await this.exec(["xdotool", "getdisplaygeometry"], { timeoutMs: 5000, envDisplay: true });
+      if (r.exit !== 0) throw new Error(r.stderr.toString());
       return true;
     } catch (err) {
       throw new ComputerError("DAEMON_DOWN", err instanceof Error ? err.message : "desk exec or input is dead");
@@ -194,7 +245,17 @@ export class DockerDesk implements Desk {
     };
   }
 
+  /** Input verbs in uinputd vocabulary; translated to xdotool on the xtest backend. */
   private async uinput(args: string[]): Promise<void> {
+    if (this.inputBackend === "xtest") {
+      for (const argv of xdotoolArgv(args)) {
+        const r = await this.exec(argv, { timeoutMs: 5000, envDisplay: true });
+        if (r.exit !== 0) {
+          throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || `xdotool ${args[0]} failed`);
+        }
+      }
+      return;
+    }
     const r = await this.exec(["/usr/local/bin/uinputd", ...args], { timeoutMs: 5000, user: "root" });
     if (r.exit !== 0) {
       throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || `uinputd ${args[0]} failed`);
@@ -217,7 +278,7 @@ export class DockerDesk implements Desk {
       "-i",
       "-u",
       opts.user ?? this.user,
-      ...(opts.envDisplay ? ["-e", "DISPLAY=:1"] : []),
+      ...(opts.envDisplay ? ["-e", `DISPLAY=:${this.display}`] : []),
       ...(opts.cwd ? ["-w", opts.cwd] : []),
       this.container,
       ...argv,
@@ -255,4 +316,37 @@ export class DockerDesk implements Desk {
 
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/** uinputd verb → xdotool argv list (XTEST; per-display, unlike uinput). */
+function xdotoolArgv(args: string[]): string[][] {
+  const [verb, ...rest] = args;
+  switch (verb) {
+    case "move":
+      return [["xdotool", "mousemove", rest[0] ?? "0", rest[1] ?? "0"]];
+    case "click": {
+      const button = BUTTON_TO_XDOTOOL[(rest[0] ?? "left") as Button] ?? "1";
+      return rest.includes("--double")
+        ? [["xdotool", "click", "--repeat", "2", "--delay", "150", button]]
+        : [["xdotool", "click", button]];
+    }
+    case "down":
+      return [["xdotool", "mousedown", BUTTON_TO_XDOTOOL[(rest[0] ?? "left") as Button] ?? "1"]];
+    case "up":
+      return [["xdotool", "mouseup", BUTTON_TO_XDOTOOL[(rest[0] ?? "left") as Button] ?? "1"]];
+    case "scroll": {
+      const dx = Math.trunc(Number(rest[0] ?? 0));
+      const dy = Math.trunc(Number(rest[1] ?? 0));
+      const out: string[][] = [];
+      if (dy !== 0) out.push(["xdotool", "click", "--repeat", String(Math.abs(dy)), dy > 0 ? "5" : "4"]);
+      if (dx !== 0) out.push(["xdotool", "click", "--repeat", String(Math.abs(dx)), dx > 0 ? "7" : "6"]);
+      return out;
+    }
+    case "key": {
+      const combo = rest.map((k) => KEY_TO_KEYSYM[k.toLowerCase()] ?? k).join("+");
+      return combo ? [["xdotool", "key", combo]] : [];
+    }
+    default:
+      return [["xdotool", verb ?? "version", ...rest]];
+  }
 }

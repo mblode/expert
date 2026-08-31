@@ -43,14 +43,15 @@ struct ComputerView: View {
             await model.refreshStatus()
             if let client = model.client {
                 seat.attach(client)
-                if let s = model.status {
-                    seat.vncURL = URL(string: s.vncUrl)
-                }
+                syncScreen()
             }
+        }
+        .onChange(of: model.selectedScreen) {
+            syncScreen()
         }
         .sheet(isPresented: $showClipboard) {
             if let client = model.client {
-                ClipboardSheet(client: client)
+                ClipboardSheet(client: client, display: seat.display)
             }
         }
         .sheet(isPresented: $showKeyboard) {
@@ -76,6 +77,17 @@ struct ComputerView: View {
         }
     }
 
+    /// Point the seat at the selected Bot's screen (nil selection = primary).
+    private func syncScreen() {
+        if let screen = model.currentScreen {
+            seat.display = screen.display == 1 ? nil : screen.display
+            seat.vncURL = URL(string: screen.vncUrl)
+        } else if let s = model.status {
+            seat.display = nil
+            seat.vncURL = URL(string: s.vncUrl)
+        }
+    }
+
     private var vncURL: URL? {
         seat.vncURL ?? model.status.flatMap { URL(string: $0.vncUrl) }
     }
@@ -95,6 +107,23 @@ struct ComputerView: View {
                 Button("Recenter pointer") { Task { await seat.recenter() } }
             } label: {
                 Label("More", systemImage: "ellipsis.circle")
+            }
+            if model.screens.count > 1 {
+                Menu {
+                    ForEach(model.screens) { screen in
+                        Button {
+                            model.selectScreen(screen)
+                        } label: {
+                            if screen.display == model.currentScreen?.display {
+                                Label(screen.botId, systemImage: "checkmark")
+                            } else {
+                                Text(screen.botId)
+                            }
+                        }
+                    }
+                } label: {
+                    Label("Screen", systemImage: "rectangle.on.rectangle")
+                }
             }
             Spacer()
             Button {
@@ -118,6 +147,8 @@ final class SeatController: ObservableObject {
     @Published var trackpad = false
     @Published var cursor: ComputerV1.Point?
     @Published var vncURL: URL?
+    /// Window index of the screen being driven. Nil = primary.
+    @Published var display: Int?
     private var client: ComputerClient?
 
     func attach(_ client: ComputerClient) {
@@ -128,7 +159,7 @@ final class SeatController: ObservableObject {
     func move(dx: Int, dy: Int, grab: Bool = false) async {
         guard let client else { return }
         do {
-            let r = try await client.pointer(.move(dx: dx, dy: dy, grab: grab))
+            let r = try await client.pointer(.move(dx: dx, dy: dy, grab: grab), display: display)
             cursor = r.cursor
         } catch { }
     }
@@ -136,7 +167,7 @@ final class SeatController: ObservableObject {
     func click(button: String = "left") async {
         guard let client else { return }
         do {
-            let r = try await client.pointer(.click(button: button))
+            let r = try await client.pointer(.click(button: button), display: display)
             cursor = r.cursor
         } catch { }
     }
@@ -154,20 +185,20 @@ final class SeatController: ObservableObject {
 
     func scroll(dx: Int, dy: Int) async {
         guard let client else { return }
-        struct Scroll: Encodable { var type = "scroll"; var dx: Int; var dy: Int }
+        struct Scroll: Encodable { var type = "scroll"; var dx: Int; var dy: Int; var display: Int? }
         var req = URLRequest(url: client.url(ComputerV1.seatPaths.pointer))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = client.token {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
-        req.httpBody = try? JSONEncoder().encode(Scroll(dx: dx, dy: dy))
+        req.httpBody = try? JSONEncoder().encode(Scroll(dx: dx, dy: dy, display: display))
         _ = try? await URLSession.shared.data(for: req)
     }
 
     func type(_ text: String) async throws {
         guard let client else { return }
-        let r = try await client.type(text)
+        let r = try await client.type(text, display: display)
         cursor = r.cursor
     }
 

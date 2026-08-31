@@ -18,6 +18,11 @@
       "CONFLICT"
     ]
   },
+  "screens": {
+    "max": 8,
+    "primary": 1,
+    "description": "One shared box, one screen (window index = X display) per Bot. The agent token identifies the Bot and its screen; Seat calls take an additive `display` (default primary). Each screen is 1280×800; the seat FSM is per screen. Bots are not security boundaries."
+  },
   "seat": {
     "states": ["AGENT", "WAITING", "HUMAN"],
     "transitions": [

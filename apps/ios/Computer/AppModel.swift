@@ -9,6 +9,13 @@ final class AppModel: ObservableObject {
     @Published var waiting = false
     @Published var pairError: String?
     @Published var busy = false
+    /// Which Bot's screen the phone is on. Nil = primary (single-screen hub).
+    @Published var selectedScreen: ComputerV1.ScreenStatus?
+
+    var screens: [ComputerV1.ScreenStatus] { status?.screens ?? [] }
+    var currentScreen: ComputerV1.ScreenStatus? {
+        selectedScreen ?? screens.first(where: { $0.display == 1 }) ?? screens.first
+    }
 
     let store = KeychainStore()
     var client: ComputerClient? {
@@ -50,12 +57,21 @@ final class AppModel: ObservableObject {
     func refreshStatus() async {
         guard let client else { return }
         do {
-            let s = try await client.status()
+            let s = try await client.status(display: selectedScreen?.display)
             status = s
-            waiting = s.state == .waiting
+            // Keep the selection pinned to the same Bot across refreshes.
+            if let sel = selectedScreen {
+                selectedScreen = s.screens?.first(where: { $0.botId == sel.botId })
+            }
+            waiting = (currentScreen?.state ?? s.state) == .waiting
         } catch {
             // keep last known
         }
+    }
+
+    func selectScreen(_ screen: ComputerV1.ScreenStatus) {
+        selectedScreen = screen
+        waiting = screen.state == .waiting
     }
 
     func sendChat(_ text: String) async {
@@ -66,7 +82,7 @@ final class AppModel: ObservableObject {
         messages.append(assistant)
         let idx = messages.count - 1
         do {
-            try await client.chat(message: trimmed) { event in
+            try await client.chat(message: trimmed, botId: currentScreen?.botId) { event in
                 Task { @MainActor in
                     switch event.type {
                     case "delta":
@@ -94,7 +110,7 @@ final class AppModel: ObservableObject {
     func imDone() async {
         guard let client else { return }
         do {
-            status = try await client.setPresence(present: false)
+            status = try await client.setPresence(present: false, display: selectedScreen?.display)
             waiting = false
         } catch {
             pairError = error.localizedDescription

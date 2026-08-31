@@ -16,7 +16,8 @@ services:
     group_add:
       - "0" # root group often owns uinput; fallback is the device mount
     ports:
-      - "127.0.0.1:5900:5900"
+      # One RFB port per window index: 5900 + N (primary :1 → 5901).
+      - "127.0.0.1:5901-5908:5901-5908"
     shm_size: "1gb"
 
 volumes:

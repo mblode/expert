@@ -30,36 +30,38 @@ struct ComputerClient: Sendable {
         try await post(ComputerV1.seatPaths.pair, ComputerV1.PairRequest(code: code), auth: false)
     }
 
-    func status() async throws -> ComputerV1.BoxStatus {
-        try await post(ComputerV1.seatPaths.status, [String: String]())
+    func status(display: Int? = nil) async throws -> ComputerV1.BoxStatus {
+        try await post(ComputerV1.seatPaths.status, ComputerV1.DisplayScoped([String: String](), display: display))
     }
 
-    func setPresence(present: Bool) async throws -> ComputerV1.BoxStatus {
-        try await post(ComputerV1.seatPaths.setPresence, ComputerV1.SetPresenceRequest(present: present))
+    func setPresence(present: Bool, display: Int? = nil) async throws -> ComputerV1.BoxStatus {
+        try await post(ComputerV1.seatPaths.setPresence, ComputerV1.SetPresenceRequest(present: present, display: display))
     }
 
-    func pointer(_ req: ComputerV1.PointerRequest) async throws -> ComputerV1.PointerResponse {
-        try await post(ComputerV1.seatPaths.pointer, req)
+    func pointer(_ req: ComputerV1.PointerRequest, display: Int? = nil) async throws -> ComputerV1.PointerResponse {
+        try await post(ComputerV1.seatPaths.pointer, ComputerV1.DisplayScoped(req, display: display))
     }
 
-    func type(_ text: String) async throws -> ComputerV1.PointerResponse {
-        try await post(ComputerV1.seatPaths.type, ComputerV1.TypeRequest(text: text))
+    func type(_ text: String, display: Int? = nil) async throws -> ComputerV1.PointerResponse {
+        try await post(ComputerV1.seatPaths.type, ComputerV1.DisplayScoped(ComputerV1.TypeRequest(text: text), display: display))
     }
 
-    func clipboardGet() async throws -> ComputerV1.Clipboard {
-        try await post(ComputerV1.seatPaths.clipboardGet, [String: String]())
+    func clipboardGet(display: Int? = nil) async throws -> ComputerV1.Clipboard {
+        try await post(ComputerV1.seatPaths.clipboardGet, ComputerV1.DisplayScoped([String: String](), display: display))
     }
 
-    func clipboardSet(_ text: String) async throws -> ComputerV1.Clipboard {
-        try await post(ComputerV1.seatPaths.clipboardSet, ComputerV1.Clipboard(text: text))
+    func clipboardSet(_ text: String, display: Int? = nil) async throws -> ComputerV1.Clipboard {
+        try await post(ComputerV1.seatPaths.clipboardSet, ComputerV1.DisplayScoped(ComputerV1.Clipboard(text: text), display: display))
     }
 
-    func chat(message: String, onEvent: @escaping @Sendable (ChatEvent) -> Void) async throws {
+    func chat(message: String, botId: String? = nil, onEvent: @escaping @Sendable (ChatEvent) -> Void) async throws {
         var req = URLRequest(url: baseURL.appending(path: "chat"))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token { req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-        req.httpBody = try JSONEncoder().encode(["message": message])
+        var body = ["message": message]
+        if let botId { body["bot_id"] = botId }
+        req.httpBody = try JSONEncoder().encode(body)
         let (bytes, response) = try await URLSession.shared.bytes(for: req)
         if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
             throw ClientError.status(http.statusCode)

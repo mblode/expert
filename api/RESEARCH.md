@@ -5,21 +5,42 @@ The protocol is [DESIGN.md](DESIGN.md). This file is the argument.
 
 ## The product we are cloning
 
-Grok Bot (xAI / Cursor) is one **persistent Debian KVM Linux VM per
-account**. Bots share the machine and get a **screen**, not a box.
-Clients: macOS, Windows, iOS 18+. The laptop can close. iOS is a real
-takeover: trackpad, pinch, clipboard, **I'm done**. Cost is plan +
-tokens, not VM-hours.
+Grok Bot (xAI branding; the client and cloud substrate are built by
+Anysphere/Cursor — bundle id `com.anysphere.sand`, DMG from
+`downloads.cursor.com`, codename "sand") is one **persistent Linux
+environment per account**: an **anyrun pod — a Firecracker microVM
+booting a Docker-built image** — with full memory+disk snapshot
+hibernation to blob storage and wake-on-connect (`resume_*` params on
+the viewer URL). Not always-hot; persistence is hibernation. Bots
+share the machine and get a **screen**, not a box. Clients: macOS,
+Windows, iOS 18+. The laptop can close. iOS is a real takeover:
+trackpad, pinch, clipboard, **I'm done**. Cost is plan + tokens, not
+VM-hours.
 
 Public 0.18 reconstruction
 ([b-nnett/grok-bot-0.18-reconstructed](https://github.com/b-nnett/grok-bot-0.18-reconstructed))
 is the desktop spec, not a fork:
 
-- Pixels = **VNC**, not WebRTC. Electron loads a trusted webview at `vncUrl`.
+- Pixels = **VNC**, not WebRTC: x11vnc → websockify → noVNC behind a
+  token-authenticated proxy (`x-anyrun-network-token`), port 6080
+  primary, 6081+ forks. Electron loads a trusted webview at `vncUrl`.
 - Clipboard and `reportUserPresence` are **IPC beside VNC**, not RFB.
-- Computer-use space **1280×800**.
+- Computer-use space **1280-wide scaled** (advertised 1280×800; a
+  `CoordinateScaler` maps API↔real pixels via xrandr). Actions run
+  in-VM over a Connect-RPC exec daemon, not over the VNC channel.
 - Exec is ConnectRPC on loopback, separate from pixels.
-- Shared box id `"shared"`; Bots get window indexes. We ship one Bot.
+- Shared box id `"shared"`; Bots get **window indexes = X displays**
+  (`:1` primary, forks `:2+`, max 100), persisted in
+  `/home/box/.sand-window-assignments.json` with per-agent owner
+  tokens; a fork router routes by display/owner headers. Bots are
+  explicitly **not security boundaries** (one `box` user, shared
+  `/workspace`).
+- Hand-off: `request_box_help` shows an instruction over the box and
+  in chat; the human drives the streamed desktop; hand-back carries a
+  completed/cancelled resolution. That is the seat.
+
+We ship the same shape at max 8 windows, the hub playing the router
+role (token → Bot → display instead of headers).
 
 No iOS source in that repo. The phone chrome is the product we write.
 
@@ -47,7 +68,11 @@ We take the action-list idea. We do not take "drive the user's laptop."
 | OpenMausBot / SuperAgents | Tiny Grok-product clones | 1-star surfaces, not a protocol |
 
 Vercel / Cloudflare Workers / Railway cannot host a desktop.
-Cheap analogue: Hetzner CX43 (~8 vCPU / 16 GB) + Tailscale.
+Cheap analogue: Hetzner + Tailscale (post June-2026 prices: CX33
+4 vCPU/8 GB €8.49/mo, CX43 €15.99/mo). Per-second sandboxes (E2B,
+Daytona, Modal, Morph) are ~10× for an always-on pet machine; Fly.io
+suspend/resume is the only cheap off-the-shelf imitation of Grok's
+hibernation.
 
 ## Hosted computer-use APIs
 
@@ -119,7 +144,7 @@ other sentence. Do not write it.
 
 | In v1 | Later |
 |---|---|
-| One box, one seat, one Bot | Window-index forks, Bot roster |
+| One box, many Bots, one screen per Bot (max 8) | Bot roster UI, Firecracker snapshot/hibernation |
 | VNC view-only + native chrome | WebRTC |
 | uinput | Anything using `XSendEvent` |
 | UTF-8 clipboard | Images |

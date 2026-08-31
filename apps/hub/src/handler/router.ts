@@ -8,7 +8,9 @@ type Handler = (ctx: RpcContext) => Promise<unknown>;
 export type RpcContext = {
   body: unknown;
   bearer?: string;
-  kind: ReturnType<AuthRegistry["verify"]>;
+  kind: "agent" | "seat" | "public";
+  /** Set for agent calls: the Bot the bearer token belongs to. */
+  botId?: string;
 };
 
 type Route = { policy: AuthPolicy; handler: Handler };
@@ -73,9 +75,9 @@ export class ConnectRouter {
   ): Promise<void> {
     try {
       const bearer = bearerFromHeader(header(req, "authorization"));
-      const kind = this.auth.verify(policy, bearer);
+      const verified = this.auth.verify(policy, bearer);
       const body = req.method === "GET" || req.method === "HEAD" ? {} : await readJson(req);
-      const result = await handler({ body, bearer, kind });
+      const result = await handler({ body, bearer, kind: verified.kind, botId: verified.botId });
       writeJson(res, 200, result ?? {});
     } catch (err) {
       writeError(res, err);

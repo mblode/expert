@@ -1,0 +1,33 @@
+#!/bin/bash
+# stop-window N — release window index N: kill its VNC server and
+# clear its entry in $HOME/.window-assignments.json.
+set -euo pipefail
+
+N="${1:?usage: stop-window N}"
+if ! [[ "$N" =~ ^[0-9]+$ ]] || (( N < 1 || N > 8 )); then
+  echo "window index must be 1..8" >&2
+  exit 2
+fi
+
+export HOME="${HOME:-/home/box}"
+ASSIGN="$HOME/.window-assignments.json"
+LOCK="$HOME/.window-assignments.lock"
+
+vncserver -kill ":$N" >/dev/null 2>&1 || true
+
+exec 9>"$LOCK"
+flock 9
+python3 - "$ASSIGN" "$N" <<'PY'
+import json, sys
+path, n = sys.argv[1], sys.argv[2]
+try:
+    with open(path) as f:
+        data = json.load(f)
+except (ValueError, FileNotFoundError):
+    data = {}
+data.pop(n, None)
+with open(path, "w") as f:
+    json.dump(data, f, indent=2, sort_keys=True)
+PY
+
+echo "window $N stopped"

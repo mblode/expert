@@ -4,16 +4,20 @@ import type { AuthPolicy } from "@computer/proto";
 
 export type TokenKind = "agent" | "seat";
 
+export type Verified = { kind: TokenKind | "public"; botId?: string };
+
 export class AuthRegistry {
   private readonly setupCode: string;
-  private readonly agentToken: string;
+  /** token → bot id. One entry per Bot; the token identifies the Bot. */
+  private readonly agentTokens: Map<string, string>;
   private readonly seatTokens = new Set<string>();
 
-  constructor(opts: { setupCode: string; agentToken: string }) {
+  constructor(opts: { setupCode: string; agentToken?: string; agentTokens?: Map<string, string> }) {
     if (!opts.setupCode) throw new Error("COMPUTER_SETUP_CODE is required");
-    if (!opts.agentToken) throw new Error("COMPUTER_AGENT_TOKEN is required");
     this.setupCode = opts.setupCode;
-    this.agentToken = opts.agentToken;
+    this.agentTokens = new Map(opts.agentTokens ?? []);
+    if (opts.agentToken) this.agentTokens.set(opts.agentToken, "main");
+    if (this.agentTokens.size === 0) throw new Error("COMPUTER_AGENT_TOKEN is required");
   }
 
   pair(code: string): string {
@@ -25,20 +29,25 @@ export class AuthRegistry {
     return token;
   }
 
-  verify(policy: AuthPolicy, bearer: string | undefined): TokenKind | "public" {
-    if (policy === "public" || policy === "pair") return "public";
+  verify(policy: AuthPolicy, bearer: string | undefined): Verified {
+    if (policy === "public" || policy === "pair") return { kind: "public" };
     if (!bearer) throw new ComputerError("UNAUTHENTICATED", "missing bearer");
     if (policy === "agent") {
-      if (!safeEqual(bearer, this.agentToken)) {
+      // Constant-time compare against every entry; no early exit on match.
+      let botId: string | undefined;
+      for (const [token, id] of this.agentTokens) {
+        if (safeEqual(bearer, token)) botId = id;
+      }
+      if (botId === undefined) {
         throw new ComputerError("UNAUTHENTICATED", "bad bearer");
       }
-      return "agent";
+      return { kind: "agent", botId };
     }
     if (policy === "seat") {
       if (!this.seatTokens.has(bearer)) {
         throw new ComputerError("UNAUTHENTICATED", "seat token required");
       }
-      return "seat";
+      return { kind: "seat" };
     }
     throw new ComputerError("UNAUTHENTICATED", "unknown policy");
   }
