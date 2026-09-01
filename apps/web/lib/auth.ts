@@ -50,6 +50,9 @@ const apple = appleSocialConfig();
 
 export const auth = betterAuth({
   advanced: {
+    database: {
+      joins: true,
+    },
     ipAddress: {
       ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"],
     },
@@ -57,9 +60,6 @@ export const auth = betterAuth({
   appName: "Expert",
   baseURL,
   database: drizzleAdapter(db, { provider: "sqlite" }),
-  experimental: {
-    joins: true,
-  },
   plugins: [
     emailOTP({
       sendVerificationOTP: async ({ email, otp, type }) => {
