@@ -47,7 +47,11 @@ export class SeatError extends Error {
  * `NEXT_PUBLIC_HUB_URL` (the Fly computer); the hub echoes CORS on JSON.
  */
 const PROXY_TARGET = process.env.NEXT_PUBLIC_HUB_PROXY_TARGET ?? "";
-const PUBLIC_HUB = (process.env.NEXT_PUBLIC_HUB_URL ?? "").replace(/\/+$/u, "");
+/** Fly computer. Set `NEXT_PUBLIC_HUB_URL` on Vercel; used as the Vercel-build fallback. */
+const FLY_HUB = "https://mblode-computer.fly.dev";
+const PUBLIC_HUB = (
+  process.env.NEXT_PUBLIC_HUB_URL || (process.env.VERCEL ? FLY_HUB : "")
+).replace(/\/+$/u, "");
 
 export function apiBase(hubUrl: string): string {
   const base = (hubUrl || PUBLIC_HUB).trim().replace(/\/+$/u, "");
