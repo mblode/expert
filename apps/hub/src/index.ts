@@ -10,6 +10,7 @@ import {
 import { allowedBind, refuseBindMessage } from "./host/bind.ts";
 import { loadPolicy } from "./service/policy.ts";
 import { FileBotStore, FileSeatTokenStore } from "./service/provision.ts";
+import { PixelRegistry } from "./service/pixels.ts";
 
 const bind = process.env.COMPUTER_BIND ?? "127.0.0.1";
 if (!allowedBind(bind)) {
@@ -39,6 +40,10 @@ const hub = createHub({
   windows,
   store: new FileBotStore(rosterPath),
   seatStore: new FileSeatTokenStore(join(dataDir, "seats.json")),
+  pixels: new PixelRegistry({
+    ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
+    tokenDir: process.env.COMPUTER_VNC_TOKEN_DIR ?? join(dataDir, "vnc-tokens"),
+  }),
   policy: loadPolicy(join(dataDir, "policy.json")),
   vncUrl,
   vncHost: process.env.COMPUTER_VNC_HOST ?? "127.0.0.1",

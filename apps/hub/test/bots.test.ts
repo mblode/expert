@@ -104,7 +104,8 @@ describe("bots: one shared box, one screen per Bot", () => {
     expect(s.screens).toHaveLength(2);
     const b = s.screens.find((x) => x.bot_id === "b")!;
     expect(b.vnc_url).toContain("display=2");
-    expect(b.vnc_url).toContain(`token=${token}`);
+    expect(b.vnc_url).toContain("token=");
+    expect(new URL(b.vnc_url).searchParams.get("token")).not.toBe(token);
     const a = s.screens.find((x) => x.bot_id === "a")!;
     expect(a.vnc_url).not.toContain("display=");
   });

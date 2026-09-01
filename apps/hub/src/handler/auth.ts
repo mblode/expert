@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { ComputerError } from "@computer/shared";
 import type { AuthPolicy } from "@computer/proto";
 import { MemorySeatTokenStore, type SeatTokenStore } from "../service/provision.ts";
+import { PixelRegistry } from "../service/pixels.ts";
 
 export type TokenKind = "agent" | "seat";
 
@@ -13,12 +14,15 @@ export class AuthRegistry {
   private readonly agentTokens: () => Iterable<[string, string]>;
   private readonly seats: SeatTokenStore;
   private readonly seatTokens: Set<string>;
+  readonly pixels: PixelRegistry;
 
   constructor(opts: {
     setupCode: string;
     agentTokens: () => Iterable<[string, string]>;
     /** Survives a restart. Memory only where nobody is meant to stay paired. */
     seats?: SeatTokenStore;
+    /** Short-lived noVNC tokens. Absent = mint against a memory registry. */
+    pixels?: PixelRegistry;
   }) {
     if (!opts.setupCode) {
       throw new Error("COMPUTER_SETUP_CODE is required — run `npm run up` to generate one");
@@ -30,6 +34,7 @@ export class AuthRegistry {
     this.agentTokens = opts.agentTokens;
     this.seats = opts.seats ?? new MemorySeatTokenStore();
     this.seatTokens = new Set(this.seats.load());
+    this.pixels = opts.pixels ?? new PixelRegistry();
   }
 
   pair(code: string): string {
@@ -64,6 +69,11 @@ export class AuthRegistry {
 
   hasSeatToken(token: string | undefined): boolean {
     return typeof token === "string" && token.length > 0 && this.seatTokens.has(token);
+  }
+
+  /** Seat token (pairing) or a live pixel grant. Either may open /vnc. */
+  canViewPixels(token: string | undefined): boolean {
+    return this.hasSeatToken(token) || this.pixels.lookup(token) !== undefined;
   }
 
   /** Test helper */

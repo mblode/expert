@@ -1,4 +1,4 @@
-# Cloud computer guest: desk (X / Chromium / Xvnc) + hub in one Machine.
+# Cloud computer guest: desk (X.Org/Xvfb + x11vnc + Chromium) + hub.
 # Keep the apt list in sync with apps/desk/Dockerfile.
 # Build context is the repo root (`fly.toml` [build] dockerfile).
 
@@ -25,15 +25,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         imagemagick \
         openssl \
         openbox \
+        procps \
         python3 \
         scrot \
-        tigervnc-standalone-server \
-        tigervnc-common \
+        x11vnc \
         x11-utils \
         x11-xserver-utils \
         xclip \
         xdotool \
         xterm \
+        xvfb \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=node /usr/local /usr/local
@@ -47,9 +48,11 @@ COPY apps/desk/bin/start-window /usr/local/bin/start-window
 COPY apps/desk/bin/stop-window /usr/local/bin/stop-window
 COPY apps/desk/bin/desk-up /usr/local/bin/desk-up
 COPY deploy/fly/guest-entrypoint.sh /usr/local/bin/guest-entrypoint.sh
+COPY deploy/fly/edge-entrypoint.sh /usr/local/bin/edge-entrypoint.sh
 RUN chmod 755 /usr/local/bin/desk-shot \
         /usr/local/bin/start-window /usr/local/bin/stop-window \
-        /usr/local/bin/desk-up /usr/local/bin/guest-entrypoint.sh
+        /usr/local/bin/desk-up /usr/local/bin/guest-entrypoint.sh \
+        /usr/local/bin/edge-entrypoint.sh
 
 WORKDIR /opt/computer
 COPY package.json package-lock.json ./
@@ -69,6 +72,6 @@ RUN npm run build --workspace=@computer/web \
 
 # Grok keeps /workspace and ~/.config across a rebuild; hub roster is /data.
 VOLUME ["/workspace", "/home/box/.config", "/data"]
-EXPOSE 8080
+EXPOSE 8080 6080-6087
 
 ENTRYPOINT ["/usr/local/bin/guest-entrypoint.sh"]

@@ -2,14 +2,19 @@
  * Fly Machines API — wake / sleep for the cloud computer.
  *
  * Grok: Firecracker anyrun pod, memory+disk snapshot, wake-on-connect.
- * Here: a Fly Machine. v1 `sleep` is stop (processes die; volumes persist).
- * `suspend` is the off-the-shelf hibernation analogue (≤2 GB, no swap).
- * Wake-on-connect is also the Fly proxy (`auto_start_machines` in fly.toml).
+ * Here: a Fly Machine. Guest may suspend when idle (minutes, not 30s).
+ * The public HTTPS door is the edge process: Status/roster never start
+ * the guest. VNC and other use wake it.
  *
  * Do not invent a custom Firecracker orchestrator.
  */
 
+import { existsSync } from "node:fs";
+import http from "node:http";
+
 export const DEFAULT_FLY_API = "https://api.machines.dev";
+/** Inside a Fly Machine, no API token is needed. */
+export const FLY_SOCKET = "/.fly/api";
 
 export type FlyAction = "list" | "get" | "status" | "wake" | "start" | "sleep" | "stop" | "suspend";
 
@@ -18,14 +23,19 @@ export type FlyConfig = {
   app: string;
   machine: string;
   api: string;
+  socket: string;
 };
 
 export function resolveFlyConfig(env: NodeJS.ProcessEnv = process.env): FlyConfig {
+  const socket =
+    env.FLY_API_SOCKET ??
+    (env.FLY_API_TOKEN ? "" : existsSync(env.FLY_SOCKET_PATH ?? FLY_SOCKET) ? (env.FLY_SOCKET_PATH ?? FLY_SOCKET) : "");
   return {
     token: env.FLY_API_TOKEN ?? "",
     app: env.FLY_APP_NAME ?? env.COMPUTER_FLY_APP ?? "",
     machine: env.FLY_MACHINE_ID ?? env.COMPUTER_FLY_MACHINE ?? "",
-    api: (env.FLY_API_BASE ?? DEFAULT_FLY_API).replace(/\/$/, ""),
+    api: socket ? "http://flaps" : (env.FLY_API_BASE ?? DEFAULT_FLY_API).replace(/\/$/, ""),
+    socket,
   };
 }
 
@@ -81,17 +91,21 @@ export async function flyRequest(
   opts: { env?: NodeJS.ProcessEnv; fetch?: FlyFetch } = {},
 ): Promise<{ status: number; body: unknown; machine: string }> {
   const env = opts.env ?? process.env;
-  const fetchFn = opts.fetch ?? globalThis.fetch;
   const cfg = resolveFlyConfig(env);
-  if (!cfg.token) throw new Error("FLY_API_TOKEN is required");
+  const fetchFn = opts.fetch ?? (cfg.socket ? unixFetch(cfg.socket) : globalThis.fetch);
+  if (!cfg.token && !cfg.socket) throw new Error("FLY_API_TOKEN is required");
   if (!cfg.app) throw new Error("FLY_APP_NAME is required");
 
   let machine = cfg.machine;
   if (!machine && action !== "list") {
     const listed = await flyRequest("list", { ...opts, env });
     const machines = Array.isArray(listed.body) ? listed.body : [];
-    const only = machines[0] as { id?: string } | undefined;
-    if (machines.length === 1 && only?.id) {
+    const computer = machines.find((m) => {
+      const meta = (m as { config?: { metadata?: Record<string, string> } }).config?.metadata;
+      return meta?.fly_process_group === "computer";
+    }) as { id?: string } | undefined;
+    const only = (computer ?? machines[0]) as { id?: string } | undefined;
+    if (only?.id && (machines.length === 1 || computer)) {
       machine = only.id;
     } else {
       throw new Error(
@@ -125,4 +139,33 @@ export async function flyRequest(
     throw new Error(`Fly API ${res.status}: ${msg}`);
   }
   return { status: res.status, body, machine };
+}
+
+function unixFetch(socketPath: string): FlyFetch {
+  return (url, init) =>
+    new Promise((resolve, reject) => {
+      const u = new URL(url);
+      const req = http.request(
+        {
+          socketPath,
+          path: u.pathname + u.search,
+          method: init?.method ?? "GET",
+          headers: init?.headers,
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(c as Buffer));
+          res.on("end", () => {
+            const text = Buffer.concat(chunks).toString("utf8");
+            resolve({
+              ok: (res.statusCode ?? 500) < 400,
+              status: res.statusCode ?? 500,
+              text: async () => text,
+            });
+          });
+        },
+      );
+      req.on("error", reject);
+      req.end();
+    });
 }

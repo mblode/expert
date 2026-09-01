@@ -71,9 +71,8 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
  *
  * "DAEMON_DOWN" alone tells a phone nothing it can act on. These three
  * fields are the first-party workspace_unavailable shape, restricted to
- * what this architecture can actually determine: there is no hibernation
- * and nothing idles out here, so `hibernated` and `idle_timeout` are named
- * for wire compatibility and never emitted.
+ * what this architecture can actually determine. The Fly edge emits
+ * `hibernated` for a Status/roster read that must not wake the guest.
  */
 export type UnavailableReason =
   | "idle_timeout"

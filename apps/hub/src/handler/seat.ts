@@ -3,7 +3,7 @@ import { ComputerError, DISPLAY, PRIMARY_DISPLAY, parseDisplay, type BoxStatus, 
 import type { Bot, BotRegistry } from "../service/bots.ts";
 import type { ProvisionService } from "../service/provision.ts";
 import type { AuthRegistry } from "./auth.ts";
-import { withSeatToken } from "./auth.ts";
+import { withPixelToken } from "../service/pixels.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
 
@@ -21,22 +21,23 @@ export type SeatDeps = {
  */
 export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   const vncUrlFor = (display: number): string => {
-    if (display === PRIMARY_DISPLAY) return deps.vncUrl;
-    const sep = deps.vncUrl.includes("?") ? "&" : "?";
-    return `${deps.vncUrl}${sep}display=${display}`;
+    // Short-lived pixel token in the URL — not the durable seat token.
+    // Seat token still opens /vnc (pairing / local-dev fallback).
+    const grant = deps.auth.pixels.mint(display);
+    return withPixelToken(deps.vncUrl, grant);
   };
 
-  const status = (token: string, display: number = PRIMARY_DISPLAY): BoxStatus => {
+  const status = (_token: string, display: number = PRIMARY_DISPLAY): BoxStatus => {
     const bot = deps.bots.byDisplay(display);
     return {
       state: bot.seat.getState(),
-      vnc_url: withSeatToken(vncUrlFor(display), token),
+      vnc_url: vncUrlFor(display),
       display: DISPLAY,
       screens: deps.bots.all().map((b) => ({
         bot_id: b.id,
         display: b.display,
         state: b.seat.getState(),
-        vnc_url: withSeatToken(vncUrlFor(b.display), token),
+        vnc_url: vncUrlFor(b.display),
       })),
     };
   };
@@ -47,7 +48,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   router.rpc(SeatMethods.Pair, "pair", async ({ body }) => {
     const o = requireObject(body);
     const token = deps.auth.pair(String(o.code ?? ""));
-    return { token, vnc_url: withSeatToken(vncUrlFor(PRIMARY_DISPLAY), token), status: status(token) };
+    return { token, vnc_url: vncUrlFor(PRIMARY_DISPLAY), status: status(token) };
   });
 
   router.rpc(SeatMethods.Status, "seat", async (ctx) => {

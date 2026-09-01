@@ -14,6 +14,7 @@ import { PolicyService } from "./service/policy.ts";
 import { ProvisionService, type BotStore, type SeatTokenStore } from "./service/provision.ts";
 import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
+import { PixelRegistry } from "./service/pixels.ts";
 import { attachVncProxy } from "./vnc-proxy.ts";
 
 export type HubOptions = {
@@ -32,6 +33,8 @@ export type HubOptions = {
   vncHost?: string;
   /** RFB port for window N is vncBasePort + N (primary :1 → 5901). */
   vncBasePort?: number;
+  /** Short-lived noVNC tokens. Default: 15-minute in-memory grants. */
+  pixels?: PixelRegistry;
   apiKey?: string;
   llmBaseUrl?: string;
   llmModel?: string;
@@ -66,6 +69,7 @@ export function createHub(opts: HubOptions): Hub {
     setupCode: opts.setupCode,
     agentTokens: () => bots.tokenEntries(),
     seats: opts.seatStore,
+    pixels: opts.pixels,
   });
   const router = new ConnectRouter(auth);
 
@@ -74,6 +78,10 @@ export function createHub(opts: HubOptions): Hub {
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
   router.extra("GET", "/healthz", "public", async () => ({ ok: true }));
+  // bot.roster equivalent — ids and screens, never tokens. Cold on the edge.
+  router.extra("GET", "/roster", "seat", async () => ({
+    bots: bots.all().map((b) => ({ id: b.id, display: b.display, state: b.seat.getState() })),
+  }));
 
   router.assertAllPolicies();
 
@@ -110,8 +118,8 @@ export function createHub(opts: HubOptions): Hub {
       if (handled) return;
       if (req.method === "GET" || req.method === "HEAD") {
         const pixels = needsSeatPixelAuth(url.pathname);
-        if (pixels && !auth.hasSeatToken(tokenFromRequest(req))) {
-          writeJson(res, 401, { error: { code: "UNAUTHENTICATED", message: "seat token required" } });
+        if (pixels && !auth.canViewPixels(tokenFromRequest(req))) {
+          writeJson(res, 401, { error: { code: "UNAUTHENTICATED", message: "seat or pixel token required" } });
           return;
         }
         // The panel wins `/`; the hub's own static dir keeps the pixels and the
@@ -128,7 +136,7 @@ export function createHub(opts: HubOptions): Hub {
 
   const wss = new WebSocketServer({
     server,
-    verifyClient: (info: { req: IncomingMessage }) => auth.hasSeatToken(tokenFromRequest(info.req)),
+    verifyClient: (info: { req: IncomingMessage }) => auth.canViewPixels(tokenFromRequest(info.req)),
   });
   attachVncProxy(wss, {
     host: opts.vncHost ?? "127.0.0.1",
