@@ -438,4 +438,51 @@ describe("vnc proxy display routing", () => {
     expect(await wsFirstMessage(`${wsBase}?token=${token}&display=3`)).toBe(4404);
     expect(await wsFirstMessage(`${wsBase}?token=${token}&display=99`)).toBe(4404);
   });
+
+  it("forwards the client RFB version so the handshake continues past 003.008", async () => {
+    const greeting = "RFB 003.008\n";
+    let fromClient = Buffer.alloc(0);
+    const rfb = createServer((sock) => {
+      sock.write(greeting);
+      sock.on("data", (d) => {
+        fromClient = Buffer.concat([fromClient, d]);
+        if (fromClient.includes(Buffer.from(greeting))) {
+          // 1 security type: None — what noVNC expects after the version swap.
+          sock.write(Buffer.from([1, 1]));
+        }
+      });
+    });
+    servers.push(rfb);
+    const rfbPort = await new Promise<number>((resolve) => {
+      rfb.listen(0, "127.0.0.1", () => {
+        const addr = rfb.address();
+        if (!addr || typeof addr === "string") throw new Error("no addr");
+        resolve(addr.port);
+      });
+    });
+    const h = await startHub({ vncBasePort: rfbPort - 1 });
+    opened.push(h);
+    const token = await h.pair();
+    const ws = new WebSocket(`${h.url.replace("http", "ws")}/websockify?token=${token}`);
+    const banner = await new Promise<Buffer>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("no banner")), 2000);
+      ws.on("message", (d) => {
+        clearTimeout(t);
+        resolve(Buffer.isBuffer(d) ? d : Buffer.from(d as ArrayBuffer));
+      });
+      ws.on("error", reject);
+    });
+    expect(banner.toString()).toBe(greeting);
+    const security = new Promise<Buffer>((resolve, reject) => {
+      const t = setTimeout(() => reject(new Error("handshake stalled after version")), 2000);
+      ws.on("message", (d) => {
+        clearTimeout(t);
+        resolve(Buffer.isBuffer(d) ? d : Buffer.from(d as ArrayBuffer));
+      });
+    });
+    ws.send(Buffer.from(greeting));
+    expect(Buffer.from(await security)).toEqual(Buffer.from([1, 1]));
+    expect(fromClient.toString()).toBe(greeting);
+    ws.close();
+  });
 });

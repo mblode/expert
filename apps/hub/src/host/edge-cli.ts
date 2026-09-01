@@ -13,6 +13,7 @@ import {
   pickComputerMachine,
   recordUse,
 } from "./edge.ts";
+import { proxyUpgradeToGuest } from "./ws-proxy.ts";
 
 const port = Number(process.env.COMPUTER_PORT ?? 8080);
 const bind = process.env.COMPUTER_BIND ?? "0.0.0.0";
@@ -97,6 +98,30 @@ const server = createServer(async (req, res) => {
     res.writeHead(503, { "content-type": "application/json" });
     res.end(JSON.stringify({ error: { code: "DAEMON_DOWN", message } }));
   }
+});
+
+server.on("upgrade", (req, socket, head) => {
+  void (async () => {
+    try {
+      const path = pathname(req);
+      const decision = await edgeDecide(path);
+      if (decision.guest?.id) guestId = decision.guest.id;
+      recordUse(lastUse);
+      if (decision.action === "wake" && decision.guest?.id) {
+        await waitForGuest(decision.guest.id);
+      }
+      const listed = await flyRequest("list");
+      const machines = Array.isArray(listed.body) ? listed.body : [];
+      const guest = pickComputerMachine(machines);
+      if (!guest?.private_ip) {
+        socket.destroy();
+        return;
+      }
+      proxyUpgradeToGuest(req, socket, head, guest.private_ip);
+    } catch {
+      socket.destroy();
+    }
+  })();
 });
 
 server.listen(port, bind, () => {
