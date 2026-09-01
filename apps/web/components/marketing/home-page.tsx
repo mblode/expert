@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { faqs } from "@/lib/content";
 import { siteConfig } from "@/lib/config";
 
@@ -68,24 +70,30 @@ export function MarketingHome(): React.ReactElement {
               </Reveal>
               <Reveal delay={0.5}>
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-                  <InstallDialog>
-                    <button
-                      className="h-12 rounded-full bg-primary px-8 text-base font-medium text-primary-foreground"
-                      type="button"
-                    >
-                      Get started
-                    </button>
-                  </InstallDialog>
+                  <Link
+                    className="inline-flex h-12 items-center rounded-full bg-primary px-8 text-base font-medium text-primary-foreground"
+                    href={siteConfig.links.login}
+                  >
+                    Get started
+                  </Link>
                 </div>
               </Reveal>
               <Reveal delay={0.6}>
-                <div className="mt-4 flex items-center justify-center">
+                <div className="mt-4 flex items-center justify-center gap-4">
                   <a
                     className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                     href={siteConfig.links.login}
                   >
                     Sign in
                   </a>
+                  <InstallDialog>
+                    <button
+                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+                      type="button"
+                    >
+                      Add the skill
+                    </button>
+                  </InstallDialog>
                 </div>
               </Reveal>
             </div>

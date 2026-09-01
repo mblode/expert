@@ -91,6 +91,10 @@ export function LoginForm({
         setPending(false);
         return;
       }
+      // Full load so the server-rendered `/` sees the session cookie and
+      // mounts the desk. Leave pending true so a second submit cannot re-check
+      // the consumed code while navigation starts.
+      window.location.assign("/");
     } catch {
       setError(NETWORK_ERROR);
       verifyingRef.current = false;

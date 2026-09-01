@@ -21,7 +21,7 @@ export default async function LoginPage() {
           <div>
             <h1 className="font-display text-3xl font-light tracking-tight">Sign in</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Email a one-time code. The computer connects automatically.
+              New or returning — email a code. The computer connects.
             </p>
           </div>
           <LoginGate appleEnabled={social.apple} googleEnabled={social.google} />
