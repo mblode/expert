@@ -97,6 +97,10 @@ sleep 0.4
 # Chromium per window. Window 1 keeps the default profile dir (volume mount).
 # --no-sandbox: the container is the sandbox; Chromium's own needs
 # privileges a desk container should not have.
+# The occlusion/backgrounding flags are load-bearing: with no VNC viewer
+# attached Chromium decides the window is not visible and stops painting, so
+# the agent's screenshot keeps returning a frozen frame — it navigates, sees
+# the old page, and retries forever.
 CHROMIUM="$(command -v chromium || command -v chromium-browser || true)"
 if [[ -n "$CHROMIUM" ]]; then
   PROFILE="$HOME/.config/chromium"
@@ -107,6 +111,10 @@ if [[ -n "$CHROMIUM" ]]; then
     --no-default-browser-check \
     --no-sandbox \
     --test-type \
+    --disable-features=CalculateNativeWinOcclusion \
+    --disable-backgrounding-occluded-windows \
+    --disable-renderer-backgrounding \
+    --disable-background-timer-throttling \
     --hide-crash-restore-bubble \
     --disable-infobars \
     --disable-sync \

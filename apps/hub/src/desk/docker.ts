@@ -17,6 +17,21 @@ const BUTTON_TO_XDOTOOL: Record<Button, string> = {
   forward: "9",
 };
 
+/**
+ * Agent key name → X keysym.
+ *
+ * A bare letter or digit is case-insensitive in a chord, and must be lowered:
+ * xdotool reads an uppercase keysym as shift+key, so ["CTRL","L"] would send
+ * ctrl+shift+l and silently do something else. A capital comes from an
+ * explicit "shift" in the key list. Longer unlisted names (F5, Page_Up) are
+ * already keysyms and pass through untouched.
+ */
+export function toKeysym(key: string): string {
+  const named = KEY_TO_KEYSYM[key.toLowerCase()];
+  if (named) return named;
+  return key.length === 1 ? key.toLowerCase() : key;
+}
+
 /** Agent key names → X keysyms for xdotool. Unlisted names pass through. */
 const KEY_TO_KEYSYM: Record<string, string> = {
   enter: "Return",
@@ -67,7 +82,7 @@ export class DockerDesk implements Desk {
 
   async ping(): Promise<boolean> {
     try {
-      const r = await this.exec(["xdotool", "getdisplaygeometry"], { timeoutMs: 5000, envDisplay: true });
+      const r = await this.exec(["xdotool", "getdisplaygeometry"], { timeoutMs: 5000 });
       if (r.exit !== 0) throw new Error(r.stderr.toString());
       return true;
     } catch (err) {
@@ -157,7 +172,7 @@ export class DockerDesk implements Desk {
   async clipboardGet(): Promise<string> {
     const r = await this.exec(
       ["bash", "-lc", "xclip -selection clipboard -o 2>/dev/null || true"],
-      { timeoutMs: 5000, envDisplay: true },
+      { timeoutMs: 5000 },
     );
     return r.stdout.toString();
   }
@@ -166,7 +181,6 @@ export class DockerDesk implements Desk {
     const r = await this.exec(["bash", "-lc", "xclip -selection clipboard -i"], {
       timeoutMs: 5000,
       stdin: text,
-      envDisplay: true,
     });
     if (r.exit !== 0) {
       throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || "clipboard set failed");
@@ -177,7 +191,6 @@ export class DockerDesk implements Desk {
     const r = await this.exec(argv, {
       timeoutMs: timeoutSec * 1000,
       cwd,
-      envDisplay: true,
     });
     const stdout = r.stdout.toString();
     const stderr = r.stderr.toString();
@@ -214,7 +227,7 @@ export class DockerDesk implements Desk {
   async focusHint(): Promise<FocusHint> {
     const r = await this.exec(
       ["bash", "-lc", "xdotool getactivewindow getwindowname 2>/dev/null || true"],
-      { timeoutMs: 3000, envDisplay: true },
+      { timeoutMs: 3000 },
     );
     const title = r.stdout.toString().trim();
     const lower = title.toLowerCase();
@@ -227,7 +240,7 @@ export class DockerDesk implements Desk {
 
   /** One xdotool invocation (XTEST) against this window's display. */
   private async xdotool(...argv: string[]): Promise<void> {
-    const r = await this.exec(["xdotool", ...argv], { timeoutMs: 5000, envDisplay: true });
+    const r = await this.exec(["xdotool", ...argv], { timeoutMs: 5000 });
     if (r.exit !== 0) {
       throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || `xdotool ${argv[0]} failed`);
     }
@@ -261,7 +274,7 @@ export class DockerDesk implements Desk {
   }
 
   private async sendKeys(keys: string[]): Promise<void> {
-    const combo = keys.map((k) => KEY_TO_KEYSYM[k.toLowerCase()] ?? k).join("+");
+    const combo = keys.map(toKeysym).join("+");
     if (combo) await this.xdotool("key", combo);
   }
 
@@ -272,7 +285,6 @@ export class DockerDesk implements Desk {
       cwd?: string;
       stdin?: string;
       binary?: boolean;
-      envDisplay?: boolean;
       user?: string;
     },
   ): Promise<{ exit: number; stdout: Buffer; stderr: Buffer }> {
@@ -281,7 +293,11 @@ export class DockerDesk implements Desk {
       "-i",
       "-u",
       opts.user ?? this.user,
-      ...(opts.envDisplay ? ["-e", `DISPLAY=:${this.display}`] : []),
+      // Always: this driver *is* one window, and a command that forgets its
+      // DISPLAY silently targets :1 — which made every fork Bot screenshot
+      // screen 1 while acting on its own.
+      "-e",
+      `DISPLAY=:${this.display}`,
       ...(opts.cwd ? ["-w", opts.cwd] : []),
       this.container,
       ...argv,
