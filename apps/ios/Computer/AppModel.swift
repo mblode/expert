@@ -3,8 +3,18 @@ import Foundation
 
 @MainActor
 final class AppModel: ObservableObject {
+    enum TurnPhase: Equatable {
+        case idle
+        /// The turn has been posted; nothing has come back yet.
+        case submitted
+        case streaming
+    }
+
     @Published var session: Session?
-    @Published var messages: [ChatMessage] = []
+    @Published var transcript = AgentTranscript()
+    @Published var phase: TurnPhase = .idle
+    @Published var restoring = false
+    @Published var turnError: String?
     @Published var status: ComputerV1.BoxStatus?
     @Published var waiting = false
     @Published var pairError: String?
@@ -23,9 +33,39 @@ final class AppModel: ObservableObject {
         return ComputerClient(baseURL: session.baseURL, token: session.token)
     }
 
+    /// The agent, reached through the paired hub's `/eve/v1` proxy on the same
+    /// origin and the same seat token as the pixels.
+    var agent: (any EveTransport)? {
+        guard let session else { return nil }
+        return EveClient(baseURL: session.baseURL, token: session.token)
+    }
+
+    // MARK: Conversation state
+
+    private(set) var cursor = EveSessionCursor.initial
+    private var turnTask: Task<Void, Never>?
+    private var restoreTask: Task<Void, Never>?
+
+    var messages: [AgentChatMessage] { transcript.messages }
+    var pendingInputRequests: [EveInputRequest] { transcript.pendingInputRequests }
+    var isBusy: Bool { phase != .idle }
+
+    /// True once a turn is in flight but before the agent has shown anything —
+    /// its first token, tool call or screenshot.
+    var isThinking: Bool {
+        guard isBusy else { return false }
+        guard let last = messages.last else { return true }
+        return last.role == .user || !last.hasVisibleContent
+    }
+
+    // MARK: Pairing
+
     func restore() {
         session = store.load()
-        if session != nil { Task { await refreshStatus() } }
+        cursor = EveCursorStore.load()
+        guard session != nil else { return }
+        Task { await refreshStatus() }
+        restoreConversation()
     }
 
     func pair(host: String, code: String) async {
@@ -47,9 +87,14 @@ final class AppModel: ObservableObject {
     }
 
     func unpair() {
+        cancelWork()
         store.clear()
+        EveCursorStore.clear()
         session = nil
-        messages = []
+        transcript = AgentTranscript()
+        cursor = .initial
+        phase = .idle
+        turnError = nil
         status = nil
         waiting = false
     }
@@ -83,39 +128,6 @@ final class AppModel: ObservableObject {
         return creds
     }
 
-    func sendChat(_ text: String) async {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, let client else { return }
-        messages.append(ChatMessage(role: .user, text: trimmed))
-        messages.append(ChatMessage(role: .assistant, text: ""))
-        let idx = messages.count - 1
-        do {
-            // The stream callback is @Sendable, so accumulate into the array
-            // element on the MainActor rather than carrying a mutable struct across.
-            try await client.chat(message: trimmed, botId: currentScreen?.botId) { event in
-                Task { @MainActor in
-                    guard self.messages.indices.contains(idx) else { return }
-                    switch event.type {
-                    case "delta":
-                        self.messages[idx].text += event.text ?? ""
-                    case "waiting":
-                        self.waiting = true
-                        if self.messages[idx].text.isEmpty {
-                            self.messages[idx].text = event.message ?? "Seat is waiting."
-                        }
-                    case "error":
-                        self.messages[idx].text += "\n\(event.message ?? event.code ?? "error")"
-                    default:
-                        break
-                    }
-                }
-            }
-        } catch {
-            messages[idx].text = error.localizedDescription
-        }
-        await refreshStatus()
-    }
-
     func imDone() async {
         guard let client else { return }
         do {
@@ -126,6 +138,165 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: Chat
+
+    func send(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !isBusy, agent != nil else { return }
+        transcript.appendOptimisticUserMessage(trimmed)
+        runTurn(message: trimmed, inputResponses: [])
+    }
+
+    /// Answers a parked human-in-the-loop request, resuming the turn that asked.
+    func answer(_ response: EveInputResponse) {
+        guard !isBusy, agent != nil else { return }
+        transcript.clearPendingInputRequests()
+        runTurn(message: nil, inputResponses: [response])
+    }
+
+    /// Stops reading the stream and asks the agent to stop the turn. The session
+    /// itself stays: the next message continues the same conversation.
+    func stop() {
+        turnTask?.cancel()
+        turnTask = nil
+        phase = .idle
+        guard let agent, let sessionId = cursor.sessionId else { return }
+        Task {
+            try? await agent.cancel(sessionId: sessionId)
+            // The cancel lands on the stream as turn.cancelled + session.waiting;
+            // the next turn reads those from the cursor rather than skipping them.
+            await self.refreshStatus()
+        }
+    }
+
+    /// Rebuilds the transcript from the durable stream so a relaunch lands back
+    /// in the same conversation.
+    private func restoreConversation() {
+        guard let agent, let sessionId = cursor.sessionId else { return }
+        restoring = true
+        restoreTask = Task {
+            defer { self.restoring = false }
+            guard let events = try? await agent.replayEvents(sessionId: sessionId),
+                  !Task.isCancelled else { return }
+            var restored = AgentTranscript()
+            for event in events { restored.apply(event) }
+            self.transcript = restored
+            self.cursor.streamIndex = events.count
+            EveCursorStore.save(self.cursor)
+        }
+    }
+
+    private func runTurn(message: String?, inputResponses: [EveInputResponse]) {
+        guard let agent else { return }
+        turnError = nil
+        phase = .submitted
+        let startCursor = cursor
+        turnTask = Task {
+            // Overlap the stream open with the send when continuing a session:
+            // the connection is established (and buffering) while the POST is in
+            // flight, which is most of the wait before the first token. A brand
+            // new session has no id to open yet, so it stays sequential.
+            var preopened: AsyncThrowingStream<EveStreamEvent, Error>?
+            if let sessionId = startCursor.sessionId {
+                preopened = agent.streamTurn(sessionId: sessionId, startIndex: startCursor.streamIndex)
+            }
+            do {
+                let ack = try await agent.sendTurn(
+                    message: message,
+                    inputResponses: inputResponses,
+                    cursor: startCursor
+                )
+                if Task.isCancelled { return }
+                self.cursor.sessionId = ack.sessionId
+                self.phase = .streaming
+
+                var index = startCursor.streamIndex
+                let stream: AsyncThrowingStream<EveStreamEvent, Error>
+                if startCursor.sessionId == ack.sessionId, let preopened {
+                    stream = preopened
+                } else {
+                    // A different session than the one optimistically opened:
+                    // drop that stream (releasing it cancels it) and start over.
+                    preopened = nil
+                    index = 0
+                    stream = agent.streamTurn(sessionId: ack.sessionId, startIndex: 0)
+                }
+
+                var boundary: EveStreamEvent?
+                for try await event in stream {
+                    if Task.isCancelled { return }
+                    index += 1
+                    // Advanced per event, not per turn, so a stop mid-turn still
+                    // leaves an accurate resume point behind.
+                    self.cursor.streamIndex = index
+                    self.transcript.apply(event)
+                    if case .actionResult = event {
+                        // The computer tool can hand the seat back mid-turn; the
+                        // banner comes from the hub's seat state, not the stream.
+                        Task { await self.refreshStatus() }
+                    }
+                    if event.isTurnBoundary { boundary = event }
+                }
+                if Task.isCancelled { return }
+                self.finishTurn(sessionId: ack.sessionId, boundary: boundary)
+            } catch {
+                if Task.isCancelled { return }
+                self.phase = .idle
+                self.turnError = error.localizedDescription
+            }
+            await self.refreshStatus()
+        }
+    }
+
+    private func finishTurn(sessionId: String, boundary: EveStreamEvent?) {
+        if boundary == .sessionWaiting {
+            // Parked: the next message continues this session from here.
+            cursor.sessionId = sessionId
+        } else {
+            // Completed or failed terminally — a reset id never revives, so the
+            // next message has to start a fresh session.
+            cursor = .initial
+        }
+        EveCursorStore.save(cursor)
+        phase = .idle
+        if let failure = transcript.failureMessage {
+            turnError = failure
+        }
+    }
+
+    private func cancelWork() {
+        turnTask?.cancel()
+        turnTask = nil
+        restoreTask?.cancel()
+        restoreTask = nil
+    }
+}
+
+/// The conversation cursor, kept beside the paired session so a relaunch can
+/// replay it. Not a credential — the seat token in the Keychain is what makes it
+/// usable — so it lives in defaults.
+enum EveCursorStore {
+    private static let sessionKey = "eve.sessionId"
+    private static let indexKey = "eve.streamIndex"
+
+    static func load(_ defaults: UserDefaults = .standard) -> EveSessionCursor {
+        guard let sessionId = defaults.string(forKey: sessionKey) else { return .initial }
+        return EveSessionCursor(sessionId: sessionId, streamIndex: defaults.integer(forKey: indexKey))
+    }
+
+    static func save(_ cursor: EveSessionCursor, to defaults: UserDefaults = .standard) {
+        guard let sessionId = cursor.sessionId else {
+            clear(defaults)
+            return
+        }
+        defaults.set(sessionId, forKey: sessionKey)
+        defaults.set(cursor.streamIndex, forKey: indexKey)
+    }
+
+    static func clear(_ defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: sessionKey)
+        defaults.removeObject(forKey: indexKey)
+    }
 }
 
 enum PairURL {
@@ -157,11 +328,4 @@ enum PairURL {
 struct Session: Codable, Equatable {
     var baseURL: URL
     var token: String
-}
-
-struct ChatMessage: Identifiable, Equatable {
-    enum Role { case user, assistant }
-    let id = UUID()
-    var role: Role
-    var text: String
 }

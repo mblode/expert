@@ -7,6 +7,7 @@ import { ConnectRouter, writeError, writeJson } from "./handler/router.ts";
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
 import { handleChat } from "./handler/chat.ts";
+import { DEFAULT_EVE_URL, handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
 import { ProvisionService, type BotStore } from "./service/provision.ts";
@@ -29,6 +30,8 @@ export type HubOptions = {
   apiKey?: string;
   llmBaseUrl?: string;
   llmModel?: string;
+  /** Where the Eve agent listens; the hub proxies /eve/v1/* to it. */
+  eveUrl?: string;
 };
 
 export type Hub = {
@@ -61,6 +64,9 @@ export function createHub(opts: HubOptions): Hub {
   router.assertAllPolicies();
 
   const staticDir = resolve(import.meta.dirname, "static");
+  // Env fallback so a hub started straight from createHub (tests) can be aimed
+  // at another Eve without threading the option through every caller.
+  const eveUrl = opts.eveUrl ?? process.env.COMPUTER_EVE_URL ?? DEFAULT_EVE_URL;
 
   const server = createServer(async (req, res) => {
     try {
@@ -68,6 +74,12 @@ export function createHub(opts: HubOptions): Hub {
       if (req.method === "OPTIONS") {
         res.writeHead(204, corsHeaders());
         res.end();
+        return;
+      }
+      // Before the Connect router: one origin and one credential for the
+      // clients — Eve's own protocol, gated by the seat token.
+      if (isEvePath(url.pathname)) {
+        await handleEveProxy(req, res, { auth, eveUrl, cors: corsHeaders() });
         return;
       }
       if (req.method === "POST" && url.pathname === "/chat") {

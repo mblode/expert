@@ -12,3 +12,6 @@ xcuserdata/
 *.xcuserstate
 .idea/
 data/
+
+# built web assets
+apps/web/dist/

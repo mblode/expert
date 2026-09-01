@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import { createHub } from "./app.ts";
+import { DEFAULT_EVE_URL } from "./handler/eve-proxy.ts";
 import { createDesk, DockerWindowManager, NoopWindowManager } from "./desk/index.ts";
 import { FileBotStore } from "./service/provision.ts";
 
@@ -29,6 +30,7 @@ const hub = createHub({
   apiKey: process.env.OPENAI_API_KEY,
   llmBaseUrl: process.env.OPENAI_BASE_URL,
   llmModel: process.env.OPENAI_MODEL,
+  eveUrl: process.env.COMPUTER_EVE_URL ?? DEFAULT_EVE_URL,
 });
 
 await hub.start();

@@ -14,9 +14,9 @@
  */
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 
@@ -97,7 +97,11 @@ async function up() {
   }
   saveEnv(env);
 
-  // 3. Pairing QR, then the hub in the foreground.
+  // 3. Eve, if she has an identity. She serves her own protocol on :2000;
+  //    the hub proxies it, so clients still only know one origin.
+  startEve(env);
+
+  // 4. Pairing QR, then the hub in the foreground.
   printPairing(env);
   console.log("• starting the hub (ctrl-c stops it; the desk keeps running)…\n");
   const child = spawn("npx", ["tsx", "apps/hub/src/index.ts"], {
@@ -106,6 +110,25 @@ async function up() {
     env: { ...process.env, ...env },
   });
   child.on("exit", (code) => process.exit(code ?? 0));
+}
+
+/** Detached so ctrl-c on the hub does not take the brain down with it. */
+function startEve(env) {
+  if (!existsSync(resolve(root, "apps/eve/.env"))) {
+    console.log("• no apps/eve/.env — run `npm run bot -- new eve` and fill apps/eve/.env to give the box a brain");
+    return;
+  }
+  const log = resolve(root, "data/eve.log");
+  mkdirSync(dirname(log), { recursive: true });
+  const out = openSync(log, "a");
+  const child = spawn("npm", ["--prefix", "apps/eve", "exec", "--", "eve", "dev", "--no-ui", "--port", "2000"], {
+    cwd: root,
+    detached: true,
+    stdio: ["ignore", out, out],
+    env: { ...process.env, ...env },
+  });
+  child.unref();
+  console.log(`• starting the agent on :2000 (log: ${relative(root, log)}) — the hub proxies it at /eve/v1`);
 }
 
 async function bot(args) {

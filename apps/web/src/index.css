@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Streamdown ships Tailwind classes in its compiled output; Tailwind 4 only
+   emits utilities it can see, so its dist has to be a scanned source. */
+@source "../../../node_modules/streamdown/dist";
+
+@theme {
+  --color-ink: oklch(0.16 0.01 260);
+  --color-panel: oklch(0.21 0.012 260);
+  --color-edge: oklch(0.31 0.014 260);
+  --color-mute: oklch(0.68 0.015 260);
+  --color-accent: oklch(0.72 0.15 240);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: white;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Prose defaults for streamed assistant markdown, without a plugin. */
+.prose-chat {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.prose-chat > * + * {
+  margin-top: 0.75em;
+}
+.prose-chat ul,
+.prose-chat ol {
+  padding-left: 1.25em;
+  list-style: revert;
+}
+.prose-chat li::marker {
+  color: var(--color-mute);
+}
+.prose-chat h1,
+.prose-chat h2,
+.prose-chat h3 {
+  font-weight: 600;
+  line-height: 1.3;
+}
+.prose-chat a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+.prose-chat code {
+  border-radius: 0.25rem;
+  background: color-mix(in oklab, white 10%, transparent);
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+}
+.prose-chat pre {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  background: color-mix(in oklab, black 35%, transparent);
+  padding: 0.75rem;
+}
+.prose-chat pre code {
+  background: none;
+  padding: 0;
+}
