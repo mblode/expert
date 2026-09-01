@@ -41,11 +41,9 @@ export type HubOptions = {
   /** Where the Eve agent listens; the hub proxies /eve/v1/* to it. */
   eveUrl?: string;
   /**
-   * The exported control panel (`apps/web/out`). Serving it from the hub's own
-   * origin is what lets a phone browser drive the box: same origin as the Seat
-   * RPCs and the VNC socket, so no CORS, no second listening port, and no
-   * second thing to publish over Tailscale. Absent or unbuilt = no panel, and
-   * the hub still serves pixels and RPCs exactly as before.
+   * Optional leftover static files (`apps/web/out`). Product web is the Vercel
+   * Next app; the hub no longer requires an export. Absent = no panel, and
+   * the hub still serves pixels and RPCs.
    */
   webDir?: string;
 };

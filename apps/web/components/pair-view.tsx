@@ -4,8 +4,8 @@ import { defaultHubUrl, pair } from "../lib/seat";
 import type { StoredSeat } from "../lib/storage";
 
 /**
- * Pairing is the whole of sign-in: a setup code buys a seat token, and a seat
- * is the box owner. Nothing else here is configurable.
+ * Local / iOS pairing fallback. Signed-in product users never see this —
+ * the web server Pairs with COMPUTER_SETUP_CODE on their behalf.
  */
 export function PairView({ onPaired }: { onPaired: (seat: StoredSeat) => void }): React.ReactElement {
   const [hubUrl, setHubUrl] = useState(() =>
@@ -32,12 +32,10 @@ export function PairView({ onPaired }: { onPaired: (seat: StoredSeat) => void })
 
   return (
     <div className="flex h-full items-center justify-center p-6">
-      <form className="w-full max-w-sm space-y-5" onSubmit={submit}>
+      <form className="w-full max-w-sm space-y-5" onSubmit={(event) => void submit(event)}>
         <div>
           <h1 className="text-xl font-semibold">Computer</h1>
-          <p className="mt-1 text-sm text-mute">
-            Pair with the box to watch its screen and talk to Eve.
-          </p>
+          <p className="mt-1 text-sm text-mute">Pair with the box to watch its screen and talk to Eve.</p>
         </div>
 
         <label className="block space-y-1.5">
