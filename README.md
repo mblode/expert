@@ -2,7 +2,7 @@
 
 A persistent Linux **computer** — one machine per account — that agents drive and a human can take the seat of.
 
-This repository is the **compute substrate**. Clients and product auth come later.
+This repository is the **compute substrate**. Product sign-in lives on the Vercel Next app (`apps/web`); the Fly hub stays pairing-based internally.
 
 ```
 local:   docker compose  →  same guest (Debian + box + X.Org + x11vnc)
@@ -28,7 +28,7 @@ Grok Bot's computer (from [api/RESEARCH.md](api/RESEARCH.md) and public xAI docs
 
 Hetzner always-on via [deploy/cloud-init.yaml](deploy/cloud-init.yaml) is an **alternate** always-hot option, not the default. There is no custom Firecracker orchestrator in this repo.
 
-Auth, Tauri, and iOS login are **explicitly later**. Pairing (`Seat.Pair` + setup code) is what boots the hub today. The control panel in `apps/web` can be served by the hub or hosted on Vercel as a static export; the desk stays on Fly.
+Product auth is Better Auth on Vercel (`apps/web`). After a valid session the web server Pairs with the hub using `COMPUTER_SETUP_CODE` (never `NEXT_PUBLIC`) and puts the seat token on the session. iOS still uses setup-code pairing. Tauri and Eve-on-Vercel are out of scope.
 
 ## Local (Docker)
 
@@ -90,13 +90,13 @@ Volumes live in **syd**. Grow in place with `fly volumes extend <name> --size N`
 
 ### Control panel on Vercel
 
-[`apps/web`](apps/web) is a static Next export (`output: 'export'`). The hub can serve `apps/web/out` on Fly, or Vercel can publish the same files. **Do not host the desk or hub on Vercel.** Do not proxy `/vnc` or `/websockify` — the iframe loads the absolute `vnc_url` the hub minted.
+[`apps/web`](apps/web) is a Next.js **server** app (Better Auth + auto-Pair). **Do not host the desk or hub on Vercel.** Do not proxy `/vnc` or `/websockify` — the iframe loads the absolute `vnc_url` the hub minted.
 
 1. Import this repo (`mblode/expert-computer`).
-2. Set the project **Root Directory** to `apps/web` ([`apps/web/vercel.json`](apps/web/vercel.json) builds with `next build` and publishes `out/`).
+2. Set the project **Root Directory** to `apps/web`.
 3. Set `NEXT_PUBLIC_HUB_URL=https://mblode-computer.fly.dev` so Pair/Status go to the Fly computer. The hub echoes CORS on JSON RPC (`ACAO *`) so a `*.vercel.app` origin can read the response.
 
-When that env is unset, a hosted page (the Fly-served panel) defaults the hub URL to `window.location.origin`. `localhost` / `127.0.0.1` still default to `http://127.0.0.1:8787`.
+When that env is unset, a hosted page defaults the hub URL to `window.location.origin`. `localhost` / `127.0.0.1` still default to `http://127.0.0.1:8787`. See **Product web (Vercel)** below for the auth env table.
 
 ### Wake / sleep
 
@@ -160,8 +160,8 @@ Eve runs **on the box**, beside the hub, over loopback — nothing public. She k
 apps/hub/       ConnectRPC, noVNC static, fallback chat loop, provisioning
 apps/desk/      Debian + Openbox + Chromium + X.Org (Xvfb) + x11vnc, XTEST input
 apps/eve/       Eve agent (eve.dev): the harness — persona, skills, computer tools
-apps/web/       Control panel (`next export`): hub-served or Vercel static; desk stays on Fly
-apps/ios/       Computer.xcodeproj (SwiftUI) — pairing client; product auth later
+apps/web/       Product web (Vercel): Better Auth + auto-Pair to the Fly hub
+apps/ios/       Computer.xcodeproj (SwiftUI) — pairing client; iOS keeps setup-code pairing
 packages/proto  buf generate (protoc-gen-es + Swift) from api/computer.proto
 packages/shared branded IDs, error codes
 deploy/fly/     Guest image + entrypoint for the Fly Machine
@@ -191,6 +191,32 @@ Agent LLM is BYO (`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`); without it the 
 npm run proto:check    # copy + buf lint + generate + gen/ committed
 npm run lint           # layer rules
 npm test               # hub tests
+npm run typecheck --workspace=@computer/web
 ```
 
 `api/computer.proto` is the source of truth; `packages/proto/gen` is committed output (TypeScript + Swift).
+
+## Product web (Vercel)
+
+`apps/web` is a Next.js **server** app (not a static export). The Vercel project Root Directory is `apps/web` (`prj_OkFZwmh7EcQgO6ThJ8EbaNLLWDbB`, team `blode`). Fly (`https://mblode-computer.fly.dev`) is the computer.
+
+Required Vercel environment variables:
+
+| Variable | Notes |
+|---|---|
+| `BETTER_AUTH_SECRET` | `openssl rand -base64 32` |
+| `BETTER_AUTH_URL` | Canonical origin, e.g. `https://your-app.vercel.app` |
+| `TURSO_DATABASE_URL` | libSQL URL |
+| `TURSO_AUTH_TOKEN` | Turso token |
+| `RESEND_API_KEY` | OTP email. If unset, the code is logged to the server console |
+| `AUTH_EMAIL_FROM` | Default `Computer <hello@send.blode.co>` |
+| `COMPUTER_SETUP_CODE` | Same secret as the Fly hub. **Server-only** — never `NEXT_PUBLIC` |
+| `NEXT_PUBLIC_HUB_URL` | `https://mblode-computer.fly.dev` |
+
+Optional: `COMPUTER_HUB_URL` (server override of the hub origin), `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`, `APPLE_CLIENT_ID` / `APPLE_CLIENT_SECRET` / `APPLE_APP_BUNDLE_IDENTIFIER`. Google and Apple buttons render only when both id and secret are present.
+
+Push the Better Auth + `computer_seat` schema once:
+
+```sh
+cd apps/web && npx drizzle-kit push
+```

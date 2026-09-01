@@ -3,6 +3,7 @@
 /* Streamdown ships Tailwind classes in its compiled output; Tailwind 4 only
    emits utilities it can see, so its dist has to be a scanned source. */
 @source "../../../node_modules/streamdown/dist";
+@source "../../../node_modules/input-otp/dist";
 
 @theme {
   --color-ink: oklch(0.16 0.01 260);
@@ -10,6 +11,22 @@
   --color-edge: oklch(0.31 0.014 260);
   --color-mute: oklch(0.68 0.015 260);
   --color-accent: oklch(0.72 0.15 240);
+}
+
+@keyframes caret-blink {
+  0%,
+  70%,
+  100% {
+    opacity: 1;
+  }
+  20%,
+  50% {
+    opacity: 0;
+  }
+}
+
+.animate-caret-blink {
+  animation: caret-blink 1s ease-out infinite;
 }
 
 html,

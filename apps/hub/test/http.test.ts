@@ -350,6 +350,45 @@ describe("Connect HTTP", () => {
     }
   });
 
+  it("JSON RPC responses include CORS headers the preflight already advertised", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const ok = await fetch(`${h.url}/computer.v1.Seat/Pair`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: "https://example.vercel.app",
+      },
+      body: JSON.stringify({ code: h.setup }),
+    });
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get("access-control-allow-origin")).toBe("*");
+    expect(ok.headers.get("access-control-allow-headers")).toContain("authorization");
+    expect(ok.headers.get("access-control-allow-headers")).toContain("content-type");
+    expect(ok.headers.get("access-control-allow-headers")).toContain("connect-protocol-version");
+
+    const denied = await fetch(`${h.url}/computer.v1.Seat/Pair`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ code: "nope" }),
+    });
+    expect(denied.status).toBe(401);
+    expect(denied.headers.get("access-control-allow-origin")).toBe("*");
+    expect(denied.headers.get("access-control-allow-headers")).toContain("authorization");
+  });
+
+  it("Status reuses the pixel token instead of minting every call", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    const first = (await rpc(h.url, "/computer.v1.Seat/Status", {}, token)) as { vnc_url: string };
+    const second = (await rpc(h.url, "/computer.v1.Seat/Status", {}, token)) as { vnc_url: string };
+    expect(first.vnc_url).toBe(second.vnc_url);
+    const pix = new URL(first.vnc_url).searchParams.get("token");
+    expect(pix).toBeTruthy();
+    expect(pix).not.toBe(token);
+  });
+
   it("GET /healthz is public and does not leak seat state", async () => {
     const h = await startHub();
     opened.push(h);

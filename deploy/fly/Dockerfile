@@ -67,6 +67,8 @@ COPY apps/hub apps/hub
 COPY apps/web apps/web
 COPY apps/eve apps/eve
 COPY packages packages
+# Server Next build (Vercel is the product front door). `out/` is no longer
+# produced; the hub serves pixels/RPCs without a static panel.
 RUN npm run build --workspace=@computer/web \
     && chown -R box:box /opt/computer
 

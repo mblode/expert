@@ -1,38 +1,56 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { createSeat } from "./lib/seat";
-import type { BoxStatus } from "./lib/seat";
-import { clearSeat, loadSeat, saveSeat } from "./lib/storage";
-import type { StoredSeat } from "./lib/storage";
+import { ConnectError } from "./components/connect-error";
 import { ChatPane } from "./components/chat-pane";
 import { DesktopPane } from "./components/desktop-pane";
-import { PairView } from "./components/pair-view";
+import { LoginForm } from "./components/login-form";
+import { authClient } from "./lib/auth-client";
+import { createSeat } from "./lib/seat";
+import type { BoxStatus } from "./lib/seat";
+import { clearSeat } from "./lib/storage";
 
 const POLL_MS = 2000;
 
-export function App(): React.ReactElement {
-  // `loadSeat` reads localStorage, which does not exist while the page is
-  // being prerendered. Reading it in an effect keeps the prerendered markup
-  // and the first client render identical — otherwise the export ships the
-  // pair screen and a paired browser hydrates into the workspace, which is a
-  // mismatch React resolves by throwing the tree away.
-  const [stored, setStored] = useState<StoredSeat | undefined>(undefined);
-  const [ready, setReady] = useState(false);
-  useEffect(() => {
-    setStored(loadSeat());
-    setReady(true);
-  }, []);
+export function App({
+  appleEnabled = false,
+  googleEnabled = false,
+}: {
+  appleEnabled?: boolean;
+  googleEnabled?: boolean;
+}): React.ReactElement {
+  const { data: session, isPending } = authClient.useSession();
 
-  if (!ready) return <div className="h-full bg-ink" />;
+  if (isPending) return <div className="h-full bg-ink" />;
 
-  if (!stored) {
+  if (!session) {
     return (
-      <PairView
-        onPaired={(seat) => {
-          saveSeat(seat);
-          setStored(seat);
+      <div className="flex h-full items-center justify-center p-6">
+        <div className="w-full max-w-sm space-y-5">
+          <div>
+            <h1 className="text-xl font-semibold">Computer</h1>
+            <p className="mt-1 text-sm text-mute">
+              Sign in to watch the screen and talk to Eve. The box connects automatically.
+            </p>
+          </div>
+          <LoginForm appleEnabled={appleEnabled} googleEnabled={googleEnabled} />
+        </div>
+      </div>
+    );
+  }
+
+  if (session.seatError || !session.seatToken) {
+    return (
+      <ConnectError
+        message={session.seatError ?? "Signed in, but no seat token was issued for the computer."}
+        onRetry={() => {
+          void fetch("/api/computer/reconnect", { method: "POST" }).then(() => {
+            void authClient.getSession();
+          });
+        }}
+        onSignOut={() => {
+          void authClient.signOut();
         }}
       />
     );
@@ -40,30 +58,42 @@ export function App(): React.ReactElement {
 
   return (
     <Workspace
-      key={stored.seatToken}
-      onUnpair={() => {
+      hubUrl={session.hubUrl}
+      key={session.seatToken}
+      onSignOut={() => {
         clearSeat();
-        setStored(undefined);
+        void authClient.signOut();
       }}
-      stored={stored}
+      seatToken={session.seatToken}
     />
   );
 }
 
 function Workspace({
-  onUnpair,
-  stored,
+  hubUrl,
+  onSignOut,
+  seatToken,
 }: {
-  onUnpair: () => void;
-  stored: StoredSeat;
+  hubUrl: string;
+  onSignOut: () => void;
+  seatToken: string;
 }): React.ReactElement {
-  const seat = useMemo(() => createSeat(stored.hubUrl, stored.seatToken), [stored]);
+  const seat = useMemo(() => createSeat(hubUrl, seatToken), [hubUrl, seatToken]);
   const [status, setStatus] = useState<BoxStatus | undefined>(undefined);
   const [display, setDisplay] = useState(1);
   const [offline, setOffline] = useState<string | null>(null);
 
-  // The seat state is the banner, and it changes without us — Eve asks for the
-  // seat on its own schedule — so it is polled rather than derived.
+  const recoverSeat = useCallback(async () => {
+    const res = await fetch("/api/computer/reconnect", { method: "POST" });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      setOffline(body?.error ?? "The computer rejected the seat token.");
+      return false;
+    }
+    await authClient.getSession();
+    return true;
+  }, []);
+
   useEffect(() => {
     let live = true;
     const tick = async () => {
@@ -75,11 +105,9 @@ function Workspace({
       } catch (cause) {
         if (!live) return;
         const message = cause instanceof Error ? cause.message : "hub unreachable";
-        // A seat token only dies one way — the hub restarted and forgot it —
-        // and every call will keep failing until we pair again. Sending the
-        // user back to pairing is the fix; showing them the envelope is not.
         if (/UNAUTHENTICATED|seat token/i.test(message)) {
-          onUnpair();
+          const recovered = await recoverSeat();
+          if (!recovered && live) setOffline(message);
           return;
         }
         setOffline(message);
@@ -91,20 +119,20 @@ function Workspace({
       live = false;
       window.clearInterval(id);
     };
-  }, [display, onUnpair, seat]);
+  }, [display, recoverSeat, seat]);
 
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex items-center gap-3 border-b border-edge px-3 py-2">
         <h1 className="text-sm font-semibold">Computer</h1>
-        <span className="truncate text-xs text-mute">{stored.hubUrl}</span>
+        <span className="truncate text-xs text-mute">{hubUrl}</span>
         {offline && <span className="text-xs text-red-300">{offline}</span>}
         <button
           className="ml-auto rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
-          onClick={onUnpair}
+          onClick={onSignOut}
           type="button"
         >
-          Unpair
+          Sign out
         </button>
       </header>
 

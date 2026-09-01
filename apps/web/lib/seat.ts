@@ -42,9 +42,9 @@ export class SeatError extends Error {
 /**
  * Where to send Seat RPCs.
  *
- * `next dev` rewrites the hub onto this origin. A hub-served export is
- * already same-origin. A Vercel-hosted export talks cross-origin to
- * `NEXT_PUBLIC_HUB_URL` (the Fly computer); the hub echoes CORS on JSON.
+ * `next dev` rewrites the hub onto this origin. In production the Vercel
+ * app talks cross-origin to `NEXT_PUBLIC_HUB_URL` (the Fly computer); the
+ * hub echoes CORS on JSON.
  */
 const PROXY_TARGET = process.env.NEXT_PUBLIC_HUB_PROXY_TARGET ?? "";
 /** Fly computer. Set `NEXT_PUBLIC_HUB_URL` on Vercel; used as the Vercel-build fallback. */

@@ -24,6 +24,8 @@ export type PixelGrant = {
  */
 export class PixelRegistry {
   private readonly grants = new Map<string, PixelGrant>();
+  /** Live token for each display, so Status can reuse instead of minting every poll. */
+  private readonly byDisplay = new Map<number, string>();
   private readonly ttlMs: number;
   private readonly tokenDir: string | undefined;
 
@@ -32,11 +34,27 @@ export class PixelRegistry {
     this.tokenDir = opts.tokenDir;
   }
 
+  /**
+   * Return a still-valid grant for this display, or mint one.
+   * Status is polled every 2s; reminting each time rotated vnc_url and
+   * remounted the noVNC iframe.
+   */
+  reuse(display: number, now = Date.now()): PixelGrant {
+    this.sweep(now);
+    const existingToken = this.byDisplay.get(display);
+    if (existingToken) {
+      const grant = this.grants.get(existingToken);
+      if (grant && grant.expires > now) return grant;
+    }
+    return this.mint(display, now);
+  }
+
   mint(display: number, now = Date.now()): PixelGrant {
     this.sweep(now);
     const token = randomBytes(24).toString("base64url");
     const grant: PixelGrant = { token, display, expires: now + this.ttlMs };
     this.grants.set(token, grant);
+    this.byDisplay.set(display, token);
     this.writeForkFile(display, token);
     return grant;
   }
@@ -76,7 +94,10 @@ export class PixelRegistry {
 
   sweep(now = Date.now()): void {
     for (const [k, g] of this.grants) {
-      if (g.expires <= now) this.grants.delete(k);
+      if (g.expires <= now) {
+        this.grants.delete(k);
+        if (this.byDisplay.get(g.display) === k) this.byDisplay.delete(g.display);
+      }
     }
   }
 
