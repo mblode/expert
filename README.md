@@ -4,7 +4,7 @@ A standing Linux **box** your agents drive and your iPhone can take over. Comput
 
 iPhone (Computer.app) → hub (ConnectRPC on loopback + Tailscale Serve) → desk (Docker, TigerVNC, one 1280×800 screen per Bot).
 
-Protocol: [api/DESIGN.md](api/DESIGN.md). Clean-room Apache-2.0 implementation of the Grok Bot 0.18 desktop contract ([b-nnett/grok-bot-0.18-reconstructed](https://github.com/b-nnett/grok-bot-0.18-reconstructed) is the spec, not a fork).
+Protocol: [api/DESIGN.md](api/DESIGN.md). Clean-room Apache-2.0 implementation of the Grok Bot desktop contract. The primary source is xAI's own Apache-2.0 publication — [`xai-org/grok-build`](https://github.com/xai-org/grok-build) ships the computer-hub wire protocol under `crates/common/` (`xai-tool-protocol`, `xai-computer-hub-core`, `xai-message-delivery-core`). [b-nnett/grok-bot-0.18-reconstructed](https://github.com/b-nnett/grok-bot-0.18-reconstructed) describes the 0.18 desktop app and is a secondary source, not a fork — note that it carries no licence grant. See [api/RESEARCH.md](api/RESEARCH.md) for what we take from each and what we refuse to read.
 
 ## Up in three commands
 

@@ -37,3 +37,21 @@ describe("SeatService FSM", () => {
     expect(() => s.requestTakeover()).toThrow(ComputerError);
   });
 });
+
+describe("a human taking the seat without being asked", () => {
+  it("SetPresence(true) takes it straight from AGENT", () => {
+    const seat = new SeatService();
+    expect(seat.getState()).toBe("AGENT");
+    expect(seat.setPresence(true)).toBe("HUMAN");
+    // and the agent is locked out until the human hands it back
+    expect(() => seat.requireAgent()).toThrow(/SEAT_HELD|human has the seat/);
+    expect(seat.setPresence(false)).toBe("AGENT");
+    expect(() => seat.requireAgent()).not.toThrow();
+  });
+
+  it("lets the human drive immediately after taking it", () => {
+    const seat = new SeatService();
+    seat.setPresence(true);
+    expect(() => seat.requireHumanContact()).not.toThrow();
+  });
+});

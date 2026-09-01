@@ -98,7 +98,7 @@ export function DesktopPane({
           >
             Clipboard
           </button>
-          {controllable && (
+          {controllable ? (
             <button
               className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-ink disabled:opacity-50"
               disabled={busy}
@@ -106,6 +106,19 @@ export function DesktopPane({
               type="button"
             >
               I&apos;m done
+            </button>
+          ) : (
+            // Without this the pane is silently dead: you move the mouse over
+            // someone else's desktop and nothing happens, with no way to ask
+            // for it. Waiting to be offered the seat is not how a person
+            // takes over a machine that is going wrong.
+            <button
+              className="rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent disabled:opacity-50"
+              disabled={busy}
+              onClick={() => void presence(true)}
+              type="button"
+            >
+              Take the seat
             </button>
           )}
         </div>
@@ -181,7 +194,7 @@ export function DesktopPane({
       <p className="px-3 pb-2 text-xs text-mute">
         {controllable
           ? "Click the screen, then move to steer the cursor (relative, like a trackpad). Typing and paste go through; Backspace and the arrow keys do not."
-          : "View only while Eve is working. It hands the seat over when it needs you."}
+          : "View only while Eve is working. Take the seat to drive it yourself, or wait for it to ask."}
       </p>
 
       {showClipboard && <ClipboardPanel display={display} seat={seat} />}

@@ -3,6 +3,54 @@
 What we measured, what we copied, what we refused.
 The protocol is [DESIGN.md](DESIGN.md). This file is the argument.
 
+## Where the contract comes from
+
+Two sources, ranked, plus one we refuse.
+
+**Primary — first-party and Apache-2.0.**
+[`xai-org/grok-build`](https://github.com/xai-org/grok-build) publishes the
+computer-hub wire protocol under `crates/common/`: `xai-tool-protocol`,
+`xai-computer-hub-core`, `xai-computer-hub-sdk`,
+`xai-computer-hub-mcp-adapter`, `xai-message-delivery-core`. Same vendor,
+same licence as this repo, so it can be read and borrowed from rather than
+only described. It is a **different layer** from the desktop app — JSON-RPC
+2.0 tool routing between harness, hub and tool server, not the in-VM exec
+plane — but `xai-tool-protocol::bot_relay` is squarely our layer, and its
+`bot.*` verbs are the closest licensed statement of what a Bot is:
+
+- `bot.command`, `bot.vncDescriptor`, `bot.roster`, `bot.status`,
+  `bot.transcript.offbox`, `bot.subscribe` / `bot.unsubscribe`,
+  `bot.bindConversation`, and a hub→client `bot.event`.
+- `agentId` is the routing key everywhere; `name` is metadata beside it.
+  Matches our **agent token → Bot → screen**; the model still never names
+  a display.
+- `bot.roster` and `bot.status` are documented **cold — never wakes the
+  box**. We have no hibernation, but the rule that a status read has no
+  side effects is worth keeping.
+
+**Secondary — a description, unlicensed.**
+[b-nnett/grok-bot-0.18-reconstructed](https://github.com/b-nnett/grok-bot-0.18-reconstructed)
+is a readable reconstruction of the 0.18 macOS app. It is the best account
+of the desktop and exec planes and everything below still stands on it —
+but it ships **no LICENSE file**, so it is a source we read and paraphrase,
+never one we copy. The behaviour half of the contract (the voice, the wake
+table, the gates) comes from
+[yuanyijie/learn-grok-bot](https://github.com/yuanyijie/learn-grok-bot),
+which is analysis rather than source and says so, and from
+[adam91holt/grokbot-sdk](https://github.com/adam91holt/grokbot-sdk) (MIT)
+for card types and on-disk layout.
+
+## Sources we refuse
+
+- **`ChHsiching/grok-bot-0.18-original`** — a verbatim proprietary runtime
+  archive, mechanically split into a per-module tree. Do not read, clone,
+  or cite it. The clean-room claim and the Apache-2.0 licence both rest on
+  this contract having been derived from descriptions; ingesting a copy of
+  the shipped runtime would retroactively taint work already done.
+- **Any repo without a licence, as a source of code.** b-nnett,
+  `irons163/filicon-bot` and `gprot42/grok-bot-tool` are all useful and all
+  unlicensed. Read for shape, write our own.
+
 ## The product we are cloning
 
 Grok Bot (xAI branding; the client and cloud substrate are built by
@@ -17,9 +65,8 @@ Windows, iOS 18+. The laptop can close. iOS is a real takeover:
 trackpad, pinch, clipboard, **I'm done**. Cost is plan + tokens, not
 VM-hours.
 
-Public 0.18 reconstruction
-([b-nnett/grok-bot-0.18-reconstructed](https://github.com/b-nnett/grok-bot-0.18-reconstructed))
-is the desktop spec, not a fork:
+The 0.18 reconstruction (secondary source, above) describes the desktop
+and exec planes:
 
 - Pixels = **VNC**, not WebRTC: x11vnc → websockify → noVNC behind a
   token-authenticated proxy (`x-anyrun-network-token`), port 6080
@@ -43,6 +90,98 @@ We ship the same shape at max 8 windows, the hub playing the router
 role (token → Bot → display instead of headers).
 
 No iOS source in that repo. The phone chrome is the product we write.
+
+## The behaviour contract
+
+Everything above is transport. This is the half that says what the agent is
+*obliged* to do, and until now it was missing from this file. Source:
+`learn-grok-bot` PRODUCT.md / ARCHITECTURE.md, corroborated by `grokbot-sdk`.
+
+**The voice.** Plain model text is an inner monologue. The user sees only
+what the agent explicitly sends. Bubbles are `SendMessage` occurrences, not
+assistant prose. Delete that gate and the scratchpad leaks into the chat —
+a different product. Card types and their turn behaviour:
+
+| Type | User sees | Ends the turn? |
+|---|---|---|
+| text | bubble, optional images | no — long work is several short bubbles |
+| widget | 1–6 real options | **yes. stop and wait** |
+| secret-request | masked input; value skips the transcript | **yes** |
+| attachment | file or standalone media | no |
+
+`MAX_CHOICE_OPTIONS = 6`; styles `default | primary | danger`. Rules that
+have to be enforced, not merely prompted: **reply first** on any
+person-opened turn, **ack is not delivery**, deciding to send is not
+sending, and no plumbing words to the user — say "my computer", never
+"box".
+
+**Wakes.** Same runner, different door. Who woke the agent changes whether
+silence is legal:
+
+| Wake | Cue | Person waiting? | May stay silent? |
+|---|---|---|---|
+| user text | — | yes | no |
+| just created | `[first run]` | yes | no |
+| channel inbound | `[inbound]` | on that channel | no |
+| schedule / file | `[routine]` | no | **yes** |
+| teammate | `SendToAgent` | depends | depends |
+| background finished | revival | usually no | yes |
+
+The silent routine is the rule that stops cron spam. It is a property of
+the wake, not of the model's mood.
+
+**Gates.** Default is act; asking is earned — irreversible, unresolvable
+ambiguity, or only the human knows. Question widget, secret-request,
+auto-review (`off` / `shadow` / `enforce`), and hand-back-the-desktop. After
+a block: adapt to a genuinely safer path, or escalate with the **same
+action unchanged** so a human card appears. Never route around with
+cookies or a stolen token.
+
+**Work-surface ladder.** memory and box files → connector → public web →
+signed-in box browser → box desktop GUI → hand back to the human. A broken
+connector is news, not something to silently replay in the browser.
+
+**Delivery operations.** `xai-message-delivery-core` models an inbound
+message as `Principal` (`Human | Agent | Runtime`) plus an `Operation` —
+`Queue`, `Steer`, `Interject`, `InterruptAndSend`. Our `POST /chat` has one
+behaviour instead: a per-Bot mutex returning `409 CONFLICT "bot is busy"`.
+`Queue` alone would be strictly better; the phone should not get an error
+because the agent is mid-turn.
+
+## What the first-party protocol does that we don't
+
+Read off `xai-tool-protocol`. Each is a deliberate difference, not an
+oversight, and each has a cost.
+
+- **VNC descriptors expire.** `bot.vncDescriptor` returns
+  `{ vncUrl, expiresHint }` — a port-token expiry the client refreshes
+  before, with `null` reserved for the legacy never-expiring form. Ours
+  mints one permanent seat token, stamps it into the URL query string, and
+  never rotates it. A leaked `vnc_url` is leaked for the life of the box.
+- **Status enums degrade, they do not throw.** `BotRunState`
+  (`absent | hibernated | running | unknown`) has a hand-written
+  `Deserialize` whose whole job is that an unknown wire string becomes
+  `Unknown` rather than an error, "so the typed parse never fails across
+  independently-deployed hub/SDK versions". `WorkspaceGoneReason` and
+  `WorkspaceGonePhase` use `#[serde(other)]` for the same reason.
+  `apps/ios/Computer/Models/ComputerV1.swift` decodes `SeatState` and
+  `ErrorCode` as plain Swift `String` enums, which **throw** on an unknown
+  value — so adding a state server-side breaks every phone already
+  installed. Strictness is right for model → hub, where a typo should be a
+  loud `VALIDATION`; it is wrong for hub → phone.
+- **There is a taxonomy for "can't reach your computer".**
+  `workspace_unavailable` carries `{ reason, phase, retryable }` —
+  `reason` one of idle-timeout / disconnect / shutdown / not-bound /
+  instance-gone / hibernated, `phase` one of in-flight-cancelled /
+  route-missing / attach. We have one `DAEMON_DOWN` and an iOS client that
+  swallows it. `retryable` is the field the UI actually needs.
+- **Transcripts page.** `bot.transcript.offbox` takes an opaque `cursor`
+  and returns `nextCursor`. Worth building the occurrence log that way from
+  the start rather than streaming it whole.
+- **Rejections are a closed, counted set.** `COMMAND_REJECTED_REASONS` is a
+  sorted const, codegen fails if it drifts from the individual constants,
+  and the hub checks its metrics labels against it "so a new reason cannot
+  land uncounted". Good discipline for our `ErrorCode`.
 
 ## Three ChatGPT machines (do not collapse them)
 
@@ -156,4 +295,16 @@ other sentence. Do not write it.
 - OpenAI computer use: https://developers.openai.com/api/docs/guides/tools-computer-use
 - Anthropic computer use (GA toolset, zoom, batch skip)
 - Gemini Computer Use (normalized coords — negative example)
-- 0.18 reconstruction: https://github.com/b-nnett/grok-bot-0.18-reconstructed
+- Computer-hub wire protocol (first-party, Apache-2.0):
+  https://github.com/xai-org/grok-build — `crates/common/xai-tool-protocol`,
+  `xai-computer-hub-core`, `xai-message-delivery-core`
+- 0.18 reconstruction (secondary, no licence):
+  https://github.com/b-nnett/grok-bot-0.18-reconstructed
+- Behaviour contract: https://github.com/yuanyijie/learn-grok-bot
+  (PRODUCT.md, ARCHITECTURE.md, MECHANISMS.md)
+- Host gateway command table and on-disk layout (MIT):
+  https://github.com/adam91holt/grokbot-sdk
+- `.grok-plugin` format: https://github.com/xai-org/plugin-marketplace
+  (`scripts/plugin_catalog.py`)
+- Persistence and failure modes: Cursor forum threads, indexed by
+  https://github.com/RongleCat/awesome-grok-bot

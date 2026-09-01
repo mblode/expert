@@ -85,11 +85,13 @@ Grok's shape: the machine is shared, the screen is not.
 ```
         request_takeover              SetPresence(false)
    AGENT ──────────────► WAITING ───────────────────► AGENT
-     ▲                      │
-     │                      │ Pair / pointer / clipboard
-     │                      ▼
-     └──────── HUMAN ───────┘
-              SetPresence(false)
+     ▲                      │                           ▲
+     │                      │ Pair / pointer / clipboard│
+     │                      ▼                           │
+     └──────── HUMAN ───────┘                           │
+     ▲        SetPresence(false) ────────────────────────┘
+     │
+     └── SetPresence(true): a human takes the seat, unasked
 ```
 
 | State | `computer` | Human pointer |
@@ -97,6 +99,11 @@ Grok's shape: the machine is shared, the screen is not.
 | `AGENT` | runs | rejected `SEAT_HELD` |
 | `WAITING` | rejected `SEAT_HELD` | first contact → `HUMAN` |
 | `HUMAN` | rejected `SEAT_HELD` | runs |
+
+A human never has to wait to be asked. `SetPresence({ present: true })`
+takes the seat from `AGENT`; the agent's next call gets `SEAT_HELD`, which
+it already handles. The person watching the machine work is the one who
+can see it going wrong, so grabbing the wheel cannot require permission.
 
 `I'm done` is `SetPresence({ present: false })`. It is not a model
 tool. After it, the next `computer` call runs.

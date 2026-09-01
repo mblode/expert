@@ -813,6 +813,113 @@ public nonisolated struct Computer_V1_WriteFileResponse: Sendable {
   public init() {}
 }
 
+/// The voice. One of three bodies; `text` is the ordinary case and does not
+/// end the turn, so long work should be several short sends rather than one.
+public nonisolated struct Computer_V1_SendMessageRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var body: Computer_V1_SendMessageRequest.OneOf_Body? = nil
+
+  public var text: Computer_V1_MessageText {
+    get {
+      if case .text(let v)? = body {return v}
+      return Computer_V1_MessageText()
+    }
+    set {body = .text(newValue)}
+  }
+
+  public var widget: Computer_V1_MessageWidget {
+    get {
+      if case .widget(let v)? = body {return v}
+      return Computer_V1_MessageWidget()
+    }
+    set {body = .widget(newValue)}
+  }
+
+  public var secretRequest: Computer_V1_MessageSecretRequest {
+    get {
+      if case .secretRequest(let v)? = body {return v}
+      return Computer_V1_MessageSecretRequest()
+    }
+    set {body = .secretRequest(newValue)}
+  }
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public nonisolated enum OneOf_Body: Equatable, Sendable {
+    case text(Computer_V1_MessageText)
+    case widget(Computer_V1_MessageWidget)
+    case secretRequest(Computer_V1_MessageSecretRequest)
+
+  }
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_MessageText: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var text: String = String()
+
+  public var images: [Computer_V1_Image] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// 1..6 real options. The turn ends here; the answer arrives as the next
+/// human message.
+public nonisolated struct Computer_V1_MessageWidget: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var prompt: String = String()
+
+  public var options: [String] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Masked input on the seat. The value is delivered to the box clipboard
+/// and never enters the transcript, the occurrence log, or the model's
+/// context — the agent is told only that it was provided, and pastes.
+public nonisolated struct Computer_V1_MessageSecretRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var prompt: String = String()
+
+  public var label: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_SendMessageResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var occurrenceID: String = String()
+
+  /// True when this send ended the turn (widget, secret_request).
+  public var turnEnded: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Computer_V1_PairRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -2465,6 +2572,230 @@ nonisolated extension Computer_V1_WriteFileResponse: SwiftProtobuf.Message, Swif
 
   public static func ==(lhs: Computer_V1_WriteFileResponse, rhs: Computer_V1_WriteFileResponse) -> Bool {
     if lhs.bytes != rhs.bytes {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_SendMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SendMessageRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}widget\0\u{3}secret_request\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try {
+        var v: Computer_V1_MessageText?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .text(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .text(v)
+        }
+      }()
+      case 2: try {
+        var v: Computer_V1_MessageWidget?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .widget(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .widget(v)
+        }
+      }()
+      case 3: try {
+        var v: Computer_V1_MessageSecretRequest?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .secretRequest(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .secretRequest(v)
+        }
+      }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    switch self.body {
+    case .text?: try {
+      guard case .text(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    }()
+    case .widget?: try {
+      guard case .widget(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    }()
+    case .secretRequest?: try {
+      guard case .secretRequest(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case nil: break
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_SendMessageRequest, rhs: Computer_V1_SendMessageRequest) -> Bool {
+    if lhs.body != rhs.body {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_MessageText: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MessageText"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}images\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      case 2: try { try decoder.decodeRepeatedMessageField(value: &self.images) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 1)
+    }
+    if !self.images.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.images, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_MessageText, rhs: Computer_V1_MessageText) -> Bool {
+    if lhs.text != rhs.text {return false}
+    if lhs.images != rhs.images {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_MessageWidget: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MessageWidget"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}prompt\0\u{1}options\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.prompt) }()
+      case 2: try { try decoder.decodeRepeatedStringField(value: &self.options) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.prompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.prompt, fieldNumber: 1)
+    }
+    if !self.options.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.options, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_MessageWidget, rhs: Computer_V1_MessageWidget) -> Bool {
+    if lhs.prompt != rhs.prompt {return false}
+    if lhs.options != rhs.options {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_MessageSecretRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MessageSecretRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}prompt\0\u{1}label\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.prompt) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.prompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.prompt, fieldNumber: 1)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_MessageSecretRequest, rhs: Computer_V1_MessageSecretRequest) -> Bool {
+    if lhs.prompt != rhs.prompt {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".SendMessageResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}occurrence_id\0\u{3}turn_ended\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.occurrenceID) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.turnEnded) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.occurrenceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.occurrenceID, fieldNumber: 1)
+    }
+    if self.turnEnded != false {
+      try visitor.visitSingularBoolField(value: self.turnEnded, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_SendMessageResponse, rhs: Computer_V1_SendMessageResponse) -> Bool {
+    if lhs.occurrenceID != rhs.occurrenceID {return false}
+    if lhs.turnEnded != rhs.turnEnded {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

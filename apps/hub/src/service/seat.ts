@@ -4,8 +4,19 @@ import { ComputerError, type SeatState } from "@computer/shared";
  * One box, one seat.
  *
  *   AGENT ──request_takeover──► WAITING ──I'm done──► AGENT
- *                                 │
- *                                 └── pointer/clipboard ──► HUMAN ──I'm done──► AGENT
+ *     ▲                           │
+ *     │                           └── pointer/clipboard ──┐
+ *     │                                                   ▼
+ *     └────────── I'm done ────────────────────────────  HUMAN
+ *                                                         ▲
+ *                        SetPresence(true) ───────────────┘
+ *
+ * The agent asks for a human with request_takeover, but a human never has
+ * to wait to be asked: SetPresence(true) takes the seat from AGENT. The
+ * agent's next call then gets SEAT_HELD, which it already knows how to
+ * wait on — the person watching a machine work is the one who can see it
+ * going wrong, and telling them to wait for permission to grab the wheel
+ * is the wrong way round.
  */
 export class SeatService {
   private state: SeatState = "AGENT";
@@ -43,13 +54,13 @@ export class SeatService {
     }
   }
 
-  /** Seat.SetPresence({ present: false }) is I'm done. */
+  /**
+   * Seat.SetPresence: true takes the seat, false is I'm done.
+   * Taking works from AGENT too — that is a human interrupting, not a
+   * protocol violation.
+   */
   setPresence(present: boolean): SeatState {
-    if (present) {
-      if (this.state === "WAITING") this.state = "HUMAN";
-      return this.state;
-    }
-    this.state = "AGENT";
+    this.state = present ? "HUMAN" : "AGENT";
     return this.state;
   }
 

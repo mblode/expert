@@ -14,6 +14,12 @@ public protocol Computer_V1_AgentClientInterface: Sendable {
     @available(iOS 13, *)
     func `spec`(request: Computer_V1_SpecRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_SpecResponse>
 
+    /// The only voice. Plain model text is a private scratchpad; the human
+    /// sees nothing the agent did not send here. A widget or secret_request
+    /// ends the turn, and a second send in the same turn is rejected.
+    @available(iOS 13, *)
+    func `sendMessage`(request: Computer_V1_SendMessageRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_SendMessageResponse>
+
     @available(iOS 13, *)
     func `computer`(request: Computer_V1_ComputerRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_ComputerResponse>
 
@@ -41,6 +47,11 @@ public final class Computer_V1_AgentClient: Computer_V1_AgentClientInterface, Se
     }
 
     @available(iOS 13, *)
+    public func `sendMessage`(request: Computer_V1_SendMessageRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_SendMessageResponse> {
+        return await self.client.unary(path: "/computer.v1.Agent/SendMessage", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `computer`(request: Computer_V1_ComputerRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_ComputerResponse> {
         return await self.client.unary(path: "/computer.v1.Agent/Computer", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -63,6 +74,7 @@ public final class Computer_V1_AgentClient: Computer_V1_AgentClientInterface, Se
     public enum Metadata {
         public enum Methods {
             public static let spec = Connect.MethodSpec(name: "Spec", service: "computer.v1.Agent", type: .unary)
+            public static let sendMessage = Connect.MethodSpec(name: "SendMessage", service: "computer.v1.Agent", type: .unary)
             public static let computer = Connect.MethodSpec(name: "Computer", service: "computer.v1.Agent", type: .unary)
             public static let shell = Connect.MethodSpec(name: "Shell", service: "computer.v1.Agent", type: .unary)
             public static let readFile = Connect.MethodSpec(name: "ReadFile", service: "computer.v1.Agent", type: .unary)

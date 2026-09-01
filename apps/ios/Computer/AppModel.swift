@@ -128,6 +128,19 @@ final class AppModel: ObservableObject {
         return creds
     }
 
+    /// Take the seat without waiting to be asked. The agent's next call gets
+    /// SEAT_HELD, which it already knows how to wait on — you should not have
+    /// to watch a machine go wrong and wait for permission to stop it.
+    func takeSeat() async {
+        guard let client else { return }
+        do {
+            status = try await client.setPresence(present: true, display: selectedScreen?.display)
+            waiting = false
+        } catch {
+            pairError = error.localizedDescription
+        }
+    }
+
     func imDone() async {
         guard let client else { return }
         do {

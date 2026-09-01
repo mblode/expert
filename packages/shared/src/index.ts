@@ -23,7 +23,14 @@ export function asBotId(s: string): BotId {
 export const WORKSPACE = "/workspace" as const;
 export const SPEC_ID = "computer.v1" as const;
 export const SPEC_VERSION = "1.0.0" as const;
-export const TOOLS = ["computer", "shell", "read_file", "write_file"] as const;
+export const TOOLS = ["send_message", "computer", "shell", "read_file", "write_file"] as const;
+
+/** Widget options the seat will render. 1..6, per the 0.18 card contract. */
+export const MAX_WIDGET_OPTIONS = 6 as const;
+
+/** Occurrence kinds in the per-Bot log the human actually sees. */
+export const OCCURRENCE_KINDS = ["human", "text", "widget", "secret_request"] as const;
+export type OccurrenceKind = (typeof OCCURRENCE_KINDS)[number];
 
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 

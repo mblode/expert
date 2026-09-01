@@ -7,6 +7,10 @@ package computer.v1;
 
 service Agent {
   rpc Spec(SpecRequest) returns (SpecResponse);
+  // The only voice. Plain model text is a private scratchpad; the human
+  // sees nothing the agent did not send here. A widget or secret_request
+  // ends the turn, and a second send in the same turn is rejected.
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
   rpc Computer(ComputerRequest) returns (ComputerResponse);
   rpc Shell(ShellRequest) returns (ShellResponse);
   rpc ReadFile(ReadFileRequest) returns (ReadFileResponse);
@@ -228,6 +232,42 @@ message WriteFileRequest {
 
 message WriteFileResponse {
   int32 bytes = 1;
+}
+
+// The voice. One of three bodies; `text` is the ordinary case and does not
+// end the turn, so long work should be several short sends rather than one.
+message SendMessageRequest {
+  oneof body {
+    MessageText text = 1;
+    MessageWidget widget = 2;
+    MessageSecretRequest secret_request = 3;
+  }
+}
+
+message MessageText {
+  string text = 1;
+  repeated Image images = 2;
+}
+
+// 1..6 real options. The turn ends here; the answer arrives as the next
+// human message.
+message MessageWidget {
+  string prompt = 1;
+  repeated string options = 2;
+}
+
+// Masked input on the seat. The value is delivered to the box clipboard
+// and never enters the transcript, the occurrence log, or the model's
+// context — the agent is told only that it was provided, and pastes.
+message MessageSecretRequest {
+  string prompt = 1;
+  string label = 2;
+}
+
+message SendMessageResponse {
+  string occurrence_id = 1;
+  // True when this send ended the turn (widget, secret_request).
+  bool turn_ended = 2;
 }
 
 // --- Seat ---

@@ -163,16 +163,28 @@ struct ComputerView: View {
                 Text(newBotResult ?? "")
             }
             Spacer()
-            Button {
-                Task {
-                    await model.imDone()
-                    dismiss()
+            // While the agent holds the seat every gesture here is refused, so
+            // the bar offers the way in rather than looking broken.
+            if model.currentScreen?.state == .agent {
+                Button {
+                    Task { await model.takeSeat() }
+                } label: {
+                    Text("Take the seat")
+                        .fontWeight(.semibold)
                 }
-            } label: {
-                Text("I’m done")
-                    .fontWeight(.semibold)
+                .buttonStyle(.bordered)
+            } else {
+                Button {
+                    Task {
+                        await model.imDone()
+                        dismiss()
+                    }
+                } label: {
+                    Text("I’m done")
+                        .fontWeight(.semibold)
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
         .padding()
         .background(.ultraThinMaterial)
