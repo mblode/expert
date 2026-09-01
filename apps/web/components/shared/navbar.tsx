@@ -6,8 +6,6 @@ import { useEffect, useState } from "react";
 import { siteConfig } from "@/lib/config";
 import { cn } from "@/lib/cn";
 
-import { InstallDialog } from "./install-dialog";
-
 export function Navbar(): React.ReactElement {
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -48,11 +46,12 @@ export function Navbar(): React.ReactElement {
           >
             Sign in
           </Link>
-          <InstallDialog>
-            <button className="h-8 rounded-full bg-primary px-3 text-sm font-medium text-primary-foreground" type="button">
-              Get started
-            </button>
-          </InstallDialog>
+          <Link
+            className="inline-flex h-8 items-center rounded-full bg-primary px-3 text-sm font-medium text-primary-foreground"
+            href={siteConfig.links.login}
+          >
+            Get started
+          </Link>
         </div>
       </nav>
     </header>
