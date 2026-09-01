@@ -35,7 +35,7 @@ const who = [
   },
   {
     role: "For your agent",
-    description: "One skill from hello.expert. After you are signed in, it uses the hub — never an invented pairing code, never a Cal.com booking.",
+    description: "One skill from hello.expert. After you are signed in, it uses the hub — never an invented pairing code, never a guessed setup code.",
   },
   {
     role: "For the work",

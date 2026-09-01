@@ -2,8 +2,8 @@
   "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
   "skills": [
     {
-      "description": "Drive the user's Expert cloud computer at hello.expert via hub Seat RPCs after they are signed in. Use when the user mentions Expert, hello.expert, their cloud computer, the desk, or taking the seat. Never invent a setup code. Never book Cal.com calls or marketplace experts.",
-      "digest": "sha256:ccd0757e3b99c8708b805fa5abf2caec9a6b8c5c40aa6306e5bb23925c8827d9",
+      "description": "Drive the user's Expert cloud computer at hello.expert via hub Seat RPCs after they are signed in. Use when the user mentions Expert, hello.expert, their cloud computer, the desk, or taking the seat. Never invent a setup code. Never guess a pairing token or invent a hub seat.",
+      "digest": "sha256:4b350c918c0cd2cfb7c00818f93ab251fe83c408558b522954ab7cd4cc1ca8d7",
       "name": "expert",
       "type": "archive",
       "url": "/.well-known/agent-skills/expert.tar.gz"

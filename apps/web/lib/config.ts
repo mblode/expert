@@ -1,6 +1,6 @@
 export const siteConfig = {
   description:
-    "The human expert your AI agent calls. A standing Linux computer your agents drive and you can take over.",
+    "The Linux computer your AI agent uses. A standing Linux computer your agents drive and you can take over.",
   installCommand: "npx skills add https://hello.expert",
   links: {
     author: "https://blode.co",

@@ -20,7 +20,7 @@ const emilioLight = localFont({
   weight: "300",
 });
 
-const siteTitle = `${siteConfig.name} | The human expert your AI agent calls`;
+const siteTitle = `${siteConfig.name} | The Linux computer your AI agent uses`;
 
 export const metadata: Metadata = {
   alternates: { canonical: "/" },
