@@ -109,4 +109,32 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(script).toMatch(/desk-up[\s\S]*boot-eves[\s\S]*npm run start --workspace=apps\/hub/);
     expect(script).not.toContain("boot-eves.ts\n)\"");
   });
+
+  it("guest entrypoint does not put secrets on the runuser argv", () => {
+    const script = readFileSync(resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"), "utf8");
+    const commands = script
+      .split("\n")
+      .filter((line) => !/^\s*#/.test(line))
+      .join("\n");
+    expect(script).toContain("--preserve-environment");
+    // `env NAME=...` after runuser puts the value in `ps`.
+    expect(commands).not.toMatch(/\benv\s+[A-Z_]+=/);
+    expect(commands).not.toContain('AI_GATEWAY_API_KEY="${AI_GATEWAY_API_KEY');
+    expect(commands).not.toContain('COMPUTER_EVE_SECRET="$COMPUTER_EVE_SECRET"');
+    expect(commands).not.toContain('COMPUTER_SETUP_CODE="$COMPUTER_SETUP_CODE"');
+  });
+
+  it("eve bot apps declare just-bash so eve start can init the guest sandbox", () => {
+    const bots = resolve(import.meta.dirname, "../../../apps/eve/bots");
+    for (const id of ["main", "night"] as const) {
+      const pkg = JSON.parse(readFileSync(join(bots, id, "package.json"), "utf8")) as {
+        dependencies?: Record<string, string>;
+      };
+      expect(pkg.dependencies?.["just-bash"], `${id} just-bash`).toMatch(/^\^?3\./);
+      const sandbox = readFileSync(join(bots, id, "agent/sandbox.ts"), "utf8");
+      expect(sandbox).toMatch(/backend:\s*justbash\s*\(/);
+      expect(sandbox).not.toMatch(/backend:\s*docker\s*\(/);
+      expect(sandbox).not.toMatch(/backend:\s*vercel\s*\(/);
+    }
+  });
 });
