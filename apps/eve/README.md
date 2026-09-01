@@ -1,47 +1,38 @@
-# eve
+# Eve on the computer
 
-This is an [eve](https://eve.dev) agent bootstrapped with [`eve init`](https://eve.dev/docs/reference/cli#eve-init).
+Eve is a process on the same machine as the hub and the desk — not a Vercel
+app. Humans sign in at [hello.expert](https://hello.expert). The browser talks
+to Eve only through the hub's `/eve/v1` proxy (seat token). Same machine,
+loopback. See [eve.dev](https://eve.dev): the directory is the agent.
 
-## Getting started
+## Layout
 
-First, run the development server:
-
-```bash
-eve dev
+```
+apps/eve/lib/           shared tools, hub RPC, hubLoopbackAuth
+apps/eve/bots/main/     production desk agent (roster bot on display 1, :2000)
+apps/eve/bots/night/    copy-dir example (started only if `night` is on the roster)
 ```
 
-The development TUI opens an interactive session where you can send messages to your agent.
+Each bot is its own eve.dev project: `agent/instructions.md`, `agent/skills/`,
+`agent/schedules/`. Shared typed tools (`computer`, `shell`, `read_file`,
+`write_file`, `send_message`) live in `lib/` and are re-exported from the bot.
 
-Start by editing `agent/instructions.md` to define the agent's identity, purpose, tone, and response guidelines. Configure its model and runtime behavior in `agent/agent.ts`.
+One **process** per bot. `COMPUTER_BOT_TOKEN` is that bot's identity and
+screen. Port is `2000 + (display - 1)`.
 
-Add capabilities under `agent/`, including tools, connections, channels, skills, subagents, and schedules. eve reloads your changes as you work.
+## Add a bot
 
-## On `.grok-plugin` interop
+1. Copy `bots/main` to `bots/<id>`.
+2. Rewrite `agent/instructions.md` (and skills / schedules) for that bot.
+3. Mint a token: `npm run bot -- new <id>` (or restore one on the volume).
+4. Restart the guest. The supervisor starts `eve start --host 127.0.0.1 --port …`
+   only if `<id>` is on the roster and `bots/<id>/package.json` exists.
 
-`agent/skills/` is already in `.grok-plugin`'s `skills/*/SKILL.md` shape, so
-adding `agent/.grok-plugin/plugin.json` is a one-file change whenever someone
-actually wants ecosystem installability.
+Do not invent a setup code, book Cal.com, or pretend the agent holds a seat
+token. Production is `eve start`, not `eve dev` / `EVE_DEV=1`.
 
-It is deliberately not there yet. The manifest has to sit in `agent/` — that
-discovery resolves `skills/*/SKILL.md` relative to the manifest — and eve's
-`createUnsupportedRootDirectoryDiagnostics` warns unconditionally on any
-unknown directory in the agent root, with no ignore config. So the manifest
-costs a permanent `eve build` warning and nothing consumes it today.
+## Auth
 
-## Learn more
-
-To learn more about eve, explore these resources:
-
-- [eve documentation](https://eve.dev/docs) — learn about eve's features and authoring APIs.
-- [Build an Agent tutorial](https://eve.dev/docs/tutorial/first-agent) — build and deploy an agent step by step.
-- [eve on GitHub](https://github.com/vercel/eve) — view the source and contribute.
-
-## Deploy on Vercel
-
-Deploy your agent to [Vercel](https://vercel.com) from the project root:
-
-```bash
-eve deploy
-```
-
-`eve deploy` links a Vercel project if needed and deploys the agent to production. See the [eve deployment documentation](https://eve.dev/docs/guides/deployment/vercel) for authentication, environment variables, and deployment options.
+`hubLoopbackAuth()` accepts `x-computer-eve-secret` from the hub. The hub
+already gated on the seat token. `localDev()` stays for the REPL only and is
+ignored by `eve start`.

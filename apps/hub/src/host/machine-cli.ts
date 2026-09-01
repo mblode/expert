@@ -63,7 +63,7 @@ async function status(): Promise<void> {
   console.log(`fly      ${fly}`);
   console.log(`guest    ${guest}`);
   if (guest === "stopped" || guest === "hibernated") {
-    console.log("volumes  /workspace, ~/.config, /data — still there");
+    console.log("volumes  /workspace (roster + Eve secret under .computer) — still there");
     console.log("wake     npm run machine -- wake   (or open the public HTTPS URL)");
   }
 }

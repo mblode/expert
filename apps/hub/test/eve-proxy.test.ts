@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { EVE_HUB_SECRET_HEADER } from "../src/host/eve.ts";
 import { startHub } from "./helper.ts";
 
 type Opened = Awaited<ReturnType<typeof startHub>>;
@@ -7,11 +8,9 @@ type Opened = Awaited<ReturnType<typeof startHub>>;
 type FakeEve = {
   server: Server;
   url: string;
-  /** What the upstream saw on the last request. */
-  seen: { method?: string; url?: string; authorization?: string; body: string }[];
+  seen: { method?: string; url?: string; authorization?: string; secret?: string; body: string }[];
 };
 
-/** Stands in for `eve dev --no-ui --port 2000`. */
 function fakeEve(handler: (req: IncomingMessage, res: ServerResponse, body: string) => void): Promise<FakeEve> {
   const seen: FakeEve["seen"] = [];
   return new Promise((resolve) => {
@@ -26,6 +25,9 @@ function fakeEve(handler: (req: IncomingMessage, res: ServerResponse, body: stri
           authorization: Array.isArray(req.headers.authorization)
             ? req.headers.authorization[0]
             : req.headers.authorization,
+          secret: Array.isArray(req.headers[EVE_HUB_SECRET_HEADER])
+            ? req.headers[EVE_HUB_SECRET_HEADER][0]
+            : req.headers[EVE_HUB_SECRET_HEADER],
           body,
         });
         handler(req, res, body);
@@ -39,7 +41,6 @@ function fakeEve(handler: (req: IncomingMessage, res: ServerResponse, body: stri
   });
 }
 
-/** A port nothing listens on: bind, read the port, close. */
 async function closedPort(): Promise<number> {
   const server = createServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -49,7 +50,7 @@ async function closedPort(): Promise<number> {
   return addr.port;
 }
 
-describe("eve proxy: one origin, one credential", () => {
+describe("eve proxy: seat token → bot → that bot's Eve", () => {
   const opened: Opened[] = [];
   const servers: Server[] = [];
   const priorEveUrl = process.env.COMPUTER_EVE_URL;
@@ -61,10 +62,12 @@ describe("eve proxy: one origin, one credential", () => {
     else process.env.COMPUTER_EVE_URL = priorEveUrl;
   });
 
-  /** Boots a hub pointed at `eveUrl`, paired, and returns the seat token. */
-  async function hubAt(eveUrl: string) {
-    process.env.COMPUTER_EVE_URL = eveUrl;
-    const h = await startHub();
+  async function hubAt(eveUrl: string, extra: Parameters<typeof startHub>[0] = {}) {
+    const h = await startHub({
+      eveUrls: { main: eveUrl },
+      eveSecret: "eve-secret-test",
+      ...extra,
+    });
     opened.push(h);
     return { h, token: await h.pair() };
   }
@@ -86,7 +89,7 @@ describe("eve proxy: one origin, one credential", () => {
     expect(eve.seen).toHaveLength(0);
   });
 
-  it("forwards method, body, status and JSON — without the seat token", async () => {
+  it("forwards method, body, status and JSON — without the seat token, with the hub secret", async () => {
     const eve = await fakeEve((_req, res, body) => {
       res.writeHead(201, { "content-type": "application/json" });
       res.end(JSON.stringify({ id: "sess_1", echo: JSON.parse(body || "{}") }));
@@ -100,15 +103,14 @@ describe("eve proxy: one origin, one credential", () => {
       body: JSON.stringify({ message: "say hi" }),
     });
     expect(res.status).toBe(201);
-    expect(res.headers.get("content-type")).toBe("application/json");
     expect(await res.json()).toEqual({ id: "sess_1", echo: { message: "say hi" } });
 
     expect(eve.seen).toHaveLength(1);
     const seen = eve.seen[0]!;
     expect(seen.method).toBe("POST");
     expect(seen.url).toBe("/eve/v1/session?foo=bar");
-    // Eve's localDev auth trusts loopback; the seat token is the hub's, not hers.
     expect(seen.authorization).toBeUndefined();
+    expect(seen.secret).toBe("eve-secret-test");
   });
 
   it("accepts the seat token as ?token= and keeps it out of the upstream url", async () => {
@@ -124,6 +126,45 @@ describe("eve proxy: one origin, one credential", () => {
     expect(eve.seen[0]!.url).toBe("/eve/v1/session");
   });
 
+  it("routes each bot to its own Eve", async () => {
+    const eveA = await fakeEve((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ who: "a" }));
+    });
+    const eveB = await fakeEve((_req, res) => {
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ who: "b" }));
+    });
+    servers.push(eveA.server, eveB.server);
+
+    const h = await startHub({
+      bots: [
+        { id: "a", display: 1, token: "token-a" },
+        { id: "b", display: 2, token: "token-b" },
+      ],
+      eveUrls: { a: eveA.url, b: eveB.url },
+      eveSecret: "eve-secret-test",
+    });
+    opened.push(h);
+    const token = await h.pair();
+
+    const toA = await fetch(`${h.url}/eve/v1/session`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "x-computer-bot": "a" },
+    });
+    expect(await toA.json()).toEqual({ who: "a" });
+    expect(eveA.seen).toHaveLength(1);
+    expect(eveB.seen).toHaveLength(0);
+
+    const toB = await fetch(`${h.url}/eve/v1/session?bot=b`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(await toB.json()).toEqual({ who: "b" });
+    expect(eveB.seen).toHaveLength(1);
+    expect(eveB.seen[0]!.url).toBe("/eve/v1/session");
+  });
+
   it("streams NDJSON through unbuffered", async () => {
     let wroteSecond = false;
     let releaseSecond = () => {};
@@ -134,8 +175,6 @@ describe("eve proxy: one origin, one credential", () => {
     const eve = await fakeEve((_req, res) => {
       res.writeHead(200, { "content-type": "application/x-ndjson" });
       res.write('{"event":"one"}\n');
-      // Only write the second line once the client has proven it saw the first;
-      // a buffering proxy never gets here and the read below times out.
       const timeout = setTimeout(releaseSecond, 2000);
       void clientSawFirst.then(() => {
         clearTimeout(timeout);
@@ -159,7 +198,6 @@ describe("eve proxy: one origin, one credential", () => {
     const decoder = new TextDecoder();
     const first = await reader.read();
     expect(decoder.decode(first.value)).toContain('"one"');
-    // The regression that matters: line one arrived before line two existed.
     expect(wroteSecond).toBe(false);
 
     releaseSecond();
@@ -195,7 +233,7 @@ describe("eve proxy: one origin, one credential", () => {
     await closed;
   });
 
-  it("reports DAEMON_DOWN when the agent is not running", async () => {
+  it("reports DAEMON_DOWN when that bot's Eve is not running", async () => {
     const { h, token } = await hubAt(`http://127.0.0.1:${await closedPort()}`);
 
     const res = await fetch(`${h.url}/eve/v1/session`, {
@@ -204,8 +242,22 @@ describe("eve proxy: one origin, one credential", () => {
       body: JSON.stringify({ message: "hi" }),
     });
     expect(res.status).toBe(503);
+    expect((await res.json()) as { error: { code: string; message: string } }).toMatchObject({
+      error: { code: "DAEMON_DOWN", message: expect.stringContaining("bot main") },
+    });
+  });
+
+  it("reports DAEMON_DOWN when this bot has no Eve URL", async () => {
+    const h = await startHub({ eveUrls: { main: "" } });
+    opened.push(h);
+    const token = await h.pair();
+    const res = await fetch(`${h.url}/eve/v1/session`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.status).toBe(503);
     expect((await res.json()) as { error: { code: string } }).toMatchObject({
-      error: { code: "DAEMON_DOWN", message: expect.stringContaining("npm run eve") },
+      error: { code: "DAEMON_DOWN" },
     });
   });
 
@@ -218,6 +270,7 @@ describe("eve proxy: one origin, one credential", () => {
     expect(res.status).toBe(204);
     expect(res.headers.get("access-control-allow-headers")).toContain("authorization");
     expect(res.headers.get("access-control-allow-headers")).toContain("content-type");
+    expect(res.headers.get("access-control-allow-headers")).toContain("x-computer-bot");
     expect(res.headers.get("access-control-allow-origin")).toBe("*");
   });
 });

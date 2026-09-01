@@ -14,9 +14,9 @@
  */
 import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, openSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, relative, resolve } from "node:path";
+import { resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 
@@ -102,8 +102,8 @@ async function up() {
   }
   saveEnv(env);
 
-  // 4. Eve, if she has an identity. She serves her own protocol on :2000;
-  //    the hub proxies it, so clients still only know one origin.
+  // 4. One Eve process per roster bot that has apps/eve/bots/<id>.
+  //    Loopback only; the hub proxies /eve/v1 so clients know one origin.
   startEve(env);
 
   // 5. Pairing QR, then the hub in the foreground.
@@ -117,23 +117,29 @@ async function up() {
   child.on("exit", (code) => process.exit(code ?? 0));
 }
 
-/** Detached so ctrl-c on the hub does not take the brain down with it. */
+/** One `eve start` per roster bot. Children are detached; this only launches them. */
 function startEve(env) {
-  if (!existsSync(resolve(root, "apps/eve/.env"))) {
-    console.log("• no apps/eve/.env — run `npm run bot -- new eve` and fill apps/eve/.env to give the box a brain");
+  const mainDir = resolve(root, "apps/eve/bots/main");
+  if (!existsSync(resolve(mainDir, "package.json"))) {
+    console.log("• no apps/eve/bots/main — copy that dir, mint a token, then re-run `up`");
     return;
   }
-  const log = resolve(root, "data/eve.log");
-  mkdirSync(dirname(log), { recursive: true });
-  const out = openSync(log, "a");
-  const child = spawn("npm", ["--prefix", "apps/eve", "exec", "--", "eve", "dev", "--no-ui", "--port", "2000"], {
-    cwd: root,
-    detached: true,
-    stdio: ["ignore", out, out],
-    env: { ...process.env, ...env },
-  });
-  child.unref();
-  console.log(`• starting the agent on :2000 (log: ${relative(root, log)}) — the hub proxies it at /eve/v1`);
+  if (!process.env.AI_GATEWAY_API_KEY && !env.AI_GATEWAY_API_KEY) {
+    console.log("• AI_GATEWAY_API_KEY is unset — Eve will start but model calls will fail");
+  }
+  try {
+    execFileSync("npx", ["tsx", "apps/hub/src/host/boot-eves.ts"], {
+      cwd: root,
+      stdio: "inherit",
+      env: {
+        ...process.env,
+        ...env,
+        COMPUTER_URL: env.COMPUTER_URL ?? `http://127.0.0.1:${env.COMPUTER_PORT}`,
+      },
+    });
+  } catch {
+    console.log("• boot-eves failed — chat will show Eve as not running");
+  }
 }
 
 /**
@@ -158,10 +164,9 @@ async function bot(args) {
       console.log(`  token: ${r.token}`);
       console.log("");
       console.log("This token is the Bot's identity — it is shown once.");
-      console.log("Give it a brain — paste into apps/eve/.env and `npm run eve`:");
-      console.log("");
-      console.log(`  COMPUTER_URL=http://127.0.0.1:${env.COMPUTER_PORT}`);
-      console.log(`  COMPUTER_BOT_TOKEN=${r.token}`);
+      console.log("Give it a brain: copy apps/eve/bots/main → apps/eve/bots/" + id + ",");
+      console.log("customise agent/instructions.md, skills/, schedules/, then restart.");
+      console.log(`Port is 2000 + (display - 1) = ${2000 + Number(r.display) - 1}.`);
       break;
     }
     case "rm": {

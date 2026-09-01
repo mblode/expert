@@ -14,24 +14,42 @@ const hasVisibleContent = (message: EveMessage): boolean =>
     part.type === "text" ? Boolean(part.text) : part.type === "dynamic-tool" || part.type === "authorization",
   );
 
+function eveIsDown(message: string | undefined): boolean {
+  if (!message) return false;
+  return /DAEMON_DOWN|not running|Failed to fetch|NetworkError|Load failed|ECONNREFUSED/i.test(
+    message,
+  );
+}
+
 /**
  * The conversation with Eve, over the hub's `/eve/v1` proxy — same seat token
- * as the rest of the app, so pairing is the only credential.
+ * as the rest of the app, so pairing is the only credential. `botId` selects
+ * which guest Eve process owns this screen (`x-computer-bot`).
  *
- * The session cursor is persisted, so a reload replays the same durable
- * session rather than starting a new one.
+ * The session cursor is persisted per bot, so a reload replays the same
+ * durable session rather than starting a new one.
  */
-export function ChatPane({ seat }: { seat: Seat }): React.ReactElement {
+export function ChatPane({
+  botId,
+  seat,
+}: {
+  botId: string;
+  seat: Seat;
+}): React.ReactElement {
   // Read once: the hook builds its store on first render and keeps it.
-  const [initialSession] = useState(loadSession);
+  // Remount this pane (`key={botId}`) when the selected Bot changes.
+  const [initialSession] = useState(() => loadSession(botId));
   const tokenRef = useRef(seat.token);
   tokenRef.current = seat.token;
+  const botRef = useRef(botId);
+  botRef.current = botId;
 
   const agent = useEveAgent({
     auth: { bearer: () => tokenRef.current },
+    headers: () => ({ "x-computer-bot": botRef.current }),
     host: apiBase(seat.hubUrl),
     initialSession,
-    onSessionChange: saveSession,
+    onSessionChange: (session) => saveSession(session, botRef.current),
     resume: initialSession !== undefined,
   });
 
@@ -42,6 +60,7 @@ export function ChatPane({ seat }: { seat: Seat }): React.ReactElement {
   const busy = agent.status === "submitted" || agent.status === "streaming";
   const resuming = agent.status === "resuming";
   const messages = agent.data.messages;
+  const down = eveIsDown(agent.error?.message);
 
   // Follow the stream, unless the reader has scrolled up to read something.
   useEffect(() => {
@@ -59,26 +78,25 @@ export function ChatPane({ seat }: { seat: Seat }): React.ReactElement {
 
   const last = messages.at(-1);
   const thinking = busy && (!last || last.role === "user" || !hasVisibleContent(last));
-  // Eve is optional on this box. A down /eve should not paint a red error
-  // over the desk — just leave the thread empty.
-  const eveQuiet =
-    agent.error !== undefined &&
-    /DAEMON_DOWN|not running|Failed to fetch|NetworkError|Load failed|ECONNREFUSED/i.test(
-      agent.error.message,
-    );
+  const statusLabel = down
+    ? "not running"
+    : resuming
+      ? "catching up…"
+      : busy
+        ? "working…"
+        : "ready";
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col border-edge max-lg:border-t lg:border-l">
       <header className="flex items-center gap-2 border-b border-edge px-3 py-2">
         <h2 className="text-sm font-medium">Eve</h2>
-        <span className="text-xs text-mute">
-          {eveQuiet ? "" : resuming ? "catching up…" : busy ? "working…" : "ready"}
-        </span>
+        <span className={`text-xs ${down ? "text-amber-300" : "text-mute"}`}>{statusLabel}</span>
+        <span className="truncate text-xs text-mute">{botId}</span>
         <button
           className="ml-auto rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
           onClick={() => {
             agent.reset();
-            saveSession(undefined);
+            saveSession(undefined, botId);
           }}
           type="button"
         >
@@ -94,7 +112,13 @@ export function ChatPane({ seat }: { seat: Seat }): React.ReactElement {
         }}
         ref={scroller}
       >
-        {messages.length === 0 && !resuming && !eveQuiet && (
+        {down && messages.length === 0 && !resuming && (
+          <p className="pt-8 text-center text-sm text-mute">
+            Eve is not running for <span className="text-ink">{botId}</span>. The guest starts
+            one process per roster bot with <code className="text-xs">eve start</code>.
+          </p>
+        )}
+        {messages.length === 0 && !resuming && !down && (
           <p className="pt-8 text-center text-sm text-mute">
             Ask Eve to do something on the box. It drives its own screen and asks for the seat
             when it gets stuck.
@@ -106,7 +130,7 @@ export function ChatPane({ seat }: { seat: Seat }): React.ReactElement {
         {thinking && <p className="text-xs text-mute">Thinking…</p>}
       </div>
 
-      {agent.error && !eveQuiet && (
+      {agent.error && (
         <div className="flex flex-wrap items-center gap-2 border-t border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           <span className="min-w-0 break-words">{agent.error.message}</span>
           {lastSent && (

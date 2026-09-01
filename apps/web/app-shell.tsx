@@ -121,6 +121,8 @@ function Workspace({
     };
   }, [display, recoverSeat, seat]);
 
+  const botId = status?.screens.find((s) => s.display === display)?.bot_id ?? "main";
+
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex items-center gap-3 border-b border-edge px-3 py-2">
@@ -144,7 +146,7 @@ function Workspace({
           seat={seat}
           status={status}
         />
-        <ChatPane seat={seat} />
+        <ChatPane botId={botId} key={botId} seat={seat} />
       </main>
     </div>
   );

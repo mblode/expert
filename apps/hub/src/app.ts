@@ -7,7 +7,8 @@ import { ConnectRouter, corsHeaders, writeError, writeJson } from "./handler/rou
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
 import { handleChat } from "./handler/chat.ts";
-import { DEFAULT_EVE_URL, handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
+import { handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
+import { eveUrlMap } from "./host/eve.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
 import { PolicyService } from "./service/policy.ts";
@@ -38,8 +39,13 @@ export type HubOptions = {
   apiKey?: string;
   llmBaseUrl?: string;
   llmModel?: string;
-  /** Where the Eve agent listens; the hub proxies /eve/v1/* to it. */
-  eveUrl?: string;
+  /**
+   * Per-bot Eve URLs. Absent entries are derived from display
+   * (`127.0.0.1:2000+(display-1)`). Pass `{ main: "" }` to force DAEMON_DOWN.
+   */
+  eveUrls?: Record<string, string>;
+  /** Shared secret injected on hub→Eve loopback requests (`eve start`). */
+  eveSecret?: string;
   /**
    * Optional leftover static files (`apps/web/out`). Product web is the Vercel
    * Next app; the hub no longer requires an export. Absent = no panel, and
@@ -90,9 +96,12 @@ export function createHub(opts: HubOptions): Hub {
     opts.webDir ??
     process.env.COMPUTER_WEB_DIR ??
     resolve(import.meta.dirname, "../../web/out");
-  // Env fallback so a hub started straight from createHub (tests) can be aimed
-  // at another Eve without threading the option through every caller.
-  const eveUrl = opts.eveUrl ?? process.env.COMPUTER_EVE_URL ?? DEFAULT_EVE_URL;
+  const eveSecret = opts.eveSecret ?? process.env.COMPUTER_EVE_SECRET;
+  const eveUrls =
+    opts.eveUrls ??
+    (process.env.COMPUTER_EVE_URL
+      ? { [bots.primary().id]: process.env.COMPUTER_EVE_URL }
+      : eveUrlMap(bots.configs()));
 
   const server = createServer(async (req, res) => {
     try {
@@ -105,7 +114,7 @@ export function createHub(opts: HubOptions): Hub {
       // Before the Connect router: one origin and one credential for the
       // clients — Eve's own protocol, gated by the seat token.
       if (isEvePath(url.pathname)) {
-        await handleEveProxy(req, res, { auth, eveUrl, cors: corsHeaders() });
+        await handleEveProxy(req, res, { auth, bots, eveUrls, eveSecret, cors: corsHeaders() });
         return;
       }
       if (req.method === "POST" && url.pathname === "/chat") {

@@ -102,7 +102,8 @@ export function writeError(res: ServerResponse, err: unknown): void {
 export function corsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
-    "access-control-allow-headers": "authorization, content-type, connect-protocol-version",
+    "access-control-allow-headers":
+      "authorization, content-type, connect-protocol-version, x-computer-bot",
     "access-control-allow-methods": "GET, POST, OPTIONS",
   };
 }

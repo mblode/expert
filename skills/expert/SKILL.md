@@ -41,7 +41,7 @@ If Status returns `UNAUTHENTICATED`, the web app reconnects (`POST /api/computer
 |---|---|
 | `/workspace` | yes |
 | `~/.config` | yes |
-| hub roster (`/data`) | yes |
+| hub roster (`/workspace/.computer`) | yes |
 | `apt` packages, `~/.local/state` | no |
 
 Status and `GET /roster` do not wake a sleeping guest.

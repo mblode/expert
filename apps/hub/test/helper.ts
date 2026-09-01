@@ -38,6 +38,8 @@ export async function startHub(
     policy?: PolicyService;
     /** Exported control panel to serve at `/`. Absent = no panel, as on a fresh clone. */
     webDir?: string;
+    eveUrls?: Record<string, string>;
+    eveSecret?: string;
   } = {},
 ): Promise<StartedHub> {
   const configs = opts.bots ?? [{ id: "main", display: 1, token: AGENT_TOKEN }];
@@ -64,6 +66,8 @@ export async function startHub(
     webDir: opts.webDir ?? resolve(import.meta.dirname, "no-such-panel"),
     vncBasePort: opts.vncBasePort,
     vncUrl: "http://127.0.0.1/vnc/index.html?view_only=1",
+    eveUrls: opts.eveUrls,
+    eveSecret: opts.eveSecret,
   });
   await hub.start();
   await new Promise<void>((resolve) => hub.server.listen(0, "127.0.0.1", resolve));
