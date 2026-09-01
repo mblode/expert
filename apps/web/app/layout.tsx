@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Computer",
-  description: "A cloud computer you sign into with email. Agents drive it; you can take the seat.",
+  description: "A standing Linux box your agents drive and you can take over.",
 };
 
 export default function RootLayout({

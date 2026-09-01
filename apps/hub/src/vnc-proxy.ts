@@ -6,10 +6,10 @@ import type { AuthRegistry } from "./handler/auth.ts";
 import { tokenFromRequest } from "./handler/auth.ts";
 
 /**
- * websockify: noVNC talks RFC6455; TigerVNC talks raw RFB on 5900+N —
- * one port per window index, `?display=N` selects it (default primary).
- * Seat token required (query `token` or Authorization). Hub still binds
- * 127.0.0.1.
+ * websockify: noVNC talks RFC6455; x11vnc talks raw RFB on 5900+N
+ * (localhost, view-only). `?display=N` selects the window (default primary).
+ * Pixel or seat token required (query `token` or Authorization).
+ * Inside the guest, noVNC also listens on 6080 / 6081+ (Grok ports).
  */
 export function attachVncProxy(
   wss: WebSocketServer,
@@ -21,7 +21,7 @@ export function attachVncProxy(
   },
 ): void {
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-    if (!opts.auth.hasSeatToken(tokenFromRequest(req))) {
+    if (!opts.auth.canViewPixels(tokenFromRequest(req))) {
       ws.close(4401, "unauthenticated");
       return;
     }
@@ -60,5 +60,5 @@ function parseDisplayParam(v: string | null): number | null {
 }
 
 export function verifyVncUpgrade(auth: AuthRegistry, req: IncomingMessage): boolean {
-  return auth.hasSeatToken(tokenFromRequest(req));
+  return auth.canViewPixels(tokenFromRequest(req));
 }

@@ -1,5 +1,5 @@
 #!/bin/bash
-# stop-window N — release window index N: kill its VNC server and
+# stop-window N — release window index N: kill its Xvfb + x11vnc and
 # clear its entry in /workspace/.window-assignments.json.
 set -euo pipefail
 
@@ -12,10 +12,13 @@ fi
 export HOME="${HOME:-/home/box}"
 ASSIGN="/workspace/.window-assignments.json"
 LOCK="/workspace/.window-assignments.lock"
+TOKEN_DIR="${COMPUTER_VNC_TOKEN_DIR:-/tmp/computer-vnc}"
 
-# Kill this window's X server; openbox and chromium exit with their display.
-pkill -f "Xvnc :$N " >/dev/null 2>&1 || true
-rm -f "/tmp/.X11-unix/X$N" "/tmp/.X$N-lock" >/dev/null 2>&1 || true
+# Kill this window's X server and its view-only x11vnc; openbox and
+# chromium exit with their display.
+pkill -f "Xvfb :$N " >/dev/null 2>&1 || true
+pkill -f "x11vnc -display :$N " >/dev/null 2>&1 || true
+rm -f "/tmp/.X11-unix/X$N" "/tmp/.X$N-lock" "$TOKEN_DIR/$N" >/dev/null 2>&1 || true
 
 exec 9>"$LOCK"
 flock 9

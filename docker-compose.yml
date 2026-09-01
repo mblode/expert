@@ -1,3 +1,4 @@
+# Local computer. The cloud path is a Fly Machine (fly.toml), not this file.
 services:
   desk:
     image: computer-desk
@@ -18,8 +19,10 @@ services:
       - workspace:/workspace
       - config:/home/box/.config
     ports:
-      # One RFB port per window index: 5900 + N (primary :1 → 5901).
+      # x11vnc RFB (localhost on the box; published on the host loopback).
       - "127.0.0.1:5901-5908:5901-5908"
+      # noVNC: 6080 primary, 6081+ forks (Grok ports). Hub still proxies too.
+      - "127.0.0.1:6080-6087:6080-6087"
     shm_size: "1gb"
 
 volumes:

@@ -1,14 +1,20 @@
 import { dirname, join, resolve } from "node:path";
 import { createHub } from "./app.ts";
 import { DEFAULT_EVE_URL } from "./handler/eve-proxy.ts";
-import { createDesk, DockerWindowManager, NoopWindowManager } from "./desk/index.ts";
+import {
+  createDesk,
+  DockerWindowManager,
+  LocalWindowManager,
+  NoopWindowManager,
+} from "./desk/index.ts";
+import { allowedBind, refuseBindMessage } from "./host/bind.ts";
 import { loadPolicy } from "./service/policy.ts";
-import { createIdentityVerifier, FileIdentityStore } from "./service/identity.ts";
 import { FileBotStore, FileSeatTokenStore } from "./service/provision.ts";
+import { PixelRegistry } from "./service/pixels.ts";
 
 const bind = process.env.COMPUTER_BIND ?? "127.0.0.1";
-if (bind !== "127.0.0.1" && bind !== "localhost") {
-  console.error("refusing to bind", bind, "— hub must stay on loopback; use Tailscale Serve");
+if (!allowedBind(bind)) {
+  console.error(refuseBindMessage(bind));
   process.exit(1);
 }
 
@@ -16,25 +22,28 @@ const port = Number(process.env.COMPUTER_PORT ?? 8787);
 const publicUrl = process.env.COMPUTER_PUBLIC_URL ?? `http://127.0.0.1:${port}`;
 const vncUrl =
   process.env.COMPUTER_VNC_URL ?? `${publicUrl.replace(/\/$/, "")}/vnc/index.html?view_only=1`;
-const dockerMode = (process.env.COMPUTER_DESK ?? "fake") === "docker";
+const deskMode = process.env.COMPUTER_DESK ?? "fake";
 // Paired seats and policy live beside the roster, wherever the operator put it.
 const rosterPath = resolve(process.env.COMPUTER_DATA ?? "data/bots.json");
 const dataDir = dirname(rosterPath);
 
+const windows =
+  deskMode === "docker"
+    ? new DockerWindowManager(process.env.COMPUTER_DESK_CONTAINER ?? "computer-desk")
+    : deskMode === "local"
+      ? new LocalWindowManager()
+      : new NoopWindowManager();
+
 const hub = createHub({
   setupCode: process.env.COMPUTER_SETUP_CODE ?? "",
   deskFactory: createDesk,
-  windows: dockerMode
-    ? new DockerWindowManager(process.env.COMPUTER_DESK_CONTAINER ?? "computer-desk")
-    : new NoopWindowManager(),
+  windows,
   store: new FileBotStore(rosterPath),
   seatStore: new FileSeatTokenStore(join(dataDir, "seats.json")),
-  identity: createIdentityVerifier({
-    jwtSecret: process.env.SUPABASE_JWT_SECRET,
-    supabaseUrl: process.env.SUPABASE_URL,
-    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  pixels: new PixelRegistry({
+    ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
+    tokenDir: process.env.COMPUTER_VNC_TOKEN_DIR ?? join(dataDir, "vnc-tokens"),
   }),
-  identityStore: new FileIdentityStore(join(dataDir, "identities.json")),
   policy: loadPolicy(join(dataDir, "policy.json")),
   vncUrl,
   vncHost: process.env.COMPUTER_VNC_HOST ?? "127.0.0.1",

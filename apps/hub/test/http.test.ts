@@ -20,7 +20,11 @@ describe("Connect HTTP", () => {
     };
     expect(res.token.length).toBeGreaterThan(10);
     expect(res.vnc_url).toContain("view_only=1");
-    expect(res.vnc_url).toContain(`token=${res.token}`);
+    expect(res.vnc_url).toContain("token=");
+    // Pixel token in the URL — not the durable seat token from Pair.
+    const pix = new URL(res.vnc_url).searchParams.get("token");
+    expect(pix).toBeTruthy();
+    expect(pix).not.toBe(res.token);
     expect(res.status.display.width).toBe(1280);
   });
 
@@ -150,6 +154,12 @@ describe("Connect HTTP", () => {
     const token = await h.pair();
     const ok = await fetch(`${h.url}/vnc/index.html?token=${token}`);
     expect(ok.status).toBe(200);
+    const paired = (await rpc(h.url, "/computer.v1.Seat/Pair", { code: h.setup })) as {
+      vnc_url: string;
+    };
+    const pix = new URL(paired.vnc_url).searchParams.get("token");
+    const pixOk = await fetch(`${h.url}/vnc/index.html?token=${pix}`);
+    expect(pixOk.status).toBe(200);
 
     const denied = await new Promise<number>((resolve) => {
       const t = setTimeout(() => resolve(-1), 2000);

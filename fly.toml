@@ -1,0 +1,93 @@
+# Cloud computer — Fly Machine in syd is the public Anyrun analogue.
+# Cursor Anyrun is Firecracker on EC2 (private). We do not use Anyrun.
+# Local/dev is docker compose — the same guest image.
+#
+# Two process groups:
+#   edge     — always-on, public HTTPS. Status/roster never wake the guest.
+#   computer — the Grok-like guest (X.Org + x11vnc + hub). Suspends when idle.
+#
+# App name is global — change `app` (or let `fly launch --copy-config` set it).
+# One computer Machine. Volumes do not replicate; do not scale the guest out.
+
+app = "computer"
+primary_region = "syd"
+
+[build]
+  dockerfile = "deploy/fly/Dockerfile"
+
+[processes]
+  edge = "/usr/local/bin/edge-entrypoint.sh"
+  computer = "/usr/local/bin/guest-entrypoint.sh"
+
+[env]
+  COMPUTER_CLOUD = "fly"
+  COMPUTER_BIND = "0.0.0.0"
+  COMPUTER_PORT = "8080"
+  HOME = "/home/box"
+  # 20 minutes. Not Sprites' 30s — a desktop cannot hibernate that fast.
+  COMPUTER_IDLE_SUSPEND_SEC = "1200"
+  COMPUTER_VNC_TTL_SEC = "900"
+  COMPUTER_NOVNC_BASE = "6080"
+  COMPUTER_VNC_TOKEN_DIR = "/tmp/computer-vnc"
+  COMPUTER_DESK = "local"
+  COMPUTER_DATA = "/data/bots.json"
+  COMPUTER_VNC_HOST = "127.0.0.1"
+  COMPUTER_VNC_PORT = "5900"
+
+[http_service]
+  processes = ["edge"]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 20
+    hard_limit = 40
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+# Persistence: /workspace + ~/.config match Grok. /data is the hub roster.
+# TRIM: `fly volumes extend <name> --size N` grows in place. Start sizes below.
+# Grok measured SKU disk is 128 GB — `fly volumes extend computer_workspace --size 128`.
+[[mounts]]
+  source = "computer_workspace"
+  destination = "/workspace"
+  processes = ["computer"]
+
+[[mounts]]
+  source = "computer_config"
+  destination = "/home/box/.config"
+  processes = ["computer"]
+
+[[mounts]]
+  source = "computer_hub"
+  destination = "/data"
+  processes = ["computer"]
+
+# Guest: start at 4 shared vCPU / 4 GB. Grok measured 8 vCPU / 16 GB / 128 GB.
+# Scale the computer process with:
+#   fly scale vm shared-cpu-8x --memory 16384 --process-group computer
+#   fly volumes extend computer_workspace --size 128
+# Suspend above 2 GB may fall back to stop — still not a 30s auto-stop.
+[[vm]]
+  processes = ["computer"]
+  cpu_kind = "shared"
+  cpus = 4
+  memory = "4gb"
+
+[[vm]]
+  processes = ["edge"]
+  cpu_kind = "shared"
+  cpus = 1
+  memory = "256mb"
+
+[deploy]
+  strategy = "immediate"

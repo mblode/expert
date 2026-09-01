@@ -1,5 +1,7 @@
 #cloud-config
-# Computer on a fresh Ubuntu 24.04 VM (Hetzner CX33 works well) in one paste.
+# Always-hot alternate — a standing Ubuntu VM (Hetzner CX33 works well).
+# The Grok-like default is a Fly Machine (fly.toml) that can sleep.
+# Use this when you want the box on 24/7 and you already have a VPS.
 #
 #   1. Create the server with this file as cloud-init user data.
 #   2. ssh in, run: tailscale up
@@ -7,6 +9,7 @@
 #   4. Scan the QR from Computer.app. Done.
 #
 # The hub stays on loopback; Tailscale Serve is the only way in.
+# This is not wake-on-connect: the VM stays billed while it runs.
 
 package_update: true
 packages:

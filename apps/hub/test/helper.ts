@@ -2,7 +2,6 @@ import { resolve } from "node:path";
 import { createHub, type Hub } from "../src/app.ts";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { NoopWindowManager } from "../src/desk/windows.ts";
-import type { IdentityStore, IdentityVerifier } from "../src/service/identity.ts";
 import { MemoryBotStore, MemorySeatTokenStore, type SeatTokenStore } from "../src/service/provision.ts";
 import type { PolicyService } from "../src/service/policy.ts";
 import type { BotConfig } from "../src/service/bots.ts";
@@ -36,8 +35,6 @@ export async function startHub(
     vncBasePort?: number;
     /** Pass one to survive a restart in-test; a fresh hub loads what it saved. */
     seatStore?: SeatTokenStore;
-    identity?: IdentityVerifier;
-    identityStore?: IdentityStore;
     policy?: PolicyService;
     /** Exported control panel to serve at `/`. Absent = no panel, as on a fresh clone. */
     webDir?: string;
@@ -61,8 +58,6 @@ export async function startHub(
     windows,
     store,
     seatStore,
-    identity: opts.identity,
-    identityStore: opts.identityStore,
     policy: opts.policy,
     // Absent means "no panel built", which is a real state and the default here
     // so the suite never depends on apps/web having been built.

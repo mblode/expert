@@ -12,6 +12,7 @@
     "up": "node scripts/computer.mjs up",
     "qr": "node scripts/computer.mjs qr",
     "bot": "node scripts/computer.mjs bot",
+    "machine": "npm exec --workspace=apps/hub -- tsx src/host/machine-cli.ts",
     "proto:gen": "buf generate",
     "proto:check": "node scripts/proto-check.mjs",
     "lint": "node scripts/lint-layers.mjs",
@@ -19,8 +20,7 @@
     "test": "npm test --workspace=apps/hub",
     "hub": "npm run start --workspace=apps/hub",
     "eve": "npm --prefix apps/eve run dev",
-    "web": "npm --prefix apps/web run dev",
-    "desktop": "npm --prefix apps/desktop run dev"
+    "web": "npm --prefix apps/web run dev"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.57.2",

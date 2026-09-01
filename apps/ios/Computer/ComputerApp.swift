@@ -18,7 +18,7 @@ struct RootView: View {
     var body: some View {
         Group {
             if model.session == nil {
-                SignInView()
+                PairView()
             } else {
                 ChatView()
             }

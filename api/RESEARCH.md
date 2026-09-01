@@ -256,10 +256,12 @@ We take the action-list idea. We do not take "drive the user's laptop."
 
 Vercel / Cloudflare Workers / Railway cannot host a desktop.
 Cheap analogue: Hetzner + Tailscale (post June-2026 prices: CX33
-4 vCPU/8 GB €8.49/mo, CX43 €15.99/mo). Per-second sandboxes (E2B,
+4 vCPU/8 GB €8.49/mo, CX43 €15.99/mo) — always-hot, documented as
+an alternate in deploy/cloud-init.yaml. Per-second sandboxes (E2B,
 Daytona, Modal, Morph) are ~10× for an always-on pet machine; Fly.io
 suspend/resume is the only cheap off-the-shelf imitation of Grok's
-hibernation.
+hibernation, and that path is checked in as fly.toml (one Machine,
+desk+hub guest, volumes for /workspace and ~/.config).
 
 ## Hosted computer-use APIs
 

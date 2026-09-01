@@ -11,12 +11,14 @@ import {
 import type { Desk, FocusHint, ShellResult } from "./types.ts";
 
 /**
- * "DAEMON_DOWN" on its own tells a phone nothing. `docker exec` failures
+ * "DAEMON_DOWN" on its own tells a phone nothing. Desk exec failures
  * differ in ways that matter to a client deciding whether to retry, and this
  * is the whole of what this box can honestly tell apart. Anything it cannot
- * distinguish stays `unknown` rather than being guessed at — and neither
- * `hibernated` nor `idle_timeout` is reachable here, because there is no
- * hibernation and nothing idles out.
+ * distinguish stays `unknown` rather than being guessed at.
+ *
+ * `hibernated` is a *host* state (Fly Machine suspend/stop). The guest
+ * cannot observe it: when the Machine is asleep this process is not
+ * running. Idle timeout is the Fly proxy's, not ours.
  */
 export function classifyDeskFailure(text: string): Unavailable {
   const t = text.toLowerCase();
@@ -41,11 +43,19 @@ function deskDown(message: string): ComputerError {
   return new ComputerError("DAEMON_DOWN", message, classifyDeskFailure(message));
 }
 
+export type DeskTransport = "docker" | "local";
+
 export type DockerDeskOptions = {
-  container: string;
+  /** Required when transport is docker (compose host → desk container). */
+  container?: string;
   user?: string;
   /** Window index = X display number. Default 1 (primary). */
   display?: number;
+  /**
+   * docker — `docker exec` into the desk container (local compose).
+   * local — same namespace as the hub (Fly Machine / cloud guest).
+   */
+  transport?: DeskTransport;
 };
 
 const BUTTON_TO_XDOTOOL: Record<Button, string> = {
@@ -105,12 +115,14 @@ const KEY_TO_KEYSYM: Record<string, string> = {
 export class DockerDesk implements Desk {
   private readonly container: string;
   private readonly user: string;
+  private readonly transport: DeskTransport;
   readonly display: number;
   private cursor = asPoint(640, 400);
   private held = false;
 
   constructor(opts: DockerDeskOptions) {
-    this.container = opts.container;
+    this.transport = opts.transport ?? "docker";
+    this.container = opts.container ?? "computer-desk";
     this.user = opts.user ?? "box";
     this.display = opts.display ?? 1;
   }
@@ -337,22 +349,34 @@ export class DockerDesk implements Desk {
       user?: string;
     },
   ): Promise<{ exit: number; stdout: Buffer; stderr: Buffer }> {
-    const dockerArgv = [
-      "exec",
-      "-i",
-      "-u",
-      opts.user ?? this.user,
-      // Always: this driver *is* one window, and a command that forgets its
-      // DISPLAY silently targets :1 — which made every fork Bot screenshot
-      // screen 1 while acting on its own.
-      "-e",
-      `DISPLAY=:${this.display}`,
-      ...(opts.cwd ? ["-w", opts.cwd] : []),
-      this.container,
-      ...argv,
-    ];
+    const cmd = this.transport === "local" ? argv[0]! : "docker";
+    const spawnArgv =
+      this.transport === "local"
+        ? argv.slice(1)
+        : [
+            "exec",
+            "-i",
+            "-u",
+            opts.user ?? this.user,
+            // Always: this driver *is* one window, and a command that forgets its
+            // DISPLAY silently targets :1 — which made every fork Bot screenshot
+            // screen 1 while acting on its own.
+            "-e",
+            `DISPLAY=:${this.display}`,
+            ...(opts.cwd ? ["-w", opts.cwd] : []),
+            this.container,
+            ...argv,
+          ];
+    const env =
+      this.transport === "local"
+        ? { ...process.env, DISPLAY: `:${this.display}`, HOME: process.env.HOME ?? "/home/box" }
+        : process.env;
     return new Promise((resolve, reject) => {
-      const child = spawn("docker", dockerArgv, { stdio: ["pipe", "pipe", "pipe"] });
+      const child = spawn(cmd, spawnArgv, {
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd: this.transport === "local" ? opts.cwd : undefined,
+        env,
+      });
       const stdout: Buffer[] = [];
       const stderr: Buffer[] = [];
       child.stdout.on("data", (c: Buffer) => stdout.push(c));
@@ -364,7 +388,7 @@ export class DockerDesk implements Desk {
       }
       const t = setTimeout(() => {
         child.kill("SIGKILL");
-        reject(deskDown(`docker exec timed out: ${argv[0]}`));
+        reject(deskDown(`desk exec timed out: ${argv[0]}`));
       }, opts.timeoutMs);
       child.on("error", (err) => {
         clearTimeout(t);
