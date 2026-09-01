@@ -10,7 +10,6 @@ import { handleChat } from "./handler/chat.ts";
 import { DEFAULT_EVE_URL, handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
-import type { IdentityStore, IdentityVerifier } from "./service/identity.ts";
 import { PolicyService } from "./service/policy.ts";
 import { ProvisionService, type BotStore, type SeatTokenStore } from "./service/provision.ts";
 import type { WindowManager } from "./desk/windows.ts";
@@ -27,10 +26,6 @@ export type HubOptions = {
   store: BotStore;
   /** Persists paired seat tokens. Without it every restart unpairs every phone. */
   seatStore: SeatTokenStore;
-  /** Product sign-in: verify a Supabase access token. Absent = Pair only. */
-  identity?: IdentityVerifier;
-  /** Persist userId → seat token so every client of an account shares a seat. */
-  identityStore?: IdentityStore;
   /** Hub-side approval gate. Absent = no rules = allow. */
   policy?: PolicyService;
   vncUrl: string;
@@ -71,8 +66,6 @@ export function createHub(opts: HubOptions): Hub {
     setupCode: opts.setupCode,
     agentTokens: () => bots.tokenEntries(),
     seats: opts.seatStore,
-    identity: opts.identity,
-    identities: opts.identityStore,
   });
   const router = new ConnectRouter(auth);
 

@@ -1,0 +1,73 @@
+# Cloud computer — one Fly Machine per account.
+#
+# Grok prod: anyrun Firecracker microVM, Docker-built Debian, memory+disk
+# snapshot hibernation, wake-on-connect. Not always-hot.
+# This file: Fly Machine (suspend/resume) running the same guest
+# (apps/desk + apps/hub). Local/dev stays `docker compose`.
+#
+# App name is global — change `app` (or let `fly launch --copy-config` set it).
+# One Machine. Volumes do not replicate; do not `fly scale count` up.
+
+app = "computer"
+primary_region = "syd"
+
+[build]
+  dockerfile = "deploy/fly/Dockerfile"
+
+[env]
+  COMPUTER_CLOUD = "fly"
+  COMPUTER_BIND = "0.0.0.0"
+  COMPUTER_PORT = "8080"
+  COMPUTER_DESK = "local"
+  COMPUTER_DATA = "/data/bots.json"
+  COMPUTER_VNC_HOST = "127.0.0.1"
+  COMPUTER_VNC_PORT = "5900"
+  # Overridden at boot from FLY_APP_NAME if unset.
+  # COMPUTER_PUBLIC_URL = "https://computer.fly.dev"
+  HOME = "/home/box"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Suspend is the Grok analogue (memory snapshot). Requires ≤2 GB and no swap.
+  # v1 explicit sleep is still `npm run machine -- sleep` (stop).
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 8
+    hard_limit = 16
+
+  [[http_service.checks]]
+    grace_period = "45s"
+    interval = "15s"
+    method = "GET"
+    path = "/healthz"
+    timeout = "5s"
+
+# Same persistence boundary as docker-compose.yml and the README table.
+# Hub roster (tokens) is host-side locally (`data/`); on the Machine it
+# lives on its own volume so bearers are not sitting in /workspace.
+[[mounts]]
+  source = "computer_workspace"
+  destination = "/workspace"
+
+[[mounts]]
+  source = "computer_config"
+  destination = "/home/box/.config"
+
+[[mounts]]
+  source = "computer_hub"
+  destination = "/data"
+
+# 2 GB is the suspend ceiling. More RAM → use auto_stop_machines = "stop".
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 2
+  memory = "2gb"
+  # Do not set swap_size_mb — swap makes the Machine ineligible to suspend.
+
+[deploy]
+  strategy = "immediate"

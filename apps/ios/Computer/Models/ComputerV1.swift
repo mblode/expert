@@ -110,10 +110,6 @@ public enum ComputerV1 {
         public init(code: String) { self.code = code }
     }
 
-    public struct SessionRequest: Codable, Sendable {
-        public init() {}
-    }
-
     public struct PairResponse: Codable, Sendable {
         public var token: String
         public var vncUrl: String
@@ -269,7 +265,6 @@ public enum ComputerV1 {
 
     public static let seatPaths = (
         pair: "/computer.v1.Seat/Pair",
-        session: "/computer.v1.Seat/Session",
         status: "/computer.v1.Seat/Status",
         setPresence: "/computer.v1.Seat/SetPresence",
         pointer: "/computer.v1.Seat/Pointer",

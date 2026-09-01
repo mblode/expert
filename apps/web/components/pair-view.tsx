@@ -9,13 +9,7 @@ const DEFAULT_HUB = "http://127.0.0.1:8787";
  * Pairing is the whole of sign-in: a setup code buys a seat token, and a seat
  * is the box owner. Nothing else here is configurable.
  */
-export function PairView({
-  onPaired,
-  onBack,
-}: {
-  onPaired: (seat: StoredSeat) => void;
-  onBack?: () => void;
-}): React.ReactElement {
+export function PairView({ onPaired }: { onPaired: (seat: StoredSeat) => void }): React.ReactElement {
   const [hubUrl, setHubUrl] = useState(DEFAULT_HUB);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -28,11 +22,7 @@ export function PairView({
     setError(null);
     try {
       const result = await pair(hubUrl, code.trim());
-      onPaired({
-        hubUrl: hubUrl.trim().replace(/\/+$/u, ""),
-        seatToken: result.token,
-        source: "pair",
-      });
+      onPaired({ hubUrl: hubUrl.trim().replace(/\/+$/u, ""), seatToken: result.token });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "pairing failed");
     } finally {
@@ -46,7 +36,7 @@ export function PairView({
         <div>
           <h1 className="text-xl font-semibold">Computer</h1>
           <p className="mt-1 text-sm text-mute">
-            Local-dev fallback: a setup code from `npm run up` buys a seat token.
+            Pair with the box to watch its screen and talk to Eve.
           </p>
         </div>
 
@@ -88,12 +78,6 @@ export function PairView({
         >
           {busy ? "Pairing…" : "Pair"}
         </button>
-
-        {onBack && (
-          <button className="w-full text-xs text-mute hover:text-white" onClick={onBack} type="button">
-            Sign in with email
-          </button>
-        )}
       </form>
     </div>
   );

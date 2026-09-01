@@ -2,11 +2,11 @@
 
 ## Deviations
 
+- **This repo is the compute substrate, not the clients.** Grok's computer is an anyrun Firecracker microVM (Docker-built Debian, memory+disk snapshot hibernation, wake-on-connect, not always-hot). Ours is a Fly.io Machine (`fly.toml`) running `apps/desk` + `apps/hub` in one guest; local/dev stays `docker compose`. Hetzner always-on via `deploy/cloud-init.yaml` is documented as an alternate, not the default. There is no custom Firecracker orchestrator. Auth (email OTP / Better Auth / Supabase), Tauri, iOS login, and Vercel hosting are **explicitly later** — pairing (`Seat.Pair`) is what boots the hub. plan.md's "iOS-only + Tailscale pairing is the product" is no longer a hosting constraint; Tailscale Serve remains the local/Hetzner front door.
 - Hub speaks Connect-JSON unary (DESIGN error envelope) rather than `@connectrpc/connect-node`. Method paths and types come from `buf generate` (`protoc-gen-es`).
 - iOS chat/seat client stays Codable JSON (`apps/ios/.../ComputerV1.swift`). Buf emits SwiftProtobuf + Connect-Swift under `packages/proto/gen/swift` for a later Connect-Swift client.
 - Seat pixels (`/vnc`, `/websockify`) require the paired seat token (`?token=` or `Authorization`). The model token cannot call Seat RPCs or read `vncUrl`.
 - Desk image installs Chromium when the distro package exists; entrypoint still starts the VNC session if the browser package is missing.
-- **Product auth is email OTP, not iOS-only Tailscale pairing.** plan.md's constraint that iOS is the only product surface and that setup-code pairing over Tailscale Serve is the front door is no longer the product. One computer per email account; iOS, web, Mac, and Windows all attach after `signInWithOtp`. Identity is a dedicated Supabase Auth project named Computer. `Seat.Session` exchanges a verified JWT for the existing seat-token machinery; `Seat.Pair` remains as a local-dev fallback so `npm run up` still works without Supabase. Hub + desk stay a standing Linux Docker host (not Vercel/Workers). Web (`apps/web`) is a first-class client. Mac + Windows are a Tauri 2 wrapper (`apps/desktop`) of that web client. iOS stays native SwiftUI; email OTP is the default unauthenticated flow, Keychain still holds the session, and pairing is a hidden/dev path.
 
 ## Multi-screen + provisioning run (2026-08-31)
 

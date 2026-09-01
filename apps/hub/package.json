@@ -13,7 +13,6 @@
     "@computer/proto": "*",
     "@computer/shared": "*",
     "@novnc/novnc": "^1.6.0",
-    "jose": "^6.2.10",
     "ws": "^8.18.3"
   },
   "devDependencies": {

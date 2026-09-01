@@ -33,9 +33,11 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash box \
 COPY bin/desk-shot /usr/local/bin/desk-shot
 COPY bin/start-window /usr/local/bin/start-window
 COPY bin/stop-window /usr/local/bin/stop-window
+COPY bin/desk-up /usr/local/bin/desk-up
 COPY bin/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/desk-shot \
-        /usr/local/bin/start-window /usr/local/bin/stop-window /usr/local/bin/entrypoint.sh
+        /usr/local/bin/start-window /usr/local/bin/stop-window \
+        /usr/local/bin/desk-up /usr/local/bin/entrypoint.sh
 
 USER box
 WORKDIR /workspace

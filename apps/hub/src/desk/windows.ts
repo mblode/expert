@@ -42,26 +42,65 @@ export class DockerWindowManager implements WindowManager {
   }
 
   private exec(argv: string[]): Promise<{ exit: number; stderr: string }> {
-    return new Promise((resolve, reject) => {
-      const child = spawn("docker", ["exec", "-u", this.user, this.container, ...argv], {
-        stdio: ["ignore", "ignore", "pipe"],
-      });
-      const stderr: Buffer[] = [];
-      child.stderr.on("data", (c: Buffer) => stderr.push(c));
-      const t = setTimeout(() => {
-        child.kill("SIGKILL");
-        reject(new ComputerError("DAEMON_DOWN", `docker exec timed out: ${argv[0]}`));
-      }, 30_000);
-      child.on("error", (err) => {
-        clearTimeout(t);
-        reject(new ComputerError("DAEMON_DOWN", err.message));
-      });
-      child.on("close", (code) => {
-        clearTimeout(t);
-        resolve({ exit: code ?? 1, stderr: Buffer.concat(stderr).toString() });
-      });
+    return spawnWindow(argv, {
+      docker: { container: this.container, user: this.user },
     });
   }
+}
+
+/**
+ * Hub and desk share a process namespace — the Fly Machine / cloud guest.
+ * Same scripts as DockerWindowManager; no `docker exec`.
+ */
+export class LocalWindowManager implements WindowManager {
+  async startWindow(display: number, ownerToken: string, botId: string, force = false): Promise<void> {
+    const argv = ["/usr/local/bin/start-window", String(display), ownerHash(ownerToken), botId];
+    if (force) argv.push("--force");
+    const r = await spawnWindow(argv, { local: true });
+    if (r.exit === 9) {
+      throw new ComputerError("CONFLICT", `window ${display} claimed by another owner`);
+    }
+    if (r.exit !== 0) {
+      throw new ComputerError("DAEMON_DOWN", r.stderr || `start-window ${display} failed`);
+    }
+  }
+
+  async stopWindow(display: number): Promise<void> {
+    const r = await spawnWindow(["/usr/local/bin/stop-window", String(display)], { local: true });
+    if (r.exit !== 0) {
+      throw new ComputerError("DAEMON_DOWN", r.stderr || `stop-window ${display} failed`);
+    }
+  }
+}
+
+function spawnWindow(
+  argv: string[],
+  opts: { docker?: { container: string; user: string }; local?: boolean },
+): Promise<{ exit: number; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const child = opts.local
+      ? spawn(argv[0]!, argv.slice(1), {
+          stdio: ["ignore", "ignore", "pipe"],
+          env: { ...process.env, HOME: process.env.HOME ?? "/home/box" },
+        })
+      : spawn("docker", ["exec", "-u", opts.docker!.user, opts.docker!.container, ...argv], {
+          stdio: ["ignore", "ignore", "pipe"],
+        });
+    const stderr: Buffer[] = [];
+    child.stderr.on("data", (c: Buffer) => stderr.push(c));
+    const t = setTimeout(() => {
+      child.kill("SIGKILL");
+      reject(new ComputerError("DAEMON_DOWN", `desk exec timed out: ${argv[0]}`));
+    }, 30_000);
+    child.on("error", (err) => {
+      clearTimeout(t);
+      reject(new ComputerError("DAEMON_DOWN", err.message));
+    });
+    child.on("close", (code) => {
+      clearTimeout(t);
+      resolve({ exit: code ?? 1, stderr: Buffer.concat(stderr).toString() });
+    });
+  });
 }
 
 export class NoopWindowManager implements WindowManager {

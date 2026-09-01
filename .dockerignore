@@ -1,0 +1,14 @@
+.git
+.github
+data
+**/.env
+**/.env.local
+node_modules
+**/node_modules
+apps/web/.next
+apps/web/out
+apps/ios
+**/*.log
+**/.DS_Store
+coverage
+*.tsbuildinfo

@@ -29,7 +29,7 @@ struct ChatView: View {
                 // for Back, and this wipes the pairing with no undo.
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
-                        Button(model.signedInWithEmail ? "Sign out" : "Unpair", systemImage: "xmark.circle", role: .destructive) {
+                        Button("Unpair", systemImage: "xmark.circle", role: .destructive) {
                             confirmUnpair = true
                         }
                     } label: {
@@ -39,19 +39,14 @@ struct ChatView: View {
                 }
             }
             .confirmationDialog(
-                model.signedInWithEmail ? "Sign out?" : "Unpair this phone?",
+                "Unpair this phone?",
                 isPresented: $confirmUnpair,
                 titleVisibility: .visible
             ) {
-                Button(
-                    model.signedInWithEmail ? "Sign out and erase this chat" : "Unpair and erase this chat",
-                    role: .destructive
-                ) { model.signOut() }
+                Button("Unpair and erase this chat", role: .destructive) { model.unpair() }
                 Button("Cancel", role: .cancel) {}
             } message: {
-                Text(model.signedInWithEmail
-                     ? "Deletes this conversation and the session from this phone. Sign in again with email to come back."
-                     : "Deletes this conversation and the seat token from this phone. Pairing again needs a setup code from the box.")
+                Text("Deletes this conversation and the seat token from this phone. Pairing again needs a setup code from the box.")
             }
             .fullScreenCover(isPresented: $showComputer) {
                 ComputerView()

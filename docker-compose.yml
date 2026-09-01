@@ -1,3 +1,4 @@
+# Local computer. The cloud path is a Fly Machine (fly.toml), not this file.
 services:
   desk:
     image: computer-desk

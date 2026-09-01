@@ -121,6 +121,7 @@ if [[ -n "$CHROMIUM" ]]; then
     --disable-infobars \
     --disable-sync \
     --disable-gpu \
+    --disable-dev-shm-usage \
     --user-data-dir="$PROFILE" \
     --window-size=1280,800 \
     --window-position=0,0 \

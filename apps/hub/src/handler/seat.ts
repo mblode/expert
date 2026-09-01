@@ -50,11 +50,6 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     return { token, vnc_url: withSeatToken(vncUrlFor(PRIMARY_DISPLAY), token), status: status(token) };
   });
 
-  router.rpc(SeatMethods.Session, "session", async (ctx) => {
-    const token = await deps.auth.session(ctx.bearer ?? "");
-    return { token, vnc_url: withSeatToken(vncUrlFor(PRIMARY_DISPLAY), token), status: status(token) };
-  });
-
   router.rpc(SeatMethods.Status, "seat", async (ctx) => {
     requireSeatToken(ctx);
     const o = requireObject(ctx.body);
