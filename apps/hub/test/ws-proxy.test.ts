@@ -1,4 +1,5 @@
-import { createServer, type AddressInfo, type IncomingMessage } from "node:http";
+import { createServer, type IncomingMessage } from "node:http";
+import type { AddressInfo } from "node:net";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket, WebSocketServer } from "ws";
 import { createEdgeServer } from "../src/host/edge-server.ts";

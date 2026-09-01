@@ -58,7 +58,7 @@ function headerHas(headers: IncomingMessage["headers"], name: string): boolean {
 }
 
 export function throttle(fn: () => void, minIntervalMs: number, clock: () => number = Date.now): () => void {
-  let last = 0;
+  let last = Number.NEGATIVE_INFINITY;
   return () => {
     const now = clock();
     if (now - last < minIntervalMs) return;
