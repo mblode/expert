@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { createHub, type Hub } from "../src/app.ts";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { NoopWindowManager } from "../src/desk/windows.ts";
@@ -35,6 +36,8 @@ export async function startHub(
     /** Pass one to survive a restart in-test; a fresh hub loads what it saved. */
     seatStore?: SeatTokenStore;
     policy?: PolicyService;
+    /** Exported control panel to serve at `/`. Absent = no panel, as on a fresh clone. */
+    webDir?: string;
   } = {},
 ): Promise<StartedHub> {
   const configs = opts.bots ?? [{ id: "main", display: 1, token: AGENT_TOKEN }];
@@ -56,6 +59,9 @@ export async function startHub(
     store,
     seatStore,
     policy: opts.policy,
+    // Absent means "no panel built", which is a real state and the default here
+    // so the suite never depends on apps/web having been built.
+    webDir: opts.webDir ?? resolve(import.meta.dirname, "no-such-panel"),
     vncBasePort: opts.vncBasePort,
     vncUrl: "http://127.0.0.1/vnc/index.html?view_only=1",
   });

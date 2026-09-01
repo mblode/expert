@@ -23,6 +23,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* iOS Safari zooms the page in whenever a field smaller than 16px takes focus,
+   and never zooms back out — the pane ends up half off-screen behind the
+   keyboard. Only touch pays for the larger type. */
+@media (pointer: coarse) {
+  input,
+  textarea {
+    font-size: 16px;
+  }
+}
+
 /* Prose defaults for streamed assistant markdown, without a plugin. */
 .prose-chat {
   line-height: 1.6;

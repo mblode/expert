@@ -39,6 +39,7 @@ export function DesktopPane({
   status: BoxStatus | undefined;
 }): React.ReactElement {
   const [showClipboard, setShowClipboard] = useState(false);
+  const [showKeyboard, setShowKeyboard] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const screen: Screen | undefined =
@@ -90,6 +91,18 @@ export function DesktopPane({
         </span>
 
         <div className="ml-auto flex items-center gap-2">
+          {/* Only offered while the seat is yours: the hub refuses typing
+              otherwise, so the bar would be a field that eats what you write. */}
+          {controllable && (
+            <button
+              aria-expanded={showKeyboard}
+              className="rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
+              onClick={() => setShowKeyboard((open) => !open)}
+              type="button"
+            >
+              Keyboard
+            </button>
+          )}
           <button
             aria-expanded={showClipboard}
             className="rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
@@ -177,7 +190,11 @@ export function DesktopPane({
               />
               <div
                 aria-label="Take over the screen"
-                className={`absolute inset-0 rounded-lg outline-none ${
+                // `touch-pinch-zoom` keeps one finger for the box — no pan, no
+                // double-tap zoom — while leaving two fingers to magnify a
+                // 1280×800 desk squeezed onto a phone. `select-none` stops the
+                // long-press selection callout from eating a held click.
+                className={`absolute inset-0 touch-pinch-zoom select-none rounded-lg outline-none ${
                   controllable ? "cursor-none focus-visible:ring-2 focus-visible:ring-accent" : "pointer-events-none"
                 }`}
                 role="application"
@@ -214,11 +231,70 @@ export function DesktopPane({
 
       <p className="px-3 pb-2 text-xs text-mute">
         {controllable
-          ? "Point where you want the cursor and the box follows. Typing and paste go through; Backspace and the arrow keys do not."
+          ? "Point where you want the cursor and the box follows. Type here, or open Keyboard on a phone; Backspace and the arrow keys do not go through."
           : "View only while Eve is working. Take the seat to drive it yourself, or wait for it to ask."}
       </p>
 
+      {controllable && showKeyboard && <KeyboardBar onSend={input.send} />}
       {showClipboard && <ClipboardPanel display={display} seat={seat} />}
     </section>
+  );
+}
+
+/**
+ * A phone cannot type into the pane the way a laptop does: iOS raises the soft
+ * keyboard for a focused form field and for nothing else, and the overlay that
+ * catches keystrokes is a `role="application"` div. So typing gets a real one.
+ *
+ * It composes a line and sends it whole rather than forwarding each keystroke,
+ * because `Seat.Type` is a paste: once a character is on the box nothing here
+ * can take it back, and Backspace does not go through. Seeing the line before
+ * it leaves is the only place a thumbed typo can still be fixed.
+ */
+function KeyboardBar({ onSend }: { onSend: (text: string) => void }): React.ReactElement {
+  const [text, setText] = useState("");
+
+  const send = (suffix: string) => {
+    if (!text && !suffix) return;
+    setText("");
+    onSend(text + suffix);
+  };
+
+  return (
+    <div className="flex items-center gap-2 border-t border-edge p-3">
+      <input
+        aria-label="Type into the box"
+        // iOS rewrites what a thumb types — capitals, corrections, curly quotes
+        // for straight ones — and the box would run the rewrite, not the
+        // command. These are the attributes that turn all of it off.
+        autoCapitalize="off"
+        autoComplete="off"
+        autoCorrect="off"
+        // Mounting is the gesture that asked for the keyboard, and iOS only
+        // raises it inside one.
+        autoFocus
+        className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+        enterKeyHint="send"
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          // Return goes to the box with the line: the reason to type into a
+          // terminal from a phone is to run the thing you typed.
+          send("\n");
+        }}
+        placeholder="Type into the box…"
+        spellCheck={false}
+        value={text}
+      />
+      <button
+        className="rounded-lg border border-edge px-3 py-2 text-sm hover:border-accent disabled:opacity-50"
+        disabled={!text}
+        onClick={() => send("")}
+        type="button"
+      >
+        Send
+      </button>
+    </div>
   );
 }

@@ -10,11 +10,31 @@ const MIME: Record<string, string> = {
   ".png": "image/png",
   ".ico": "image/x-icon",
   ".json": "application/json",
+  // A Next export ships its own fonts and route manifests. Without these the
+  // browser gets application/octet-stream and silently drops the font.
+  ".woff2": "font/woff2",
+  ".woff": "font/woff",
+  ".ttf": "font/ttf",
+  ".txt": "text/plain; charset=utf-8",
+  ".map": "application/json",
+  ".webmanifest": "application/manifest+json",
 };
 
-/** Pixels of the screen are seat-only; the rest of the bundle is public. */
+/**
+ * Pixels of the screen are seat-only; the rest of the bundle is public.
+ *
+ * `/` is deliberately not here. It is the control panel, and the control panel
+ * is where you pair — gating it behind the token pairing produces is a door
+ * locked with the key inside. It ships no pixels of its own: the desktop
+ * arrives through the `/vnc/` iframe, which is still gated below, and the
+ * WebSocket behind it checks the seat token again on upgrade.
+ */
 export function needsSeatPixelAuth(pathname: string): boolean {
-  return pathname === "/" || pathname === "/index.html" || pathname === "/vnc" || pathname.startsWith("/vnc/");
+  return (
+    pathname === "/vnc" ||
+    pathname.startsWith("/vnc/") ||
+    pathname === "/debug.html"
+  );
 }
 
 export function serveStatic(req: IncomingMessage, res: ServerResponse, dir: string, pathname: string): boolean {

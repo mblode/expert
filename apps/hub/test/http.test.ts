@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { rpc, startHub } from "./helper.ts";
 
@@ -115,12 +118,33 @@ describe("Connect HTTP", () => {
     expect(chat.status).toBe(401);
   });
 
+  it("serves the control panel at / without a seat token", async () => {
+    // The panel is where you pair, so gating it behind the token pairing
+    // produces would lock the key inside. It ships no pixels of its own.
+    const dir = mkdtempSync(join(tmpdir(), "panel-"));
+    writeFileSync(join(dir, "index.html"), "<!doctype html><title>panel</title>");
+    writeFileSync(join(dir, "app.woff2"), "font");
+    const h = await startHub({ webDir: dir });
+    opened.push(h);
+
+    const root = await fetch(`${h.url}/`);
+    expect(root.status).toBe(200);
+    expect(await root.text()).toContain("panel");
+
+    // A Next export ships fonts; the wrong content-type drops them silently.
+    const font = await fetch(`${h.url}/app.woff2`);
+    expect(font.headers.get("content-type")).toBe("font/woff2");
+
+    // The panel must not be able to shadow a gated path.
+    expect((await fetch(`${h.url}/vnc/index.html`)).status).toBe(401);
+  });
+
   it("pixels and websockify require a seat token", async () => {
     const h = await startHub();
     opened.push(h);
     const naked = await fetch(`${h.url}/vnc/index.html`);
     expect(naked.status).toBe(401);
-    const debug = await fetch(`${h.url}/`);
+    const debug = await fetch(`${h.url}/debug.html`);
     expect(debug.status).toBe(401);
 
     const token = await h.pair();

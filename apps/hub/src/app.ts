@@ -37,6 +37,14 @@ export type HubOptions = {
   llmModel?: string;
   /** Where the Eve agent listens; the hub proxies /eve/v1/* to it. */
   eveUrl?: string;
+  /**
+   * The exported control panel (`apps/web/out`). Serving it from the hub's own
+   * origin is what lets a phone browser drive the box: same origin as the Seat
+   * RPCs and the VNC socket, so no CORS, no second listening port, and no
+   * second thing to publish over Tailscale. Absent or unbuilt = no panel, and
+   * the hub still serves pixels and RPCs exactly as before.
+   */
+  webDir?: string;
 };
 
 export type Hub = {
@@ -70,6 +78,12 @@ export function createHub(opts: HubOptions): Hub {
   router.assertAllPolicies();
 
   const staticDir = resolve(import.meta.dirname, "static");
+  // Env fallback for the same reason as eveUrl below: a hub started straight
+  // from createHub should still find the panel without threading an option.
+  const webDir =
+    opts.webDir ??
+    process.env.COMPUTER_WEB_DIR ??
+    resolve(import.meta.dirname, "../../web/out");
   // Env fallback so a hub started straight from createHub (tests) can be aimed
   // at another Eve without threading the option through every caller.
   const eveUrl = opts.eveUrl ?? process.env.COMPUTER_EVE_URL ?? DEFAULT_EVE_URL;
@@ -95,10 +109,15 @@ export function createHub(opts: HubOptions): Hub {
       const handled = await router.handle(req, res);
       if (handled) return;
       if (req.method === "GET" || req.method === "HEAD") {
-        if (needsSeatPixelAuth(url.pathname) && !auth.hasSeatToken(tokenFromRequest(req))) {
+        const pixels = needsSeatPixelAuth(url.pathname);
+        if (pixels && !auth.hasSeatToken(tokenFromRequest(req))) {
           writeJson(res, 401, { error: { code: "UNAUTHENTICATED", message: "seat token required" } });
           return;
         }
+        // The panel wins `/`; the hub's own static dir keeps the pixels and the
+        // novnc bundle. Checked in this order so an unbuilt panel cannot shadow
+        // a gated path, and a built one cannot be shadowed by the debug page.
+        if (!pixels && serveStatic(req, res, webDir, url.pathname)) return;
         if (serveStatic(req, res, staticDir, url.pathname)) return;
       }
       writeJson(res, 404, { error: { code: "VALIDATION", message: "not found" } });

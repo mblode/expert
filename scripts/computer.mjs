@@ -81,7 +81,12 @@ async function up() {
     env.COMPUTER_DESK = "fake";
   }
 
-  // 2. Publish over Tailscale when available.
+  // 2. The control panel, so a phone browser has something to open. Static
+  //    export served by the hub itself — one origin, one thing to publish.
+  //    A failure here is not fatal: the phone app and the RPCs do not need it.
+  buildWeb();
+
+  // 3. Publish over Tailscale when available.
   if (has("tailscale")) {
     try {
       run("tailscale", ["serve", "--bg", `http://127.0.0.1:${env.COMPUTER_PORT}`]);
@@ -97,11 +102,11 @@ async function up() {
   }
   saveEnv(env);
 
-  // 3. Eve, if she has an identity. She serves her own protocol on :2000;
+  // 4. Eve, if she has an identity. She serves her own protocol on :2000;
   //    the hub proxies it, so clients still only know one origin.
   startEve(env);
 
-  // 4. Pairing QR, then the hub in the foreground.
+  // 5. Pairing QR, then the hub in the foreground.
   printPairing(env);
   console.log("• starting the hub (ctrl-c stops it; the desk keeps running)…\n");
   const child = spawn("npx", ["tsx", "apps/hub/src/index.ts"], {
@@ -129,6 +134,30 @@ function startEve(env) {
   });
   child.unref();
   console.log(`• starting the agent on :2000 (log: ${relative(root, log)}) — the hub proxies it at /eve/v1`);
+}
+
+/**
+ * The panel is a static export the hub serves from its own origin, so a
+ * browser on the phone talks to one host for the page, the RPCs and the VNC
+ * socket. Built here rather than committed, so it cannot drift from the client
+ * code sitting beside it in the repo.
+ */
+function buildWeb() {
+  const out = resolve(root, "apps/web/out");
+  try {
+    console.log("• building the control panel…");
+    // Quiet unless it fails: `next build` is a page of output nobody reads
+    // during a successful `up`, and the interesting line is the next one.
+    exec("npm", ["--prefix", "apps/web", "run", "build"]);
+    console.log("• control panel ready — open the URL below in a browser");
+  } catch (err) {
+    console.log(
+      existsSync(out)
+        ? "• control panel build failed — serving the previous build"
+        : "• control panel build failed — no browser panel this run (the phone app and the RPCs do not need it)",
+    );
+    console.log(`  ${String(err?.stdout || err?.message || err).trim().split("\n").slice(-3).join("\n  ")}`);
+  }
 }
 
 async function bot(args) {
