@@ -8,13 +8,13 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "auth:generate": "better-auth generate --output db/schema.ts -y",
+    "auth:generate": "npx auth@1.7.2 generate --output db/schema.ts -y",
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
     "@libsql/client": "^0.17.4",
     "agentation": "^3.0.2",
-    "better-auth": "^1.6.23",
+    "better-auth": "^1.7.2",
     "drizzle-orm": "^0.45.2",
     "eve": "^0.47.6",
     "input-otp": "^1.4.2",
