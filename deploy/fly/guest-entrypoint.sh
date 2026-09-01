@@ -40,8 +40,8 @@ if [[ -z "${COMPUTER_SETUP_CODE:-}" ]]; then
 fi
 
 echo "computer guest: desk-up, then Eve per roster bot, then hub on ${COMPUTER_BIND}:${COMPUTER_PORT}"
-# HOME is already exported. Do not re-list secrets as `env KEY=value` —
-# that puts AI_GATEWAY_API_KEY, the setup code, and the Eve secret in `ps`.
+# HOME is already exported. Do not re-list secrets on the runuser command
+# line — that puts the gateway key, setup code, and Eve secret in `ps`.
 runuser -u box --preserve-environment -- /usr/local/bin/desk-up
 
 # Tokens and the hub→Eve secret live on the volume. `eve build` already ran
