@@ -33,6 +33,13 @@ export interface Desk {
   shell(argv: string[], cwd: string, timeoutSec: number): Promise<ShellResult>;
   readFile(path: string): Promise<string>;
   writeFile(path: string, content: string): Promise<number>;
+  /**
+   * Append, not read-modify-write. The per-Bot transcript is append-only and
+   * grows one line per bubble; rewriting it whole every time would both cost
+   * a full re-send through `docker exec` and put every earlier line at risk
+   * of a truncated write.
+   */
+  appendFile(path: string, content: string): Promise<number>;
   focusHint(): Promise<FocusHint>;
 }
 

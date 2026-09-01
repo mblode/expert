@@ -14,4 +14,5 @@ xcuserdata/
 data/
 
 # built web assets
-apps/web/dist/
+apps/web/.next/
+apps/web/out/

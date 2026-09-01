@@ -11,6 +11,7 @@ import { ComputerError, SPEC_ID, SPEC_VERSION, TOOLS, WORKSPACE, DISPLAY } from 
 import type { ComputerService } from "./computer.ts";
 import type { FileService } from "./files.ts";
 import type { SeatService } from "./seat.ts";
+import type { BotState } from "./state.ts";
 import type { Occurrence, VoiceService } from "./voice.ts";
 import { parseSendBody } from "./voice.ts";
 import { parseActions } from "./computer.ts";
@@ -27,6 +28,8 @@ export type ChatDeps = {
   files: FileService;
   seat: SeatService;
   voice: VoiceService;
+  /** The Bot's directory on the box. Its profile and memory open the prompt. */
+  state?: BotState;
   apiKey?: string;
   baseUrl?: string;
   model?: string;
@@ -110,8 +113,11 @@ async function* runLlmLoop(
   let nudged = false;
   const base = (deps.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "");
   const model = deps.model ?? "gpt-4.1";
+  // Who this Bot is and what it was told to remember, read off the box. A desk
+  // that will not answer costs the agent its memory, not its turn.
+  const preamble = (await deps.state?.prompt()) ?? "";
   const messages: Record<string, unknown>[] = [
-    { role: "system", content: SYSTEM },
+    { role: "system", content: preamble ? `${SYSTEM}\n\n${preamble}` : SYSTEM },
     { role: "user", content: userText },
   ];
 

@@ -82,6 +82,8 @@ The bold cells are the ones that bite. A rebuild replaces the image, so packages
 
 Window claims live in `/workspace/.window-assignments.json`, so a rebuild does not cost a Bot its screen — the desk restarts every window it had.
 
+Each Bot's own state is under `/workspace/.bots/<id>/` for the same reason: `profile.json`, `memory/profile.md`, and its thread as `transcript.jsonl`. Grok keeps this in `~/sand-data`, which on this box a rebuild would erase. The Bot's **token is not there** — `data/bots.json` on the host is the only place a bearer lives, and the box only ever sees `sha256(token)`. Bots are not security boundaries, so every Bot can read every other Bot's directory. Deleting a Bot frees its screen and its roster row and leaves the directory alone; `rm -rf` it from the desk to be rid of it.
+
 ## Compute
 
 Provider-agnostic: any Linux machine that stays on and runs Docker — a Hetzner/DO VM, a spare mini PC. Vercel/Cloudflare Workers/Railway can't host a standing desktop. The hub binds `127.0.0.1`; Tailscale Serve publishes HTTPS. Do not bind `0.0.0.0`.

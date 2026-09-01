@@ -83,6 +83,43 @@ with the screenshot arriving as a vision part.
 Still unverified: the iPhone app itself (needs Xcode and a device) and the
 seven-step cellular run.
 
+## Per-Bot state on the box (2026-09-01)
+
+Bots had a host-side roster and nothing of their own on the machine they
+drive. They now get `/workspace/.bots/<id>/`.
+
+- **Not `~/sand-data/agents/<id>/`**, which is where Grok puts it. `$HOME` is
+  not on a volume here, so a rebuild would erase it — the row the README's
+  persistence table calls out. `/workspace` survives, and
+  `.window-assignments.json` already lives there for the same reason.
+- Contents: `profile.json` (Grok's fields, snake_cased like the rest of our
+  on-box JSON), `memory/profile.md` (dated `- (YYYY-MM-DD) [note|episode]`
+  fact lines, ~500 chars, identity = sha1 of the normalised text so a fact
+  written twice is one entry), and `transcript.jsonl`. No `settings.json` and
+  no `automations/`: we have neither feature, and an empty stub is not a
+  contract.
+- **The token stays on the host.** Nothing under the box path contains a
+  bearer — tested. `/workspace` is shared by every Bot, so this directory is
+  organisation, not isolation.
+- The **occurrence log is now durable**. It was process memory, so every hub
+  restart silently wiped the human's thread. `VoiceService` writes each
+  occurrence behind the caller (a bubble does not wait on a `docker exec`) and
+  `ProvisionService` reads it back at boot. `seq` survives, so a cursor the
+  phone held still means what it meant, and a widget that ended a turn is
+  still ended after the restart. A Bot whose transcript could not be read does
+  not persist for that run — numbering a second run from 1 into the same file
+  is the one way to actually corrupt it.
+- **Deleting a Bot keeps its directory.** A roster row is not a human's record
+  of what happened on their computer, and Grok draws the same line. A Bot
+  re-created under a name it had before adopts what it left behind.
+- Memory has one writer and one reader: the agent writes lines with the
+  `write_file` tool it already has (the seeded header is where the format is
+  stated), and the hub's chat loop reads profile + memory into the system
+  prompt. No new RPC, no sixth tool, no proto change.
+- `Desk` gained `appendFile`. The transcript is append-only; rewriting it
+  whole per bubble would re-send the file through `docker exec` every time and
+  put every earlier line behind a truncating write.
+
 ## Run end
 
 Host (this Linux agent, 2026-08-31):

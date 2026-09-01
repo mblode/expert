@@ -253,11 +253,20 @@ export class DockerDesk implements Desk {
   }
 
   async writeFile(path: string, content: string): Promise<number> {
+    return this.put(path, content, ">");
+  }
+
+  async appendFile(path: string, content: string): Promise<number> {
+    return this.put(path, content, ">>");
+  }
+
+  /** Truncate or append; the parent directory is made either way. */
+  private async put(path: string, content: string, redirect: ">" | ">>"): Promise<number> {
     const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "/workspace";
-    const r = await this.exec(["bash", "-lc", `mkdir -p ${shellQuote(dir)} && cat > ${shellQuote(path)}`], {
-      timeoutMs: 15_000,
-      stdin: content,
-    });
+    const r = await this.exec(
+      ["bash", "-lc", `mkdir -p ${shellQuote(dir)} && cat ${redirect} ${shellQuote(path)}`],
+      { timeoutMs: 15_000, stdin: content },
+    );
     if (r.exit !== 0) {
       throw new ComputerError("VALIDATION", r.stderr.toString() || `write failed: ${path}`);
     }

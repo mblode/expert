@@ -11,6 +11,7 @@ import { ComputerService } from "./computer.ts";
 import { FileService } from "./files.ts";
 import { PolicyService } from "./policy.ts";
 import { SeatService } from "./seat.ts";
+import { BotState } from "./state.ts";
 import { VoiceService } from "./voice.ts";
 
 /**
@@ -30,6 +31,8 @@ export type Bot = {
   token: string;
   desk: Desk;
   seat: SeatService;
+  /** This Bot's directory on the box: profile, memory, transcript. Never its token. */
+  state: BotState;
   voice: VoiceService;
   computer: ComputerService;
   files: FileService;
@@ -70,13 +73,17 @@ export class BotRegistry {
     }
     const desk = this.deskFactory(c.display);
     const seat = new SeatService();
+    const state = new BotState(desk, c.id);
     const bot: Bot = {
       id: asBotId(c.id),
       display: c.display,
       token: c.token,
       desk,
       seat,
-      voice: new VoiceService(desk),
+      state,
+      // The Bot's directory is where the occurrence log stops being a
+      // process-lifetime thing; ProvisionService reads it back at boot.
+      voice: new VoiceService(desk, undefined, state),
       computer: new ComputerService(desk, seat, this.policy),
       files: new FileService(desk, seat, this.policy),
       chatBusy: false,

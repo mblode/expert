@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useMemo, useState } from "react";
 
 import { createSeat } from "./lib/seat";
@@ -11,7 +13,19 @@ import { PairView } from "./components/pair-view";
 const POLL_MS = 2000;
 
 export function App(): React.ReactElement {
-  const [stored, setStored] = useState<StoredSeat | undefined>(loadSeat);
+  // `loadSeat` reads localStorage, which does not exist while the page is
+  // being prerendered. Reading it in an effect keeps the prerendered markup
+  // and the first client render identical — otherwise the export ships the
+  // pair screen and a paired browser hydrates into the workspace, which is a
+  // mismatch React resolves by throwing the tree away.
+  const [stored, setStored] = useState<StoredSeat | undefined>(undefined);
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    setStored(loadSeat());
+    setReady(true);
+  }, []);
+
+  if (!ready) return <div className="h-full bg-ink" />;
 
   if (!stored) {
     return (

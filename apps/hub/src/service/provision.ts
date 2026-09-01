@@ -149,6 +149,25 @@ export class ProvisionService {
         console.warn(`window ${bot.display}: reclaiming a stale claim for bot ${bot.id}`);
         await this.windows.startWindow(bot.display, bot.token, bot.id, true);
       }
+      await this.mountState(bot);
+    }
+  }
+
+  /**
+   * Bring up a Bot's directory on the box and read its transcript back, so a
+   * hub restart is not an amnesia event for the human.
+   *
+   * Never fatal. Box state is not required to serve: a hub whose desk is not
+   * answering yet must still pair, stream and hold the roster. A Bot that
+   * failed to restore also does not persist for the rest of the run — see
+   * VoiceService.restore — so a half-read log is never appended to.
+   */
+  private async mountState(bot: Bot): Promise<void> {
+    try {
+      await bot.state.init();
+      bot.voice.restore(await bot.state.loadTranscript());
+    } catch (err) {
+      console.warn(`bot ${bot.id}: box state unavailable (${(err as Error).message})`);
     }
   }
 
@@ -163,9 +182,19 @@ export class ProvisionService {
       throw err;
     }
     this.store.save(this.bots.configs());
+    await this.mountState(bot);
     return bot;
   }
 
+  /**
+   * Free the screen and the roster entry. The Bot's directory on the box is
+   * deliberately left where it is: the transcript and the memory file are a
+   * human's record of what happened on their computer, and `/workspace` is
+   * theirs — deleting a roster row must not silently take those with it. Grok
+   * draws the same line (deleting a Bot does not remove shared-computer
+   * files). Re-creating a Bot under the same name adopts what it left behind;
+   * `rm -rf` from the desk is the way to actually be rid of it.
+   */
   async remove(id: string): Promise<void> {
     const bot = this.bots.remove(id);
     this.store.save(this.bots.configs());

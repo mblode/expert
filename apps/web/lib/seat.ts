@@ -42,29 +42,32 @@ export class SeatError extends Error {
 /**
  * Where to send requests for a given hub.
  *
- * In dev the vite server proxies the hub onto this origin, and same-origin
- * paths are the only thing that works: the hub answers the CORS preflight but
- * never echoes `access-control-allow-origin` on the response, so a
- * cross-origin `fetch` cannot read one. A build has no proxy and goes direct.
+ * Same-origin paths are the only thing that works: the hub answers the CORS
+ * preflight but never echoes `access-control-allow-origin` on the response,
+ * so a cross-origin `fetch` cannot read one. In dev `next dev` rewrites the
+ * hub onto this origin; in an export build the hub serves these files itself,
+ * so it is same-origin already and the target is empty.
  */
+const PROXY_TARGET = process.env.NEXT_PUBLIC_HUB_PROXY_TARGET ?? "";
+
 export function apiBase(hubUrl: string): string {
   const base = hubUrl.trim().replace(/\/+$/u, "");
-  if (__HUB_PROXY_TARGET__ && sameOrigin(base, __HUB_PROXY_TARGET__)) return "";
+  if (PROXY_TARGET && sameOrigin(base, PROXY_TARGET)) return "";
   return base;
 }
 
 /**
- * The hub hands back absolute `vnc_url`s. Re-point them at whatever base we
- * are actually talking to, so in dev the noVNC page — and the websocket it
- * opens back to `location.host` — travel through the same proxy.
+ * The hub hands back absolute `vnc_url`s, and they are used as-is.
+ *
+ * Do not route these through the dev proxy. noVNC opens an RFB websocket back
+ * to whatever origin served the page, and a Next rewrite cannot carry a
+ * WebSocket upgrade — proxied, the page would load and the socket would fail.
+ * Pointing the iframe straight at the hub keeps page and socket on one origin.
+ * It is a cross-origin iframe, which is fine: nothing here reads its document,
+ * and the token is already in the URL the hub minted.
  */
-export function screenSrc(hubUrl: string, vncUrl: string): string {
-  try {
-    const url = new URL(vncUrl, window.location.origin);
-    return `${apiBase(hubUrl)}${url.pathname}${url.search}`;
-  } catch {
-    return vncUrl;
-  }
+export function screenSrc(_hubUrl: string, vncUrl: string): string {
+  return vncUrl;
 }
 
 function sameOrigin(a: string, b: string): boolean {

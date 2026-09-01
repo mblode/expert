@@ -23,8 +23,8 @@ hub  (TypeScript, loopback + Tailscale Serve)
         │
         ▼
 desk (Docker)
-  Ubuntu, Openbox, Chromium, TigerVNC :5900, 1280×800
-  Volume: /workspace + browser profile
+  Debian, Openbox, Chromium, TigerVNC :5900, 1280×800
+  Volume: /workspace + ~/.config (all Chromium profiles, not just window 1)
   XTEST via xdotool for pointer (not XSendEvent)
 ```
 
