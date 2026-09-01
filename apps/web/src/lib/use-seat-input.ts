@@ -15,6 +15,8 @@ const TYPE_IDLE_MS = 300;
 
 export type SeatInput = {
   error: string | null;
+  /** Attach to the drawn cursor; it is moved directly, not through React. */
+  cursorRef: React.RefObject<HTMLDivElement | null>;
   handlers: {
     onPointerMove: (event: React.PointerEvent) => void;
     onPointerDown: (event: React.PointerEvent) => void;
@@ -33,9 +35,16 @@ export type SeatInput = {
 /**
  * Turns browser input over the (view-only) desktop stream into Seat RPCs.
  *
- * The pointer is relative, not absolute: the API moves the box's cursor by a
- * delta, so this reads like a trackpad rather than a remote desktop. Deltas are
- * CSS pixels scaled to the box's own resolution.
+ * The cursor you see is drawn here, not streamed. The real one is a round trip
+ * away — RPC, docker exec, X, then a VNC frame — so a cursor made of pixels
+ * always trails the mouse by a visible lag and the pane feels broken. This
+ * paints a local cursor the instant the mouse moves and lets the box catch up.
+ *
+ * Because the drawn cursor is the one being aimed, the box is steered to an
+ * absolute position rather than by accumulated deltas: each tick asks for the
+ * difference between where you are pointing and where the box last said it
+ * was. A dropped or clamped move then corrects itself on the next tick, where
+ * summed deltas would have drifted apart for good.
  */
 export function useSeatInput(
   seat: Seat,
@@ -45,7 +54,12 @@ export function useSeatInput(
 ): SeatInput {
   const [error, setError] = useState<string | null>(null);
 
-  const pending = useRef({ dx: 0, dy: 0 });
+  /** Where the human is pointing, in the box's pixels. The drawn cursor. */
+  const aim = useRef<{ x: number; y: number } | null>(null);
+  /** Where the box last told us its cursor is. */
+  const boxCursor = useRef<{ x: number; y: number } | null>(null);
+  /** The drawn cursor element, moved directly so a mousemove costs no render. */
+  const cursorRef = useRef<HTMLDivElement | null>(null);
   const inFlight = useRef(false);
   const dragging = useRef(false);
   const dragged = useRef(false);
@@ -83,13 +97,23 @@ export function useSeatInput(
     if (!active) return;
     const id = window.setInterval(() => {
       if (inFlight.current) return;
-      const { dx, dy } = pending.current;
+      const target = aim.current;
       const grab = dragging.current;
+      // Nothing to say when the box is already under the drawn cursor and the
+      // button has not changed.
+      const at = boxCursor.current;
+      const dx = target && at ? Math.round(target.x - at.x) : 0;
+      const dy = target && at ? Math.round(target.y - at.y) : 0;
       if (dx === 0 && dy === 0 && grab === held.current) return;
-      pending.current = { dx: 0, dy: 0 };
       held.current = grab;
       inFlight.current = true;
-      void run((current, screen) => current.move(dx, dy, grab, screen)).finally(() => {
+      void run(async (current, screen) => {
+        const result = await current.move(dx, dy, grab, screen);
+        // The box is the authority on where its cursor ended up; believing it
+        // is what keeps the aim from drifting away over a long drag.
+        if (result?.cursor) boxCursor.current = result.cursor;
+        return result;
+      }).finally(() => {
         inFlight.current = false;
       });
     }, POINTER_TICK_MS);
@@ -109,12 +133,26 @@ export function useSeatInput(
 
   return {
     error,
+    cursorRef,
     handlers: {
       onPointerMove: (event) => {
         if (!activeRef.current) return;
-        const factor = scale(event);
-        pending.current.dx += event.movementX * factor.x;
-        pending.current.dy += event.movementY * factor.y;
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        const { desk: size } = targetRef.current;
+        const x = clamp(((event.clientX - rect.left) / rect.width) * size.width, size.width);
+        const y = clamp(((event.clientY - rect.top) / rect.height) * size.height, size.height);
+        aim.current = { x, y };
+        // Paint immediately, outside React: a mousemove must not cost a render.
+        const el = cursorRef.current;
+        if (el) {
+          el.style.left = `${(x / size.width) * 100}%`;
+          el.style.top = `${(y / size.height) * 100}%`;
+          el.style.opacity = "1";
+        }
+        // The box has not reported a position yet, so assume it is where we
+        // are pointing; the first move's response replaces this.
+        boxCursor.current ??= { x, y };
         if (dragging.current && (event.movementX !== 0 || event.movementY !== 0)) {
           dragged.current = true;
         }
@@ -130,7 +168,6 @@ export function useSeatInput(
         dragging.current = false;
       },
       onPointerLeave: () => {
-        pending.current = { dx: 0, dy: 0 };
         dragging.current = false;
       },
       onClick: () => {
@@ -191,6 +228,10 @@ export function useSeatInput(
       onBlur: flushTyped,
     },
   };
+}
+
+function clamp(value: number, size: number): number {
+  return Math.max(0, Math.min(size - 1, value));
 }
 
 function clampNotches(pixels: number): number {

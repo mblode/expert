@@ -8,6 +8,9 @@
 
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
+/** Where the box says its cursor actually is, after a move. */
+export type PointerResponse = { cursor: { x: number; y: number }; seat: SeatState };
+
 export type Screen = {
   bot_id: string;
   display: number;
@@ -114,7 +117,7 @@ export function createSeat(hubUrl: string, token: string) {
       call<BoxStatus>("SetPresence", { present, display }),
     /** `grab` holds the left button down across moves — that is how a drag works. */
     move: (dx: number, dy: number, grab: boolean, display?: number) =>
-      call<unknown>("Pointer", { type: "move", dx, dy, grab, display }),
+      call<PointerResponse>("Pointer", { type: "move", dx, dy, grab, display }),
     click: (button: Button, display?: number) =>
       call<unknown>("Pointer", { type: "click", button, display }),
     scroll: (dx: number, dy: number, display?: number) =>

@@ -207,6 +207,15 @@ final class SeatController: ObservableObject {
 
     func move(dx: Int, dy: Int, grab: Bool = false) async {
         guard let client else { return }
+        // Move the drawn cursor now and reconcile with the box afterwards.
+        // Waiting for the round trip to paint it is what makes a remote
+        // desktop feel broken: your finger is here and the pointer is behind.
+        if let at = cursor {
+            cursor = ComputerV1.Point(
+                x: min(max(at.x + dx, 0), ComputerV1.display.width - 1),
+                y: min(max(at.y + dy, 0), ComputerV1.display.height - 1)
+            )
+        }
         do {
             let r = try await client.pointer(.move(dx: dx, dy: dy, grab: grab, display: display))
             cursor = r.cursor

@@ -184,6 +184,27 @@ export function DesktopPane({
                 tabIndex={controllable ? 0 : -1}
                 {...input.handlers}
               />
+              {/* The cursor you steer. The box's own cursor is in the video a
+                  round trip behind, so this one is drawn here and moved on
+                  mousemove; the box follows. */}
+              {controllable && (
+                <div
+                  aria-hidden
+                  className="pointer-events-none absolute z-10 opacity-0 transition-opacity"
+                  ref={input.cursorRef}
+                  style={{ left: 0, top: 0 }}
+                >
+                  <svg
+                    className="-translate-x-px -translate-y-px drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)]"
+                    fill="none"
+                    height="20"
+                    viewBox="0 0 12 19"
+                    width="13"
+                  >
+                    <path d="M1 1.5v14l3.2-3.4h5.3L1 1.5z" fill="white" stroke="black" strokeWidth="1.2" />
+                  </svg>
+                </div>
+              )}
             </>
           ) : (
             <p className="absolute inset-0 grid place-items-center text-sm text-mute">Connecting…</p>
@@ -193,7 +214,7 @@ export function DesktopPane({
 
       <p className="px-3 pb-2 text-xs text-mute">
         {controllable
-          ? "Click the screen, then move to steer the cursor (relative, like a trackpad). Typing and paste go through; Backspace and the arrow keys do not."
+          ? "Point where you want the cursor and the box follows. Typing and paste go through; Backspace and the arrow keys do not."
           : "View only while Eve is working. Take the seat to drive it yourself, or wait for it to ask."}
       </p>
 
