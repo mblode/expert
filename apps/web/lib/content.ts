@@ -6,7 +6,7 @@ export const faqs = [
   },
   {
     answer:
-      "Paste `npx skills add https://hello.expert` in Claude, Codex, OpenCode, or Cursor. The skill tells the agent you have a cloud computer at hello.expert. After you are signed in, the agent uses the hub Seat RPCs. It must not invent a setup code and must not book Cal.com calls.",
+      "Paste `npx skills add https://hello.expert` in Claude, Codex, OpenCode, or Cursor. The skill tells the agent you have a cloud computer at hello.expert. After you are signed in, the agent uses the hub Seat RPCs. It must not invent a setup code and must not guess a pairing token.",
     question: "How does the agent skill work?",
   },
   {

@@ -1,6 +1,6 @@
 ---
 name: expert
-description: Drive the user's Expert cloud computer at hello.expert via hub Seat RPCs after they are signed in. Use when the user mentions Expert, hello.expert, their cloud computer, the desk, or taking the seat. Never invent a setup code. Never book Cal.com calls or marketplace experts.
+description: Drive the user's Expert cloud computer at hello.expert via hub Seat RPCs after they are signed in. Use when the user mentions Expert, hello.expert, their cloud computer, the desk, or taking the seat. Never invent a setup code. Never guess a pairing token or invent a hub seat.
 ---
 
 # Expert
@@ -19,7 +19,7 @@ Humans install by signing in there. That is install. Agents install this skill.
 ## Rules
 
 1. **Never invent a setup code.** Do not ask the user for `COMPUTER_SETUP_CODE`. Do not guess one. Do not call `Seat.Pair` as the human product path.
-2. **Never book Cal.com calls.** This is not a booking marketplace. Do not open `/experts`, Stripe Connect, Recall, or "become an expert".
+2. **Never guess a pairing token.** Do not invent a seat token. Do not skip sign-in at hello.expert, or call Seat.Pair as the human path.
 3. **The skill cannot drive the box without a signed-in session.** If the user is not signed in at hello.expert, tell them to open that URL and sign in. Then retry. Do not pretend you have a seat token.
 4. Prefer the hub the session already knows (`NEXT_PUBLIC_HUB_URL` / `https://mblode-computer.fly.dev`).
 
