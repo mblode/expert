@@ -143,6 +143,70 @@ describe("Connect HTTP", () => {
     expect((await fetch(`${h.url}/vnc/index.html`)).status).toBe(401);
   });
 
+  it("JSON RPC responses echo CORS so a cross-origin panel can read them", async () => {
+    const h = await startHub();
+    opened.push(h);
+
+    const preflight = await fetch(`${h.url}/computer.v1.Seat/Pair`, { method: "OPTIONS" });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get("access-control-allow-origin")).toBe("*");
+    expect(preflight.headers.get("access-control-allow-headers")).toContain("authorization");
+    expect(preflight.headers.get("access-control-allow-headers")).toContain("content-type");
+    expect(preflight.headers.get("access-control-allow-headers")).toContain("connect-protocol-version");
+    expect(preflight.headers.get("access-control-allow-methods")).toMatch(/GET/);
+    expect(preflight.headers.get("access-control-allow-methods")).toMatch(/POST/);
+    expect(preflight.headers.get("access-control-allow-methods")).toMatch(/OPTIONS/);
+
+    const pair = await fetch(`${h.url}/computer.v1.Seat/Pair`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "connect-protocol-version": "1" },
+      body: JSON.stringify({ code: h.setup }),
+    });
+    expect(pair.ok).toBe(true);
+    expect(pair.headers.get("access-control-allow-origin")).toBe("*");
+    expect(pair.headers.get("access-control-allow-headers")).toContain("authorization");
+    expect(pair.headers.get("access-control-allow-methods")).toMatch(/POST/);
+    const paired = (await pair.json()) as { token: string };
+
+    const status = await fetch(`${h.url}/computer.v1.Seat/Status`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${paired.token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+    expect(status.ok).toBe(true);
+    expect(status.headers.get("access-control-allow-origin")).toBe("*");
+
+    const denied = await fetch(`${h.url}/computer.v1.Agent/Spec`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(denied.status).toBe(401);
+    expect(denied.headers.get("access-control-allow-origin")).toBe("*");
+  });
+
+  it("Status reuses the same pixel token across close polls", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    const first = (await rpc(h.url, "/computer.v1.Seat/Status", {}, token)) as {
+      vnc_url: string;
+      screens: { display: number; vnc_url: string }[];
+    };
+    const second = (await rpc(h.url, "/computer.v1.Seat/Status", {}, token)) as {
+      vnc_url: string;
+    };
+    expect(first.vnc_url).toBe(second.vnc_url);
+    const pix = new URL(first.vnc_url).searchParams.get("token");
+    expect(pix).toBeTruthy();
+    expect(pix).not.toBe(token);
+    const primary = first.screens.find((s) => s.display === 1);
+    expect(primary?.vnc_url).toBe(first.vnc_url);
+  });
+
   it("pixels and websockify require a seat token", async () => {
     const h = await startHub();
     opened.push(h);

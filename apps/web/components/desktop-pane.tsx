@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { BoxStatus, Screen, Seat, SeatState } from "../lib/seat";
-import { screenSrc } from "../lib/seat";
+import { pixelUrlFresh, screenSrc } from "../lib/seat";
 import { useSeatInput } from "../lib/use-seat-input";
 import { ClipboardPanel } from "./clipboard-panel";
 
@@ -52,6 +52,8 @@ export function DesktopPane({
   );
 
   const input = useSeatInput(seat, display, controllable, desk);
+  const screenId = screen ? `${screen.bot_id}:${screen.display}` : "";
+  const vncSrc = useStableVncSrc(screen?.vnc_url, screenId);
 
   const presence = async (present: boolean) => {
     setBusy(true);
@@ -184,8 +186,8 @@ export function DesktopPane({
             <>
               <iframe
                 className="absolute inset-0 size-full rounded-lg border border-edge bg-black"
-                key={screen.vnc_url}
-                src={screenSrc(seat.hubUrl, screen.vnc_url)}
+                key={screenId}
+                src={screenSrc(seat.hubUrl, vncSrc ?? screen.vnc_url)}
                 title={`${screen.bot_id} screen`}
               />
               <div
@@ -239,6 +241,22 @@ export function DesktopPane({
       {showClipboard && <ClipboardPanel display={display} seat={seat} />}
     </section>
   );
+}
+
+/**
+ * Hold the current pixel URL until the grant is close to expiry or the
+ * screen identity changes. Rewriting `src` (or keying on `vnc_url`) on
+ * every Status poll tears down noVNC.
+ */
+function useStableVncSrc(incoming: string | undefined, identity: string): string | undefined {
+  const held = useRef<{ identity: string; url: string } | undefined>(undefined);
+  if (!incoming) {
+    return held.current?.identity === identity ? held.current.url : undefined;
+  }
+  if (!held.current || held.current.identity !== identity || !pixelUrlFresh(held.current.url)) {
+    held.current = { identity, url: incoming };
+  }
+  return held.current.url;
 }
 
 /**

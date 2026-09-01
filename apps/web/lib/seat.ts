@@ -40,20 +40,52 @@ export class SeatError extends Error {
 }
 
 /**
- * Where to send requests for a given hub.
+ * Where to send Seat RPCs.
  *
- * Same-origin paths are the only thing that works: the hub answers the CORS
- * preflight but never echoes `access-control-allow-origin` on the response,
- * so a cross-origin `fetch` cannot read one. In dev `next dev` rewrites the
- * hub onto this origin; in an export build the hub serves these files itself,
- * so it is same-origin already and the target is empty.
+ * `next dev` rewrites the hub onto this origin. A hub-served export is
+ * already same-origin. A Vercel-hosted export talks cross-origin to
+ * `NEXT_PUBLIC_HUB_URL` (the Fly computer); the hub echoes CORS on JSON.
  */
 const PROXY_TARGET = process.env.NEXT_PUBLIC_HUB_PROXY_TARGET ?? "";
+const PUBLIC_HUB = (process.env.NEXT_PUBLIC_HUB_URL ?? "").replace(/\/+$/u, "");
 
 export function apiBase(hubUrl: string): string {
-  const base = hubUrl.trim().replace(/\/+$/u, "");
-  if (PROXY_TARGET && sameOrigin(base, PROXY_TARGET)) return "";
+  const base = (hubUrl || PUBLIC_HUB).trim().replace(/\/+$/u, "");
+  if (PROXY_TARGET && base && sameOrigin(base, PROXY_TARGET)) return "";
   return base;
+}
+
+/** Local-dev hub. Hosted pages use the env URL or the page origin. */
+const LOCAL_HUB = "http://127.0.0.1:8787";
+
+/** Remint window — keep the iframe src while more than this remains. */
+export const PIXEL_REFRESH_MS = 60_000;
+
+/**
+ * Pair default: `NEXT_PUBLIC_HUB_URL` (Vercel → Fly), else the page origin
+ * when hosted, else loopback for `next dev` / 127.0.0.1.
+ */
+export function defaultHubUrl(
+  location?: { hostname: string; origin: string },
+  publicHub = PUBLIC_HUB,
+): string {
+  const configured = publicHub.trim().replace(/\/+$/u, "");
+  if (configured) return configured;
+  if (!location) return LOCAL_HUB;
+  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+    return LOCAL_HUB;
+  }
+  return location.origin;
+}
+
+/** True while the stamped pixel grant still has enough time left. */
+export function pixelUrlFresh(vncUrl: string, now = Date.now(), minRemainingMs = PIXEL_REFRESH_MS): boolean {
+  try {
+    const expires = Number(new URL(vncUrl).searchParams.get("expires"));
+    return Number.isFinite(expires) && expires - now > minRemainingMs;
+  } catch {
+    return false;
+  }
 }
 
 /**

@@ -28,7 +28,7 @@ Grok Bot's computer (from [api/RESEARCH.md](api/RESEARCH.md) and public xAI docs
 
 Hetzner always-on via [deploy/cloud-init.yaml](deploy/cloud-init.yaml) is an **alternate** always-hot option, not the default. There is no custom Firecracker orchestrator in this repo.
 
-Auth, Tauri, iOS login, and a hosted web front door are **explicitly later**. Pairing (`Seat.Pair` + setup code) is what boots the hub today.
+Auth, Tauri, and iOS login are **explicitly later**. Pairing (`Seat.Pair` + setup code) is what boots the hub today. The control panel in `apps/web` can be served by the hub or hosted on Vercel as a static export; the desk stays on Fly.
 
 ## Local (Docker)
 
@@ -86,7 +86,17 @@ fly deploy
 
 Volumes live in **syd**. Grow in place with `fly volumes extend <name> --size N` (TRIM/size: start 20 / 2 / 1 GB; Grok disk is 128 GB on workspace). One computer Machine — do not `fly scale count` the guest.
 
-`vnc_url` carries a **short-lived pixel token** (15 min). Pairing still mints a durable seat token for Seat RPCs; that seat token still opens `/vnc` so existing iOS pair sessions keep working.
+`vnc_url` carries a **short-lived pixel token** (15 min). Pairing still mints a durable seat token for Seat RPCs; that seat token still opens `/vnc` so existing iOS pair sessions keep working. `Seat.Status` reuses a still-valid pixel grant so the panel's noVNC iframe is not remounted every poll.
+
+### Control panel on Vercel
+
+[`apps/web`](apps/web) is a static Next export (`output: 'export'`). The hub can serve `apps/web/out` on Fly, or Vercel can publish the same files. **Do not host the desk or hub on Vercel.** Do not proxy `/vnc` or `/websockify` — the iframe loads the absolute `vnc_url` the hub minted.
+
+1. Import this repo (`mblode/expert-computer`).
+2. Set the project **Root Directory** to `apps/web` ([`apps/web/vercel.json`](apps/web/vercel.json) builds with `next build` and publishes `out/`).
+3. Set `NEXT_PUBLIC_HUB_URL=https://mblode-computer.fly.dev` so Pair/Status go to the Fly computer. The hub echoes CORS on JSON RPC (`ACAO *`) so a `*.vercel.app` origin can read the response.
+
+When that env is unset, a hosted page (the Fly-served panel) defaults the hub URL to `window.location.origin`. `localhost` / `127.0.0.1` still default to `http://127.0.0.1:8787`.
 
 ### Wake / sleep
 
@@ -150,7 +160,7 @@ Eve runs **on the box**, beside the hub, over loopback — nothing public. She k
 apps/hub/       ConnectRPC, noVNC static, fallback chat loop, provisioning
 apps/desk/      Debian + Openbox + Chromium + X.Org (Xvfb) + x11vnc, XTEST input
 apps/eve/       Eve agent (eve.dev): the harness — persona, skills, computer tools
-apps/web/       Control panel, served by the hub (`next export`)
+apps/web/       Control panel (`next export`): hub-served or Vercel static; desk stays on Fly
 apps/ios/       Computer.xcodeproj (SwiftUI) — pairing client; product auth later
 packages/proto  buf generate (protoc-gen-es + Swift) from api/computer.proto
 packages/shared branded IDs, error codes
