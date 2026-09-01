@@ -49,11 +49,26 @@ export function saveSeat(seat: StoredSeat): void {
 export function clearSeat(): void {
   write(SEAT_KEY, undefined);
   write(SESSION_KEY, undefined);
+  try {
+    const prefix = `${SESSION_KEY}.`;
+    const keys: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    for (const key of keys) window.localStorage.removeItem(key);
+  } catch {
+    // Same as write(): private browsing or a full quota.
+  }
 }
 
-export function loadSession(): ClientSessionState | undefined {
+function sessionKey(botId?: string): string {
+  return botId ? `${SESSION_KEY}.${botId}` : SESSION_KEY;
+}
+
+export function loadSession(botId?: string): ClientSessionState | undefined {
   return read(
-    SESSION_KEY,
+    sessionKey(botId),
     (v): v is ClientSessionState =>
       typeof v === "object" &&
       v !== null &&
@@ -62,6 +77,6 @@ export function loadSession(): ClientSessionState | undefined {
   );
 }
 
-export function saveSession(session: ClientSessionState | undefined): void {
-  write(SESSION_KEY, session);
+export function saveSession(session: ClientSessionState | undefined, botId?: string): void {
+  write(sessionKey(botId), session);
 }

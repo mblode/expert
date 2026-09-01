@@ -58,12 +58,11 @@ A paired seat is the box owner (`Seat.CreateBot` / `Seat.DeleteBot`).
 
 **Fly Machine in syd = the Anyrun analogue.** Local Docker = Grok's local Docker box. Cursor Anyrun itself is private; we do not call it.
 
-Two process groups in [fly.toml](fly.toml):
+One process group in [fly.toml](fly.toml):
 
 | Process | Role | Size (start) |
 |---|---|---|
-| `edge` | Always-on public HTTPS. Status / `GET /roster` **never start** the guest. | 1 shared CPU / 256 MB |
-| `computer` | The guest: X.Org + x11vnc + hub. Suspends after 20 min idle. | **shared-cpu-4x / 4 GB** |
+| `computer` | The guest: desk + one Eve per roster bot + hub. Eve is a child, not a second Fly process group. | **shared-cpu-4x / 4 GB** |
 
 Grok's measured SKU is **8 vCPU / 16 GB / 128 GB disk**. Scale the computer to that:
 
@@ -78,13 +77,12 @@ Do **not** auto-stop after 30s (that is Sprites, too aggressive for a desktop). 
 # once per account — change `app` in fly.toml; names are global
 fly launch --copy-config --no-deploy
 fly volumes create computer_workspace --size 20 --region syd
-fly volumes create computer_config --size 2 --region syd
-fly volumes create computer_hub --size 1 --region syd
 fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)"
+fly secrets set AI_GATEWAY_API_KEY="…"
 fly deploy
 ```
 
-Volumes live in **syd**. Grow in place with `fly volumes extend <name> --size N` (TRIM/size: start 20 / 2 / 1 GB; Grok disk is 128 GB on workspace). One computer Machine — do not `fly scale count` the guest.
+One volume in **syd**: `computer_workspace` → `/workspace`. Grow in place with `fly volumes extend computer_workspace --size N`. One computer Machine — do not `fly scale count` the guest.
 
 `vnc_url` carries a **short-lived pixel token** (15 min). Pairing still mints a durable seat token for Seat RPCs; that seat token still opens `/vnc` so existing iOS pair sessions keep working. `Seat.Status` reuses a still-valid pixel grant so the panel's noVNC iframe is not remounted every poll.
 
@@ -102,9 +100,9 @@ When that env is unset, a hosted page defaults the hub URL to `window.location.o
 
 | | What happens | Wakes the guest? |
 |---|---|---|
-| `Seat.Status`, `GET /roster`, `/healthz` | Edge answers from Fly Machines state | **no** |
-| `/vnc`, `/websockify`, Pair, Agent, other Seat RPCs | Edge starts the computer, then proxies | yes |
-| 20 min idle | Edge `suspend`s the computer | — |
+| `Seat.Status`, `GET /roster`, `/healthz` | Guest hub answers (machine must be up) | **no extra start** |
+| `/vnc`, `/websockify`, Pair, Agent, other Seat RPCs | Guest hub | yes if the Machine was stopped |
+| 20 min idle | Guest idle-suspend | — |
 | `npm run machine -- sleep` | stop (volumes persist) | — |
 | `npm run machine -- wake` / `suspend` | explicit host control | — |
 
@@ -116,7 +114,7 @@ npm run machine -- wake
 npm run machine -- suspend
 ```
 
-A computer update (`fly deploy`) replaces the guest image the same way a desk rebuild does: **apt packages do not survive**. `/workspace` and `~/.config` stay on volumes. `/data` (roster, seats, pairing code) stays too.
+A computer update (`fly deploy`) replaces the guest image the same way a desk rebuild does: **apt packages do not survive**. `/workspace` stays on the `computer_workspace` volume (desk files, `.computer` roster/tokens, Eve secret). `~/.config` is on the image unless you bind it yourself.
 
 ## What survives
 
@@ -126,7 +124,7 @@ Two guest paths persist, and that is Grok Bot's own boundary — matched deliber
 |---|:--:|:--:|:--:|:--:|:--:|
 | `/workspace` — files, the Bot's own state | yes | yes | no | yes | yes |
 | `~/.config` — every Chromium profile, app config | yes | yes | no | yes | yes |
-| hub roster (`data/` locally, `/data` on Fly) | yes | yes | no | yes | yes |
+| hub roster (`data/` locally, `/workspace/.computer` on Fly) | yes | yes | no | yes | yes |
 | `~/.local/state` — WhatsApp/Signal linked devices | yes | **no** | no | no | yes |
 | `~/.ssh`, `~/.gitconfig`, anything else in `~` | yes | **no** | no | no | yes |
 | `apt install`ed packages | yes | **no** | no | no | yes |
@@ -136,7 +134,7 @@ The bold cells are the ones that bite. A rebuild replaces the image, so packages
 
 Window claims live in `/workspace/.window-assignments.json`, so a rebuild does not cost a Bot its screen — the desk restarts every window it had.
 
-Each Bot's own state is under `/workspace/.bots/<id>/` for the same reason: `profile.json`, `memory/profile.md`, and its thread as `transcript.jsonl`. Grok keeps this in `~/sand-data`, which on this box a rebuild would erase. The Bot's **token is not there** — the roster on the host (`data/bots.json`) or on the Fly `/data` volume is the only place a bearer lives, and the box only ever sees `sha256(token)`. Bots are not security boundaries, so every Bot can read every other Bot's directory. Deleting a Bot frees its screen and its roster row and leaves the directory alone; `rm -rf` it from the desk to be rid of it.
+Each Bot's own state is under `/workspace/.bots/<id>/` for the same reason: `profile.json`, `memory/profile.md`, and its thread as `transcript.jsonl`. Grok keeps this in `~/sand-data`, which on this box a rebuild would erase. The Bot's **token is not there** — the roster on the host (`data/bots.json`) or on Fly at `/workspace/.computer/bots.json` is the only place a bearer lives, and the box only ever sees `sha256(token)`. Bots are not security boundaries, so every Bot can read every other Bot's directory. Deleting a Bot frees its screen and its roster row and leaves the directory alone; `rm -rf` it from the desk to be rid of it.
 
 ## Always-hot alternate (Hetzner)
 
@@ -144,22 +142,29 @@ Paste [deploy/cloud-init.yaml](deploy/cloud-init.yaml) into a new Ubuntu 24.04 V
 
 ## Eve as the harness
 
-[Eve](https://eve.dev) (Vercel's agent framework) is the brain; this box is the body. `apps/eve/` is an Eve agent whose four tools are the computer — `computer` even hands the model screenshots as vision input — plus a persona (`agent/instructions.md`) and a computer-use playbook (`agent/skills/computer-use.md`).
+[Eve](https://eve.dev) runs **inside the computer** — the same Fly Machine as the hub, the desk (Xvfb / x11vnc / Chromium), and the bot screens. It is not a Vercel deployment. Humans sign in at [hello.expert](https://hello.expert); the web client talks to Eve only through the hub's `/eve/v1` proxy (seat token). Same machine, loopback.
+
+One Eve **process** per roster bot (`COMPUTER_BOT_TOKEN` is that bot's identity and screen). Subagents under a single Eve would share one token — that is not "each bot drives its own Eve".
+
+Each bot is an eve.dev project at `apps/eve/bots/<id>/` (`agent/instructions.md`, `agent/skills/`, `agent/schedules/`). Shared tools live in `apps/eve/lib/`. Port is `2000 + (display - 1)` (`main` on display 1 → `:2000`).
 
 ```sh
-npm run bot -- new eve      # prints the two lines for apps/eve/.env
-cd apps/eve && cp .env.example .env   # paste token, set AI_GATEWAY_API_KEY
-npm run eve                 # (from the root) talk to Eve in the dev REPL
+npm run bot -- new night              # mint a token, next free screen
+cp -R apps/eve/bots/main apps/eve/bots/night
+# edit night's instructions / skills / schedules
+# restart the guest — supervisor starts Eve only if the id is on the roster
 ```
 
-Eve runs **on the box**, beside the hub, over loopback — nothing public. She keeps her state in `/workspace`, drives her own screen, and when she hits a 2FA prompt she calls `request_takeover`: the client banners, you take the seat, tap I'm done, she continues. Requires Node ≥24 for the Eve runtime (the hub itself runs on ≥20). Deploying Eve to Vercel instead works but needs a path back to the box — deliberately not the default.
+Adding a bot = new Eve dir (instructions / skills / schedules) + token + port. The guest entrypoint ensures tokens on `/workspace/.computer`, then `eve start --host 127.0.0.1 --port …` with `AI_GATEWAY_API_KEY` and that bot's token. `eve build` runs in the Docker image so start is fast.
+
+The hub maps seat → bot → that bot's Eve URL and injects `x-computer-eve-secret`. Production is `eve start`, not `eve dev` / `EVE_DEV=1`.
 
 ## Shape
 
 ```
 apps/hub/       ConnectRPC, noVNC static, fallback chat loop, provisioning
 apps/desk/      Debian + Openbox + Chromium + X.Org (Xvfb) + x11vnc, XTEST input
-apps/eve/       Eve agent (eve.dev): the harness — persona, skills, computer tools
+apps/eve/       Eve (eve.dev) on the guest: shared lib + one project per bot under bots/
 apps/web/       hello.expert (Vercel): marketing + Better Auth + auto-Pair to Fly
 apps/ios/       Computer.xcodeproj (SwiftUI) — pairing client; iOS keeps setup-code pairing
 packages/proto  buf generate (protoc-gen-es + Swift) from api/computer.proto
@@ -179,9 +184,9 @@ Two services. Four model tools. A seat per screen.
 
 Clipboard, `vncUrl`, and pointer are **not** model tools. VNC is view-only — x11vnc is `-viewonly` and localhost-only, so a viewer cannot inject input; input arrives only as `Seat.Pointer`/`Seat.Type`, which is what lets the hub enforce the seat.
 
-**Many Bots, one box.** Each Bot owns a screen (window index = X display, `:1`–`:8`, x11vnc RFB `5900+N`, noVNC `6080+(N-1)`); its token is its identity — **agent token → Bot → screen**, the model never names a display. Bots are provisioned at runtime; the roster lives in `data/bots.json` locally (gitignored — it holds tokens) or `/data` on Fly. Bots are **not** security boundaries: one `box` user, shared `/workspace`.
+**Many Bots, one box.** Each Bot owns a screen (window index = X display, `:1`–`:8`, x11vnc RFB `5900+N`, noVNC `6080+(N-1)`); its token is its identity — **agent token → Bot → screen**, the model never names a display. Bots are provisioned at runtime; the roster lives in `data/bots.json` locally (gitignored — it holds tokens) or `/workspace/.computer/bots.json` on Fly. Bots are **not** security boundaries: one `box` user, shared `/workspace`.
 
-Locally the hub binds `127.0.0.1`. On Fly the **edge** is public; the guest hub listens on the 6PN. Do not bind `0.0.0.0` on a machine that is not a Fly guest.
+Locally the hub binds `127.0.0.1`. On Fly the guest hub is the public `http_service` (one `computer` process). Do not bind `0.0.0.0` on a machine that is not a Fly guest.
 
 Agent LLM is BYO (`OPENAI_API_KEY`, optional `OPENAI_BASE_URL`); without it the hub still pairs, streams the desktop, and serves the four tools.
 

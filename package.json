@@ -6,7 +6,8 @@
     "apps/hub",
     "packages/shared",
     "packages/proto",
-    "apps/*"
+    "apps/*",
+    "apps/eve/bots/*"
   ],
   "scripts": {
     "up": "node scripts/computer.mjs up",
@@ -19,7 +20,7 @@
     "typecheck": "npm run typecheck --workspace=packages/shared && npm run typecheck --workspace=packages/proto && npm run typecheck --workspace=apps/hub && npm run typecheck --workspace=@computer/web",
     "test": "npm test --workspace=apps/hub",
     "hub": "npm run start --workspace=apps/hub",
-    "eve": "npm --prefix apps/eve run dev",
+    "eve": "npm run dev --workspace=@computer/eve-main",
     "web": "npm --prefix apps/web run dev"
   },
   "devDependencies": {

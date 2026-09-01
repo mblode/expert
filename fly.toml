@@ -1,28 +1,24 @@
-# Cloud computer — Fly Machine in syd is the public Anyrun analogue.
-# Cursor Anyrun is Firecracker on EC2 (private). We do not use Anyrun.
-# Local/dev is docker compose — the same guest image.
-#
-# Two process groups:
-#   edge     — always-on, public HTTPS. Status/roster never wake the guest.
-#   computer — the Grok-like guest (X.Org + x11vnc + hub). Suspends when idle.
+# Cloud computer — one Fly Machine in syd. Eve, desk, and hub share it.
+# Eve is a child of this guest (loopback), not a Vercel app and not a
+# second Fly process group.
 #
 # App name is global — change `app` (or let `fly launch --copy-config` set it).
 # One computer Machine. Volumes do not replicate; do not scale the guest out.
 
-app = "computer"
+app = "mblode-computer"
 primary_region = "syd"
 
 [build]
   dockerfile = "deploy/fly/Dockerfile"
 
 [processes]
-  edge = "/usr/local/bin/edge-entrypoint.sh"
   computer = "/usr/local/bin/guest-entrypoint.sh"
 
 [env]
   COMPUTER_CLOUD = "fly"
   COMPUTER_BIND = "0.0.0.0"
   COMPUTER_PORT = "8080"
+  COMPUTER_URL = "http://127.0.0.1:8080"
   HOME = "/home/box"
   # 20 minutes. Not Sprites' 30s — a desktop cannot hibernate that fast.
   COMPUTER_IDLE_SUSPEND_SEC = "1200"
@@ -30,12 +26,13 @@ primary_region = "syd"
   COMPUTER_NOVNC_BASE = "6080"
   COMPUTER_VNC_TOKEN_DIR = "/tmp/computer-vnc"
   COMPUTER_DESK = "local"
-  COMPUTER_DATA = "/data/bots.json"
+  COMPUTER_DATA = "/workspace/.computer/bots.json"
   COMPUTER_VNC_HOST = "127.0.0.1"
   COMPUTER_VNC_PORT = "5900"
+  COMPUTER_EVE_BOTS = "/opt/computer/apps/eve/bots"
 
 [http_service]
-  processes = ["edge"]
+  processes = ["computer"]
   internal_port = 8080
   force_https = true
   auto_stop_machines = "off"
@@ -48,46 +45,26 @@ primary_region = "syd"
     hard_limit = 40
 
   [[http_service.checks]]
-    grace_period = "20s"
+    grace_period = "40s"
     interval = "30s"
     method = "GET"
     path = "/healthz"
     timeout = "5s"
 
-# Persistence: /workspace + ~/.config match Grok. /data is the hub roster.
-# TRIM: `fly volumes extend <name> --size N` grows in place. Start sizes below.
-# Grok measured SKU disk is 128 GB — `fly volumes extend computer_workspace --size 128`.
+# One volume: /workspace (desk files, .computer roster/tokens, Eve secret).
 [[mounts]]
   source = "computer_workspace"
   destination = "/workspace"
   processes = ["computer"]
 
-[[mounts]]
-  source = "computer_config"
-  destination = "/home/box/.config"
-  processes = ["computer"]
-
-[[mounts]]
-  source = "computer_hub"
-  destination = "/data"
-  processes = ["computer"]
-
 # Guest: start at 4 shared vCPU / 4 GB. Grok measured 8 vCPU / 16 GB / 128 GB.
-# Scale the computer process with:
 #   fly scale vm shared-cpu-8x --memory 16384 --process-group computer
 #   fly volumes extend computer_workspace --size 128
-# Suspend above 2 GB may fall back to stop — still not a 30s auto-stop.
 [[vm]]
   processes = ["computer"]
   cpu_kind = "shared"
   cpus = 4
   memory = "4gb"
-
-[[vm]]
-  processes = ["edge"]
-  cpu_kind = "shared"
-  cpus = 1
-  memory = "256mb"
 
 [deploy]
   strategy = "immediate"

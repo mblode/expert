@@ -1,6 +1,6 @@
 import { dirname, join, resolve } from "node:path";
 import { createHub } from "./app.ts";
-import { DEFAULT_EVE_URL } from "./handler/eve-proxy.ts";
+import { ensureEveSecret } from "./host/ensure-roster.ts";
 import {
   createDesk,
   DockerWindowManager,
@@ -26,6 +26,8 @@ const deskMode = process.env.COMPUTER_DESK ?? "fake";
 // Paired seats and policy live beside the roster, wherever the operator put it.
 const rosterPath = resolve(process.env.COMPUTER_DATA ?? "data/bots.json");
 const dataDir = dirname(rosterPath);
+const eveSecret = ensureEveSecret(join(dataDir, "eve-secret"), process.env.COMPUTER_EVE_SECRET);
+process.env.COMPUTER_EVE_SECRET = eveSecret;
 
 const windows =
   deskMode === "docker"
@@ -52,7 +54,7 @@ const hub = createHub({
   apiKey: process.env.OPENAI_API_KEY,
   llmBaseUrl: process.env.OPENAI_BASE_URL,
   llmModel: process.env.OPENAI_MODEL,
-  eveUrl: process.env.COMPUTER_EVE_URL ?? DEFAULT_EVE_URL,
+  eveSecret,
 });
 
 await hub.start();

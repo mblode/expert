@@ -1,29 +1,22 @@
 {
   "name": "@computer/eve",
   "version": "0.0.0",
+  "private": true,
   "type": "module",
-  "imports": {
-    "#*": "./agent/*",
-    "#evals/*": "./evals/*"
+  "description": "Shared Eve tools, hub RPC, and loopback auth. Per-bot agents live in bots/<id>.",
+  "exports": {
+    "./lib/auth": "./lib/auth.ts",
+    "./lib/hub": "./lib/hub.ts"
   },
   "scripts": {
-    "build": "eve build",
-    "deploy": "eve deploy",
-    "dev": "eve dev",
-    "eval": "eve eval",
-    "start": "eve start",
-    "typecheck": "tsc"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.53",
-    "@vercel/connect": "1.0.0",
-    "ai": "^7.0.82",
     "eve": "^0.47.6",
     "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/node": "24.x",
     "typescript": "7.0.2"
-  },
-  "private": true
+  }
 }
