@@ -8,6 +8,7 @@ import { sendOtpEmail } from "./email";
 import { appleSocialConfig, googleSocialConfig } from "./social-providers";
 
 const HUB_ORIGIN = "https://mblode-computer.fly.dev";
+const PRODUCT_ORIGINS = ["https://hello.expert", "https://www.hello.expert"];
 const isProduction = process.env.VERCEL_ENV === "production";
 const isBuild = process.env.NEXT_PHASE === "phase-production-build";
 
@@ -24,9 +25,14 @@ const baseURL = isProduction
   : (process.env.BETTER_AUTH_URL ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined));
 
-const staticTrustedOrigins = isProduction
-  ? [canonicalOrigin, HUB_ORIGIN]
-  : [canonicalOrigin, HUB_ORIGIN, "https://*.vercel.app"];
+const staticTrustedOrigins = [
+  ...new Set([
+    canonicalOrigin,
+    HUB_ORIGIN,
+    ...PRODUCT_ORIGINS,
+    ...(isProduction ? [] : ["https://*.vercel.app"]),
+  ]),
+];
 
 // Local dev: reflect any localhost origin so the portless / next port is trusted.
 const trustedOrigins = (request?: Request): string[] => {
@@ -48,7 +54,7 @@ export const auth = betterAuth({
       ipAddressHeaders: ["x-vercel-forwarded-for", "x-forwarded-for"],
     },
   },
-  appName: "Computer",
+  appName: "Expert",
   baseURL,
   database: drizzleAdapter(db, { provider: "sqlite" }),
   experimental: {

@@ -11,6 +11,16 @@
   --color-edge: oklch(0.31 0.014 260);
   --color-mute: oklch(0.68 0.015 260);
   --color-accent: oklch(0.72 0.15 240);
+  --color-background: #000000;
+  --color-foreground: #ffffff;
+  --color-muted: rgba(255, 255, 255, 0.06);
+  --color-muted-foreground: #969696;
+  --color-primary: #ffffff;
+  --color-primary-foreground: #000000;
+  --color-night-sky: #161717;
+  --color-growth-green: #49de80;
+  --font-sans: var(--font-glide), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-emilio-light), var(--font-glide), ui-serif, Georgia, serif;
 }
 
 @keyframes caret-blink {
@@ -37,7 +47,61 @@ body {
 body {
   background: var(--color-ink);
   color: white;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+.marketing {
+  color-scheme: dark;
+  background: #000;
+  color: #fff;
+}
+
+.marketing::after {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  pointer-events: none;
+  content: "";
+  background-image: url("/bkg-noise.jpg");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+  opacity: 0.08;
+}
+
+.hero-glow {
+  background: radial-gradient(
+    ellipse 120% 100% at 50% 40%,
+    rgba(96, 124, 144, 0.15),
+    rgba(121, 142, 158, 0.1) 45%,
+    rgba(176, 161, 157, 0.06) 75%,
+    rgba(176, 161, 157, 0.02) 90%,
+    transparent
+  );
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only:focus,
+.focus\:not-sr-only:focus {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
 }
 
 /* iOS Safari zooms the page in whenever a field smaller than 16px takes focus,

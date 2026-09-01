@@ -124,7 +124,7 @@ function Workspace({
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex items-center gap-3 border-b border-edge px-3 py-2">
-        <h1 className="text-sm font-semibold">Computer</h1>
+        <h1 className="text-sm font-semibold">Expert</h1>
         <span className="truncate text-xs text-mute">{hubUrl}</span>
         {offline && <span className="text-xs text-red-300">{offline}</span>}
         <button
