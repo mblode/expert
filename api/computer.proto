@@ -19,6 +19,10 @@ service Agent {
 
 service Seat {
   rpc Pair(PairRequest) returns (PairResponse);
+  // Product sign-in: exchange a verified Supabase access token (Authorization
+  // Bearer) for the same seat token Pair mints. Email OTP itself is a client
+  // concern — the hub never sends mail.
+  rpc Session(SessionRequest) returns (PairResponse);
   rpc Status(StatusRequest) returns (BoxStatus);
   rpc SetPresence(SetPresenceRequest) returns (BoxStatus);
   rpc Pointer(PointerRequest) returns (PointerResponse);
@@ -301,6 +305,9 @@ message SendMessageResponse {
 message PairRequest {
   string code = 1;
 }
+
+// Empty: the Supabase JWT is the Authorization bearer, not a body field.
+message SessionRequest {}
 
 message PairResponse {
   string token = 1;

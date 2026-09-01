@@ -105,6 +105,11 @@ export async function pair(hubUrl: string, code: string): Promise<PairResult> {
   return await rpc<PairResult>(hubUrl, "Pair", { code });
 }
 
+/** Product sign-in: Supabase access token → hub seat token. */
+export async function session(hubUrl: string, accessToken: string): Promise<PairResult> {
+  return await rpc<PairResult>(hubUrl, "Session", {}, accessToken);
+}
+
 export type Seat = ReturnType<typeof createSeat>;
 
 export function createSeat(hubUrl: string, token: string) {

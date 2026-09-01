@@ -9,7 +9,12 @@ import type { ClientSessionState } from "eve/client";
 const SEAT_KEY = "computer.web.seat";
 const SESSION_KEY = "computer.web.session";
 
-export type StoredSeat = { hubUrl: string; seatToken: string };
+export type StoredSeat = {
+  hubUrl: string;
+  seatToken: string;
+  email?: string;
+  source?: "otp" | "pair";
+};
 
 function read<T>(key: string, valid: (value: unknown) => value is T): T | undefined {
   try {
@@ -38,7 +43,11 @@ export function loadSeat(): StoredSeat | undefined {
       typeof v === "object" &&
       v !== null &&
       typeof (v as StoredSeat).hubUrl === "string" &&
-      typeof (v as StoredSeat).seatToken === "string",
+      typeof (v as StoredSeat).seatToken === "string" &&
+      ((v as StoredSeat).email === undefined || typeof (v as StoredSeat).email === "string") &&
+      ((v as StoredSeat).source === undefined ||
+        (v as StoredSeat).source === "otp" ||
+        (v as StoredSeat).source === "pair"),
   );
 }
 

@@ -14,6 +14,9 @@
 		B10000000000000000000005 /* CoordinateMap.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000005 /* CoordinateMap.swift */; };
 		B10000000000000000000006 /* ComputerV1.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000006 /* ComputerV1.swift */; };
 		B10000000000000000000007 /* PairView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000007 /* PairView.swift */; };
+		B10000000000000000000013 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000013 /* SignInView.swift */; };
+		B10000000000000000000014 /* SupabaseAuth.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000014 /* SupabaseAuth.swift */; };
+		B10000000000000000000015 /* ComputerConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000015 /* ComputerConfig.swift */; };
 		B10000000000000000000008 /* QRScanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000008 /* QRScanner.swift */; };
 		B10000000000000000000009 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000009 /* ChatView.swift */; };
 		B1000000000000000000000A /* ComputerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000A /* ComputerView.swift */; };
@@ -29,6 +32,7 @@
 		B10000000000000000000021 /* PairTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000021 /* PairTests.swift */; };
 		B10000000000000000000022 /* ClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000022 /* ClientTests.swift */; };
 		B10000000000000000000023 /* AgentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000023 /* AgentTests.swift */; };
+		B10000000000000000000024 /* SignInTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000024 /* SignInTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -49,6 +53,9 @@
 		C10000000000000000000005 /* CoordinateMap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinateMap.swift; sourceTree = "<group>"; };
 		C10000000000000000000006 /* ComputerV1.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerV1.swift; sourceTree = "<group>"; };
 		C10000000000000000000007 /* PairView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairView.swift; sourceTree = "<group>"; };
+		C10000000000000000000013 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
+		C10000000000000000000014 /* SupabaseAuth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SupabaseAuth.swift; sourceTree = "<group>"; };
+		C10000000000000000000015 /* ComputerConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerConfig.swift; sourceTree = "<group>"; };
 		C10000000000000000000008 /* QRScanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QRScanner.swift; sourceTree = "<group>"; };
 		C10000000000000000000009 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		C1000000000000000000000A /* ComputerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerView.swift; sourceTree = "<group>"; };
@@ -64,6 +71,7 @@
 		C10000000000000000000021 /* PairTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairTests.swift; sourceTree = "<group>"; };
 		C10000000000000000000022 /* ClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClientTests.swift; sourceTree = "<group>"; };
 		C10000000000000000000023 /* AgentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentTests.swift; sourceTree = "<group>"; };
+		C10000000000000000000024 /* SignInTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInTests.swift; sourceTree = "<group>"; };
 		C10000000000000000000030 /* Computer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Computer.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C10000000000000000000031 /* ComputerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ComputerTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -124,6 +132,8 @@
 				C10000000000000000000004 /* ComputerClient.swift */,
 				C10000000000000000000005 /* CoordinateMap.swift */,
 				C10000000000000000000006 /* ComputerV1.swift */,
+				C10000000000000000000014 /* SupabaseAuth.swift */,
+				C10000000000000000000015 /* ComputerConfig.swift */,
 				C10000000000000000000010 /* EveClient.swift */,
 				C10000000000000000000011 /* AgentTranscript.swift */,
 			);
@@ -133,6 +143,7 @@
 		A10000000000000000000006 /* Screens */ = {
 			isa = PBXGroup;
 			children = (
+				C10000000000000000000013 /* SignInView.swift */,
 				C10000000000000000000007 /* PairView.swift */,
 				C10000000000000000000008 /* QRScanner.swift */,
 				C10000000000000000000009 /* ChatView.swift */,
@@ -160,6 +171,7 @@
 				C10000000000000000000021 /* PairTests.swift */,
 				C10000000000000000000022 /* ClientTests.swift */,
 				C10000000000000000000023 /* AgentTests.swift */,
+				C10000000000000000000024 /* SignInTests.swift */,
 			);
 			path = ComputerTests;
 			sourceTree = "<group>";
@@ -269,6 +281,9 @@
 				B10000000000000000000004 /* ComputerClient.swift in Sources */,
 				B10000000000000000000005 /* CoordinateMap.swift in Sources */,
 				B10000000000000000000006 /* ComputerV1.swift in Sources */,
+				B10000000000000000000014 /* SupabaseAuth.swift in Sources */,
+				B10000000000000000000015 /* ComputerConfig.swift in Sources */,
+				B10000000000000000000013 /* SignInView.swift in Sources */,
 				B10000000000000000000007 /* PairView.swift in Sources */,
 				B10000000000000000000008 /* QRScanner.swift in Sources */,
 				B10000000000000000000009 /* ChatView.swift in Sources */,
@@ -291,6 +306,7 @@
 				B10000000000000000000021 /* PairTests.swift in Sources */,
 				B10000000000000000000022 /* ClientTests.swift in Sources */,
 				B10000000000000000000023 /* AgentTests.swift in Sources */,
+				B10000000000000000000024 /* SignInTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -351,6 +367,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Computer;
+				INFOPLIST_KEY_SUPABASE_URL = "$(SUPABASE_URL)";
+				INFOPLIST_KEY_SUPABASE_ANON_KEY = "$(SUPABASE_ANON_KEY)";
+				INFOPLIST_KEY_COMPUTER_HUB_URL = "$(COMPUTER_HUB_URL)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan a pairing QR code from the hub.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Reach the Computer hub on your tailnet.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -382,6 +401,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = Computer;
+				INFOPLIST_KEY_SUPABASE_URL = "$(SUPABASE_URL)";
+				INFOPLIST_KEY_SUPABASE_ANON_KEY = "$(SUPABASE_ANON_KEY)";
+				INFOPLIST_KEY_COMPUTER_HUB_URL = "$(COMPUTER_HUB_URL)";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan a pairing QR code from the hub.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Reach the Computer hub on your tailnet.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

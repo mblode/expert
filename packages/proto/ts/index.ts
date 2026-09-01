@@ -41,6 +41,7 @@ export const AgentMethods = {
 
 export const SeatMethods = {
   Pair: path(Seat, Seat.method.pair),
+  Session: path(Seat, Seat.method.session),
   Status: path(Seat, Seat.method.status),
   SetPresence: path(Seat, Seat.method.setPresence),
   Pointer: path(Seat, Seat.method.pointer),
@@ -58,4 +59,4 @@ export const ALL_METHODS = [
   ...Seat.methods.map((m) => path(Seat, m)),
 ] as const;
 
-export type AuthPolicy = "public" | "pair" | "agent" | "seat";
+export type AuthPolicy = "public" | "pair" | "session" | "agent" | "seat";

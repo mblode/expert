@@ -3,6 +3,7 @@ import { createHub } from "./app.ts";
 import { DEFAULT_EVE_URL } from "./handler/eve-proxy.ts";
 import { createDesk, DockerWindowManager, NoopWindowManager } from "./desk/index.ts";
 import { loadPolicy } from "./service/policy.ts";
+import { createIdentityVerifier, FileIdentityStore } from "./service/identity.ts";
 import { FileBotStore, FileSeatTokenStore } from "./service/provision.ts";
 
 const bind = process.env.COMPUTER_BIND ?? "127.0.0.1";
@@ -28,6 +29,12 @@ const hub = createHub({
     : new NoopWindowManager(),
   store: new FileBotStore(rosterPath),
   seatStore: new FileSeatTokenStore(join(dataDir, "seats.json")),
+  identity: createIdentityVerifier({
+    jwtSecret: process.env.SUPABASE_JWT_SECRET,
+    supabaseUrl: process.env.SUPABASE_URL,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  }),
+  identityStore: new FileIdentityStore(join(dataDir, "identities.json")),
   policy: loadPolicy(join(dataDir, "policy.json")),
   vncUrl,
   vncHost: process.env.COMPUTER_VNC_HOST ?? "127.0.0.1",

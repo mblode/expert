@@ -88,6 +88,12 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     @available(iOS 13, *)
     func `pair`(request: Computer_V1_PairRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_PairResponse>
 
+    /// Product sign-in: exchange a verified Supabase access token (Authorization
+    /// Bearer) for the same seat token Pair mints. Email OTP itself is a client
+    /// concern — the hub never sends mail.
+    @available(iOS 13, *)
+    func `session`(request: Computer_V1_SessionRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_PairResponse>
+
     @available(iOS 13, *)
     func `status`(request: Computer_V1_StatusRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BoxStatus>
 
@@ -136,6 +142,11 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     @available(iOS 13, *)
     public func `pair`(request: Computer_V1_PairRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_PairResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/Pair", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `session`(request: Computer_V1_SessionRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_PairResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/Session", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
     @available(iOS 13, *)
@@ -191,6 +202,7 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     public enum Metadata {
         public enum Methods {
             public static let pair = Connect.MethodSpec(name: "Pair", service: "computer.v1.Seat", type: .unary)
+            public static let session = Connect.MethodSpec(name: "Session", service: "computer.v1.Seat", type: .unary)
             public static let status = Connect.MethodSpec(name: "Status", service: "computer.v1.Seat", type: .unary)
             public static let setPresence = Connect.MethodSpec(name: "SetPresence", service: "computer.v1.Seat", type: .unary)
             public static let pointer = Connect.MethodSpec(name: "Pointer", service: "computer.v1.Seat", type: .unary)

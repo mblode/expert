@@ -28,7 +28,7 @@ struct PairView: View {
                     Section { Text(err).foregroundStyle(.red) }
                 }
                 Section {
-                    Text("Saves the Tailscale URL and bearer in Keychain. Hub stays on loopback; the phone reaches it over Serve.")
+                    Text("Local-dev fallback. Product sign-in is email OTP. This path saves the hub URL and a seat token in Keychain.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
