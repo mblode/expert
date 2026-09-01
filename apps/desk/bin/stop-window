@@ -1,6 +1,6 @@
 #!/bin/bash
 # stop-window N — release window index N: kill its VNC server and
-# clear its entry in $HOME/.window-assignments.json.
+# clear its entry in /workspace/.window-assignments.json.
 set -euo pipefail
 
 N="${1:?usage: stop-window N}"

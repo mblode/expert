@@ -1,8 +1,17 @@
-import { ComputerError, MAX_DISPLAYS, PRIMARY_DISPLAY, type BotId, asBotId } from "@computer/shared";
+import {
+  ComputerError,
+  MAX_DISPLAYS,
+  PRIMARY_DISPLAY,
+  asBotId,
+  unavailable,
+  type BotId,
+} from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 import { ComputerService } from "./computer.ts";
 import { FileService } from "./files.ts";
+import { PolicyService } from "./policy.ts";
 import { SeatService } from "./seat.ts";
+import { VoiceService } from "./voice.ts";
 
 /**
  * One shared box, many Bots, one screen (window index = X display) per Bot.
@@ -21,6 +30,7 @@ export type Bot = {
   token: string;
   desk: Desk;
   seat: SeatService;
+  voice: VoiceService;
   computer: ComputerService;
   files: FileService;
   chatBusy: boolean;
@@ -31,9 +41,11 @@ const ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 export class BotRegistry {
   private readonly bots: Bot[] = [];
 
+  /** Policy is box-wide, not per-Bot: Bots are not security boundaries. */
   constructor(
     private readonly deskFactory: (display: number) => Desk,
     configs: BotConfig[] = [],
+    private readonly policy: PolicyService = new PolicyService(),
   ) {
     for (const c of configs) this.add(c);
   }
@@ -64,8 +76,9 @@ export class BotRegistry {
       token: c.token,
       desk,
       seat,
-      computer: new ComputerService(desk, seat),
-      files: new FileService(desk, seat),
+      voice: new VoiceService(desk),
+      computer: new ComputerService(desk, seat, this.policy),
+      files: new FileService(desk, seat, this.policy),
       chatBusy: false,
     };
     this.bots.push(bot);
@@ -103,7 +116,14 @@ export class BotRegistry {
 
   primary(): Bot {
     const bot = this.bots.find((b) => b.display === PRIMARY_DISPLAY) ?? this.bots[0];
-    if (!bot) throw new ComputerError("DAEMON_DOWN", "no bots mounted");
+    // Nothing to attach to and nothing a retry can fix — the roster has to change.
+    if (!bot) {
+      throw new ComputerError(
+        "DAEMON_DOWN",
+        "no bots mounted",
+        unavailable("not_bound", "route_missing"),
+      );
+    }
     return bot;
   }
 

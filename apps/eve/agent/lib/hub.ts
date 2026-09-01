@@ -6,6 +6,7 @@
  */
 
 const paths = {
+  sendMessage: "/computer.v1.Agent/SendMessage",
   computer: "/computer.v1.Agent/Computer",
   shell: "/computer.v1.Agent/Shell",
   readFile: "/computer.v1.Agent/ReadFile",

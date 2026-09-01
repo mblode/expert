@@ -1,15 +1,18 @@
 import { ComputerError, WORKSPACE, resolveWorkspacePath } from "@computer/shared";
 import type { Desk, ShellResult } from "../desk/types.ts";
+import { PolicyService, deniedError } from "./policy.ts";
 import type { SeatService } from "./seat.ts";
 
 export class FileService {
   private readonly desk: Desk;
   private readonly seat: SeatService;
+  private readonly policy: PolicyService;
   private readonly shellCache = new Map<string, { hash: string; response: ShellResult }>();
 
-  constructor(desk: Desk, seat: SeatService) {
+  constructor(desk: Desk, seat: SeatService, policy: PolicyService = new PolicyService()) {
     this.desk = desk;
     this.seat = seat;
+    this.policy = policy;
   }
 
   async shell(req: {
@@ -37,6 +40,10 @@ export class FileService {
       if (hit.hash !== hash) throw new ComputerError("CONFLICT", "request_id reused with a different body");
       return hit.response;
     }
+    // The gate Eve kept client-side. Denials are never cached: the rule, or
+    // the human's mind, may have changed by the retry.
+    const verdict = await this.policy.evaluate({ tool: "shell", argv: req.argv, cwd });
+    if (verdict.decision !== "allow") throw deniedError(verdict);
     await this.desk.ping();
     const response = await this.desk.shell(req.argv, cwd, timeout);
     this.shellCache.set(req.request_id, { hash, response });

@@ -1,4 +1,12 @@
-import { asPoint, clampCursor, ComputerError, DISPLAY, type Button, type Point } from "@computer/shared";
+import {
+  asPoint,
+  clampCursor,
+  ComputerError,
+  DISPLAY,
+  unavailable,
+  type Button,
+  type Point,
+} from "@computer/shared";
 import type { Desk, FocusHint, ShellResult } from "./types.ts";
 
 /** Minimal valid 1×1 PNG. Tests do not decode pixels. */
@@ -32,7 +40,14 @@ export class FakeDesk implements Desk {
   }
 
   async ping(): Promise<boolean> {
-    if (this.failPing) throw new ComputerError("DAEMON_DOWN", "desk exec or input is dead");
+    // Detail included: a fake that drops it would hide the envelope regression.
+    if (this.failPing) {
+      throw new ComputerError(
+        "DAEMON_DOWN",
+        "desk exec or input is dead",
+        unavailable("instance_gone", "attach"),
+      );
+    }
     return true;
   }
 

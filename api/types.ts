@@ -12,6 +12,11 @@ export type Display = typeof DISPLAY;
 
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
+/**
+ * Closed on the way in, additive on the way out: model→hub validation stays
+ * strict, but a client must degrade an ErrorCode or ActionResult kind it does
+ * not know to the generic case rather than hard-failing on it.
+ */
 export type ErrorCode =
   | "UNAUTHENTICATED"
   | "SEAT_HELD"
@@ -19,9 +24,30 @@ export type ErrorCode =
   | "PATH_REJECTED"
   | "DAEMON_DOWN"
   | "VALIDATION"
-  | "CONFLICT";
+  | "CONFLICT"
+  | "DENIED";
 
-export type ApiError = { error: { code: ErrorCode; message: string } };
+/**
+ * DAEMON_DOWN detail. `hibernated` and `idle_timeout` exist for wire
+ * compatibility with the first-party shape; this box never emits them.
+ * `retryable` is the client contract — false only when no route exists.
+ */
+export type Unavailable = {
+  reason:
+    | "idle_timeout"
+    | "disconnect"
+    | "shutdown"
+    | "not_bound"
+    | "instance_gone"
+    | "hibernated"
+    | "unknown";
+  phase: "in_flight_cancelled" | "route_missing" | "attach" | "unknown";
+  retryable: boolean;
+};
+
+export type ApiError = {
+  error: { code: ErrorCode; message: string } & Partial<Unavailable>;
+};
 
 export type Button = "left" | "right" | "middle" | "back" | "forward";
 export type Point = { x: PixelX; y: PixelY };
@@ -39,10 +65,12 @@ export type Action =
   | { type: "zoom"; x: PixelX; y: PixelY; w: number; h: number }
   | { type: "request_takeover" };
 
+/** Three terminal states: `denied` is the hub refusing, not the box failing. */
 export type ActionResult =
   | { kind: "ok"; duration_ms: number; image_b64?: string }
-  | { kind: "error"; duration_ms: number; code: ErrorCode; message: string }
-  | { kind: "skipped"; reason: "prior_failed" | "after_takeover" };
+  | ({ kind: "error"; duration_ms: number; code: ErrorCode; message: string } & Partial<Unavailable>)
+  | { kind: "denied"; rule: string; reason: string }
+  | { kind: "skipped"; reason: "prior_failed" | "after_takeover" | "after_denied" };
 
 export type PendingCheck = {
   id: string;
@@ -96,10 +124,12 @@ export interface Seat {
   }>;
   status(req?: { display?: number }): Promise<BoxStatus>;
   setPresence(req: { present: boolean; display?: number }): Promise<BoxStatus>;
+  /** `grab` holds the left button across a move — a drag from the trackpad. */
   pointer(
     req:
-      | { type: "move"; dx: number; dy: number; display?: number }
-      | { type: "click"; button?: Button; display?: number },
+      | { type: "move"; dx: number; dy: number; grab?: boolean; display?: number }
+      | { type: "click"; button?: Button; display?: number }
+      | { type: "scroll"; dx: number; dy: number; display?: number },
   ): Promise<{ cursor: Point; seat: SeatState }>;
   type(req: { text: string; display?: number }): Promise<{ cursor: Point; seat: SeatState }>;
   clipboardGet(req?: { display?: number }): Promise<{ text: string }>;

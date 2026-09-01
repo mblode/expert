@@ -1,6 +1,45 @@
 import { spawn } from "node:child_process";
-import { ComputerError, clampCursor, asPoint, type Button, type Point } from "@computer/shared";
+import {
+  ComputerError,
+  asPoint,
+  clampCursor,
+  unavailable,
+  type Button,
+  type Point,
+  type Unavailable,
+} from "@computer/shared";
 import type { Desk, FocusHint, ShellResult } from "./types.ts";
+
+/**
+ * "DAEMON_DOWN" on its own tells a phone nothing. `docker exec` failures
+ * differ in ways that matter to a client deciding whether to retry, and this
+ * is the whole of what this box can honestly tell apart. Anything it cannot
+ * distinguish stays `unknown` rather than being guessed at — and neither
+ * `hibernated` nor `idle_timeout` is reachable here, because there is no
+ * hibernation and nothing idles out.
+ */
+export function classifyDeskFailure(text: string): Unavailable {
+  const t = text.toLowerCase();
+  // The docker CLI itself is missing or unusable: no route to any box, and a
+  // retry will not conjure one.
+  if (/enoent|docker: not found|command not found|cannot connect to the docker daemon/.test(t)) {
+    return unavailable("not_bound", "route_missing");
+  }
+  if (/no such container|is not running|is restarting/.test(t)) {
+    return unavailable("instance_gone", "attach");
+  }
+  // We killed it, so the command's fate is unknown — the box may be fine.
+  if (/timed out/.test(t)) return unavailable("unknown", "in_flight_cancelled");
+  // Container answers but the X server on this display does not.
+  if (/n't open display|not open display/.test(t)) {
+    return unavailable("shutdown", "attach");
+  }
+  return unavailable("unknown", "attach");
+}
+
+function deskDown(message: string): ComputerError {
+  return new ComputerError("DAEMON_DOWN", message, classifyDeskFailure(message));
+}
 
 export type DockerDeskOptions = {
   container: string;
@@ -86,14 +125,15 @@ export class DockerDesk implements Desk {
       if (r.exit !== 0) throw new Error(r.stderr.toString());
       return true;
     } catch (err) {
-      throw new ComputerError("DAEMON_DOWN", err instanceof Error ? err.message : "desk exec or input is dead");
+      if (err instanceof ComputerError) throw err;
+      throw deskDown(err instanceof Error ? err.message : "desk exec or input is dead");
     }
   }
 
   async screenshot(): Promise<Buffer> {
     const r = await this.exec(["/usr/local/bin/desk-shot"], { timeoutMs: 15_000, binary: true });
     if (r.exit !== 0) {
-      throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || "screenshot failed");
+      throw deskDown(r.stderr.toString() || "screenshot failed");
     }
     return Buffer.isBuffer(r.stdout) ? r.stdout : Buffer.from(r.stdout);
   }
@@ -104,7 +144,7 @@ export class DockerDesk implements Desk {
       binary: true,
     });
     if (r.exit !== 0) {
-      throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || "zoom failed");
+      throw deskDown(r.stderr.toString() || "zoom failed");
     }
     return Buffer.isBuffer(r.stdout) ? r.stdout : Buffer.from(r.stdout);
   }
@@ -183,7 +223,7 @@ export class DockerDesk implements Desk {
       stdin: text,
     });
     if (r.exit !== 0) {
-      throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || "clipboard set failed");
+      throw deskDown(r.stderr.toString() || "clipboard set failed");
     }
   }
 
@@ -242,7 +282,7 @@ export class DockerDesk implements Desk {
   private async xdotool(...argv: string[]): Promise<void> {
     const r = await this.exec(["xdotool", ...argv], { timeoutMs: 5000 });
     if (r.exit !== 0) {
-      throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || `xdotool ${argv[0]} failed`);
+      throw deskDown(r.stderr.toString() || `xdotool ${argv[0]} failed`);
     }
   }
 
@@ -315,11 +355,12 @@ export class DockerDesk implements Desk {
       }
       const t = setTimeout(() => {
         child.kill("SIGKILL");
-        reject(new ComputerError("DAEMON_DOWN", `docker exec timed out: ${argv[0]}`));
+        reject(deskDown(`docker exec timed out: ${argv[0]}`));
       }, opts.timeoutMs);
       child.on("error", (err) => {
         clearTimeout(t);
-        reject(new ComputerError("DAEMON_DOWN", err.message));
+        // spawn ENOENT lands here: `${code}: ${message}` so the classifier sees it.
+        reject(deskDown(`${(err as NodeJS.ErrnoException).code ?? ""} ${err.message}`.trim()));
       });
       child.on("close", (code) => {
         clearTimeout(t);

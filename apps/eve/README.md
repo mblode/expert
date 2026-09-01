@@ -16,6 +16,18 @@ Start by editing `agent/instructions.md` to define the agent's identity, purpose
 
 Add capabilities under `agent/`, including tools, connections, channels, skills, subagents, and schedules. eve reloads your changes as you work.
 
+## On `.grok-plugin` interop
+
+`agent/skills/` is already in `.grok-plugin`'s `skills/*/SKILL.md` shape, so
+adding `agent/.grok-plugin/plugin.json` is a one-file change whenever someone
+actually wants ecosystem installability.
+
+It is deliberately not there yet. The manifest has to sit in `agent/` — that
+discovery resolves `skills/*/SKILL.md` relative to the manifest — and eve's
+`createUnsupportedRootDirectoryDiagnostics` warns unconditionally on any
+unknown directory in the agent root, with no ignore config. So the manifest
+costs a permanent `eve build` warning and nothing consumes it today.
+
 ## Learn more
 
 To learn more about eve, explore these resources:

@@ -1,15 +1,22 @@
 /**
  * Chat is a hub stream beside Agent/Seat. Not a computer-use verb.
- * BYO API key. Tool loop maps onto the four model tools.
+ * BYO API key. Tool loop maps onto the five model tools.
+ *
+ * This is the zero-dependency fallback; Eve is the real harness. Both speak
+ * through the same voice, so the human sees one occurrence log either way.
+ * Model prose is NOT a bubble here — if the loop never calls send_message,
+ * the human correctly sees nothing.
  */
 import { ComputerError, SPEC_ID, SPEC_VERSION, TOOLS, WORKSPACE, DISPLAY } from "@computer/shared";
 import type { ComputerService } from "./computer.ts";
 import type { FileService } from "./files.ts";
 import type { SeatService } from "./seat.ts";
+import type { Occurrence, VoiceService } from "./voice.ts";
+import { parseSendBody } from "./voice.ts";
 import { parseActions } from "./computer.ts";
 
 export type ChatEvent =
-  | { type: "delta"; text: string }
+  | { type: "occurrence"; occurrence: Occurrence }
   | { type: "tool"; name: string; request_id: string }
   | { type: "waiting"; message: string }
   | { type: "error"; code: string; message: string }
@@ -19,36 +26,64 @@ export type ChatDeps = {
   computer: ComputerService;
   files: FileService;
   seat: SeatService;
+  voice: VoiceService;
   apiKey?: string;
   baseUrl?: string;
   model?: string;
 };
 
-const SYSTEM = `You drive a persistent Linux desktop through four tools: computer, shell, read_file, write_file.
+const SYSTEM = `You drive a persistent Linux desktop through five tools: send_message, computer, shell, read_file, write_file.
+send_message is your only voice. Everything else you write is a private scratchpad the user never sees — end a turn without sending and they see nothing at all.
+Reply first: your first action on a user turn is a short text send. Acknowledging is not delivering — send again with the result.
+A widget or secret_request ends the turn: stop and wait. Never say send_message, hub, seat, port or token to the user; say "my computer".
 Display is 1280×800, origin top-left. Coordinates are pixels of the last full-display screenshot. Zoom does not rematch that space.
 On first failing computer action the rest are skipped. If the seat is WAITING or HUMAN, computer returns SEAT_HELD — tell the user to take the seat or tap I'm done.
 Do not mention VNC, pairing, or clipboard. Chromium is an app; type into the URL bar instead of navigate.`;
+
+/** Where the stream has got to in the voice log. Carried through the turn. */
+type Seen = { cursor: number };
+
+/**
+ * Yield every occurrence the stream has not sent yet. The voice is the only
+ * producer of these, so this is the whole path from agent to human.
+ */
+function* flush(deps: ChatDeps, seen: Seen): Generator<ChatEvent> {
+  for (const occurrence of deps.voice.page(String(seen.cursor), 500).entries) {
+    seen.cursor = occurrence.seq;
+    yield { type: "occurrence", occurrence };
+  }
+}
 
 export async function* runChat(deps: ChatDeps, userText: string): AsyncGenerator<ChatEvent> {
   if (!userText.trim()) {
     yield { type: "error", code: "VALIDATION", message: "message is required" };
     return;
   }
+  const seen: Seen = { cursor: 0 };
+  // A person opened the turn. That records what they said and re-opens the
+  // voice if a widget had ended the previous turn.
+  deps.voice.sayHuman(userText);
+  yield* flush(deps, seen);
   if (!deps.apiKey) {
-    yield* runEchoLoop(deps, userText);
+    yield* runEchoLoop(deps, userText, seen);
     return;
   }
-  yield* runLlmLoop(deps, userText);
+  yield* runLlmLoop(deps, userText, seen);
 }
 
 /** Offline / test loop: no vendor key. Still exercises tools when the user asks plainly. */
-async function* runEchoLoop(deps: ChatDeps, userText: string): AsyncGenerator<ChatEvent> {
+async function* runEchoLoop(deps: ChatDeps, userText: string, seen: Seen): AsyncGenerator<ChatEvent> {
   if (/open computer|takeover|take the seat/i.test(userText)) {
     const id = `chat_${Date.now()}`;
     yield { type: "tool", name: "computer", request_id: id };
     try {
       const r = await deps.computer.run(id, [{ type: "request_takeover" }]);
       if (r.seat === "WAITING") {
+        await deps.voice.send({
+          kind: "text",
+          text: "The seat is yours — open my computer, and tap I'm done when you're finished.",
+        });
+        yield* flush(deps, seen);
         yield { type: "waiting", message: "Seat is waiting. Open Computer and tap I'm done when finished." };
       }
     } catch (err) {
@@ -58,14 +93,21 @@ async function* runEchoLoop(deps: ChatDeps, userText: string): AsyncGenerator<Ch
     yield { type: "done" };
     return;
   }
-  yield {
-    type: "delta",
+  await deps.voice.send({
+    kind: "text",
     text: `Hub is up. Spec ${SPEC_ID} ${SPEC_VERSION}. Tools: ${TOOLS.join(", ")}. Workspace ${WORKSPACE}. Display ${DISPLAY.width}×${DISPLAY.height}. Set OPENAI_API_KEY to enable the agent loop.`,
-  };
+  });
+  yield* flush(deps, seen);
   yield { type: "done" };
 }
 
-async function* runLlmLoop(deps: ChatDeps, userText: string): AsyncGenerator<ChatEvent> {
+async function* runLlmLoop(
+  deps: ChatDeps,
+  userText: string,
+  seen: Seen,
+): AsyncGenerator<ChatEvent> {
+  let spoke = false;
+  let nudged = false;
   const base = (deps.baseUrl ?? "https://api.openai.com/v1").replace(/\/$/, "");
   const model = deps.model ?? "gpt-4.1";
   const messages: Record<string, unknown>[] = [
@@ -103,9 +145,22 @@ async function* runLlmLoop(deps: ChatDeps, userText: string): AsyncGenerator<Cha
       yield { type: "error", code: "DAEMON_DOWN", message: "empty llm message" };
       return;
     }
-    if (msg.content) yield { type: "delta", text: msg.content };
+    // msg.content is the scratchpad. It is deliberately not emitted: the
+    // only way to reach the human is send_message.
     const calls = msg.tool_calls ?? [];
     if (calls.length === 0) {
+      // Reply-first, enforced once. Silence on a person-opened turn is a
+      // bug, so nudge — but only ever once, or a mute model loops forever.
+      if (!spoke && !nudged) {
+        nudged = true;
+        messages.push(msg);
+        messages.push({
+          role: "system",
+          content:
+            "You ended a turn a person is waiting on without calling send_message, so they saw nothing. Send them the answer now.",
+        });
+        continue;
+      }
       yield { type: "done" };
       return;
     }
@@ -115,6 +170,10 @@ async function* runLlmLoop(deps: ChatDeps, userText: string): AsyncGenerator<Cha
       const args = parseArgs(call.function.arguments);
       yield { type: "tool", name, request_id: String(args.request_id ?? call.id) };
       const result = await dispatchTool(deps, name, args);
+      for (const ev of flush(deps, seen)) {
+        spoke = true;
+        yield ev;
+      }
       if (deps.seat.getState() === "WAITING") {
         yield { type: "waiting", message: "Seat is waiting. Open Computer and tap I'm done when finished." };
       }
@@ -145,6 +204,8 @@ async function dispatchTool(
 ): Promise<unknown> {
   try {
     switch (name) {
+      case "send_message":
+        return await deps.voice.send(parseSendBody(args));
       case "computer":
         return await deps.computer.run(String(args.request_id ?? ""), parseActions(args.actions));
       case "shell":
@@ -169,6 +230,33 @@ async function dispatchTool(
 
 function openaiTools() {
   return [
+    {
+      type: "function",
+      function: {
+        name: "send_message",
+        description:
+          "Say something to the human. This is the ONLY thing they see — your other text is a private scratchpad. Reply with a short text send before you start work, and send again with the result. A widget or secret_request ends the turn.",
+        parameters: {
+          type: "object",
+          required: ["kind"],
+          properties: {
+            kind: { type: "string", enum: ["text", "widget", "secret_request"] },
+            text: { type: "string", description: "kind=text. One bubble." },
+            prompt: { type: "string", description: "kind=widget or secret_request." },
+            options: {
+              type: "array",
+              items: { type: "string" },
+              description: "kind=widget. 1-6 real choices.",
+            },
+            label: {
+              type: "string",
+              description:
+                "kind=secret_request. What the masked field holds. The value goes to the clipboard, never to you — paste it.",
+            },
+          },
+        },
+      },
+    },
     {
       type: "function",
       function: {

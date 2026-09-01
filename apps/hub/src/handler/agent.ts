@@ -1,6 +1,7 @@
 import { AgentMethods } from "@computer/proto";
 import { ComputerError, DISPLAY, SPEC_ID, SPEC_VERSION, TOOLS, WORKSPACE } from "@computer/shared";
 import { parseActions } from "../service/computer.ts";
+import { parseSendBody } from "../service/voice.ts";
 import type { Bot, BotRegistry } from "../service/bots.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
@@ -19,6 +20,12 @@ export function registerAgent(router: ConnectRouter, bots: BotRegistry): void {
     workspace: WORKSPACE,
     tools: [...TOOLS],
   }));
+
+  // The voice leads the tool table: everything else is work the human
+  // never sees unless this is called.
+  router.rpc(AgentMethods.SendMessage, "agent", async (ctx) => {
+    return bot(ctx).voice.send(parseSendBody(ctx.body));
+  });
 
   router.rpc(AgentMethods.Computer, "agent", async (ctx) => {
     const o = requireObject(ctx.body);

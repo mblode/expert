@@ -41,6 +41,9 @@ USER box
 WORKDIR /workspace
 # One RFB port per window index: 5900 + N
 EXPOSE 5901-5908
-VOLUME ["/workspace", "/home/box/.config/chromium"]
+# Grok keeps /workspace, the browser profile and ~/.config across a rebuild;
+# it does not keep ~/.local/state, and apt packages die with the image. Same
+# boundary here, so a skill written for a Bot needs no edit.
+VOLUME ["/workspace", "/home/box/.config"]
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

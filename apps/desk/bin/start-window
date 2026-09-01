@@ -2,10 +2,11 @@
 # start-window N [owner-hash] [bot-id]
 #
 # Claim window index N (X display :N, RFB port 5900+N) for a Bot.
-# Assignments live in $HOME/.window-assignments.json with sha256 owner
-# hashes, never raw tokens. Re-claim by the same owner is idempotent;
-# a different owner gets exit 9. Bots are not security boundaries —
-# same box user, shared /workspace.
+# Assignments live in /workspace/.window-assignments.json — on the volume,
+# so a claim outlives the container — with sha256 owner hashes, never raw
+# tokens. Re-claim by the same owner is idempotent; a different owner gets
+# exit 9. Bots are not security boundaries — same box user, shared
+# /workspace.
 set -euo pipefail
 
 N="${1:?usage: start-window N [owner-hash] [bot-id] [--force]}"
@@ -94,7 +95,8 @@ done
 DISPLAY="$DISPLAY_NAME" openbox >"/tmp/openbox-$N.log" 2>&1 &
 sleep 0.4
 
-# Chromium per window. Window 1 keeps the default profile dir (volume mount).
+# Chromium per window. Every profile is under ~/.config, which is the
+# volume, so all of them survive a rebuild — not just window 1's.
 # --no-sandbox: the container is the sandbox; Chromium's own needs
 # privileges a desk container should not have.
 # The occlusion/backgrounding flags are load-bearing: with no VNC viewer

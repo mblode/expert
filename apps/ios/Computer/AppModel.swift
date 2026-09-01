@@ -10,6 +10,20 @@ final class AppModel: ObservableObject {
         case streaming
     }
 
+    /// Whether the box answered last time we asked. A swallowed failure is the
+    /// blank screen: a stale "up" status behind a webview that never loaded,
+    /// with nothing on screen saying so and no way to try again.
+    enum Reachability: Equatable {
+        case unknown
+        case ok
+        case down(message: String, retryable: Bool)
+
+        var failure: (message: String, retryable: Bool)? {
+            guard case .down(let message, let retryable) = self else { return nil }
+            return (message, retryable)
+        }
+    }
+
     @Published var session: Session?
     @Published var transcript = AgentTranscript()
     @Published var phase: TurnPhase = .idle
@@ -19,6 +33,9 @@ final class AppModel: ObservableObject {
     @Published var waiting = false
     @Published var pairError: String?
     @Published var busy = false
+    @Published private(set) var reach: Reachability = .unknown
+    /// Bumped by `retry()` to make the desktop webview load again.
+    @Published private(set) var vncReload = 0
     /// Which Bot's screen the phone is on. Nil = primary (single-screen hub).
     @Published var selectedScreen: ComputerV1.ScreenStatus?
 
@@ -97,6 +114,7 @@ final class AppModel: ObservableObject {
         turnError = nil
         status = nil
         waiting = false
+        reach = .unknown
     }
 
     func refreshStatus() async {
@@ -109,9 +127,23 @@ final class AppModel: ObservableObject {
                 selectedScreen = s.screens.first(where: { $0.botId == sel.botId })
             }
             waiting = (currentScreen?.state ?? s.state) == .waiting
+            reach = .ok
         } catch {
-            // keep last known
+            // Keep the last known status, but stop pretending it is current.
+            reach = .down(message: error.localizedDescription, retryable: ClientError.retryable(error))
         }
+    }
+
+    /// The desktop webview could not load, or its renderer died. Either way the
+    /// pixels are gone, and only saying so tells it apart from a black desktop.
+    func reportDesktopFailure(_ message: String) {
+        reach = .down(message: message, retryable: true)
+    }
+
+    func retry() async {
+        reach = .unknown
+        vncReload += 1
+        await refreshStatus()
     }
 
     func selectScreen(_ screen: ComputerV1.ScreenStatus) {

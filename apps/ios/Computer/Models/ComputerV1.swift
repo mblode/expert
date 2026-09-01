@@ -19,10 +19,20 @@ public enum ComputerV1 {
         }
     }
 
+    /// Hub → phone status enums degrade instead of throwing: the hub is deployed
+    /// independently of the App Store build, so a state added on the box must not
+    /// break the typed parse on every phone already in a pocket.
     public enum SeatState: String, Codable, Sendable {
         case agent = "AGENT"
         case waiting = "WAITING"
         case human = "HUMAN"
+        /// A state this build does not know. Never sent by us.
+        case unknown = "UNKNOWN"
+
+        public init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = SeatState(rawValue: raw) ?? .unknown
+        }
     }
 
     public enum ErrorCode: String, Codable, Sendable {
@@ -33,6 +43,15 @@ public enum ComputerV1 {
         case daemonDown = "DAEMON_DOWN"
         case validation = "VALIDATION"
         case conflict = "CONFLICT"
+        /// A hub policy rule refused the call. Not a failure of the box.
+        case denied = "DENIED"
+        /// A code this build does not know. The message still reaches the user.
+        case unknown = "UNKNOWN"
+
+        public init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = ErrorCode(rawValue: raw) ?? .unknown
+        }
     }
 
     public struct Point: Codable, Equatable, Sendable {
@@ -151,6 +170,8 @@ public enum ComputerV1 {
     public enum PointerRequest: Codable, Sendable {
         case move(dx: Int, dy: Int, grab: Bool?, display: Int?)
         case click(button: String?, display: Int?)
+        /// Wheel notches at the current cursor; the box supplies the position.
+        case scroll(dx: Int, dy: Int, display: Int?)
 
         enum CodingKeys: String, CodingKey { case type, dx, dy, grab, button, display }
 
@@ -166,6 +187,11 @@ public enum ComputerV1 {
             case .click(let button, let display):
                 try c.encode("click", forKey: .type)
                 try c.encodeIfPresent(button, forKey: .button)
+                try c.encodeIfPresent(display, forKey: .display)
+            case .scroll(let dx, let dy, let display):
+                try c.encode("scroll", forKey: .type)
+                try c.encode(dx, forKey: .dx)
+                try c.encode(dy, forKey: .dy)
                 try c.encodeIfPresent(display, forKey: .display)
             }
         }
@@ -184,6 +210,12 @@ public enum ComputerV1 {
                 )
             case "click":
                 self = .click(button: try c.decodeIfPresent(String.self, forKey: .button), display: display)
+            case "scroll":
+                self = .scroll(
+                    dx: try c.decode(Int.self, forKey: .dx),
+                    dy: try c.decode(Int.self, forKey: .dy),
+                    display: display
+                )
             default:
                 throw DecodingError.dataCorruptedError(forKey: .type, in: c, debugDescription: type)
             }
@@ -214,6 +246,12 @@ public enum ComputerV1 {
         public struct Body: Codable, Sendable {
             public var code: ErrorCode
             public var message: String
+            /// DAEMON_DOWN only: why the box is unreachable, at what stage, and
+            /// whether trying again can help. Absent on every other code, and on
+            /// a hub older than the release that added them.
+            public var reason: String?
+            public var phase: String?
+            public var retryable: Bool?
         }
     }
 

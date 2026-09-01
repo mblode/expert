@@ -77,6 +77,9 @@ public nonisolated enum Computer_V1_ErrorCode: SwiftProtobuf.Enum, Swift.CaseIte
   case daemonDown // = 5
   case validation // = 6
   case conflict // = 7
+
+  /// A hub policy rule refused the call. Not a failure of the box.
+  case denied // = 8
   case UNRECOGNIZED(Int)
 
   public init() {
@@ -93,6 +96,7 @@ public nonisolated enum Computer_V1_ErrorCode: SwiftProtobuf.Enum, Swift.CaseIte
     case 5: self = .daemonDown
     case 6: self = .validation
     case 7: self = .conflict
+    case 8: self = .denied
     default: self = .UNRECOGNIZED(rawValue)
     }
   }
@@ -107,6 +111,7 @@ public nonisolated enum Computer_V1_ErrorCode: SwiftProtobuf.Enum, Swift.CaseIte
     case .daemonDown: return 5
     case .validation: return 6
     case .conflict: return 7
+    case .denied: return 8
     case .UNRECOGNIZED(let i): return i
     }
   }
@@ -121,6 +126,7 @@ public nonisolated enum Computer_V1_ErrorCode: SwiftProtobuf.Enum, Swift.CaseIte
     .daemonDown,
     .validation,
     .conflict,
+    .denied,
   ]
 
 }
@@ -230,6 +236,16 @@ public nonisolated struct Computer_V1_Error: Sendable {
   public var code: Computer_V1_ErrorCode = .unspecified
 
   public var message: String = String()
+
+  /// DAEMON_DOWN only. Why the box is unreachable and whether a retry helps.
+  /// reason: idle_timeout | disconnect | shutdown | not_bound | instance_gone |
+  ///         hibernated | unknown   (this box emits neither of the first two)
+  /// phase:  in_flight_cancelled | route_missing | attach | unknown
+  public var reason: String = String()
+
+  public var phase: String = String()
+
+  public var retryable: Bool = false
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -651,12 +667,23 @@ public nonisolated struct Computer_V1_ActionResult: Sendable {
     set {body = .skipped(newValue)}
   }
 
+  /// Terminal, like ok and error: the hub refused before the box was touched.
+  public var denied: Computer_V1_ActionDenied {
+    get {
+      if case .denied(let v)? = body {return v}
+      return Computer_V1_ActionDenied()
+    }
+    set {body = .denied(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Body: Equatable, Sendable {
     case ok(Computer_V1_ActionOk)
     case error(Computer_V1_ActionError)
     case skipped(Computer_V1_ActionSkipped)
+    /// Terminal, like ok and error: the hub refused before the box was touched.
+    case denied(Computer_V1_ActionDenied)
 
   }
 
@@ -698,6 +725,29 @@ public nonisolated struct Computer_V1_ActionError: Sendable {
 
   public var message: String = String()
 
+  /// see Error.reason
+  public var reason: String = String()
+
+  /// see Error.phase
+  public var phase: String = String()
+
+  public var retryable: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// The rule that refused, and what to tell the human.
+public nonisolated struct Computer_V1_ActionDenied: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var rule: String = String()
+
+  public var reason: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -708,7 +758,7 @@ public nonisolated struct Computer_V1_ActionSkipped: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// prior_failed | after_takeover
+  /// prior_failed | after_takeover | after_denied
   public var reason: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -1054,6 +1104,14 @@ public nonisolated struct Computer_V1_PointerRequest: Sendable {
     set {body = .click(newValue)}
   }
 
+  public var scroll: Computer_V1_PointerScroll {
+    get {
+      if case .scroll(let v)? = body {return v}
+      return Computer_V1_PointerScroll()
+    }
+    set {body = .scroll(newValue)}
+  }
+
   /// 0/absent = primary
   public var display: Int32 = 0
 
@@ -1062,6 +1120,7 @@ public nonisolated struct Computer_V1_PointerRequest: Sendable {
   public nonisolated enum OneOf_Body: Equatable, Sendable {
     case move(Computer_V1_PointerMove)
     case click(Computer_V1_PointerClick)
+    case scroll(Computer_V1_PointerScroll)
 
   }
 
@@ -1069,6 +1128,25 @@ public nonisolated struct Computer_V1_PointerRequest: Sendable {
 }
 
 public nonisolated struct Computer_V1_PointerMove: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var dx: Int32 = 0
+
+  public var dy: Int32 = 0
+
+  /// Hold the left button across the move: a drag from the phone's trackpad,
+  /// pressed on the first grabbed move and released on the first ungrabbed one.
+  public var grab: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Wheel at the cursor. No x/y: the seat's pointer is where it already is.
+public nonisolated struct Computer_V1_PointerScroll: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
@@ -1172,6 +1250,96 @@ public nonisolated struct Computer_V1_Clipboard: Sendable {
   public init() {}
 }
 
+public nonisolated struct Computer_V1_OccurrencesRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// Last seq the caller has. Absent or empty = from the start.
+  public var cursor: String = String()
+
+  public var limit: Int32 = 0
+
+  public var display: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_Occurrence: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var seq: Int32 = 0
+
+  public var at: Int64 = 0
+
+  /// human | text | widget | secret_request
+  public var kind: String = String()
+
+  public var text: String = String()
+
+  public var prompt: String = String()
+
+  public var options: [String] = []
+
+  public var answer: String = String()
+
+  public var label: String = String()
+
+  public var provided: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_OccurrencesResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var entries: [Computer_V1_Occurrence] = []
+
+  public var nextCursor: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_ProvideSecretRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var occurrenceID: String = String()
+
+  public var value: String = String()
+
+  public var display: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_ProvideSecretResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var provided: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Computer_V1_CreateBotRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -1223,7 +1391,7 @@ nonisolated extension Computer_V1_SeatState: SwiftProtobuf._ProtoNameProviding {
 }
 
 nonisolated extension Computer_V1_ErrorCode: SwiftProtobuf._ProtoNameProviding {
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ERROR_CODE_UNSPECIFIED\0\u{1}ERROR_CODE_UNAUTHENTICATED\0\u{1}ERROR_CODE_SEAT_HELD\0\u{1}ERROR_CODE_OUT_OF_BOUNDS\0\u{1}ERROR_CODE_PATH_REJECTED\0\u{1}ERROR_CODE_DAEMON_DOWN\0\u{1}ERROR_CODE_VALIDATION\0\u{1}ERROR_CODE_CONFLICT\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{2}\0ERROR_CODE_UNSPECIFIED\0\u{1}ERROR_CODE_UNAUTHENTICATED\0\u{1}ERROR_CODE_SEAT_HELD\0\u{1}ERROR_CODE_OUT_OF_BOUNDS\0\u{1}ERROR_CODE_PATH_REJECTED\0\u{1}ERROR_CODE_DAEMON_DOWN\0\u{1}ERROR_CODE_VALIDATION\0\u{1}ERROR_CODE_CONFLICT\0\u{1}ERROR_CODE_DENIED\0")
 }
 
 nonisolated extension Computer_V1_Button: SwiftProtobuf._ProtoNameProviding {
@@ -1337,7 +1505,7 @@ nonisolated extension Computer_V1_Image: SwiftProtobuf.Message, SwiftProtobuf._M
 
 nonisolated extension Computer_V1_Error: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Error"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}code\0\u{1}message\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}code\0\u{1}message\0\u{1}reason\0\u{1}phase\0\u{1}retryable\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1347,6 +1515,9 @@ nonisolated extension Computer_V1_Error: SwiftProtobuf.Message, SwiftProtobuf._M
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularEnumField(value: &self.code) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.reason) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.phase) }()
+      case 5: try { try decoder.decodeSingularBoolField(value: &self.retryable) }()
       default: break
       }
     }
@@ -1359,12 +1530,24 @@ nonisolated extension Computer_V1_Error: SwiftProtobuf.Message, SwiftProtobuf._M
     if !self.message.isEmpty {
       try visitor.visitSingularStringField(value: self.message, fieldNumber: 2)
     }
+    if !self.reason.isEmpty {
+      try visitor.visitSingularStringField(value: self.reason, fieldNumber: 3)
+    }
+    if !self.phase.isEmpty {
+      try visitor.visitSingularStringField(value: self.phase, fieldNumber: 4)
+    }
+    if self.retryable != false {
+      try visitor.visitSingularBoolField(value: self.retryable, fieldNumber: 5)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Computer_V1_Error, rhs: Computer_V1_Error) -> Bool {
     if lhs.code != rhs.code {return false}
     if lhs.message != rhs.message {return false}
+    if lhs.reason != rhs.reason {return false}
+    if lhs.phase != rhs.phase {return false}
+    if lhs.retryable != rhs.retryable {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2162,7 +2345,7 @@ nonisolated extension Computer_V1_ComputerResponse: SwiftProtobuf.Message, Swift
 
 nonisolated extension Computer_V1_ActionResult: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ActionResult"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}error\0\u{1}skipped\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}ok\0\u{1}error\0\u{1}skipped\0\u{1}denied\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2209,6 +2392,19 @@ nonisolated extension Computer_V1_ActionResult: SwiftProtobuf.Message, SwiftProt
           self.body = .skipped(v)
         }
       }()
+      case 4: try {
+        var v: Computer_V1_ActionDenied?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .denied(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .denied(v)
+        }
+      }()
       default: break
       }
     }
@@ -2231,6 +2427,10 @@ nonisolated extension Computer_V1_ActionResult: SwiftProtobuf.Message, SwiftProt
     case .skipped?: try {
       guard case .skipped(let v)? = self.body else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+    }()
+    case .denied?: try {
+      guard case .denied(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
     }()
     case nil: break
     }
@@ -2285,7 +2485,7 @@ nonisolated extension Computer_V1_ActionOk: SwiftProtobuf.Message, SwiftProtobuf
 
 nonisolated extension Computer_V1_ActionError: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ActionError"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}duration_ms\0\u{1}code\0\u{1}message\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}duration_ms\0\u{1}code\0\u{1}message\0\u{1}reason\0\u{1}phase\0\u{1}retryable\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2296,6 +2496,9 @@ nonisolated extension Computer_V1_ActionError: SwiftProtobuf.Message, SwiftProto
       case 1: try { try decoder.decodeSingularInt32Field(value: &self.durationMs) }()
       case 2: try { try decoder.decodeSingularEnumField(value: &self.code) }()
       case 3: try { try decoder.decodeSingularStringField(value: &self.message) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.reason) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.phase) }()
+      case 6: try { try decoder.decodeSingularBoolField(value: &self.retryable) }()
       default: break
       }
     }
@@ -2311,6 +2514,15 @@ nonisolated extension Computer_V1_ActionError: SwiftProtobuf.Message, SwiftProto
     if !self.message.isEmpty {
       try visitor.visitSingularStringField(value: self.message, fieldNumber: 3)
     }
+    if !self.reason.isEmpty {
+      try visitor.visitSingularStringField(value: self.reason, fieldNumber: 4)
+    }
+    if !self.phase.isEmpty {
+      try visitor.visitSingularStringField(value: self.phase, fieldNumber: 5)
+    }
+    if self.retryable != false {
+      try visitor.visitSingularBoolField(value: self.retryable, fieldNumber: 6)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -2318,6 +2530,44 @@ nonisolated extension Computer_V1_ActionError: SwiftProtobuf.Message, SwiftProto
     if lhs.durationMs != rhs.durationMs {return false}
     if lhs.code != rhs.code {return false}
     if lhs.message != rhs.message {return false}
+    if lhs.reason != rhs.reason {return false}
+    if lhs.phase != rhs.phase {return false}
+    if lhs.retryable != rhs.retryable {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ActionDenied: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ActionDenied"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}rule\0\u{1}reason\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.rule) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.reason) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.rule.isEmpty {
+      try visitor.visitSingularStringField(value: self.rule, fieldNumber: 1)
+    }
+    if !self.reason.isEmpty {
+      try visitor.visitSingularStringField(value: self.reason, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ActionDenied, rhs: Computer_V1_ActionDenied) -> Bool {
+    if lhs.rule != rhs.rule {return false}
+    if lhs.reason != rhs.reason {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3036,7 +3286,7 @@ nonisolated extension Computer_V1_SetPresenceRequest: SwiftProtobuf.Message, Swi
 
 nonisolated extension Computer_V1_PointerRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PointerRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}move\0\u{1}click\0\u{1}display\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}move\0\u{1}click\0\u{1}display\0\u{1}scroll\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3071,6 +3321,19 @@ nonisolated extension Computer_V1_PointerRequest: SwiftProtobuf.Message, SwiftPr
         }
       }()
       case 3: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
+      case 4: try {
+        var v: Computer_V1_PointerScroll?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .scroll(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .scroll(v)
+        }
+      }()
       default: break
       }
     }
@@ -3090,11 +3353,14 @@ nonisolated extension Computer_V1_PointerRequest: SwiftProtobuf.Message, SwiftPr
       guard case .click(let v)? = self.body else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
     }()
-    case nil: break
+    default: break
     }
     if self.display != 0 {
       try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 3)
     }
+    try { if case .scroll(let v)? = self.body {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3108,6 +3374,46 @@ nonisolated extension Computer_V1_PointerRequest: SwiftProtobuf.Message, SwiftPr
 
 nonisolated extension Computer_V1_PointerMove: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".PointerMove"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}dx\0\u{1}dy\0\u{1}grab\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.dx) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.dy) }()
+      case 3: try { try decoder.decodeSingularBoolField(value: &self.grab) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.dx != 0 {
+      try visitor.visitSingularInt32Field(value: self.dx, fieldNumber: 1)
+    }
+    if self.dy != 0 {
+      try visitor.visitSingularInt32Field(value: self.dy, fieldNumber: 2)
+    }
+    if self.grab != false {
+      try visitor.visitSingularBoolField(value: self.grab, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_PointerMove, rhs: Computer_V1_PointerMove) -> Bool {
+    if lhs.dx != rhs.dx {return false}
+    if lhs.dy != rhs.dy {return false}
+    if lhs.grab != rhs.grab {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_PointerScroll: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".PointerScroll"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}dx\0\u{1}dy\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -3133,7 +3439,7 @@ nonisolated extension Computer_V1_PointerMove: SwiftProtobuf.Message, SwiftProto
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Computer_V1_PointerMove, rhs: Computer_V1_PointerMove) -> Bool {
+  public static func ==(lhs: Computer_V1_PointerScroll, rhs: Computer_V1_PointerScroll) -> Bool {
     if lhs.dx != rhs.dx {return false}
     if lhs.dy != rhs.dy {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
@@ -3335,6 +3641,226 @@ nonisolated extension Computer_V1_Clipboard: SwiftProtobuf.Message, SwiftProtobu
 
   public static func ==(lhs: Computer_V1_Clipboard, rhs: Computer_V1_Clipboard) -> Bool {
     if lhs.text != rhs.text {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_OccurrencesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OccurrencesRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}cursor\0\u{1}limit\0\u{1}display\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.cursor) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.limit) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.cursor.isEmpty {
+      try visitor.visitSingularStringField(value: self.cursor, fieldNumber: 1)
+    }
+    if self.limit != 0 {
+      try visitor.visitSingularInt32Field(value: self.limit, fieldNumber: 2)
+    }
+    if self.display != 0 {
+      try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_OccurrencesRequest, rhs: Computer_V1_OccurrencesRequest) -> Bool {
+    if lhs.cursor != rhs.cursor {return false}
+    if lhs.limit != rhs.limit {return false}
+    if lhs.display != rhs.display {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_Occurrence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Occurrence"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}seq\0\u{1}at\0\u{1}kind\0\u{1}text\0\u{1}prompt\0\u{1}options\0\u{1}answer\0\u{1}label\0\u{1}provided\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.seq) }()
+      case 3: try { try decoder.decodeSingularInt64Field(value: &self.at) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.text) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.prompt) }()
+      case 7: try { try decoder.decodeRepeatedStringField(value: &self.options) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.answer) }()
+      case 9: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      case 10: try { try decoder.decodeSingularBoolField(value: &self.provided) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    if self.seq != 0 {
+      try visitor.visitSingularInt32Field(value: self.seq, fieldNumber: 2)
+    }
+    if self.at != 0 {
+      try visitor.visitSingularInt64Field(value: self.at, fieldNumber: 3)
+    }
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 4)
+    }
+    if !self.text.isEmpty {
+      try visitor.visitSingularStringField(value: self.text, fieldNumber: 5)
+    }
+    if !self.prompt.isEmpty {
+      try visitor.visitSingularStringField(value: self.prompt, fieldNumber: 6)
+    }
+    if !self.options.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.options, fieldNumber: 7)
+    }
+    if !self.answer.isEmpty {
+      try visitor.visitSingularStringField(value: self.answer, fieldNumber: 8)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 9)
+    }
+    if self.provided != false {
+      try visitor.visitSingularBoolField(value: self.provided, fieldNumber: 10)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_Occurrence, rhs: Computer_V1_Occurrence) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs.seq != rhs.seq {return false}
+    if lhs.at != rhs.at {return false}
+    if lhs.kind != rhs.kind {return false}
+    if lhs.text != rhs.text {return false}
+    if lhs.prompt != rhs.prompt {return false}
+    if lhs.options != rhs.options {return false}
+    if lhs.answer != rhs.answer {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.provided != rhs.provided {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_OccurrencesResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".OccurrencesResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}entries\0\u{3}next_cursor\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.entries) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.nextCursor) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.entries.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.entries, fieldNumber: 1)
+    }
+    if !self.nextCursor.isEmpty {
+      try visitor.visitSingularStringField(value: self.nextCursor, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_OccurrencesResponse, rhs: Computer_V1_OccurrencesResponse) -> Bool {
+    if lhs.entries != rhs.entries {return false}
+    if lhs.nextCursor != rhs.nextCursor {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ProvideSecretRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProvideSecretRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}occurrence_id\0\u{1}value\0\u{1}display\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.occurrenceID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.value) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.occurrenceID.isEmpty {
+      try visitor.visitSingularStringField(value: self.occurrenceID, fieldNumber: 1)
+    }
+    if !self.value.isEmpty {
+      try visitor.visitSingularStringField(value: self.value, fieldNumber: 2)
+    }
+    if self.display != 0 {
+      try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ProvideSecretRequest, rhs: Computer_V1_ProvideSecretRequest) -> Bool {
+    if lhs.occurrenceID != rhs.occurrenceID {return false}
+    if lhs.value != rhs.value {return false}
+    if lhs.display != rhs.display {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ProvideSecretResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ProvideSecretResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}provided\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.provided) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.provided != false {
+      try visitor.visitSingularBoolField(value: self.provided, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ProvideSecretResponse, rhs: Computer_V1_ProvideSecretResponse) -> Bool {
+    if lhs.provided != rhs.provided {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

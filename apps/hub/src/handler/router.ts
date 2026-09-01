@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { ComputerError, ERROR_HTTP_STATUS, type ErrorCode } from "@computer/shared";
+import { ComputerError, ERROR_HTTP_STATUS, unavailable, type ErrorCode } from "@computer/shared";
 import { ALL_METHODS, type AuthPolicy } from "@computer/proto";
 import { AuthRegistry, bearerFromHeader } from "./auth.ts";
 
@@ -90,8 +90,12 @@ export function writeError(res: ServerResponse, err: unknown): void {
     writeJson(res, err.httpStatus(), err.toEnvelope());
     return;
   }
+  // A throw that is not a ComputerError is a hub bug, not a diagnosis: say
+  // unknown/unknown rather than inventing a reason the client would act on.
   const message = err instanceof Error ? err.message : "internal";
-  writeJson(res, 500, { error: { code: "DAEMON_DOWN" satisfies ErrorCode, message } });
+  writeJson(res, 500, {
+    error: { code: "DAEMON_DOWN" satisfies ErrorCode, message, ...unavailable("unknown", "unknown") },
+  });
 }
 
 export function writeJson(res: ServerResponse, status: number, body: unknown): void {

@@ -64,6 +64,7 @@ export async function handleChat(
         computer: bot.computer,
         files: bot.files,
         seat: bot.seat,
+        voice: bot.voice,
         apiKey: deps.apiKey,
         baseUrl: deps.llmBaseUrl,
         model: deps.llmModel,

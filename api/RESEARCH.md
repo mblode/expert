@@ -148,6 +148,54 @@ behaviour instead: a per-Bot mutex returning `409 CONFLICT "bot is busy"`.
 `Queue` alone would be strictly better; the phone should not get an error
 because the agent is mid-turn.
 
+## The persistence contract
+
+The single most-asked question in the Cursor forum threads (indexed by
+[awesome-grok-bot](https://github.com/RongleCat/awesome-grok-bot)) is what a
+"computer update" costs you. Staff answers there settle it, and the answer is
+narrower than users expect:
+
+| Path | Survives a computer update? |
+|---|---|
+| `/workspace` | yes |
+| browser profile | yes |
+| `~/.config` | yes |
+| `~/.local/state` | **no** |
+| `apt install`ed packages | **no** — the OS image is rebuilt |
+| background processes | no — the box sleeps when idle |
+
+`~/.local/state` is the one that draws the threads: it is where WhatsApp Web
+and Signal keep a linked device, so users re-scan the QR after every update
+and read it as a bug. It is not — it is the boundary.
+
+The staff remedy for packages is a **list in a file** that the agent
+reinstalls after an update, not a persisted package store. We copy the
+boundary exactly, including its sharp edges. The point is that a skill
+written for a Bot runs here unmodified; a wider boundary is as wrong as a
+narrower one, because a skill written against ours would then break on
+theirs.
+
+**"Nix package persistence" stays on `plan.md`'s cut list.** apt packages
+dying on an image rebuild is not a defect we inherited by accident — it is
+the behaviour Grok has. Baking a Nix store to keep them would make this box
+*more* durable than the thing we are cloning, which breaks the contract in
+the direction nobody notices until a skill relies on it. The fix is
+documentation (README's "What survives"), not a volume.
+
+Two volumes carry this: `workspace:/workspace` and `config:/home/box/.config`.
+`~/.config` is one volume rather than a parent plus a nested
+`config/chromium` one — Docker mounts parent before child and both do
+persist, verified, but the nested form leaves a permanently empty
+`chromium/` in the parent, so anyone inspecting or backing up the parent
+volume silently misses the profile. One volume also covers windows 2–8,
+whose profiles live at `~/.config/chromium-N` and were previously on the
+container layer, i.e. lost on every rebuild.
+
+Our window claims sit in `/workspace/.window-assignments.json`, not beside
+the 0.18 app's `/home/box/.sand-window-assignments.json` in `$HOME`:
+`$HOME` is not on a volume here, and a rebuild must not cost a Bot its
+screen.
+
 ## What the first-party protocol does that we don't
 
 Read off `xai-tool-protocol`. Each is a deliberate difference, not an

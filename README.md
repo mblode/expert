@@ -65,6 +65,23 @@ Clipboard, `vncUrl`, and pointer are **not** model tools. VNC is view-only — t
 
 **Many Bots, one box.** Each Bot owns a screen (window index = X display, `:1`–`:8`, RFB on `5900 + N`); its token is its identity — **agent token → Bot → screen**, the model never names a display. Bots are provisioned at runtime; the roster lives in `data/bots.json` (gitignored — it holds tokens). Bots are **not** security boundaries: one `box` user, shared `/workspace`.
 
+## What survives
+
+Two paths persist, and that is Grok Bot's own boundary — matched deliberately, so a skill written for a Bot needs no edit here.
+
+| | `docker compose restart` | rebuild (`npm run up`, `up --build`) | `down -v` |
+|---|:--:|:--:|:--:|
+| `/workspace` — files, the Bot's own state | yes | yes | no |
+| `~/.config` — every Chromium profile, app config | yes | yes | no |
+| `~/.local/state` — WhatsApp/Signal linked devices | yes | **no** | no |
+| `~/.ssh`, `~/.gitconfig`, anything else in `~` | yes | **no** | no |
+| `apt install`ed packages | yes | **no** | no |
+| running processes, `/tmp`, X displays | no | no | no |
+
+The bold cells are the ones that bite. A rebuild replaces the image, so packages go with it — keep the list in `/workspace/packages.txt` and have the agent reinstall after an update, the same drill Grok users are given. A linked-device session under `~/.local/state` has to be re-scanned. Anything else you want to keep, put in `/workspace` and symlink.
+
+Window claims live in `/workspace/.window-assignments.json`, so a rebuild does not cost a Bot its screen — the desk restarts every window it had.
+
 ## Compute
 
 Provider-agnostic: any Linux machine that stays on and runs Docker — a Hetzner/DO VM, a spare mini PC. Vercel/Cloudflare Workers/Railway can't host a standing desktop. The hub binds `127.0.0.1`; Tailscale Serve publishes HTTPS. Do not bind `0.0.0.0`.

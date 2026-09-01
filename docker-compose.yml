@@ -9,8 +9,14 @@ services:
     environment:
       DISPLAY: ":1"
     volumes:
+      # Grok's persistence boundary, matched: /workspace and ~/.config
+      # survive a rebuild; ~/.local/state and apt packages do not.
+      # One volume for ~/.config, not a nested chromium one — nesting works
+      # but hides the profile from anyone inspecting or backing up the
+      # parent, and every window's profile (chromium, chromium-2…8) is
+      # already under here.
       - workspace:/workspace
-      - browser:/home/box/.config/chromium
+      - config:/home/box/.config
     ports:
       # One RFB port per window index: 5900 + N (primary :1 → 5901).
       - "127.0.0.1:5901-5908:5901-5908"
@@ -18,4 +24,4 @@ services:
 
 volumes:
   workspace:
-  browser:
+  config:

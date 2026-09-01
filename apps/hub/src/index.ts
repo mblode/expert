@@ -1,8 +1,9 @@
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { createHub } from "./app.ts";
 import { DEFAULT_EVE_URL } from "./handler/eve-proxy.ts";
 import { createDesk, DockerWindowManager, NoopWindowManager } from "./desk/index.ts";
-import { FileBotStore } from "./service/provision.ts";
+import { loadPolicy } from "./service/policy.ts";
+import { FileBotStore, FileSeatTokenStore } from "./service/provision.ts";
 
 const bind = process.env.COMPUTER_BIND ?? "127.0.0.1";
 if (bind !== "127.0.0.1" && bind !== "localhost") {
@@ -15,6 +16,9 @@ const publicUrl = process.env.COMPUTER_PUBLIC_URL ?? `http://127.0.0.1:${port}`;
 const vncUrl =
   process.env.COMPUTER_VNC_URL ?? `${publicUrl.replace(/\/$/, "")}/vnc/index.html?view_only=1`;
 const dockerMode = (process.env.COMPUTER_DESK ?? "fake") === "docker";
+// Paired seats and policy live beside the roster, wherever the operator put it.
+const rosterPath = resolve(process.env.COMPUTER_DATA ?? "data/bots.json");
+const dataDir = dirname(rosterPath);
 
 const hub = createHub({
   setupCode: process.env.COMPUTER_SETUP_CODE ?? "",
@@ -22,7 +26,9 @@ const hub = createHub({
   windows: dockerMode
     ? new DockerWindowManager(process.env.COMPUTER_DESK_CONTAINER ?? "computer-desk")
     : new NoopWindowManager(),
-  store: new FileBotStore(resolve(process.env.COMPUTER_DATA ?? "data/bots.json")),
+  store: new FileBotStore(rosterPath),
+  seatStore: new FileSeatTokenStore(join(dataDir, "seats.json")),
+  policy: loadPolicy(join(dataDir, "policy.json")),
   vncUrl,
   vncHost: process.env.COMPUTER_VNC_HOST ?? "127.0.0.1",
   // RFB port for window N is base + N (primary :1 → 5901).

@@ -38,39 +38,92 @@ export class FileBotStore implements BotStore {
    * overwrite every existing token.
    */
   load(): BotConfig[] {
-    let raw: string;
-    try {
-      raw = readFileSync(this.path, "utf8");
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
-      throw new Error(
-        `bot roster ${this.path} could not be read (${(err as Error).message}). It is the only record of every bot token — fix the file or its permissions, or move it aside to start a fresh box.`,
-      );
-    }
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(raw);
-    } catch (err) {
-      throw new Error(
-        `bot roster ${this.path} is not valid JSON (${(err as Error).message}). It is the only record of every bot token — restore it from a backup, or move it aside to start a fresh box.`,
-      );
-    }
-    if (!Array.isArray(parsed)) {
-      throw new Error(
-        `bot roster ${this.path} must be a JSON array of bots, got ${parsed === null ? "null" : typeof parsed}. It is the only record of every bot token — restore it from a backup, or move it aside to start a fresh box.`,
-      );
-    }
-    return parsed as BotConfig[];
+    return (readTokenFile(this.path, "bot roster") as BotConfig[] | undefined) ?? [];
   }
 
-  /** Atomic: a crash mid-write leaves the previous roster (and its tokens) intact. */
   save(configs: BotConfig[]): void {
-    const dir = dirname(this.path);
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const tmp = join(dir, `.${basename(this.path)}.${process.pid}.tmp`);
-    writeFileSync(tmp, JSON.stringify(configs, null, 2) + "\n", { mode: 0o600 });
-    renameSync(tmp, this.path);
+    writeTokenFile(this.path, configs);
   }
+}
+
+/**
+ * Paired seats. Same file discipline as the roster, and for the same reason:
+ * these tokens are the only thing standing between a phone and the box, and
+ * losing them silently unpairs every device with no way back but the setup
+ * code. They were in-memory, so every hub restart did exactly that.
+ */
+export interface SeatTokenStore {
+  load(): string[];
+  save(tokens: string[]): void;
+}
+
+export class MemorySeatTokenStore implements SeatTokenStore {
+  private tokens: string[] = [];
+
+  load(): string[] {
+    return this.tokens;
+  }
+
+  save(tokens: string[]): void {
+    this.tokens = tokens;
+  }
+}
+
+export class FileSeatTokenStore implements SeatTokenStore {
+  constructor(private readonly path: string) {}
+
+  load(): string[] {
+    const parsed = readTokenFile(this.path, "seat tokens");
+    if (parsed === undefined) return [];
+    if (parsed.some((t) => typeof t !== "string")) {
+      throw new Error(`seat tokens ${this.path} must be a JSON array of strings`);
+    }
+    return parsed as string[];
+  }
+
+  save(tokens: string[]): void {
+    writeTokenFile(this.path, tokens);
+  }
+}
+
+/**
+ * A missing file is a fresh box; anything else throws. Never degrade a file
+ * of tokens to "empty" — that is indistinguishable from a wipe, and the
+ * caller would happily write the empty state back over it.
+ */
+function readTokenFile(path: string, what: string): unknown[] | undefined {
+  let raw: string;
+  try {
+    raw = readFileSync(path, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw new Error(
+      `${what} ${path} could not be read (${(err as Error).message}). It is the only record of these tokens — fix the file or its permissions, or move it aside to start fresh.`,
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    throw new Error(
+      `${what} ${path} is not valid JSON (${(err as Error).message}). It is the only record of these tokens — restore it from a backup, or move it aside to start fresh.`,
+    );
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error(
+      `${what} ${path} must be a JSON array, got ${parsed === null ? "null" : typeof parsed}. It is the only record of these tokens — restore it from a backup, or move it aside to start fresh.`,
+    );
+  }
+  return parsed;
+}
+
+/** Atomic: a crash mid-write leaves the previous file (and its tokens) intact. */
+function writeTokenFile(path: string, value: unknown): void {
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const tmp = join(dir, `.${basename(path)}.${process.pid}.tmp`);
+  writeFileSync(tmp, JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
+  renameSync(tmp, path);
 }
 
 export class ProvisionService {

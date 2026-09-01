@@ -44,7 +44,7 @@ describe("Connect HTTP", () => {
     };
     expect(spec.id).toBe("computer.v1");
     expect(spec.display).toEqual({ width: 1280, height: 800, scale: 1 });
-    expect(spec.tools).toEqual(["computer", "shell", "read_file", "write_file"]);
+    expect(spec.tools).toEqual(["send_message", "computer", "shell", "read_file", "write_file"]);
     const raw = await fetch(`${h.url}/spec`);
     const json = (await raw.json()) as { id: string };
     expect(json.id).toBe("computer.v1");
@@ -174,6 +174,82 @@ describe("Connect HTTP", () => {
     const text = await res.text();
     expect(text).toContain("waiting");
     expect(h.hub.bots.primary().seat.getState()).toBe("WAITING");
+  });
+
+  it("the chat stream carries occurrences, never raw model prose", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    const res = await fetch(`${h.url}/chat`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ message: "what can you do" }),
+    });
+    const text = await res.text();
+    const events = text
+      .split("\n\n")
+      .filter((b) => b.startsWith("data: "))
+      .map((b) => JSON.parse(b.slice(6)) as { type: string; occurrence?: { kind: string; text?: string } });
+
+    // The old shape is gone: nothing reaches the phone as a raw delta.
+    expect(events.some((e) => e.type === "delta")).toBe(false);
+
+    // The human's own message is the first occurrence, then the reply.
+    const kinds = events.filter((e) => e.type === "occurrence").map((e) => e.occurrence!.kind);
+    expect(kinds[0]).toBe("human");
+    expect(kinds).toContain("text");
+
+    // And the log is the same one the voice keeps, so the thread persists.
+    const log = h.hub.bots.primary().voice.page().entries;
+    expect(log.map((o) => o.kind)).toEqual(kinds);
+  });
+
+  it("a secret reaches the clipboard over the wire and appears in no response", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    const bot = h.hub.bots.primary();
+
+    // The agent asks for a masked field.
+    const { occurrence_id } = await bot.voice.send({
+      kind: "secret_request",
+      prompt: "GitHub wants your 2FA code",
+      label: "2FA code",
+    });
+
+    const res = await fetch(`${h.url}/computer.v1.Seat/ProvideSecret`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({ occurrence_id, value: "424242" }),
+    });
+    expect(res.status).toBe(200);
+    expect(await res.text()).not.toContain("424242");
+
+    // It landed exactly once, on the box clipboard.
+    expect(h.desk.clipboard).toBe("424242");
+
+    // And the thread the phone can read never carries it.
+    const thread = await fetch(`${h.url}/computer.v1.Seat/Occurrences`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    const body = await thread.text();
+    expect(body).not.toContain("424242");
+    expect(body).toContain("secret_request");
+  });
+
+  it("Occurrences and ProvideSecret both require a seat token", async () => {
+    const h = await startHub();
+    opened.push(h);
+    for (const m of ["Occurrences", "ProvideSecret"]) {
+      const res = await fetch(`${h.url}/computer.v1.Seat/${m}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(401);
+    }
   });
 
   it("GET /healthz is public and does not leak seat state", async () => {

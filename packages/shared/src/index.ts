@@ -34,6 +34,17 @@ export type OccurrenceKind = (typeof OCCURRENCE_KINDS)[number];
 
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
+/**
+ * Closed on the way in, additive on the way out.
+ *
+ * model→hub stays strict: an unknown action type or send kind is VALIDATION,
+ * loudly, because a typo in a tool call is a bug the model must see. But
+ * hub→client is the opposite direction and grows: DENIED joined this union,
+ * `denied` joined ActionResult, and `reason`/`phase` ride along on the error
+ * envelope. A client that hard-fails on an unrecognised ErrorCode or
+ * ActionResult kind breaks on the next hub release — degrade to the generic
+ * case (treat it as an error, render the message) instead.
+ */
 export type ErrorCode =
   | "UNAUTHENTICATED"
   | "SEAT_HELD"
@@ -41,7 +52,8 @@ export type ErrorCode =
   | "PATH_REJECTED"
   | "DAEMON_DOWN"
   | "VALIDATION"
-  | "CONFLICT";
+  | "CONFLICT"
+  | "DENIED";
 
 export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   UNAUTHENTICATED: 401,
@@ -51,20 +63,59 @@ export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
   DAEMON_DOWN: 503,
   VALIDATION: 400,
   CONFLICT: 409,
+  DENIED: 403,
 };
 
-export type ApiError = { error: { code: ErrorCode; message: string } };
+/**
+ * Why the box could not be reached, and whether trying again can help.
+ *
+ * "DAEMON_DOWN" alone tells a phone nothing it can act on. These three
+ * fields are the first-party workspace_unavailable shape, restricted to
+ * what this architecture can actually determine: there is no hibernation
+ * and nothing idles out here, so `hibernated` and `idle_timeout` are named
+ * for wire compatibility and never emitted.
+ */
+export type UnavailableReason =
+  | "idle_timeout"
+  | "disconnect"
+  | "shutdown"
+  | "not_bound"
+  | "instance_gone"
+  | "hibernated"
+  | "unknown";
+
+export type UnavailablePhase = "in_flight_cancelled" | "route_missing" | "attach" | "unknown";
+
+export type Unavailable = {
+  reason: UnavailableReason;
+  phase: UnavailablePhase;
+  /** Client contract. False only when no amount of retrying will bind a route. */
+  retryable: boolean;
+};
+
+/** route_missing means there is nothing to attach to; everything else may come back. */
+export function unavailable(reason: UnavailableReason, phase: UnavailablePhase): Unavailable {
+  return { reason, phase, retryable: phase !== "route_missing" };
+}
+
+export type ApiError = {
+  error: { code: ErrorCode; message: string } & Partial<Unavailable>;
+};
 
 export class ComputerError extends Error {
   readonly code: ErrorCode;
-  constructor(code: ErrorCode, message: string) {
+  /** DAEMON_DOWN only: why, and whether a retry is worth it. */
+  readonly detail?: Unavailable;
+
+  constructor(code: ErrorCode, message: string, detail?: Unavailable) {
     super(message);
     this.name = "ComputerError";
     this.code = code;
+    this.detail = detail;
   }
 
   toEnvelope(): ApiError {
-    return { error: { code: this.code, message: this.message } };
+    return { error: { code: this.code, message: this.message, ...this.detail } };
   }
 
   httpStatus(): number {
@@ -88,10 +139,17 @@ export type Action =
   | { type: "zoom"; x: PixelX; y: PixelY; w: number; h: number }
   | { type: "request_takeover" };
 
+/**
+ * Three terminal states, not two: `denied` is the hub's own answer, not a
+ * failure of the box. It means a policy rule refused the action before it
+ * ran, so retrying the identical action is pointless — the model needs the
+ * human, or a different plan.
+ */
 export type ActionResult =
   | { kind: "ok"; duration_ms: number; image_b64?: string; media_type?: string }
-  | { kind: "error"; duration_ms: number; code: ErrorCode; message: string }
-  | { kind: "skipped"; reason: "prior_failed" | "after_takeover" };
+  | ({ kind: "error"; duration_ms: number; code: ErrorCode; message: string } & Partial<Unavailable>)
+  | { kind: "denied"; rule: string; reason: string }
+  | { kind: "skipped"; reason: "prior_failed" | "after_takeover" | "after_denied" };
 
 export type PendingCheck = {
   id: string;

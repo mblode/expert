@@ -12,6 +12,25 @@ enum ClientError: LocalizedError {
         case .decode: return "bad response"
         }
     }
+
+    /// Whether trying the same call again could plausibly work — what the UI
+    /// keys on to decide between a retry button and a dead end. The hub says so
+    /// outright on DAEMON_DOWN; everywhere else it is derived from the code, and
+    /// a code this build does not know counts as retryable rather than terminal,
+    /// as does a transport error that never reached the hub at all.
+    static func retryable(_ error: Error) -> Bool {
+        guard let error = error as? ClientError else { return true }
+        switch error {
+        case .http(let api):
+            if let retryable = api.error.retryable { return retryable }
+            switch api.error.code {
+            case .unauthenticated, .pathRejected, .validation, .outOfBounds, .denied: return false
+            case .seatHeld, .daemonDown, .conflict, .unknown: return true
+            }
+        case .status(let code): return code >= 500 || code == 429
+        case .decode: return false
+        }
+    }
 }
 
 struct ComputerClient: Sendable {

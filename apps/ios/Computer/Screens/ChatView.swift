@@ -11,6 +11,11 @@ struct ChatView: View {
                 if model.waiting {
                     WaitingBanner()
                 }
+                if let failure = model.reach.failure {
+                    UnreachableBanner(message: failure.message, retryable: failure.retryable) {
+                        Task { await model.retry() }
+                    }
+                }
                 transcript
                 composer
             }
@@ -114,5 +119,48 @@ struct WaitingBanner: View {
             .padding(10)
             .background(Color.orange.opacity(0.9))
             .foregroundStyle(.black)
+    }
+}
+
+/// The box did not answer. Said out loud with a way back, because the
+/// alternative is a stale status behind pixels that never arrive.
+struct UnreachableBanner: View {
+    let message: String
+    let retryable: Bool
+    let retry: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label(message, systemImage: "exclamationmark.triangle.fill")
+                .font(.footnote.weight(.medium))
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if retryable {
+                Button("Retry", action: retry)
+                    .font(.footnote.weight(.semibold))
+                    .buttonStyle(.bordered)
+            }
+        }
+        .padding(10)
+        .background(Color.red.opacity(0.9))
+        .foregroundStyle(.white)
+    }
+}
+
+/// A refused pointer or keystroke — SEAT_HELD while the agent is driving,
+/// OUT_OF_BOUNDS off the edge of the desktop. Tap to dismiss.
+struct SeatErrorBanner: View {
+    let message: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        Button(action: dismiss) {
+            Label(message, systemImage: "hand.raised.fill")
+                .font(.footnote.weight(.medium))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(10)
+                .background(.ultraThinMaterial)
+        }
+        .buttonStyle(.plain)
+        .accessibilityHint("Dismiss")
     }
 }

@@ -1,7 +1,8 @@
 import { createHub, type Hub } from "../src/app.ts";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { NoopWindowManager } from "../src/desk/windows.ts";
-import { MemoryBotStore } from "../src/service/provision.ts";
+import { MemoryBotStore, MemorySeatTokenStore, type SeatTokenStore } from "../src/service/provision.ts";
+import type { PolicyService } from "../src/service/policy.ts";
 import type { BotConfig } from "../src/service/bots.ts";
 
 export const SETUP_CODE = "setup-code-test";
@@ -13,6 +14,7 @@ export type StartedHub = {
   desks: Map<number, FakeDesk>;
   windows: NoopWindowManager;
   store: MemoryBotStore;
+  seatStore: SeatTokenStore;
   url: string;
   agent: string;
   setup: string;
@@ -26,13 +28,21 @@ export type StartedHub = {
  * its own FakeDesk (or the one you provide in `desks`).
  */
 export async function startHub(
-  opts: { bots?: BotConfig[]; desks?: Map<number, FakeDesk>; vncBasePort?: number } = {},
+  opts: {
+    bots?: BotConfig[];
+    desks?: Map<number, FakeDesk>;
+    vncBasePort?: number;
+    /** Pass one to survive a restart in-test; a fresh hub loads what it saved. */
+    seatStore?: SeatTokenStore;
+    policy?: PolicyService;
+  } = {},
 ): Promise<StartedHub> {
   const configs = opts.bots ?? [{ id: "main", display: 1, token: AGENT_TOKEN }];
   const desks = opts.desks ?? new Map<number, FakeDesk>();
   const windows = new NoopWindowManager();
   const store = new MemoryBotStore();
   store.save(configs);
+  const seatStore = opts.seatStore ?? new MemorySeatTokenStore();
   const hub = createHub({
     setupCode: SETUP_CODE,
     deskFactory: (display) => {
@@ -44,6 +54,8 @@ export async function startHub(
     },
     windows,
     store,
+    seatStore,
+    policy: opts.policy,
     vncBasePort: opts.vncBasePort,
     vncUrl: "http://127.0.0.1/vnc/index.html?view_only=1",
   });
@@ -58,6 +70,7 @@ export async function startHub(
     desks,
     windows,
     store,
+    seatStore,
     url,
     agent: AGENT_TOKEN,
     setup: SETUP_CODE,

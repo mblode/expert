@@ -1,5 +1,4 @@
 import { defineTool } from "eve/tools";
-import { once } from "eve/tools/approval";
 import { z } from "zod";
 import { hubRpc } from "../lib/hub";
 
@@ -21,7 +20,20 @@ export default defineTool({
     timeout_sec: z.number().int().min(1).max(120).optional(),
   }),
   // First shell command per session asks the human once; after that it flows.
-  approval: once(),
+  //
+  // Schedules run in task mode, which cannot park for a person: there, an
+  // approval prompt is not a pause, it is a failed run. Those turns carry the
+  // app principal, so they skip the gate and the rest of `once()` is inlined —
+  // approved once, then free for the remainder of the session.
+  approval: ({ session, toolName, approvedTools }) => {
+    const auth = session.auth.current;
+    const isScheduledRun =
+      auth?.authenticator === "app" &&
+      auth.principalId === "eve:app" &&
+      auth.principalType === "runtime";
+    if (isScheduledRun || approvedTools.has(toolName)) return "not-applicable";
+    return "user-approval";
+  },
   async execute(input) {
     return await hubRpc<ShellResponse>("shell", input);
   },

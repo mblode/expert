@@ -21,8 +21,10 @@ struct ComputerView: View {
             GeometryReader { geo in
                 ZStack {
                     if let url = vncURL {
-                        VncView(url: url)
-                            .allowsHitTesting(false)
+                        VncView(url: url, reloadToken: model.vncReload) { message in
+                            model.reportDesktopFailure(message)
+                        }
+                        .allowsHitTesting(false)
                     } else {
                         Color.black
                     }
@@ -37,6 +39,19 @@ struct ComputerView: View {
                             .frame(width: 10, height: 10)
                             .position(CoordinateMap.viewPoint(from: (c.x, c.y), in: CGRect(origin: .zero, size: geo.size)))
                             .allowsHitTesting(false)
+                    }
+                    // Over the pixels, because the failure this reports is that
+                    // there are none — the black underneath explains nothing.
+                    VStack {
+                        if let failure = model.reach.failure {
+                            UnreachableBanner(message: failure.message, retryable: failure.retryable) {
+                                Task { await model.retry() }
+                            }
+                        }
+                        Spacer()
+                        if let error = seat.error {
+                            SeatErrorBanner(message: error) { seat.error = nil }
+                        }
                     }
                 }
             }
@@ -69,7 +84,7 @@ struct ComputerView: View {
                                 let t = typed
                                 typed = ""
                                 showKeyboard = false
-                                Task { try? await seat.type(t) }
+                                Task { await seat.type(t) }
                             }
                         }
                         ToolbarItem(placement: .cancellationAction) {
@@ -194,6 +209,7 @@ struct ComputerView: View {
 @MainActor
 final class SeatController: ObservableObject {
     @Published var trackpad = false
+    @Published var error: String?
     @Published var cursor: ComputerV1.Point?
     @Published var vncURL: URL?
     /// Window index of the screen being driven. Nil = primary.
@@ -216,18 +232,12 @@ final class SeatController: ObservableObject {
                 y: min(max(at.y + dy, 0), ComputerV1.display.height - 1)
             )
         }
-        do {
-            let r = try await client.pointer(.move(dx: dx, dy: dy, grab: grab, display: display))
-            cursor = r.cursor
-        } catch { }
+        await perform { try await client.pointer(.move(dx: dx, dy: dy, grab: grab, display: self.display)) }
     }
 
     func click(button: String = "left") async {
         guard let client else { return }
-        do {
-            let r = try await client.pointer(.click(button: button, display: display))
-            cursor = r.cursor
-        } catch { }
+        await perform { try await client.pointer(.click(button: button, display: self.display)) }
     }
 
     func tapDesktop(x: Int, y: Int) async {
@@ -243,25 +253,30 @@ final class SeatController: ObservableObject {
 
     func scroll(dx: Int, dy: Int) async {
         guard let client else { return }
-        struct Scroll: Encodable { var type = "scroll"; var dx: Int; var dy: Int; var display: Int? }
-        var req = URLRequest(url: client.url(ComputerV1.seatPaths.pointer))
-        req.httpMethod = "POST"
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        if let token = client.token {
-            req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        req.httpBody = try? JSONEncoder().encode(Scroll(dx: dx, dy: dy, display: display))
-        _ = try? await URLSession.shared.data(for: req)
+        await perform { try await client.pointer(.scroll(dx: dx, dy: dy, display: self.display)) }
     }
 
-    func type(_ text: String) async throws {
+    func type(_ text: String) async {
         guard let client else { return }
-        let r = try await client.type(text, display: display)
-        cursor = r.cursor
+        await perform { try await client.type(text, display: self.display) }
     }
 
     func recenter() async {
         let cur = cursor ?? ComputerV1.Point(x: 640, y: 400)
         await move(dx: 640 - cur.x, dy: 400 - cur.y)
+    }
+
+    /// SEAT_HELD and OUT_OF_BOUNDS are the two things the seat says most, and
+    /// dropping them leaves a screen that ignores every gesture with no reason
+    /// given. Success clears the last one. A pan refused while the agent holds
+    /// the seat lands here at gesture rate, so only a change is published.
+    private func perform(_ call: () async throws -> ComputerV1.PointerResponse) async {
+        do {
+            cursor = try await call().cursor
+            if error != nil { error = nil }
+        } catch {
+            let message = error.localizedDescription
+            if self.error != message { self.error = message }
+        }
     }
 }

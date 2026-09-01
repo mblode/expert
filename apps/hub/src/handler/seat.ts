@@ -127,6 +127,33 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     return { text: o.text };
   });
 
+  // The thread. Read-only, and deliberately NOT gated on requireHumanContact:
+  // reading what was said is not taking the seat.
+  router.rpc(SeatMethods.Occurrences, "seat", async (ctx) => {
+    requireSeatToken(ctx);
+    const o = requireObject(ctx.body);
+    const bot = botFor(ctx, o);
+    const cursor = typeof o.cursor === "string" && o.cursor ? o.cursor : undefined;
+    const limit = typeof o.limit === "number" ? o.limit : undefined;
+    return bot.voice.page(cursor, limit);
+  });
+
+  // A masked value for an open secret_request. It goes to the clipboard and
+  // nowhere else — not the log, not the response, not the model's context.
+  // Nothing here may echo `value` back, including in an error message.
+  router.rpc(SeatMethods.ProvideSecret, "seat", async (ctx) => {
+    requireSeatToken(ctx);
+    const o = requireObject(ctx.body);
+    const bot = botFor(ctx, o);
+    await bot.desk.ping();
+    if (typeof o.occurrence_id !== "string" || !o.occurrence_id) {
+      throw new ComputerError("VALIDATION", "occurrence_id is required");
+    }
+    if (typeof o.value !== "string") throw new ComputerError("VALIDATION", "value is required");
+    await bot.voice.provideSecret(o.occurrence_id, o.value);
+    return { provided: true };
+  });
+
   // Provisioning: a paired seat is the box owner.
   router.rpc(SeatMethods.CreateBot, "seat", async (ctx) => {
     requireSeatToken(ctx);

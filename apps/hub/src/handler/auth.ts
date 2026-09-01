@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { ComputerError } from "@computer/shared";
 import type { AuthPolicy } from "@computer/proto";
+import { MemorySeatTokenStore, type SeatTokenStore } from "../service/provision.ts";
 
 export type TokenKind = "agent" | "seat";
 
@@ -10,9 +11,15 @@ export class AuthRegistry {
   private readonly setupCode: string;
   /** Live view of the roster: [token, botId] pairs. Provisioning needs no auth sync. */
   private readonly agentTokens: () => Iterable<[string, string]>;
-  private readonly seatTokens = new Set<string>();
+  private readonly seats: SeatTokenStore;
+  private readonly seatTokens: Set<string>;
 
-  constructor(opts: { setupCode: string; agentTokens: () => Iterable<[string, string]> }) {
+  constructor(opts: {
+    setupCode: string;
+    agentTokens: () => Iterable<[string, string]>;
+    /** Survives a restart. Memory only where nobody is meant to stay paired. */
+    seats?: SeatTokenStore;
+  }) {
     if (!opts.setupCode) {
       throw new Error("COMPUTER_SETUP_CODE is required — run `npm run up` to generate one");
     }
@@ -21,15 +28,15 @@ export class AuthRegistry {
     }
     this.setupCode = opts.setupCode;
     this.agentTokens = opts.agentTokens;
+    this.seats = opts.seats ?? new MemorySeatTokenStore();
+    this.seatTokens = new Set(this.seats.load());
   }
 
   pair(code: string): string {
     if (!safeEqual(code, this.setupCode)) {
       throw new ComputerError("UNAUTHENTICATED", "bad setup code");
     }
-    const token = randomBytes(24).toString("base64url");
-    this.seatTokens.add(token);
-    return token;
+    return this.mint();
   }
 
   verify(policy: AuthPolicy, bearer: string | undefined): Verified {
@@ -61,8 +68,18 @@ export class AuthRegistry {
 
   /** Test helper */
   issueSeatToken(): string {
+    return this.mint();
+  }
+
+  /**
+   * Persist before returning. A token handed to a phone that never reached
+   * disk is worse than a failed pairing: the phone believes it is paired and
+   * the next restart says otherwise, which is the bug this store exists for.
+   */
+  private mint(): string {
     const token = randomBytes(24).toString("base64url");
     this.seatTokens.add(token);
+    this.seats.save([...this.seatTokens]);
     return token;
   }
 }

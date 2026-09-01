@@ -13,9 +13,12 @@ import {
   type PendingCheck,
   type Point,
   type SeatState,
+  type Unavailable,
+  unavailable,
 } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 import { PNG_MEDIA } from "../desk/types.ts";
+import { PolicyService, type PolicyVerdict } from "./policy.ts";
 import type { SeatService } from "./seat.ts";
 
 export type ComputerOk = {
@@ -35,12 +38,14 @@ const WAIT_CAP_MS = 8000;
 export class ComputerService {
   private readonly desk: Desk;
   private readonly seat: SeatService;
+  private readonly policy: PolicyService;
   private readonly cache = new Map<string, Cached>();
   private checkSeq = 0;
 
-  constructor(desk: Desk, seat: SeatService) {
+  constructor(desk: Desk, seat: SeatService, policy: PolicyService = new PolicyService()) {
     this.desk = desk;
     this.seat = seat;
+    this.policy = policy;
   }
 
   async run(requestId: string, actions: Action[]): Promise<ComputerOk> {
@@ -64,13 +69,23 @@ export class ComputerService {
     await this.desk.ping();
 
     const results: ActionResult[] = [];
-    let skip: "prior_failed" | "after_takeover" | null = null;
+    let skip: "prior_failed" | "after_takeover" | "after_denied" | null = null;
     let lastExecuted: Action | undefined;
     let takeover = false;
+    const asked: PolicyVerdict[] = [];
 
     for (const action of actions) {
       if (skip) {
         results.push({ kind: "skipped", reason: skip });
+        continue;
+      }
+      // Before the box is touched, and before duration_ms starts: a denial is
+      // not a slow action, it is a different outcome.
+      const verdict = await this.policy.evaluate({ tool: "computer", action });
+      if (verdict.decision !== "allow") {
+        if (verdict.decision === "ask") asked.push(verdict);
+        results.push({ kind: "denied", rule: verdict.rule, reason: verdict.reason });
+        skip = "after_denied";
         continue;
       }
       const started = Date.now();
@@ -85,14 +100,15 @@ export class ComputerService {
         }
       } catch (err) {
         const duration_ms = Date.now() - started;
-        const { code, message } = toError(err);
-        results.push({ kind: "error", duration_ms, code, message });
+        results.push({ kind: "error", duration_ms, ...toError(err) });
         lastExecuted = action;
         skip = "prior_failed";
       }
     }
 
-    const pending_checks = takeover ? [] : await this.collectChecks();
+    // `ask` denies now and explains why: the check rides alongside the denial
+    // so the model stops and asks the human instead of retrying blind.
+    const pending_checks = takeover ? [] : [...this.askChecks(asked), ...await this.collectChecks()];
 
     const needsShot =
       lastExecuted !== undefined &&
@@ -197,6 +213,15 @@ export class ComputerService {
     }
   }
 
+  /** A policy `ask` becomes the advisory it always should have been. */
+  private askChecks(asked: PolicyVerdict[]): PendingCheck[] {
+    return asked.map((v) => ({
+      id: `chk_${++this.checkSeq}`,
+      code: "destructive" as const,
+      message: `${v.rule} needs the human: ${v.reason}`,
+    }));
+  }
+
   private async collectChecks(): Promise<PendingCheck[]> {
     const hint = await this.desk.focusHint();
     const out: PendingCheck[] = [];
@@ -229,9 +254,14 @@ function assertAction(action: Action): void {
   }
 }
 
-function toError(err: unknown): { code: ComputerError["code"]; message: string } {
-  if (err instanceof ComputerError) return { code: err.code, message: err.message };
-  return { code: "DAEMON_DOWN", message: err instanceof Error ? err.message : "unknown error" };
+/** Carries the DAEMON_DOWN detail into the per-action result, not just the envelope. */
+function toError(err: unknown): { code: ComputerError["code"]; message: string } & Partial<Unavailable> {
+  if (err instanceof ComputerError) return { code: err.code, message: err.message, ...err.detail };
+  return {
+    code: "DAEMON_DOWN",
+    message: err instanceof Error ? err.message : "unknown error",
+    ...unavailable("unknown", "unknown"),
+  };
 }
 
 function hashBody(requestId: string, actions: Action[]): string {

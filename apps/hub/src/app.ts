@@ -10,7 +10,8 @@ import { handleChat } from "./handler/chat.ts";
 import { DEFAULT_EVE_URL, handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
-import { ProvisionService, type BotStore } from "./service/provision.ts";
+import { PolicyService } from "./service/policy.ts";
+import { ProvisionService, type BotStore, type SeatTokenStore } from "./service/provision.ts";
 import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
 import { attachVncProxy } from "./vnc-proxy.ts";
@@ -23,6 +24,10 @@ export type HubOptions = {
   windows: WindowManager;
   /** Persists the roster; FileBotStore in production, MemoryBotStore in tests. */
   store: BotStore;
+  /** Persists paired seat tokens. Without it every restart unpairs every phone. */
+  seatStore: SeatTokenStore;
+  /** Hub-side approval gate. Absent = no rules = allow. */
+  policy?: PolicyService;
   vncUrl: string;
   vncHost?: string;
   /** RFB port for window N is vncBasePort + N (primary :1 → 5901). */
@@ -47,11 +52,12 @@ export type Hub = {
 };
 
 export function createHub(opts: HubOptions): Hub {
-  const bots = new BotRegistry(opts.deskFactory, opts.store.load());
+  const bots = new BotRegistry(opts.deskFactory, opts.store.load(), opts.policy);
   const provision = new ProvisionService(bots, opts.windows, opts.store);
   const auth = new AuthRegistry({
     setupCode: opts.setupCode,
     agentTokens: () => bots.tokenEntries(),
+    seats: opts.seatStore,
   });
   const router = new ConnectRouter(auth);
 

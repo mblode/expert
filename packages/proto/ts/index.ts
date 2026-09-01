@@ -32,6 +32,7 @@ function path(service: { typeName: string }, method: { name: string }): string {
 
 export const AgentMethods = {
   Spec: path(Agent, Agent.method.spec),
+  SendMessage: path(Agent, Agent.method.sendMessage),
   Computer: path(Agent, Agent.method.computer),
   Shell: path(Agent, Agent.method.shell),
   ReadFile: path(Agent, Agent.method.readFile),
@@ -46,6 +47,8 @@ export const SeatMethods = {
   Type: path(Seat, Seat.method.type),
   ClipboardGet: path(Seat, Seat.method.clipboardGet),
   ClipboardSet: path(Seat, Seat.method.clipboardSet),
+  Occurrences: path(Seat, Seat.method.occurrences),
+  ProvideSecret: path(Seat, Seat.method.provideSecret),
   CreateBot: path(Seat, Seat.method.createBot),
   DeleteBot: path(Seat, Seat.method.deleteBot),
 } as const;
