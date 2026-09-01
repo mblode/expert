@@ -146,7 +146,7 @@ other sentence. Do not write it.
 |---|---|
 | One box, many Bots, one screen per Bot (max 8) | Bot roster UI, Firecracker snapshot/hibernation |
 | VNC view-only + native chrome | WebRTC |
-| uinput | Anything using `XSendEvent` |
+| XTEST (`xdotool`) | Anything using `XSendEvent`; uinput, which no virtual X server reads |
 | UTF-8 clipboard | Images |
 | `pending_checks` + takeover | Model-side acknowledge RPC |
 | Hetzner + Tailscale Serve | Public bind, Nix bake |

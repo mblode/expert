@@ -25,7 +25,7 @@ hub  (TypeScript, loopback + Tailscale Serve)
 desk (Docker)
   Ubuntu, Openbox, Chromium, TigerVNC :5900, 1280×800
   Volume: /workspace + browser profile
-  uinput/xdotool for pointer (not XSendEvent)
+  XTEST via xdotool for pointer (not XSendEvent)
 ```
 
 **iOS is the product surface.** Hub and desk exist so the phone has something to drive after the MacBook lid closes.
@@ -83,7 +83,7 @@ One Docker image. TigerVNC 1280×800. Chromium. Persistent volume. Non-root `box
 - **One box, many Bots, one screen per Bot.** Window index = X display: primary `:1`, forks `:2`–`:8`, RFB on `5900 + N`. Claims live in `~/.window-assignments.json` on the box with sha256 owner hashes. Agent token → Bot → screen; the seat FSM is per screen. Default config is still exactly one Bot on `:1`.
 - **Protocol is [api/DESIGN.md](api/DESIGN.md).** One action union, Claude skip-the-rest, pixel coords, seat FSM. Not a 64-tool MCP server. Not Gemini 0–999.
 - **1280×800.** Agent and iOS share that sentence; do not add resolution settings.
-- **uinput for pointer.** TigerVNC `XSendEvent` is ignored by GTK; Wine/Chrome need real input.
+- **XTEST for pointer.** TigerVNC `XSendEvent` is ignored by GTK. uinput was the first guess and is a dead end against a virtual X server: it injects into the kernel input layer, which Xvnc never reads, so it exits 0 and moves nothing. XTEST is real input at the X server and drives Chromium; it also works on a real Xorg desktop, so there is no second backend.
 - **No Next.js, Vercel, or Fly.** Constraint is a standing Linux desktop. Deploy: Docker Compose on a Hetzner box (CX33 €8.49/mo is the sweet spot; CX43 €15.99/mo post the June-2026 price rise) or any always-on Docker host + Tailscale. Cloudflare Tunnel + Access browser-rendered VNC is a clientless alternative front door — noted, not adopted.
 - **TypeScript monorepo for hub/proto only.** iOS is Xcode; desk is a Dockerfile. Do not invent a shared React Native client.
 
@@ -99,7 +99,7 @@ packages/shared/   # branded IDs, error codes (TS)
 
 No `packages/ui`. Two clients (WKWebView debug page, iOS) is not a third design system.
 
-Hub modules: `handler` (Connect adapters) → `service` (seat, clipboard, agent) → `desk` (docker exec / VNC / uinput). Lint: `desk` may not import `handler`.
+Hub modules: `handler` (Connect adapters) → `service` (seat, clipboard, agent) → `desk` (docker exec / VNC / XTEST). Lint: `desk` and `service` may not import `handler`.
 
 ## Out of scope
 
@@ -134,7 +134,7 @@ Simulator proves pair + RPC. Only the cellular run proves the product.
 
 ## STOP conditions
 
-- TigerVNC + uinput cannot click Chromium or a GTK app → stop, do not paper over with `XSendEvent`.
+- ~~TigerVNC + uinput cannot click Chromium or a GTK app~~ → **fired and resolved.** uinput could not; XTEST can, verified against real Chromium. No `XSendEvent` anywhere.
 - WKWebView cannot show view-only noVNC without stealing gestures → stop, switch that webview to a still-JPEG fallback only after logging it; do not start a WebRTC rewrite.
 - Tailscale Serve cannot reach the phone on cellular → stop, do not bind hub to `0.0.0.0`.
 

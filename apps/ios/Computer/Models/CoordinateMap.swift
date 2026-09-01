@@ -4,9 +4,22 @@ enum CoordinateMap {
     static let width: CGFloat = 1280
     static let height: CGFloat = 800
 
+    /// Points-per-desktop-pixel when 1280×800 is letterboxed into `bounds`.
+    static func scale(in bounds: CGRect) -> CGFloat {
+        min(bounds.width / width, bounds.height / height)
+    }
+
+    /// A finger translation in view points as a desktop-pixel vector (1:1 with
+    /// the on-screen image). Unclamped, so it stays usable as a relative delta.
+    static func desktopVector(from view: CGPoint, in bounds: CGRect) -> CGPoint {
+        let scale = scale(in: bounds)
+        guard scale > 0 else { return .zero }
+        return CGPoint(x: view.x / scale, y: view.y / scale)
+    }
+
     /// Letterbox 1280×800 into `bounds`. Origin top-left, same sentence as the agent.
     static func desktopPoint(from view: CGPoint, in bounds: CGRect) -> (x: Int, y: Int) {
-        let scale = min(bounds.width / width, bounds.height / height)
+        let scale = scale(in: bounds)
         let w = width * scale
         let h = height * scale
         let x0 = bounds.minX + (bounds.width - w) / 2
@@ -19,7 +32,7 @@ enum CoordinateMap {
     }
 
     static func viewPoint(from desktop: (x: Int, y: Int), in bounds: CGRect) -> CGPoint {
-        let scale = min(bounds.width / width, bounds.height / height)
+        let scale = scale(in: bounds)
         let w = width * scale
         let h = height * scale
         let x0 = bounds.minX + (bounds.width - w) / 2

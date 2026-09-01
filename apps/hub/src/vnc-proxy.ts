@@ -42,9 +42,11 @@ export function attachVncProxy(
     });
     sock.on("close", () => ws.close());
     ws.on("message", (d) => {
+      // ws delivers Buffer | ArrayBuffer | Buffer[]; a fragmented frame arrives
+      // as the array and must be joined, not passed to Buffer.from().
       if (Buffer.isBuffer(d)) sock.write(d);
-      else if (d instanceof ArrayBuffer) sock.write(Buffer.from(d));
-      else sock.write(Buffer.from(d as Uint8Array));
+      else if (Array.isArray(d)) sock.write(Buffer.concat(d));
+      else sock.write(Buffer.from(d));
     });
     ws.on("close", () => sock.destroy());
   });

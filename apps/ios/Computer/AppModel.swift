@@ -87,31 +87,31 @@ final class AppModel: ObservableObject {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let client else { return }
         messages.append(ChatMessage(role: .user, text: trimmed))
-        var assistant = ChatMessage(role: .assistant, text: "")
-        messages.append(assistant)
+        messages.append(ChatMessage(role: .assistant, text: ""))
         let idx = messages.count - 1
         do {
+            // The stream callback is @Sendable, so accumulate into the array
+            // element on the MainActor rather than carrying a mutable struct across.
             try await client.chat(message: trimmed, botId: currentScreen?.botId) { event in
                 Task { @MainActor in
+                    guard self.messages.indices.contains(idx) else { return }
                     switch event.type {
                     case "delta":
-                        assistant.text += event.text ?? ""
-                        self.messages[idx] = assistant
+                        self.messages[idx].text += event.text ?? ""
                     case "waiting":
                         self.waiting = true
-                        assistant.text += assistant.text.isEmpty ? (event.message ?? "Seat is waiting.") : ""
-                        self.messages[idx] = assistant
+                        if self.messages[idx].text.isEmpty {
+                            self.messages[idx].text = event.message ?? "Seat is waiting."
+                        }
                     case "error":
-                        assistant.text += "\n\(event.message ?? event.code ?? "error")"
-                        self.messages[idx] = assistant
+                        self.messages[idx].text += "\n\(event.message ?? event.code ?? "error")"
                     default:
                         break
                     }
                 }
             }
         } catch {
-            assistant.text = error.localizedDescription
-            messages[idx] = assistant
+            messages[idx].text = error.localizedDescription
         }
         await refreshStatus()
     }

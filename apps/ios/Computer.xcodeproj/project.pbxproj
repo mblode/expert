@@ -19,6 +19,7 @@
 		B1000000000000000000000A /* ComputerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000A /* ComputerView.swift */; };
 		B1000000000000000000000B /* VncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000B /* VncView.swift */; };
 		B1000000000000000000000D /* DesktopGestures.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000D /* DesktopGestures.swift */; };
+		B1000000000000000000000C /* TrackpadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000C /* TrackpadView.swift */; };
 		B1000000000000000000000E /* ClipboardSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000E /* ClipboardSheet.swift */; };
 		B1000000000000000000000F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = C1000000000000000000000F /* Assets.xcassets */; };
 		B10000000000000000000020 /* CoordinateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C10000000000000000000020 /* CoordinateTests.swift */; };
@@ -49,6 +50,7 @@
 		C1000000000000000000000A /* ComputerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComputerView.swift; sourceTree = "<group>"; };
 		C1000000000000000000000B /* VncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VncView.swift; sourceTree = "<group>"; };
 		C1000000000000000000000D /* DesktopGestures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopGestures.swift; sourceTree = "<group>"; };
+		C1000000000000000000000C /* TrackpadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackpadView.swift; sourceTree = "<group>"; };
 		C1000000000000000000000E /* ClipboardSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardSheet.swift; sourceTree = "<group>"; };
 		C1000000000000000000000F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		C10000000000000000000020 /* CoordinateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoordinateTests.swift; sourceTree = "<group>"; };
@@ -134,6 +136,7 @@
 			children = (
 				C1000000000000000000000B /* VncView.swift */,
 				C1000000000000000000000D /* DesktopGestures.swift */,
+				C1000000000000000000000C /* TrackpadView.swift */,
 				C1000000000000000000000E /* ClipboardSheet.swift */,
 			);
 			path = Views;
@@ -260,6 +263,7 @@
 				B1000000000000000000000A /* ComputerView.swift in Sources */,
 				B1000000000000000000000B /* VncView.swift in Sources */,
 				B1000000000000000000000D /* DesktopGestures.swift in Sources */,
+				B1000000000000000000000C /* TrackpadView.swift in Sources */,
 				B1000000000000000000000E /* ClipboardSheet.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

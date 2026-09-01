@@ -26,7 +26,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     return `${deps.vncUrl}${sep}display=${display}`;
   };
 
-  const status = (token: string, display = PRIMARY_DISPLAY): BoxStatus => {
+  const status = (token: string, display: number = PRIMARY_DISPLAY): BoxStatus => {
     const bot = deps.bots.byDisplay(display);
     return {
       state: bot.seat.getState(),

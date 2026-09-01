@@ -73,7 +73,7 @@ fi
 #
 # AcceptKeyEvents/AcceptPointerEvents=0 make the RFB channel pixels-out
 # only: a viewer cannot inject input even if it tries. All input arrives
-# as XTEST/uinput from the hub, which is what enforces the seat.
+# as XTEST from the hub, which is what enforces the seat.
 Xvnc "$DISPLAY_NAME" \
   -geometry 1280x800 \
   -depth 24 \

@@ -15,6 +15,7 @@
     "proto:gen": "buf generate",
     "proto:check": "node scripts/proto-check.mjs",
     "lint": "node scripts/lint-layers.mjs",
+    "typecheck": "npm run typecheck --workspace=packages/shared && npm run typecheck --workspace=packages/proto && npm run typecheck --workspace=apps/hub",
     "test": "npm test --workspace=apps/hub",
     "hub": "npm run start --workspace=apps/hub",
     "eve": "npm --prefix apps/eve run dev"

@@ -3,6 +3,9 @@ import {
   ACTION_TYPES,
   ComputerError,
   DISPLAY,
+  asPixelX,
+  asPixelY,
+  asPoint,
   assertInBounds,
   inBounds,
   type Action,
@@ -260,15 +263,15 @@ function parseAction(raw: unknown, index: number): Action {
     case "move":
       return {
         type,
-        x: num(a.x, `${type}.x`),
-        y: num(a.y, `${type}.y`),
+        x: asPixelX(num(a.x, `${type}.x`)),
+        y: asPixelY(num(a.y, `${type}.y`)),
         ...(type !== "move" && a.button !== undefined ? { button: button(a.button) } : {}),
       } as Action;
     case "scroll":
       return {
         type: "scroll",
-        x: num(a.x, "scroll.x"),
-        y: num(a.y, "scroll.y"),
+        x: asPixelX(num(a.x, "scroll.x")),
+        y: asPixelY(num(a.y, "scroll.y")),
         dx: num(a.dx, "scroll.dx"),
         dy: num(a.dy, "scroll.dy"),
       };
@@ -287,7 +290,7 @@ function parseAction(raw: unknown, index: number): Action {
         path: a.path.map((p, j) => {
           if (!p || typeof p !== "object") throw new ComputerError("VALIDATION", `drag.path[${j}]`);
           const pt = p as Record<string, unknown>;
-          return { x: num(pt.x, `path[${j}].x`), y: num(pt.y, `path[${j}].y`) };
+          return asPoint(num(pt.x, `path[${j}].x`), num(pt.y, `path[${j}].y`));
         }),
       };
     case "wait":
@@ -295,8 +298,8 @@ function parseAction(raw: unknown, index: number): Action {
     case "zoom":
       return {
         type: "zoom",
-        x: num(a.x, "zoom.x"),
-        y: num(a.y, "zoom.y"),
+        x: asPixelX(num(a.x, "zoom.x")),
+        y: asPixelY(num(a.y, "zoom.y")),
         w: num(a.w, "zoom.w"),
         h: num(a.h, "zoom.h"),
       };

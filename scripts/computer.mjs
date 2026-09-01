@@ -71,7 +71,7 @@ async function up() {
   // 1. Desk container (skipped gracefully without a running Docker).
   if (dockerReady()) {
     console.log("• building the desk (first run takes a few minutes)…");
-    run("docker", ["compose", "up", "-d", "--build"]);
+    run("docker", ["compose", "up", "-d", "--build", "--force-recreate"]);
   } else if (has("docker")) {
     console.log("• docker is installed but its daemon is not running — start Docker Desktop or OrbStack, then re-run `npm run up`");
     console.log("  continuing with a fake desk so you can still pair and poke around");

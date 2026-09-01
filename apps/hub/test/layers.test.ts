@@ -25,7 +25,7 @@ describe("layers", () => {
   });
 
   it("assertAllPolicies fails if a Connect method is missing", () => {
-    const auth = new AuthRegistry({ setupCode: "s", agentToken: "a" });
+    const auth = new AuthRegistry({ setupCode: "s", agentTokens: () => [] });
     const router = new ConnectRouter(auth);
     expect(() => router.assertAllPolicies()).toThrow(/auth policy/);
     for (const path of ALL_METHODS) {
@@ -45,7 +45,7 @@ describe("layers", () => {
   });
 
   it("rpc() throws when policy is omitted", () => {
-    const auth = new AuthRegistry({ setupCode: "s", agentToken: "a" });
+    const auth = new AuthRegistry({ setupCode: "s", agentTokens: () => [] });
     const router = new ConnectRouter(auth);
     expect(() =>
       router.rpc("/computer.v1.Agent/Spec", undefined as never, async () => ({})),

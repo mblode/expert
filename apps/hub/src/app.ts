@@ -1,18 +1,17 @@
-import { createServer, type IncomingMessage, type ServerResponse, type Server } from "node:http";
-import { readFileSync, existsSync } from "node:fs";
-import { extname, join, resolve } from "node:path";
+import { createServer, type IncomingMessage, type Server } from "node:http";
+import { resolve } from "node:path";
 import { WebSocketServer } from "ws";
-import { AgentMethods } from "@computer/proto";
 import type { Desk } from "./desk/types.ts";
 import { AuthRegistry, tokenFromRequest } from "./handler/auth.ts";
 import { ConnectRouter, writeError, writeJson } from "./handler/router.ts";
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
+import { handleChat } from "./handler/chat.ts";
+import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
 import { ProvisionService, type BotStore } from "./service/provision.ts";
 import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
-import { runChat } from "./service/chat.ts";
 import { attachVncProxy } from "./vnc-proxy.ts";
 
 export type HubOptions = {
@@ -92,7 +91,7 @@ export function createHub(opts: HubOptions): Hub {
 
   const wss = new WebSocketServer({
     server,
-    verifyClient: (info) => auth.hasSeatToken(tokenFromRequest(info.req)),
+    verifyClient: (info: { req: IncomingMessage }) => auth.hasSeatToken(tokenFromRequest(info.req)),
   });
   attachVncProxy(wss, {
     host: opts.vncHost ?? "127.0.0.1",
@@ -124,128 +123,3 @@ function corsHeaders(): Record<string, string> {
     "access-control-allow-methods": "GET, POST, OPTIONS",
   };
 }
-
-async function handleChat(
-  req: IncomingMessage,
-  res: ServerResponse,
-  deps: {
-    bots: BotRegistry;
-    auth: AuthRegistry;
-    apiKey?: string;
-    llmBaseUrl?: string;
-    llmModel?: string;
-  },
-): Promise<void> {
-  const bearer = tokenFromRequest(req);
-  deps.auth.verify("seat", bearer);
-
-  const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
-  let message = "";
-  let botId: string | undefined;
-  try {
-    const body = JSON.parse(chunks.length ? Buffer.concat(chunks).toString("utf8") : "{}") as {
-      message?: string;
-      bot_id?: string;
-    };
-    message = body.message ?? "";
-    botId = body.bot_id;
-  } catch {
-    writeJson(res, 400, { error: { code: "VALIDATION", message: "invalid JSON" } });
-    return;
-  }
-
-  let bot;
-  try {
-    bot = botId ? deps.bots.byId(botId) : deps.bots.primary();
-  } catch (err) {
-    writeError(res, err);
-    return;
-  }
-  // One agent loop per Bot at a time — the Bot owns exactly one screen.
-  // Different Bots run concurrently.
-  if (bot.chatBusy) {
-    writeJson(res, 409, { error: { code: "CONFLICT", message: `bot ${bot.id} is busy` } });
-    return;
-  }
-  bot.chatBusy = true;
-
-  res.writeHead(200, {
-    "content-type": "text/event-stream; charset=utf-8",
-    "cache-control": "no-store",
-    connection: "keep-alive",
-  });
-
-  try {
-    for await (const ev of runChat(
-      {
-        computer: bot.computer,
-        files: bot.files,
-        seat: bot.seat,
-        apiKey: deps.apiKey,
-        baseUrl: deps.llmBaseUrl,
-        model: deps.llmModel,
-      },
-      message,
-    )) {
-      res.write(`data: ${JSON.stringify(ev)}\n\n`);
-    }
-  } finally {
-    bot.chatBusy = false;
-  }
-  res.end();
-}
-
-const MIME: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
-  ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
-  ".ico": "image/x-icon",
-  ".json": "application/json",
-};
-
-function needsSeatPixelAuth(pathname: string): boolean {
-  return pathname === "/" || pathname === "/index.html" || pathname === "/vnc" || pathname.startsWith("/vnc/");
-}
-
-function serveStatic(req: IncomingMessage, res: ServerResponse, dir: string, pathname: string): boolean {
-  let rel = pathname === "/" ? "/index.html" : pathname;
-  if (rel.startsWith("/vnc") && (rel === "/vnc" || rel === "/vnc/")) rel = "/vnc/index.html";
-  const safe = join(dir, rel.replace(/^\/+/, ""));
-  if (!safe.startsWith(dir)) return false;
-  if (!existsSync(safe)) {
-    // optional @novnc/novnc from node_modules
-    if (rel.startsWith("/novnc/")) {
-      const novnc = tryNovnc(rel.slice("/novnc/".length));
-      if (novnc) {
-        writeFile(res, novnc.path, novnc.body);
-        return true;
-      }
-    }
-    return false;
-  }
-  writeFile(res, safe, readFileSync(safe));
-  void req;
-  return true;
-}
-
-function writeFile(res: ServerResponse, path: string, body: Buffer): void {
-  res.writeHead(200, { "content-type": MIME[extname(path)] ?? "application/octet-stream" });
-  res.end(body);
-}
-
-function tryNovnc(rel: string): { path: string; body: Buffer } | null {
-  const candidates = [
-    resolve(process.cwd(), "node_modules/@novnc/novnc", rel),
-    resolve(import.meta.dirname, "../node_modules/@novnc/novnc", rel),
-    resolve(import.meta.dirname, "../../../node_modules/@novnc/novnc", rel),
-  ];
-  for (const p of candidates) {
-    if (existsSync(p)) return { path: p, body: readFileSync(p) };
-  }
-  return null;
-}
-
-void AgentMethods;

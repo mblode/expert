@@ -46,7 +46,7 @@ Fresh cloud box instead? Paste [deploy/cloud-init.yaml](deploy/cloud-init.yaml) 
 
 ```
 apps/hub/       ConnectRPC, noVNC static, fallback chat loop, provisioning
-apps/desk/      Ubuntu + Openbox + Chromium + TigerVNC + uinput/XTEST
+apps/desk/      Debian + Openbox + Chromium + TigerVNC (Xvnc), XTEST input
 apps/eve/       Eve agent (eve.dev): the harness — persona, skills, computer tools
 apps/ios/       Computer.xcodeproj (SwiftUI, iOS 18+)
 packages/proto  buf generate (protoc-gen-es + Swift) from api/computer.proto

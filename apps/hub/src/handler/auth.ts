@@ -16,6 +16,9 @@ export class AuthRegistry {
     if (!opts.setupCode) {
       throw new Error("COMPUTER_SETUP_CODE is required — run `npm run up` to generate one");
     }
+    if (typeof opts.agentTokens !== "function") {
+      throw new Error("agentTokens must be a function returning the roster's [token, botId] pairs");
+    }
     this.setupCode = opts.setupCode;
     this.agentTokens = opts.agentTokens;
   }

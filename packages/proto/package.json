@@ -2,6 +2,9 @@
   "name": "@computer/proto",
   "version": "1.0.0",
   "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "exports": {
     ".": "./ts/index.ts",
     "./gen/es/*": "./gen/es/*"

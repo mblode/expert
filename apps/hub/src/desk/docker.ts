@@ -2,31 +2,11 @@ import { spawn } from "node:child_process";
 import { ComputerError, clampCursor, asPoint, type Button, type Point } from "@computer/shared";
 import type { Desk, FocusHint, ShellResult } from "./types.ts";
 
-export type InputBackend = "uinput" | "xtest";
-
 export type DockerDeskOptions = {
   container: string;
   user?: string;
   /** Window index = X display number. Default 1 (primary). */
   display?: number;
-  /**
-   * Default XTEST (xdotool with DISPLAY=:N): real synthesized input at the
-   * X server, honoured by GTK and Chromium, and per-display.
-   *
-   * uinput is kernel-global and injects into the kernel input layer, which
-   * a virtual X server (Xvnc) never reads — verified: `uinputd move` exits
-   * 0 and the pointer does not move. Opt in only for a real Xorg desktop
-   * on hardware. Neither path is XSendEvent, which GTK ignores.
-   */
-  inputBackend?: InputBackend;
-};
-
-const BUTTON_TO_UINPUT: Record<Button, string> = {
-  left: "left",
-  right: "right",
-  middle: "middle",
-  back: "back",
-  forward: "forward",
 };
 
 const BUTTON_TO_XDOTOOL: Record<Button, string> = {
@@ -64,14 +44,14 @@ const KEY_TO_KEYSYM: Record<string, string> = {
 
 /**
  * Desk driver for one window (X display) of the box: docker exec in.
- * Pointer goes through uinputd on the primary window and XTEST on forks
- * (never XSendEvent).
+ * All input is XTEST via `xdotool` with `DISPLAY=:N` — real synthesized
+ * input at the X server, honoured by GTK and Chromium, and per-display.
+ * Never XSendEvent, which GTK ignores.
  */
 export class DockerDesk implements Desk {
   private readonly container: string;
   private readonly user: string;
   readonly display: number;
-  readonly inputBackend: InputBackend;
   private cursor = asPoint(640, 400);
   private held = false;
 
@@ -79,7 +59,6 @@ export class DockerDesk implements Desk {
     this.container = opts.container;
     this.user = opts.user ?? "box";
     this.display = opts.display ?? 1;
-    this.inputBackend = opts.inputBackend ?? "xtest";
   }
 
   getCursor(): Point {
@@ -88,10 +67,7 @@ export class DockerDesk implements Desk {
 
   async ping(): Promise<boolean> {
     try {
-      const r =
-        this.inputBackend === "uinput"
-          ? await this.exec(["/usr/local/bin/uinputd", "ping"], { timeoutMs: 5000 })
-          : await this.exec(["xdotool", "getdisplaygeometry"], { timeoutMs: 5000, envDisplay: true });
+      const r = await this.exec(["xdotool", "getdisplaygeometry"], { timeoutMs: 5000, envDisplay: true });
       if (r.exit !== 0) throw new Error(r.stderr.toString());
       return true;
     } catch (err) {
@@ -120,61 +96,61 @@ export class DockerDesk implements Desk {
 
   async click(x: number, y: number, button: Button): Promise<void> {
     await this.move(x, y);
-    await this.uinput(["click", BUTTON_TO_UINPUT[button]]);
+    await this.clickButton(button);
   }
 
   async doubleClick(x: number, y: number, button: Button): Promise<void> {
     await this.move(x, y);
-    await this.uinput(["click", BUTTON_TO_UINPUT[button], "--double"]);
+    await this.clickButton(button, true);
   }
 
   async scroll(x: number, y: number, dx: number, dy: number): Promise<void> {
     await this.move(x, y);
-    await this.uinput(["scroll", String(dx), String(dy)]);
+    await this.scrollBy(dx, dy);
   }
 
   async keypress(keys: string[]): Promise<void> {
-    await this.uinput(["key", ...keys]);
+    await this.sendKeys(keys);
   }
 
   async type(text: string): Promise<void> {
-    // Unicode via clipboard + ctrl+v (uinput cannot emit arbitrary codepoints).
+    // Unicode via clipboard + ctrl+v (XTEST keysyms cannot cover every codepoint).
     await this.clipboardSet(text);
-    await this.uinput(["key", "ctrl", "v"]);
+    await this.sendKeys(["ctrl", "v"]);
   }
 
   async move(x: number, y: number): Promise<void> {
     this.cursor = asPoint(x, y);
-    await this.uinput(["move", String(x), String(y)]);
+    await this.moveTo(x, y);
   }
 
   async drag(path: Point[]): Promise<void> {
     const first = path[0];
     if (!first) return;
     await this.move(first.x, first.y);
-    await this.uinput(["down", "left"]);
+    await this.mouseDown("left");
     for (const p of path.slice(1)) {
       await this.move(p.x, p.y);
     }
-    await this.uinput(["up", "left"]);
+    await this.mouseUp("left");
   }
 
   async pointerDelta(dx: number, dy: number, grab = false): Promise<Point> {
     this.cursor = clampCursor(this.cursor.x + dx, this.cursor.y + dy);
     if (grab && !this.held) {
-      await this.uinput(["down", "left"]);
+      await this.mouseDown("left");
       this.held = true;
     }
     if (!grab && this.held) {
-      await this.uinput(["up", "left"]);
+      await this.mouseUp("left");
       this.held = false;
     }
-    await this.uinput(["move", String(this.cursor.x), String(this.cursor.y)]);
+    await this.moveTo(this.cursor.x, this.cursor.y);
     return this.cursor;
   }
 
   async pointerClick(button: Button): Promise<Point> {
-    await this.uinput(["click", BUTTON_TO_UINPUT[button]]);
+    await this.clickButton(button);
     return this.cursor;
   }
 
@@ -249,21 +225,44 @@ export class DockerDesk implements Desk {
     };
   }
 
-  /** Input verbs in uinputd vocabulary; translated to xdotool on the xtest backend. */
-  private async uinput(args: string[]): Promise<void> {
-    if (this.inputBackend === "xtest") {
-      for (const argv of xdotoolArgv(args)) {
-        const r = await this.exec(argv, { timeoutMs: 5000, envDisplay: true });
-        if (r.exit !== 0) {
-          throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || `xdotool ${args[0]} failed`);
-        }
-      }
-      return;
-    }
-    const r = await this.exec(["/usr/local/bin/uinputd", ...args], { timeoutMs: 5000, user: "root" });
+  /** One xdotool invocation (XTEST) against this window's display. */
+  private async xdotool(...argv: string[]): Promise<void> {
+    const r = await this.exec(["xdotool", ...argv], { timeoutMs: 5000, envDisplay: true });
     if (r.exit !== 0) {
-      throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || `uinputd ${args[0]} failed`);
+      throw new ComputerError("DAEMON_DOWN", r.stderr.toString() || `xdotool ${argv[0]} failed`);
     }
+  }
+
+  private moveTo(x: number, y: number): Promise<void> {
+    return this.xdotool("mousemove", String(x), String(y));
+  }
+
+  private clickButton(button: Button, double = false): Promise<void> {
+    const b = BUTTON_TO_XDOTOOL[button];
+    return double
+      ? this.xdotool("click", "--repeat", "2", "--delay", "150", b)
+      : this.xdotool("click", b);
+  }
+
+  private mouseDown(button: Button): Promise<void> {
+    return this.xdotool("mousedown", BUTTON_TO_XDOTOOL[button]);
+  }
+
+  private mouseUp(button: Button): Promise<void> {
+    return this.xdotool("mouseup", BUTTON_TO_XDOTOOL[button]);
+  }
+
+  /** Wheel buttons: 4/5 vertical, 6/7 horizontal. */
+  private async scrollBy(dx: number, dy: number): Promise<void> {
+    const y = Math.trunc(dy);
+    const x = Math.trunc(dx);
+    if (y !== 0) await this.xdotool("click", "--repeat", String(Math.abs(y)), y > 0 ? "5" : "4");
+    if (x !== 0) await this.xdotool("click", "--repeat", String(Math.abs(x)), x > 0 ? "7" : "6");
+  }
+
+  private async sendKeys(keys: string[]): Promise<void> {
+    const combo = keys.map((k) => KEY_TO_KEYSYM[k.toLowerCase()] ?? k).join("+");
+    if (combo) await this.xdotool("key", combo);
   }
 
   private exec(
@@ -320,37 +319,4 @@ export class DockerDesk implements Desk {
 
 function shellQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
-}
-
-/** uinputd verb → xdotool argv list (XTEST; per-display, unlike uinput). */
-function xdotoolArgv(args: string[]): string[][] {
-  const [verb, ...rest] = args;
-  switch (verb) {
-    case "move":
-      return [["xdotool", "mousemove", rest[0] ?? "0", rest[1] ?? "0"]];
-    case "click": {
-      const button = BUTTON_TO_XDOTOOL[(rest[0] ?? "left") as Button] ?? "1";
-      return rest.includes("--double")
-        ? [["xdotool", "click", "--repeat", "2", "--delay", "150", button]]
-        : [["xdotool", "click", button]];
-    }
-    case "down":
-      return [["xdotool", "mousedown", BUTTON_TO_XDOTOOL[(rest[0] ?? "left") as Button] ?? "1"]];
-    case "up":
-      return [["xdotool", "mouseup", BUTTON_TO_XDOTOOL[(rest[0] ?? "left") as Button] ?? "1"]];
-    case "scroll": {
-      const dx = Math.trunc(Number(rest[0] ?? 0));
-      const dy = Math.trunc(Number(rest[1] ?? 0));
-      const out: string[][] = [];
-      if (dy !== 0) out.push(["xdotool", "click", "--repeat", String(Math.abs(dy)), dy > 0 ? "5" : "4"]);
-      if (dx !== 0) out.push(["xdotool", "click", "--repeat", String(Math.abs(dx)), dx > 0 ? "7" : "6"]);
-      return out;
-    }
-    case "key": {
-      const combo = rest.map((k) => KEY_TO_KEYSYM[k.toLowerCase()] ?? k).join("+");
-      return combo ? [["xdotool", "key", combo]] : [];
-    }
-    default:
-      return [["xdotool", verb ?? "version", ...rest]];
-  }
 }

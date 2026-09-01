@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { createServer, type Server } from "node:net";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { ComputerError } from "@computer/shared";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { ownerHash } from "../src/desk/windows.ts";
 import { BotRegistry } from "../src/service/bots.ts";
+import { FileBotStore } from "../src/service/provision.ts";
 import { rpc, startHub } from "./helper.ts";
 
 type Opened = Awaited<ReturnType<typeof startHub>>;
@@ -291,6 +296,72 @@ describe("provisioning: computer as a service", () => {
     });
     expect(h.hub.bots.all().map((b) => b.id)).toEqual(["main"]);
     expect(h.store.load().map((b) => b.id)).toEqual(["main"]);
+  });
+
+  it("claims the new window with force: the roster, not the box, owns the display", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "night" }, token);
+    // allocateDisplay() only hands out a display no Bot holds, so any claim
+    // left on the box for :2 is stale and must not brick provisioning.
+    expect(h.windows.forced).toContain(2);
+  });
+
+  it("a failing stopWindow still completes the removal", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "night" }, token);
+
+    h.windows.stopWindow = async (display: number) => {
+      throw new ComputerError("DAEMON_DOWN", `stop-window ${display} failed`);
+    };
+
+    await rpc(h.url, "/computer.v1.Seat/DeleteBot", { id: "night" }, token);
+    expect(h.hub.bots.all().map((b) => b.id)).toEqual(["main"]);
+    expect(h.store.load().map((b) => b.id)).toEqual(["main"]);
+  });
+});
+
+describe("FileBotStore: the roster is the only record of every bot token", () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+  });
+
+  const tempDir = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), "hub-roster-"));
+    dirs.push(dir);
+    return dir;
+  };
+
+  it("throws on a corrupt roster instead of reading it as an empty box", () => {
+    const path = join(tempDir(), "bots.json");
+    writeFileSync(path, '[{"id":"main","display":1,"token":"bot_x"');
+    // Returning [] here would let start() mint a new primary and save over
+    // the file, destroying every existing token.
+    const store = new FileBotStore(path);
+    expect(() => store.load()).toThrow(new RegExp(path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    expect(() => store.load()).toThrow(/JSON/);
+  });
+
+  it("throws when the roster parses but is not an array", () => {
+    const path = join(tempDir(), "bots.json");
+    writeFileSync(path, '{"bots":[]}');
+    expect(() => new FileBotStore(path).load()).toThrow(/array/);
+  });
+
+  it("returns [] only when the roster file is absent", () => {
+    const store = new FileBotStore(join(tempDir(), "missing", "bots.json"));
+    expect(store.load()).toEqual([]);
+  });
+
+  it("round-trips a saved roster", () => {
+    const path = join(tempDir(), "nested", "bots.json");
+    const store = new FileBotStore(path);
+    store.save([{ id: "main", display: 1, token: "bot_x" }]);
+    expect(store.load()).toEqual([{ id: "main", display: 1, token: "bot_x" }]);
   });
 });
 

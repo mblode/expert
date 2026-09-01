@@ -16,7 +16,7 @@ below is the only contract.
 - Bots are provisioned at runtime (`Seat.CreateBot` / `Seat.DeleteBot`, `npm run bot -- new|rm`), never via env config. The roster (with tokens) persists in `COMPUTER_DATA` (default `data/bots.json`, gitignored, mode 0600). Boot with an empty store auto-provisions `main` on `:1` with a minted `bot_…` token.
 - `COMPUTER_SETUP_CODE` is the only secret input and `npm run up` generates it; `COMPUTER_AGENT_TOKEN` and `COMPUTER_BOTS` no longer exist.
 - `COMPUTER_VNC_PORT` is a **base port**: window N dials `base + N`, so primary `:1` is 5901 (also fixes the earlier compose mismatch where 5900 was published while `vncserver :1` listened on 5901).
-- Fork displays (`:2+`) use XTEST via `xdotool` with `DISPLAY=:N` (uinput is kernel-global and cannot target one X display). Primary keeps uinputd; `COMPUTER_INPUT_BACKEND` overrides.
+- Every display is driven by XTEST via `xdotool` with `DISPLAY=:N`. (Superseded below: the uinput backend was measured to be a no-op against Xvnc and has since been deleted outright.)
 - Owner identity on the box is `sha256(bot token)` in `~/.window-assignments.json` — raw bearers never land on the shared filesystem.
 
 ## Eve run (2026-08-31)
@@ -49,7 +49,7 @@ reading it, and the fixes are in this branch.
   bar, typed, pressed Return, and example.com then wikipedia.org loaded. XTEST
   is not the `XSendEvent` the design refused; it is real input at the X server,
   which GTK and Chromium honour. Default backend is now `xtest` everywhere;
-  `uinput` stays opt-in for a real Xorg desktop on hardware.
+  uinput has since been deleted: XTEST also works on a real Xorg desktop, so it won in no environment we support, and leaving it selectable meant a config that silently ignored every input.
 - **Debian, not Ubuntu.** Ubuntu's `chromium-browser` is a snap transition stub:
   it installs, and running it prints "requires the chromium snap to be
   installed". Debian 12 ships a real chromium on amd64 and arm64.
@@ -96,7 +96,7 @@ node scripts/computer.mjs   # CLI smoke: up-less usage, bot new/ls/rm/token agai
 
 Not run here (no Docker, no Xcode, no iPhone):
 
-- `docker compose up` / TigerVNC + uinput (:1) and XTEST vs Chromium (:2+)
+- ~~`docker compose up` / TigerVNC input vs Chromium~~ — done, see above
 - `xcodebuild -project apps/ios/Computer.xcodeproj -scheme Computer -destination 'platform=iOS Simulator,name=iPhone 16' test`
 - Seven-step cellular verification (pair → chat → Open Computer → seat → paste → I'm done → lock 30s)
 
