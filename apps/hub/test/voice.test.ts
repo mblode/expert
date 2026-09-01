@@ -3,10 +3,14 @@ import { ComputerError } from "@computer/shared";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { VoiceService, parseSendBody } from "../src/service/voice.ts";
 
-const voice = () => {
+/** `ttlMs` shortens the clipboard window; omit it for the shipped two minutes. */
+const voice = (ttlMs?: number) => {
   const desk = new FakeDesk();
-  return { desk, v: new VoiceService(desk) };
+  return { desk, v: new VoiceService(desk, ttlMs) };
 };
+
+/** One turn of the timer phase, so a zero-TTL clear has run to completion. */
+const settle = () => new Promise((r) => setTimeout(r, 5));
 
 describe("the voice", () => {
   it("a turn that never sends leaves nothing for the human to see", () => {
@@ -73,6 +77,37 @@ describe("the voice", () => {
     expect(dump).not.toContain("424242");
     const s = v.page().entries.find((o) => o.id === occurrence_id);
     expect(s?.kind === "secret_request" && s.provided).toBe(true);
+  });
+
+  it("the secret leaves the clipboard once the paste window closes", async () => {
+    const { desk, v } = voice(0);
+    const { occurrence_id } = await v.send({
+      kind: "secret_request",
+      prompt: "GitHub is asking for your 2FA code",
+      label: "2FA code",
+    });
+    await v.provideSecret(occurrence_id, "424242");
+    // There to be pasted...
+    expect(desk.clipboard).toBe("424242");
+    await settle();
+    // ...and not there to be read by everything else on that display.
+    expect(desk.clipboard).toBe("");
+    expect(JSON.stringify(v.page().entries)).not.toContain("424242");
+  });
+
+  it("does not clear a clipboard someone else has written since", async () => {
+    const { desk, v } = voice(0);
+    const { occurrence_id } = await v.send({
+      kind: "secret_request",
+      prompt: "GitHub is asking for your 2FA code",
+      label: "2FA code",
+    });
+    await v.provideSecret(occurrence_id, "424242");
+    // The agent pasted, then copied something of its own. That copy is not
+    // ours to destroy, and the secret is gone from the clipboard either way.
+    await desk.clipboardSet("git log --oneline");
+    await settle();
+    expect(desk.clipboard).toBe("git log --oneline");
   });
 
   it("pages with a cursor rather than replaying the whole log", async () => {

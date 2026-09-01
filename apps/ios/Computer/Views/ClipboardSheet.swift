@@ -7,13 +7,29 @@ struct ClipboardSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var box = ""
     @State private var error: String?
+    @State private var loading = true
 
     var body: some View {
         NavigationStack {
             Form {
                 Section("Box clipboard") {
-                    TextField("UTF-8 only in v1", text: $box, axis: .vertical)
-                        .lineLimit(4...10)
+                    // An empty field is the box's clipboard being empty, so the
+                    // read has to be visible or the two read the same.
+                    if loading {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Reading the box clipboard")
+                                .foregroundStyle(.secondary)
+                        }
+                    } else {
+                        TextField("UTF-8 only in v1", text: $box, axis: .vertical)
+                            .lineLimit(4...10)
+                        if box.isEmpty {
+                            Text("Empty")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
                 if let error {
                     Text(error).foregroundStyle(.red)
@@ -41,6 +57,7 @@ struct ClipboardSheet: View {
                 }
             }
             .task {
+                defer { loading = false }
                 do { box = try await client.clipboardGet(display: display).text }
                 catch { self.error = error.localizedDescription }
             }

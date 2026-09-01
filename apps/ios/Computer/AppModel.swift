@@ -24,6 +24,12 @@ final class AppModel: ObservableObject {
         }
     }
 
+    struct SeatFailure: Equatable {
+        /// The seat state that was asked for, so a retry asks for the same one.
+        let present: Bool
+        let message: String
+    }
+
     @Published var session: Session?
     @Published var transcript = AgentTranscript()
     @Published var phase: TurnPhase = .idle
@@ -32,6 +38,11 @@ final class AppModel: ObservableObject {
     @Published var status: ComputerV1.BoxStatus?
     @Published var waiting = false
     @Published var pairError: String?
+    /// A seat change that did not happen, kept so the takeover screen can say
+    /// so and repeat it. `pairError` is the pairing screen's and is never seen
+    /// from here — a silent hand-back leaves the operator believing an agent
+    /// has control of a machine they are still holding.
+    @Published var seatFailure: SeatFailure?
     @Published var busy = false
     @Published private(set) var reach: Reachability = .unknown
     /// Bumped by `retry()` to make the desktop webview load again.
@@ -114,6 +125,7 @@ final class AppModel: ObservableObject {
         turnError = nil
         status = nil
         waiting = false
+        seatFailure = nil
         reach = .unknown
     }
 
@@ -164,32 +176,58 @@ final class AppModel: ObservableObject {
     /// SEAT_HELD, which it already knows how to wait on — you should not have
     /// to watch a machine go wrong and wait for permission to stop it.
     func takeSeat() async {
-        guard let client else { return }
-        do {
-            status = try await client.setPresence(present: true, display: selectedScreen?.display)
-            waiting = false
-        } catch {
-            pairError = error.localizedDescription
-        }
+        await setSeat(present: true)
     }
 
-    func imDone() async {
-        guard let client else { return }
+    /// Returns whether the agent actually has the seat back. The caller closes
+    /// the takeover screen only on true.
+    @discardableResult
+    func imDone() async -> Bool {
+        await setSeat(present: false)
+    }
+
+    func retrySeatChange() async {
+        guard let failure = seatFailure else { return }
+        await setSeat(present: failure.present)
+    }
+
+    @discardableResult
+    private func setSeat(present: Bool) async -> Bool {
+        guard let client else {
+            seatFailure = SeatFailure(present: present, message: "Not paired to a box.")
+            return false
+        }
+        seatFailure = nil
         do {
-            status = try await client.setPresence(present: false, display: selectedScreen?.display)
+            status = try await client.setPresence(present: present, display: selectedScreen?.display)
             waiting = false
+            return true
         } catch {
-            pairError = error.localizedDescription
+            seatFailure = SeatFailure(present: present, message: error.localizedDescription)
+            return false
         }
     }
 
     // MARK: Chat
 
-    func send(_ text: String) {
+    /// False when nothing was dispatched, so the composer keeps the typed text.
+    /// A send that silently eats the draft is the worst of both: no message and
+    /// no way back to what was written.
+    @discardableResult
+    func send(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !isBusy, agent != nil else { return }
+        guard !trimmed.isEmpty else { return false }
+        guard !isBusy else {
+            turnError = "The agent is still on the last turn. Your message was not sent."
+            return false
+        }
+        guard agent != nil else {
+            turnError = "Not paired to a box. Your message was not sent."
+            return false
+        }
         transcript.appendOptimisticUserMessage(trimmed)
         runTurn(message: trimmed, inputResponses: [])
+        return true
     }
 
     /// Answers a parked human-in-the-loop request, resuming the turn that asked.

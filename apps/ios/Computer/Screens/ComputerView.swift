@@ -10,8 +10,15 @@ struct ComputerView: View {
     @State private var showMenu = false
     @State private var showNewBot = false
     @State private var newBotId = ""
-    @State private var newBotResult: String?
-    @State private var newBotToken: String?
+    @State private var newBotError: String?
+    @State private var newBot: ComputerV1.BotCredentials?
+    @State private var tokenCopied = false
+    @State private var confirmTokenClose = false
+    @State private var confirmClose = false
+
+    /// The agent is driving this screen: every gesture would be refused, and
+    /// closing is the only thing here that is still safe to do.
+    private var agentHoldsSeat: Bool { model.currentScreen?.state == .agent }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,10 +35,10 @@ struct ComputerView: View {
                     } else {
                         Color.black
                     }
-                    DesktopGestures(seat: seat, enabled: !seat.trackpad)
+                    DesktopGestures(seat: seat, enabled: !seat.trackpad && !agentHoldsSeat)
                         .opacity(seat.trackpad ? 0 : 1)
                     if seat.trackpad {
-                        TrackpadView(seat: seat)
+                        TrackpadView(seat: seat, enabled: !agentHoldsSeat)
                     }
                     if let c = seat.cursor {
                         Circle()
@@ -43,13 +50,41 @@ struct ComputerView: View {
                     // Over the pixels, because the failure this reports is that
                     // there are none — the black underneath explains nothing.
                     VStack {
+                        HStack {
+                            closeButton
+                            Spacer()
+                            // The ••• that exits trackpad mode is in the bottom
+                            // bar, so the badge cannot cover its own way out.
+                            if seat.trackpad {
+                                Label("Trackpad", systemImage: "hand.point.up.left.fill")
+                                    .font(.caption.weight(.semibold))
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(.ultraThinMaterial, in: Capsule())
+                                    .accessibilityLabel("Trackpad mode is on")
+                            }
+                        }
+                        .padding(8)
                         if let failure = model.reach.failure {
                             UnreachableBanner(message: failure.message, retryable: failure.retryable) {
                                 Task { await model.retry() }
                             }
                         }
+                        if let failure = model.seatFailure {
+                            UnreachableBanner(message: seatFailureMessage(failure), retryable: true) {
+                                Task { await model.retrySeatChange() }
+                            }
+                        }
                         Spacer()
-                        if let error = seat.error {
+                        // One calm statement instead of a refusal per tap: the
+                        // gesture layers are off above, so nothing else says it.
+                        if agentHoldsSeat {
+                            Label("The agent is driving. Take the seat to use this screen.", systemImage: "hand.raised.fill")
+                                .font(.footnote.weight(.medium))
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(10)
+                                .background(.ultraThinMaterial)
+                        } else if let error = seat.error {
                             SeatErrorBanner(message: error) { seat.error = nil }
                         }
                     }
@@ -94,6 +129,88 @@ struct ComputerView: View {
             }
             .presentationDetents([.medium])
         }
+        .sheet(isPresented: .init(get: { newBot != nil }, set: { if !$0 { newBot = nil } })) {
+            if let bot = newBot {
+                newBotTokenSheet(bot)
+            }
+        }
+        .alert("Couldn’t create the Bot", isPresented: .init(get: { newBotError != nil }, set: { if !$0 { newBotError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(newBotError ?? "")
+        }
+    }
+
+    /// Closing is navigation and never a seat change, so it is always offered —
+    /// otherwise the only way out while the agent drives is to take the seat.
+    private var closeButton: some View {
+        Button {
+            if agentHoldsSeat { dismiss() } else { confirmClose = true }
+        } label: {
+            Image(systemName: "xmark")
+                .font(.body.weight(.semibold))
+                .padding(10)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .accessibilityLabel("Close the computer")
+        .confirmationDialog("You still have the seat", isPresented: $confirmClose, titleVisibility: .visible) {
+            Button("Close and keep the seat") { dismiss() }
+            Button("Hand the seat back and close") {
+                Task { if await model.imDone() { dismiss() } }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Closing leaves the agent blocked until you hand the seat back.")
+        }
+    }
+
+    private func seatFailureMessage(_ failure: AppModel.SeatFailure) -> String {
+        failure.present
+            ? "You do not have the seat: \(failure.message)"
+            : "You still have the seat — the hand-back failed: \(failure.message)"
+    }
+
+    /// The hub mints this token once and cannot show it again, so it gets a
+    /// sheet that has to be answered rather than a message you can swipe off.
+    private func newBotTokenSheet(_ bot: ComputerV1.BotCredentials) -> some View {
+        NavigationStack {
+            Form {
+                Section("Token") {
+                    Text(bot.token)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                    Button {
+                        UIPasteboard.general.string = bot.token
+                        tokenCopied = true
+                    } label: {
+                        Label(tokenCopied ? "Copied" : "Copy token",
+                              systemImage: tokenCopied ? "checkmark" : "doc.on.doc")
+                    }
+                }
+                Section {
+                    LabeledContent("Bot", value: bot.id)
+                    LabeledContent("Screen", value: "\(bot.display)")
+                } footer: {
+                    Text("Shown once. Losing it means creating the Bot again.")
+                }
+            }
+            .navigationTitle("\(bot.id) is live")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") {
+                        if tokenCopied { newBot = nil } else { confirmTokenClose = true }
+                    }
+                }
+            }
+            .confirmationDialog("Close without the token?", isPresented: $confirmTokenClose, titleVisibility: .visible) {
+                Button("Close anyway", role: .destructive) { newBot = nil }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("It is not stored anywhere and cannot be shown again.")
+            }
+        }
+        .interactiveDismissDisabled()
     }
 
     /// Point the seat at the selected Bot's screen (nil selection = primary).
@@ -156,12 +273,10 @@ struct ComputerView: View {
                     newBotId = ""
                     Task {
                         do {
-                            let creds = try await model.createBot(id: id)
-                            newBotToken = creds.token
-                            newBotResult = "\(creds.id) is live on screen \(creds.display).\n\nToken (shown once):\n\(creds.token)"
+                            tokenCopied = false
+                            newBot = try await model.createBot(id: id)
                         } catch {
-                            newBotToken = nil
-                            newBotResult = error.localizedDescription
+                            newBotError = error.localizedDescription
                         }
                     }
                 }
@@ -169,18 +284,10 @@ struct ComputerView: View {
             } message: {
                 Text("Gets its own screen on the shared box.")
             }
-            .alert("Bot", isPresented: .init(get: { newBotResult != nil }, set: { if !$0 { newBotResult = nil } })) {
-                if newBotToken != nil {
-                    Button("Copy token") { UIPasteboard.general.string = newBotToken }
-                }
-                Button("Done", role: .cancel) {}
-            } message: {
-                Text(newBotResult ?? "")
-            }
             Spacer()
             // While the agent holds the seat every gesture here is refused, so
             // the bar offers the way in rather than looking broken.
-            if model.currentScreen?.state == .agent {
+            if agentHoldsSeat {
                 Button {
                     Task { await model.takeSeat() }
                 } label: {
@@ -189,11 +296,9 @@ struct ComputerView: View {
                 }
                 .buttonStyle(.bordered)
             } else {
+                // Only a hand-back that the box confirmed closes the screen.
                 Button {
-                    Task {
-                        await model.imDone()
-                        dismiss()
-                    }
+                    Task { if await model.imDone() { dismiss() } }
                 } label: {
                     Text("I’m done")
                         .fontWeight(.semibold)

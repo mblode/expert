@@ -4,6 +4,7 @@ struct ChatView: View {
     @EnvironmentObject var model: AppModel
     @State private var draft = ""
     @State private var showComputer = false
+    @State private var confirmUnpair = false
 
     var body: some View {
         NavigationStack {
@@ -21,12 +22,31 @@ struct ChatView: View {
             }
             .navigationTitle("Chat")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Unpair") { model.unpair() }
-                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Open computer") { showComputer = true }
                 }
+                // Unpair is off the top-left slot: that is where a thumb reaches
+                // for Back, and this wipes the pairing with no undo.
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Button("Unpair", systemImage: "xmark.circle", role: .destructive) {
+                            confirmUnpair = true
+                        }
+                    } label: {
+                        Label("More", systemImage: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("More")
+                }
+            }
+            .confirmationDialog(
+                "Unpair this phone?",
+                isPresented: $confirmUnpair,
+                titleVisibility: .visible
+            ) {
+                Button("Unpair and erase this chat", role: .destructive) { model.unpair() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Deletes this conversation and the seat token from this phone. Pairing again needs a setup code from the box.")
             }
             .fullScreenCover(isPresented: $showComputer) {
                 ComputerView()
@@ -95,9 +115,9 @@ struct ChatView: View {
                 .accessibilityLabel("Stop the agent")
             } else {
                 Button {
-                    let text = draft
-                    draft = ""
-                    model.send(text)
+                    // Cleared only once the turn is actually in flight; a refused
+                    // send says why and leaves the text where it was typed.
+                    if model.send(draft) { draft = "" }
                 } label: {
                     Label("Send", systemImage: "arrow.up")
                         .labelStyle(.iconOnly)

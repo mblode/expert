@@ -6,15 +6,18 @@ import UIKit
 /// `DesktopGestures`, only rendered while `seat.trackpad` is on.
 struct TrackpadView: UIViewRepresentable {
     var seat: SeatController
+    var enabled: Bool
 
     func makeUIView(context: Context) -> PadView {
         let v = PadView()
         v.seat = seat
+        v.isUserInteractionEnabled = enabled
         return v
     }
 
     func updateUIView(_ uiView: PadView, context: Context) {
         uiView.seat = seat
+        uiView.isUserInteractionEnabled = enabled
     }
 
     final class PadView: UIView, UIGestureRecognizerDelegate {
