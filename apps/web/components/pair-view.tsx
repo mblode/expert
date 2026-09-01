@@ -1,16 +1,16 @@
 import { useState } from "react";
 
-import { pair } from "../lib/seat";
+import { defaultHubUrl, pair } from "../lib/seat";
 import type { StoredSeat } from "../lib/storage";
-
-const DEFAULT_HUB = "http://127.0.0.1:8787";
 
 /**
  * Pairing is the whole of sign-in: a setup code buys a seat token, and a seat
  * is the box owner. Nothing else here is configurable.
  */
 export function PairView({ onPaired }: { onPaired: (seat: StoredSeat) => void }): React.ReactElement {
-  const [hubUrl, setHubUrl] = useState(DEFAULT_HUB);
+  const [hubUrl, setHubUrl] = useState(() =>
+    defaultHubUrl(typeof window === "undefined" ? undefined : window.location),
+  );
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

@@ -98,12 +98,22 @@ export function writeError(res: ServerResponse, err: unknown): void {
   });
 }
 
+/** Same CORS on OPTIONS and on JSON so a Vercel-hosted panel can read Pair/Status. */
+export function corsHeaders(): Record<string, string> {
+  return {
+    "access-control-allow-origin": "*",
+    "access-control-allow-headers": "authorization, content-type, connect-protocol-version",
+    "access-control-allow-methods": "GET, POST, OPTIONS",
+  };
+}
+
 export function writeJson(res: ServerResponse, status: number, body: unknown): void {
   const data = JSON.stringify(body);
   res.writeHead(status, {
     "content-type": "application/json; charset=utf-8",
     "content-length": Buffer.byteLength(data),
     "cache-control": "no-store",
+    ...corsHeaders(),
   });
   res.end(data);
 }

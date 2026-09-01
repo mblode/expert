@@ -1,18 +1,19 @@
 import type { NextConfig } from "next";
 
 /**
- * The hub this app talks to. Same-origin in production — the hub serves the
- * exported build itself — so this only matters to `next dev`.
+ * The hub this app talks to.
+ *
+ * `next dev` proxies JSON onto HUB_URL. A hub-served export is same-origin
+ * (no NEXT_PUBLIC_HUB_URL). A Vercel export sets NEXT_PUBLIC_HUB_URL to the
+ * Fly computer; pixels stay on that origin via the minted `vnc_url`.
  */
 const isDev = process.env.NODE_ENV === "development";
 const HUB = process.env.HUB_URL ?? "http://127.0.0.1:8787";
 const EVE = process.env.EVE_URL ?? HUB;
 
 const nextConfig: NextConfig = {
-  // A client-only control panel for a box on your own machine. There is no
-  // server to render on and nothing to host: `next build` emits static files
-  // the hub serves from its own origin, which keeps the hub's loopback bind
-  // the only listening socket.
+  // Static files only — no Next server. The hub may serve `out/`, or Vercel
+  // publishes the same directory. The desk never runs here.
   output: "export",
   reactCompiler: true,
   experimental: {
@@ -20,8 +21,7 @@ const nextConfig: NextConfig = {
     turbopackRustReactCompiler: true,
   },
   env: {
-    // Inlined at build time. Empty in an export build: there is no proxy, and
-    // same-origin is the whole point of the hub serving these files.
+    // Inlined at build time. Empty unless `next dev` is proxying the hub.
     NEXT_PUBLIC_HUB_PROXY_TARGET: isDev ? HUB : "",
   },
   /**

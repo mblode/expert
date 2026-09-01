@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PixelRegistry, withPixelToken } from "../src/service/pixels.ts";
+import { PIXEL_REFRESH_MS, PixelRegistry, withPixelToken } from "../src/service/pixels.ts";
 
 describe("PixelRegistry", () => {
   it("maps Grok noVNC ports: :1 → 6080, :2 → 6081", () => {
@@ -25,5 +25,32 @@ describe("PixelRegistry", () => {
     expect(url).toContain("display=2");
     expect(url).toContain("view_only=1");
     expect(url).toContain("expires=");
+  });
+
+  it("reuses a still-valid grant for the same display", () => {
+    const pixels = new PixelRegistry({ ttlMs: 15 * 60 * 1000 });
+    const t0 = 1_000_000;
+    const a = pixels.grantFor(1, t0);
+    const b = pixels.grantFor(1, t0 + 2_000);
+    expect(b.token).toBe(a.token);
+    expect(b.expires).toBe(a.expires);
+  });
+
+  it("mints a new grant when the current one is within PIXEL_REFRESH_MS of expiry", () => {
+    const pixels = new PixelRegistry({ ttlMs: 15 * 60 * 1000 });
+    const t0 = 1_000_000;
+    const a = pixels.grantFor(1, t0);
+    const b = pixels.grantFor(1, a.expires - PIXEL_REFRESH_MS);
+    expect(b.token).not.toBe(a.token);
+    expect(pixels.lookup(a.token, a.expires - PIXEL_REFRESH_MS)).toEqual(a);
+  });
+
+  it("keeps grants per display", () => {
+    const pixels = new PixelRegistry({ ttlMs: 15 * 60 * 1000 });
+    const a = pixels.grantFor(1, 0);
+    const b = pixels.grantFor(2, 0);
+    expect(a.token).not.toBe(b.token);
+    expect(a.display).toBe(1);
+    expect(b.display).toBe(2);
   });
 });

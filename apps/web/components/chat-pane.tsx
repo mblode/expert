@@ -59,13 +59,20 @@ export function ChatPane({ seat }: { seat: Seat }): React.ReactElement {
 
   const last = messages.at(-1);
   const thinking = busy && (!last || last.role === "user" || !hasVisibleContent(last));
+  // Eve is optional on this box. A down /eve should not paint a red error
+  // over the desk — just leave the thread empty.
+  const eveQuiet =
+    agent.error !== undefined &&
+    /DAEMON_DOWN|not running|Failed to fetch|NetworkError|Load failed|ECONNREFUSED/i.test(
+      agent.error.message,
+    );
 
   return (
     <section className="flex min-h-0 min-w-0 flex-col border-edge max-lg:border-t lg:border-l">
       <header className="flex items-center gap-2 border-b border-edge px-3 py-2">
         <h2 className="text-sm font-medium">Eve</h2>
         <span className="text-xs text-mute">
-          {resuming ? "catching up…" : busy ? "working…" : "ready"}
+          {eveQuiet ? "" : resuming ? "catching up…" : busy ? "working…" : "ready"}
         </span>
         <button
           className="ml-auto rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
@@ -87,7 +94,7 @@ export function ChatPane({ seat }: { seat: Seat }): React.ReactElement {
         }}
         ref={scroller}
       >
-        {messages.length === 0 && !resuming && (
+        {messages.length === 0 && !resuming && !eveQuiet && (
           <p className="pt-8 text-center text-sm text-mute">
             Ask Eve to do something on the box. It drives its own screen and asks for the seat
             when it gets stuck.
@@ -99,7 +106,7 @@ export function ChatPane({ seat }: { seat: Seat }): React.ReactElement {
         {thinking && <p className="text-xs text-mute">Thinking…</p>}
       </div>
 
-      {agent.error && (
+      {agent.error && !eveQuiet && (
         <div className="flex flex-wrap items-center gap-2 border-t border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           <span className="min-w-0 break-words">{agent.error.message}</span>
           {lastSent && (

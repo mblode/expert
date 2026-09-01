@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { WebSocketServer } from "ws";
 import type { Desk } from "./desk/types.ts";
 import { AuthRegistry, tokenFromRequest } from "./handler/auth.ts";
-import { ConnectRouter, writeError, writeJson } from "./handler/router.ts";
+import { ConnectRouter, corsHeaders, writeError, writeJson } from "./handler/router.ts";
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
 import { handleChat } from "./handler/chat.ts";
@@ -158,13 +158,5 @@ export function createHub(opts: HubOptions): Hub {
         wss.close();
         server.close(() => resolveClose());
       }),
-  };
-}
-
-function corsHeaders(): Record<string, string> {
-  return {
-    "access-control-allow-origin": "*",
-    "access-control-allow-headers": "authorization, content-type, connect-protocol-version",
-    "access-control-allow-methods": "GET, POST, OPTIONS",
   };
 }

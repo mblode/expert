@@ -5,6 +5,9 @@ import { randomBytes } from "node:crypto";
 /** Default lifetime for a pixel (noVNC) token. Seat tokens stay long-lived. */
 export const DEFAULT_PIXEL_TTL_MS = 15 * 60 * 1000;
 
+/** Remint only when the current grant has this little time left. */
+export const PIXEL_REFRESH_MS = 60 * 1000;
+
 export type PixelGrant = {
   token: string;
   display: number;
@@ -15,6 +18,9 @@ export type PixelGrant = {
  * Short-lived VNC / noVNC tokens. Pairing still uses the durable seat
  * token for Seat RPCs; Status/Pair stamp a pixel token into `vnc_url`.
  * The seat token remains accepted on `/vnc` so an old iOS pair URL works.
+ *
+ * Status must reuse a still-valid grant: minting on every poll rotates
+ * `vnc_url` and remounts the control-panel iframe.
  */
 export class PixelRegistry {
   private readonly grants = new Map<string, PixelGrant>();
@@ -33,6 +39,22 @@ export class PixelRegistry {
     this.grants.set(token, grant);
     this.writeForkFile(display, token);
     return grant;
+  }
+
+  /**
+   * Grant for this display: reuse one that still has more than
+   * `PIXEL_REFRESH_MS` left, otherwise mint. Pair may mint; Status must
+   * call this so close polls return the same `vnc_url` token.
+   */
+  grantFor(display: number, now = Date.now()): PixelGrant {
+    this.sweep(now);
+    let best: PixelGrant | undefined;
+    for (const grant of this.grants.values()) {
+      if (grant.display !== display) continue;
+      if (grant.expires - now <= PIXEL_REFRESH_MS) continue;
+      if (!best || grant.expires > best.expires) best = grant;
+    }
+    return best ?? this.mint(display, now);
   }
 
   /**

@@ -23,7 +23,8 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   const vncUrlFor = (display: number): string => {
     // Short-lived pixel token in the URL — not the durable seat token.
     // Seat token still opens /vnc (pairing / local-dev fallback).
-    const grant = deps.auth.pixels.mint(display);
+    // Reuse a still-valid grant so Status polls do not rotate the iframe URL.
+    const grant = deps.auth.pixels.grantFor(display);
     return withPixelToken(deps.vncUrl, grant);
   };
 
