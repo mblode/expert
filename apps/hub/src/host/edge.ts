@@ -12,8 +12,28 @@ export const COLD_PATHS = new Set([
   "/roster",
 ]);
 
+export function normalizePath(pathname: string): string {
+  const raw = pathname.split("?")[0] ?? pathname;
+  const trimmed = raw.replace(/\/+$/, "");
+  return trimmed.length > 0 ? trimmed : "/";
+}
+
+export function isColdPath(pathname: string): boolean {
+  return COLD_PATHS.has(normalizePath(pathname));
+}
+
 export function shouldWake(pathname: string): boolean {
-  return !COLD_PATHS.has(pathname.split("?")[0] ?? pathname);
+  return !isColdPath(pathname);
+}
+
+/**
+ * Refresh the idle stamp. Status / roster / healthz never count — those
+ * must stay cold so a phone polling Seat.Status cannot keep a sleeping
+ * guest awake, and cannot reset the 20-minute timer on a running one.
+ * VNC, websockify, Pair, Agent, and other Seat RPCs do.
+ */
+export function recordsUse(pathname: string): boolean {
+  return !isColdPath(pathname);
 }
 
 export type GuestMachine = {

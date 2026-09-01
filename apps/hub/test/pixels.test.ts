@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PixelRegistry, withPixelToken } from "../src/service/pixels.ts";
 
@@ -25,5 +28,34 @@ describe("PixelRegistry", () => {
     expect(url).toContain("display=2");
     expect(url).toContain("view_only=1");
     expect(url).toContain("expires=");
+  });
+
+  it("accepts a start-window fork token file that was never minted", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pix-"));
+    writeFileSync(join(dir, "3"), "deadbeefcafebabe\n", { mode: 0o600 });
+    const pixels = new PixelRegistry({ tokenDir: dir });
+    const g = pixels.lookup("deadbeefcafebabe");
+    expect(g?.display).toBe(3);
+    expect(g?.token).toBe("deadbeefcafebabe");
+    expect(pixels.lookup("nope")).toBeUndefined();
+  });
+
+  it("still accepts a minted fork token after the in-memory grant expires", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pix-"));
+    const pixels = new PixelRegistry({ ttlMs: 1_000, tokenDir: dir });
+    const t0 = 1_000_000;
+    const g = pixels.mint(2, t0);
+    expect(pixels.lookup(g.token, t0 + 10)).toEqual(g);
+    const after = pixels.lookup(g.token, t0 + 1_001);
+    expect(after?.token).toBe(g.token);
+    expect(after?.display).toBe(2);
+  });
+
+  it("rejects an empty token file", () => {
+    const dir = mkdtempSync(join(tmpdir(), "pix-"));
+    writeFileSync(join(dir, "2"), "\n", { mode: 0o600 });
+    const pixels = new PixelRegistry({ tokenDir: dir });
+    expect(pixels.lookup("")).toBeUndefined();
+    expect(pixels.lookup("anything")).toBeUndefined();
   });
 });

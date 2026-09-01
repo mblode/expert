@@ -1,6 +1,7 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { MAX_DISPLAYS } from "@computer/shared";
 
 /** Default lifetime for a pixel (noVNC) token. Seat tokens stay long-lived. */
 export const DEFAULT_PIXEL_TTL_MS = 15 * 60 * 1000;
@@ -36,20 +37,19 @@ export class PixelRegistry {
   }
 
   /**
-   * Valid pixel token, or undefined. Expired grants are dropped.
-   * A fork-port token file is also accepted (Grok 6081 + token file).
+   * Valid pixel token, or undefined. Expired in-memory grants are dropped.
+   * A fork-port token file (`$tokenDir/{2-8}`, also `{1}` if present) is
+   * accepted until `stop-window` deletes it — start-window writes an openssl
+   * hex token that is never minted into memory.
    */
   lookup(token: string | undefined, now = Date.now()): PixelGrant | undefined {
     if (!token) return undefined;
     const g = this.grants.get(token);
     if (g) {
-      if (g.expires <= now) {
-        this.grants.delete(token);
-        return undefined;
-      }
-      return g;
+      if (g.expires > now) return g;
+      this.grants.delete(token);
     }
-    return undefined;
+    return this.lookupFile(token);
   }
 
   sweep(now = Date.now()): void {
@@ -73,6 +73,38 @@ export class PixelRegistry {
     mkdirSync(this.tokenDir, { recursive: true, mode: 0o700 });
     writeFileSync(join(this.tokenDir, String(display)), `${token}\n`, { mode: 0o600 });
   }
+
+  /**
+   * Compare against every display file. No early exit on match so a wrong
+   * token does not leak which file existed via timing.
+   */
+  private lookupFile(token: string): PixelGrant | undefined {
+    if (!this.tokenDir) return undefined;
+    let found: PixelGrant | undefined;
+    for (let display = 1; display <= MAX_DISPLAYS; display++) {
+      const raw = readTokenFile(this.tokenDir, display);
+      if (raw !== undefined && tokensEqual(raw, token)) {
+        found = { token, display, expires: Number.MAX_SAFE_INTEGER };
+      }
+    }
+    return found;
+  }
+}
+
+function readTokenFile(dir: string, display: number): string | undefined {
+  try {
+    const raw = readFileSync(join(dir, String(display)), "utf8").trim();
+    return raw.length > 0 ? raw : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function tokensEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
 }
 
 export function withPixelToken(base: string, grant: PixelGrant): string {

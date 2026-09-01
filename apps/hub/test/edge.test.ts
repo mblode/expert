@@ -4,6 +4,7 @@ import {
   hibernatedBody,
   maybeIdleSuspend,
   pickComputerMachine,
+  recordsUse,
   shouldWake,
 } from "../src/host/edge.ts";
 
@@ -20,6 +21,16 @@ describe("edge cold paths", () => {
     expect(shouldWake("/websockify")).toBe(true);
     expect(shouldWake("/computer.v1.Seat/Pair")).toBe(true);
     expect(shouldWake("/computer.v1.Agent/Computer")).toBe(true);
+  });
+
+  it("refreshes idle on VNC use, never on Status/roster/health", () => {
+    expect(recordsUse("/computer.v1.Seat/Status")).toBe(false);
+    expect(recordsUse("/roster")).toBe(false);
+    expect(recordsUse("/healthz")).toBe(false);
+    expect(recordsUse("/vnc")).toBe(true);
+    expect(recordsUse("/vnc/websockify")).toBe(true);
+    expect(recordsUse("/websockify")).toBe(true);
+    expect(recordsUse("/computer.v1.Seat/Open")).toBe(true);
   });
 
   it("picks the computer process group out of edge+guest", () => {
