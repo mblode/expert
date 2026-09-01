@@ -1,6 +1,7 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { ComputerError } from "@computer/shared";
 import type { AuthPolicy } from "@computer/proto";
+import { MemoryIdentityStore, type IdentityStore, type IdentityVerifier } from "../service/identity.ts";
 import { MemorySeatTokenStore, type SeatTokenStore } from "../service/provision.ts";
 
 export type TokenKind = "agent" | "seat";
@@ -13,34 +14,72 @@ export class AuthRegistry {
   private readonly agentTokens: () => Iterable<[string, string]>;
   private readonly seats: SeatTokenStore;
   private readonly seatTokens: Set<string>;
+  private readonly identity: IdentityVerifier | undefined;
+  private readonly identities: IdentityStore;
+  private readonly userSeats: Map<string, string>;
 
   constructor(opts: {
-    setupCode: string;
+    setupCode?: string;
     agentTokens: () => Iterable<[string, string]>;
     /** Survives a restart. Memory only where nobody is meant to stay paired. */
     seats?: SeatTokenStore;
+    /** Product sign-in: verify a Supabase access token. Absent = Pair only. */
+    identity?: IdentityVerifier;
+    identities?: IdentityStore;
   }) {
-    if (!opts.setupCode) {
-      throw new Error("COMPUTER_SETUP_CODE is required — run `npm run up` to generate one");
+    if (!opts.setupCode && !opts.identity) {
+      throw new Error(
+        "COMPUTER_SETUP_CODE is required — run `npm run up` to generate one, or set SUPABASE_JWT_SECRET / SUPABASE_URL for email sign-in",
+      );
     }
     if (typeof opts.agentTokens !== "function") {
       throw new Error("agentTokens must be a function returning the roster's [token, botId] pairs");
     }
-    this.setupCode = opts.setupCode;
+    this.setupCode = opts.setupCode ?? "";
     this.agentTokens = opts.agentTokens;
     this.seats = opts.seats ?? new MemorySeatTokenStore();
     this.seatTokens = new Set(this.seats.load());
+    this.identity = opts.identity;
+    this.identities = opts.identities ?? new MemoryIdentityStore();
+    this.userSeats = new Map(Object.entries(this.identities.load()));
+    for (const token of this.userSeats.values()) this.seatTokens.add(token);
+    if (this.userSeats.size) this.seats.save([...this.seatTokens]);
   }
 
   pair(code: string): string {
+    if (!this.setupCode) {
+      throw new ComputerError("UNAUTHENTICATED", "pairing is disabled; sign in with email");
+    }
     if (!safeEqual(code, this.setupCode)) {
       throw new ComputerError("UNAUTHENTICATED", "bad setup code");
     }
     return this.mint();
   }
 
+  /**
+   * Product door: a verified Supabase JWT becomes the existing seat-token
+   * machinery. The same `auth.users.id` always maps to the same token.
+   */
+  async session(jwt: string): Promise<string> {
+    if (!this.identity) {
+      throw new ComputerError("UNAUTHENTICATED", "email sign-in is not configured");
+    }
+    if (!jwt) throw new ComputerError("UNAUTHENTICATED", "missing bearer");
+    const { userId } = await this.identity(jwt);
+    const existing = this.userSeats.get(userId);
+    if (existing && this.seatTokens.has(existing)) return existing;
+    const token = this.mint();
+    this.userSeats.set(userId, token);
+    this.identities.save(Object.fromEntries(this.userSeats));
+    return token;
+  }
+
   verify(policy: AuthPolicy, bearer: string | undefined): Verified {
     if (policy === "public" || policy === "pair") return { kind: "public" };
+    if (policy === "session") {
+      if (!bearer) throw new ComputerError("UNAUTHENTICATED", "missing bearer");
+      return { kind: "public" };
+    }
     if (!bearer) throw new ComputerError("UNAUTHENTICATED", "missing bearer");
     if (policy === "agent") {
       // Constant-time compare against every entry; no early exit on match.

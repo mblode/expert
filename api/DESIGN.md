@@ -11,7 +11,7 @@ loads. `computer.proto` is what the hub implements.
 | Who | Sees | Never sees |
 |---|---|---|
 | Model | `computer`, `shell`, `read_file`, `write_file` | pairing, VNC URL, clipboard, trackpad, "I'm done" |
-| iPhone | pair, `vncUrl`, pointer, clipboard, presence | action verbs, file paths, shell |
+| Human (iOS / web / Mac / Windows) | email OTP, `vncUrl`, pointer, clipboard, presence | action verbs, file paths, shell |
 | Hub adapter | maps OpenAI / Claude / Gemini calls onto the four tools | new verbs |
 
 Clipboard is not a model tool. A page that copies a prompt into the
@@ -20,8 +20,8 @@ clipboard would otherwise become an injection path.
 ## Shape
 
 ```
-iPhone ── Seat ── hub ── desk
-Model  ── Agent ─┘
+iOS / web / desktop ── Seat ── hub ── desk
+Model               ── Agent ─┘
 ```
 
 Two ConnectRPC services on one hub. One box. Many Bots, one screen
@@ -37,7 +37,8 @@ service Agent {
 }
 
 service Seat {
-  rpc Pair
+  rpc Pair              // local-dev fallback: setup code → seat token
+  rpc Session           // product: Supabase JWT → seat token
   rpc Status
   rpc SetPresence
   rpc Pointer
@@ -235,9 +236,29 @@ One envelope everywhere:
 
 HTTP status follows the code: 401, 409, 400, 400, 503, 400, 409.
 
-## What the phone does
+## Auth
 
-`Pair` exchanges the setup code for a bearer and a `vncUrl`.
+Product sign-in is email one-time password against Supabase Auth
+(`signInWithOtp`). Clients perform OTP; the hub never sends mail.
+
+`Seat.Session` takes `Authorization: Bearer <supabase access token>`,
+verifies it (JWT secret or Auth `getUser`), and maps `auth.users.id` to
+that user's seat on this box — one computer per email. The response is
+the same shape as `Pair`: a hub seat token, `vncUrl`, and `BoxStatus`.
+Seat RPCs after that keep the existing seat-token bearer. A given user
+always gets the same seat token, so iOS, web, Mac, and Windows attach
+to the same desktop.
+
+`Seat.Pair` (setup code) remains as a local-dev fallback so `npm run up`
+works without Supabase. It is not the product login.
+
+TLS + the verified JWT is product auth. Tailscale Serve may still
+publish a loopback hub; it is not the identity.
+
+## What the client does
+
+`Session` exchanges a Supabase access token for a bearer and a `vncUrl`.
+`Pair` is the setup-code fallback for a box that is not wired to Supabase.
 `Status` returns `{ state, vncUrl, display, screens }`.
 Seat calls take an additive `display` to pick a screen (see Screens).
 `Pointer` is the trackpad: `move` deltas or `click` at the current

@@ -41,6 +41,14 @@ struct ComputerClient: Sendable {
         try await post(ComputerV1.seatPaths.pair, ComputerV1.PairRequest(code: code), auth: false)
     }
 
+    func session(accessToken: String) async throws -> ComputerV1.PairResponse {
+        try await post(
+            ComputerV1.seatPaths.session,
+            ComputerV1.SessionRequest(),
+            bearer: accessToken
+        )
+    }
+
     func status(display: Int? = nil) async throws -> ComputerV1.BoxStatus {
         try await post(ComputerV1.seatPaths.status, ComputerV1.StatusRequest(display: display))
     }
@@ -73,14 +81,21 @@ struct ComputerClient: Sendable {
         try await post(ComputerV1.seatPaths.deleteBot, ComputerV1.DeleteBotRequest(id: id))
     }
 
-    private func post<In: Encodable, Out: Decodable>(_ path: String, _ body: In, auth: Bool = true) async throws -> Out {
+    private func post<In: Encodable, Out: Decodable>(
+        _ path: String,
+        _ body: In,
+        auth: Bool = true,
+        bearer: String? = nil
+    ) async throws -> Out {
         var req = URLRequest(url: baseURL.appending(path: String(path.drop(while: { $0 == "/" }))))
         // appending(path:) strips leading slash; Connect paths include the package.
         req = URLRequest(url: url(path))
         req.httpMethod = "POST"
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.setValue("1", forHTTPHeaderField: "Connect-Protocol-Version")
-        if auth, let token {
+        if let bearer {
+            req.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
+        } else if auth, let token {
             req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
         req.httpBody = try JSONEncoder().encode(body)

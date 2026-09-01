@@ -50,6 +50,8 @@ final class AppModel: ObservableObject {
     /// Which Bot's screen the phone is on. Nil = primary (single-screen hub).
     @Published var selectedScreen: ComputerV1.ScreenStatus?
 
+    var signedInWithEmail: Bool { session?.source == "otp" || session?.email != nil }
+
     var screens: [ComputerV1.ScreenStatus] { status?.screens ?? [] }
     var currentScreen: ComputerV1.ScreenStatus? {
         selectedScreen ?? screens.first(where: { $0.display == 1 }) ?? screens.first
@@ -86,7 +88,7 @@ final class AppModel: ObservableObject {
         return last.role == .user || !last.hasVisibleContent
     }
 
-    // MARK: Pairing
+    // MARK: Sign-in / pairing
 
     func restore() {
         session = store.load()
@@ -94,6 +96,47 @@ final class AppModel: ObservableObject {
         guard session != nil else { return }
         Task { await refreshStatus() }
         restoreConversation()
+    }
+
+    func sendOtp(email: String) async {
+        busy = true
+        pairError = nil
+        defer { busy = false }
+        do {
+            guard let auth = SupabaseAuth.fromConfig() else {
+                throw SupabaseAuthError.notConfigured
+            }
+            try await auth.sendOtp(email: email)
+        } catch {
+            pairError = error.localizedDescription
+        }
+    }
+
+    func signIn(host: String, email: String, code: String) async {
+        busy = true
+        pairError = nil
+        defer { busy = false }
+        do {
+            guard let auth = SupabaseAuth.fromConfig() else {
+                throw SupabaseAuthError.notConfigured
+            }
+            let url = try PairURL.parseHost(host)
+            let supabase = try await auth.verifyOtp(email: email, code: code)
+            let client = ComputerClient(baseURL: url, token: nil)
+            let res = try await client.session(accessToken: supabase.accessToken)
+            let session = Session(
+                baseURL: url,
+                token: res.token,
+                email: supabase.email ?? email,
+                source: "otp"
+            )
+            store.save(session)
+            self.session = session
+            self.status = res.status
+            waiting = res.status.state == .waiting
+        } catch {
+            pairError = error.localizedDescription
+        }
     }
 
     func pair(host: String, code: String) async {
@@ -104,7 +147,7 @@ final class AppModel: ObservableObject {
             let url = try PairURL.parseHost(host)
             let client = ComputerClient(baseURL: url, token: nil)
             let res = try await client.pair(code: code)
-            let session = Session(baseURL: url, token: res.token)
+            let session = Session(baseURL: url, token: res.token, source: "pair")
             store.save(session)
             self.session = session
             self.status = res.status
@@ -112,6 +155,10 @@ final class AppModel: ObservableObject {
         } catch {
             pairError = error.localizedDescription
         }
+    }
+
+    func signOut() {
+        unpair()
     }
 
     func unpair() {
@@ -411,4 +458,13 @@ enum PairURL {
 struct Session: Codable, Equatable {
     var baseURL: URL
     var token: String
+    var email: String?
+    var source: String?
+
+    init(baseURL: URL, token: String, email: String? = nil, source: String? = nil) {
+        self.baseURL = baseURL
+        self.token = token
+        self.email = email
+        self.source = source
+    }
 }
