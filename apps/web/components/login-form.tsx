@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { authClient } from "@/lib/auth-client";
 import { captureEvent, identifyUser } from "@/lib/posthog-client";
+import { userFromSignIn } from "@/lib/sign-in-user";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -102,7 +103,7 @@ export function LoginForm({
     setPending(true);
     setError(null);
     try {
-      const { error: verifyError } = await authClient.signIn.emailOtp({
+      const { data, error: verifyError } = await authClient.signIn.emailOtp({
         email: email.trim().toLowerCase(),
         otp: code,
       });
@@ -112,15 +113,18 @@ export function LoginForm({
         setPending(false);
         return;
       }
-      const { data: session } = await authClient.getSession();
-      if (session?.user?.id) {
-        identifyUser(session.user.id, session.user.email);
+      // Identify from the sign-in body. Do not getSession here: that runs
+      // customSession pairing and a throw would leave a consumed code on /login.
+      // The desk still identifies on bootstrap after this full reload.
+      try {
+        const user = userFromSignIn(data);
+        if (user) {
+          identifyUser(user.id, user.email ?? email.trim().toLowerCase());
+        }
+        captureEvent("login_completed", { method: "email_otp" });
+      } finally {
+        window.location.assign("/");
       }
-      captureEvent("login_completed", { method: "email_otp" });
-      // Full load so the server-rendered `/` sees the session cookie and
-      // mounts the desk. Leave pending true so a second submit cannot re-check
-      // the consumed code while navigation starts.
-      window.location.assign("/");
     } catch {
       setError(NETWORK_ERROR);
       verifyingRef.current = false;
