@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { authClient } from "@/lib/auth-client";
 import { captureEvent, identifyUser } from "@/lib/posthog-client";
+import { userFromSignIn } from "@/lib/sign-in-user";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -101,8 +102,9 @@ export function LoginForm({
     verifyingRef.current = true;
     setPending(true);
     setError(null);
+    let data: unknown;
     try {
-      const { error: verifyError } = await authClient.signIn.emailOtp({
+      const { data: signInData, error: verifyError } = await authClient.signIn.emailOtp({
         email: email.trim().toLowerCase(),
         otp: code,
       });
@@ -112,20 +114,26 @@ export function LoginForm({
         setPending(false);
         return;
       }
-      const { data: session } = await authClient.getSession();
-      if (session?.user?.id) {
-        identifyUser(session.user.id, session.user.email);
-      }
-      captureEvent("login_completed", { method: "email_otp" });
-      // Full load so the server-rendered `/` sees the session cookie and
-      // mounts the desk. Leave pending true so a second submit cannot re-check
-      // the consumed code while navigation starts.
-      window.location.assign("/");
+      data = signInData;
     } catch {
       setError(NETWORK_ERROR);
       verifyingRef.current = false;
       setPending(false);
+      return;
     }
+    // Identify from the sign-in body. Do not getSession here: that runs
+    // customSession pairing and a throw would leave a consumed code on /login.
+    // Keep pending/verifying locked: the code is already consumed.
+    try {
+      const user = userFromSignIn(data);
+      if (user) {
+        identifyUser(user.id, user.email ?? email.trim().toLowerCase());
+      }
+      captureEvent("login_completed", { method: "email_otp" });
+    } catch {
+      // Analytics must not unlock the form or paint a network error.
+    }
+    window.location.assign("/");
   };
 
   const social = async (provider: "google" | "apple") => {
