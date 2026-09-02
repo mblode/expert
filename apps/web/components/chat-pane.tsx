@@ -2,6 +2,7 @@ import { useEveAgent } from "eve/react";
 import type { EveMessage } from "eve/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { apiBase } from "../lib/seat";
 import type { Seat } from "../lib/seat";
 import { loadSession, saveSession } from "../lib/storage";
@@ -100,16 +101,18 @@ export function ChatPane({ botId, seat }: { botId: string; seat: Seat }): React.
           {statusLabel}
         </output>
         <span className="truncate text-xs text-mute">{botId}</span>
-        <button
-          className="ml-auto rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
+        <Button
+          className="ml-auto"
           onClick={() => {
             agent.reset();
             saveSession(undefined, botId);
           }}
+          size="xs"
           type="button"
+          variant="outline"
         >
           New chat
-        </button>
+        </Button>
       </header>
 
       <div
@@ -143,13 +146,15 @@ export function ChatPane({ botId, seat }: { botId: string; seat: Seat }): React.
         <div className="flex flex-wrap items-center gap-2 border-t border-red-900/60 bg-red-950/40 px-3 py-2 text-xs text-red-200">
           <span className="min-w-0 break-words">{agent.error.message}</span>
           {lastSent && (
-            <button
-              className="ml-auto rounded-md border border-red-800 px-2 py-0.5 hover:border-red-400"
+            <Button
+              className="ml-auto"
               onClick={() => send(lastSent)}
+              size="xs"
               type="button"
+              variant="outline"
             >
               Retry
-            </button>
+            </Button>
           )}
         </div>
       )}

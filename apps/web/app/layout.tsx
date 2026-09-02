@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Agentation } from "agentation";
 
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { siteConfig } from "@/lib/config";
 
 import "./globals.css";
@@ -40,10 +41,12 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html className={`${glide.variable} ${emilioLight.variable} h-full`} lang="en">
+    <html className={`dark ${glide.variable} ${emilioLight.variable} h-full`} lang="en">
       <body className="h-full">
-        {children}
-        {process.env.NODE_ENV === "development" && <Agentation />}
+        <TooltipProvider>
+          {children}
+          {process.env.NODE_ENV === "development" && <Agentation />}
+        </TooltipProvider>
       </body>
     </html>
   );

@@ -5,6 +5,8 @@ import type {
   EveMessagePart,
 } from "eve/react";
 
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Markdown } from "./markdown";
 
 /** The client's reply to a human-in-the-loop input request. */
@@ -166,10 +168,10 @@ function ToolSteps({ parts }: { parts: EveDynamicToolPart[] }): React.ReactEleme
  * eve marks the destructive choice itself; guessing which of "approve" and
  * "cancel" is the dangerous one gets it backwards for a session limit.
  */
-const OPTION_CLASS = {
-  danger: "bg-red-500 text-white hover:bg-red-400",
-  default: "border border-edge hover:border-accent",
-  primary: "bg-accent text-ink hover:opacity-90",
+const OPTION_VARIANT = {
+  danger: "destructive",
+  default: "outline",
+  primary: "default",
 } as const;
 
 /**
@@ -211,18 +213,32 @@ function InputRequestCard({
       )}
       <p className="text-sm leading-6">{request.prompt}</p>
       <div className="flex flex-wrap gap-2 pt-3">
-        {(request.options ?? []).map((option) => (
-          <button
-            className={`rounded-md px-2.5 py-1 text-xs font-medium ${OPTION_CLASS[option.style ?? "default"]}`}
-            disabled={disabled}
-            key={option.id}
-            onClick={() => onAnswer({ optionId: option.id, requestId: request.requestId })}
-            title={option.description}
-            type="button"
-          >
-            {option.label}
-          </button>
-        ))}
+        {(request.options ?? []).map((option) => {
+          const button = (
+            <Button
+              disabled={disabled}
+              onClick={() => onAnswer({ optionId: option.id, requestId: request.requestId })}
+              size="xs"
+              type="button"
+              variant={OPTION_VARIANT[option.style ?? "default"]}
+            >
+              {option.label}
+            </Button>
+          );
+          if (!option.description) {
+            return (
+              <span className="contents" key={option.id}>
+                {button}
+              </span>
+            );
+          }
+          return (
+            <Tooltip key={option.id}>
+              <TooltipTrigger render={button} />
+              <TooltipContent>{option.description}</TooltipContent>
+            </Tooltip>
+          );
+        })}
       </div>
     </fieldset>
   );
@@ -266,7 +282,7 @@ function MessagePart({
         src={url}
       />
     ) : (
-      <a className="text-sm text-accent underline" href={url} rel="noreferrer" target="_blank">
+      <a className="text-sm text-foreground underline" href={url} rel="noreferrer" target="_blank">
         {part.filename ?? "Attachment"}
       </a>
     );
@@ -313,7 +329,7 @@ function MessagePart({
           ? `${part.displayName} authorization ${part.outcome}`
           : part.description}
         {url && (
-          <a className="ml-2 text-accent underline" href={url} rel="noreferrer" target="_blank">
+          <a className="ml-2 text-foreground underline" href={url} rel="noreferrer" target="_blank">
             Sign in
           </a>
         )}
