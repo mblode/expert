@@ -1,12 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
-import { type AuthFn, UnauthenticatedError, withAuthChallenges } from "eve/channels/auth";
+import { UnauthenticatedError, withAuthChallenges } from "eve/channels/auth";
+import type { AuthFn } from "eve/channels/auth";
 
 /** Header the hub injects on loopback `/eve/v1` proxy requests. */
 export const EVE_HUB_SECRET_HEADER = "x-computer-eve-secret";
 
-export function eveHubSecretFromEnv(
-  env: NodeJS.ProcessEnv = process.env,
-): string | undefined {
+export function eveHubSecretFromEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const secret = env.COMPUTER_EVE_SECRET;
   return secret && secret.length > 0 ? secret : undefined;
 }
@@ -15,17 +14,21 @@ export function eveHubSecretMatches(
   provided: string | null | undefined,
   expected: string | undefined,
 ): boolean {
-  if (!provided || !expected) return false;
+  if (!provided || !expected) {
+    return false;
+  }
   const a = Buffer.from(provided);
   const b = Buffer.from(expected);
-  if (a.length !== b.length) return false;
+  if (a.length !== b.length) {
+    return false;
+  }
   return timingSafeEqual(a, b);
 }
 
 /**
  * Production (`eve start`) authenticator: the hub already gated on the seat
  * token. Trust only the shared secret it injects. Does not use `localDev()` /
- * `EVE_DEV=1` — that path is ignored by `eve start`.
+ * `EVE_DEV=1`, that path is ignored by `eve start`.
  */
 export function hubLoopbackAuth(
   secret: string | undefined = eveHubSecretFromEnv(),
@@ -38,7 +41,9 @@ export function hubLoopbackAuth(
       });
     }
     const provided = request.headers.get(EVE_HUB_SECRET_HEADER);
-    if (!eveHubSecretMatches(provided, secret)) return null;
+    if (!eveHubSecretMatches(provided, secret)) {
+      return null;
+    }
     return {
       attributes: { via: "hub" },
       authenticator: "computer-hub",

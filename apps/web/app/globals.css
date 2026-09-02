@@ -81,7 +81,7 @@ body {
 }
 
 /* iOS Safari zooms the page in whenever a field smaller than 16px takes focus,
-   and never zooms back out — the pane ends up half off-screen behind the
+   and never zooms back out: the pane ends up half off-screen behind the
    keyboard. Only touch pays for the larger type. */
 @media (pointer: coarse) {
   input,

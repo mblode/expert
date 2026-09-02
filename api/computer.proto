@@ -32,7 +32,7 @@ service Seat {
   // the box clipboard and is never stored, logged, or returned.
   rpc ProvideSecret(ProvideSecretRequest) returns (ProvideSecretResponse);
   // Provisioning: a paired seat is the box owner. The hub allocates the
-  // next free screen and mints the Bot's token — returned exactly once.
+  // next free screen and mints the Bot's token, returned exactly once.
   rpc CreateBot(CreateBotRequest) returns (BotCredentials);
   rpc DeleteBot(DeleteBotRequest) returns (BoxStatus);
 }
@@ -284,7 +284,7 @@ message MessageWidget {
 
 // Masked input on the seat. The value is delivered to the box clipboard
 // and never enters the transcript, the occurrence log, or the model's
-// context — the agent is told only that it was provided, and pastes.
+// context: the agent is told only that it was provided, and pastes.
 message MessageSecretRequest {
   string prompt = 1;
   string label = 2;

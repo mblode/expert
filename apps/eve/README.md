@@ -1,6 +1,6 @@
 # Eve on the computer
 
-Eve is a process on the same machine as the hub and the desk — not a Vercel
+Eve is a process on the same machine as the hub and the desk, not a Vercel
 app. Humans sign in at [hello.expert](https://hello.expert). The browser talks
 to Eve only through the hub's `/eve/v1` proxy (seat token). Same machine,
 loopback. See [eve.dev](https://eve.dev): the directory is the agent.

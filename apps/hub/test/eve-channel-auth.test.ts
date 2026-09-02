@@ -18,9 +18,7 @@ describe("Eve channel: hub loopback auth", () => {
 
   it("skips a missing or wrong secret so the walk can 401", async () => {
     const auth = hubLoopbackAuth("s3cret");
-    expect(
-      await auth(new Request("http://127.0.0.1:2000/eve/v1/session")),
-    ).toBeNull();
+    expect(await auth(new Request("http://127.0.0.1:2000/eve/v1/session"))).toBeNull();
     expect(
       await auth(
         new Request("http://127.0.0.1:2000/eve/v1/session", {
@@ -31,14 +29,14 @@ describe("Eve channel: hub loopback auth", () => {
   });
 
   it("throws when the process has no secret at all", async () => {
-    const auth = hubLoopbackAuth(undefined);
+    const auth = hubLoopbackAuth();
     try {
       await auth(new Request("http://127.0.0.1:2000/eve/v1/session"));
       throw new Error("expected UnauthenticatedError");
-    } catch (err) {
-      expect(err).toBeInstanceOf(Error);
-      expect((err as Error).message).toBe("COMPUTER_EVE_SECRET is not set");
-      expect((err as { response?: Response }).response?.status).toBe(401);
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe("COMPUTER_EVE_SECRET is not set");
+      expect((error as { response?: Response }).response?.status).toBe(401);
     }
   });
 

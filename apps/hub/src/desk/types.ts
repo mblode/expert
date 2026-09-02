@@ -1,18 +1,18 @@
 import type { Button, Point } from "@computer/shared";
 
-export type ShellResult = {
+export interface ShellResult {
   exit: number;
   stdout: string;
   stderr: string;
   stdout_truncated: boolean;
   stderr_truncated: boolean;
-};
+}
 
-export type FocusHint = {
+export interface FocusHint {
   title: string;
   password: boolean;
   confirm: boolean;
-};
+}
 
 export interface Desk {
   ping(): Promise<boolean>;

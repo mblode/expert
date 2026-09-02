@@ -16,11 +16,11 @@ for this, so speak only if something needs a person.
 Every command below is written to work as plain argv.
 
 1. Disk: \`df -P /workspace\`. Note the use percentage. This volume is the
-   only persistent disk — hub roster, bot tokens, and my files all live here.
+   only persistent disk, hub roster, bot tokens, and my files all live here.
 2. If /workspace is at 80% or more, find what is big: \`du -x -h --max-depth=1 /workspace\`,
    then the same one level into the largest directory.
 3. Confirm the computer state dir exists: \`test -d /workspace/.computer\`.
-   If it is missing, say so — that is where the roster lives and a missing
+   If it is missing, say so, that is where the roster lives and a missing
    dir means the next boot will mint a new primary token.
 4. Packages: read \`/workspace/packages.md\` if it exists. For each package it
    lists, check it is still installed with \`dpkg -s <name>\`. A computer update
@@ -35,7 +35,7 @@ and every listed package is present. A quiet run is a silent run.
 
 **Send one short message** when the disk is at 80% or more, \`.computer\` is
 missing, a package from packages.md is missing, or a step failed. Say what
-is wrong and the one thing you suggest. If the fix is obviously safe and
-reversible — clearing a package cache, reinstalling from packages.md — do
-it first and say what you did.`,
+is wrong and the one thing you suggest. Do not fix it yourself: a scheduled
+run has nobody watching, so anything beyond reading (a reinstall, a cache
+clear, a delete) waits for a person to say so.`,
 });

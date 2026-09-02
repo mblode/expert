@@ -4,10 +4,10 @@
  */
 
 const paths = {
-  sendMessage: "/computer.v1.Agent/SendMessage",
   computer: "/computer.v1.Agent/Computer",
-  shell: "/computer.v1.Agent/Shell",
   readFile: "/computer.v1.Agent/ReadFile",
+  sendMessage: "/computer.v1.Agent/SendMessage",
+  shell: "/computer.v1.Agent/Shell",
   writeFile: "/computer.v1.Agent/WriteFile",
 } as const;
 
@@ -21,23 +21,26 @@ export async function hubRpc<T>(path: HubPath, body: unknown): Promise<T> {
   const token = process.env.COMPUTER_BOT_TOKEN;
   if (!token) {
     throw new Error(
-      "COMPUTER_BOT_TOKEN is not set — this Eve process is a Bot. Mint one with `npm run bot -- new <id>` and start Eve with that token.",
+      "COMPUTER_BOT_TOKEN is not set: this Eve process is a Bot. Mint one with `npm run bot -- new <id>` and start Eve with that token.",
     );
   }
   let res: Response;
   try {
     res = await fetch(`${base}${paths[path]}`, {
-      method: "POST",
+      body: JSON.stringify(body),
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify(body),
+      method: "POST",
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
-  } catch (cause) {
-    const why = cause instanceof Error && cause.name === "TimeoutError" ? "did not answer in time" : "is not reachable";
-    throw new Error(`the computer's hub ${why} at ${base}`, { cause });
+  } catch (error) {
+    const why =
+      error instanceof Error && error.name === "TimeoutError"
+        ? "did not answer in time"
+        : "is not reachable";
+    throw new Error(`the computer's hub ${why} at ${base}`, { cause: error });
   }
   const text = await res.text();
   let json: unknown = null;
@@ -48,7 +51,9 @@ export async function hubRpc<T>(path: HubPath, body: unknown): Promise<T> {
   }
   if (!res.ok) {
     const error = (json as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new Error(`${error?.code ?? `HTTP_${res.status}`}: ${error?.message ?? text.slice(0, 200) ?? "hub call failed"}`);
+    throw new Error(
+      `${error?.code ?? `HTTP_${res.status}`}: ${error?.message ?? text.slice(0, 200) ?? "hub call failed"}`,
+    );
   }
   return json as T;
 }

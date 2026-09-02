@@ -1,42 +1,47 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer } from "node:http";
+import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { EVE_HUB_SECRET_HEADER } from "../src/host/eve.ts";
 import { startHub } from "./helper.ts";
 
 type Opened = Awaited<ReturnType<typeof startHub>>;
 
-type FakeEve = {
+interface FakeEve {
   server: Server;
   url: string;
   seen: { method?: string; url?: string; authorization?: string; secret?: string; body: string }[];
-};
+}
 
-function fakeEve(handler: (req: IncomingMessage, res: ServerResponse, body: string) => void): Promise<FakeEve> {
+function fakeEve(
+  handler: (req: IncomingMessage, res: ServerResponse, body: string) => void,
+): Promise<FakeEve> {
   const seen: FakeEve["seen"] = [];
   return new Promise((resolve) => {
     const server = createServer((req, res) => {
       const chunks: Buffer[] = [];
       req.on("data", (c: Buffer) => chunks.push(c));
       req.on("end", () => {
-        const body = Buffer.concat(chunks).toString("utf8");
+        const body = Buffer.concat(chunks).toString("utf-8");
         seen.push({
-          method: req.method,
-          url: req.url,
           authorization: Array.isArray(req.headers.authorization)
             ? req.headers.authorization[0]
             : req.headers.authorization,
+          body,
+          method: req.method,
           secret: Array.isArray(req.headers[EVE_HUB_SECRET_HEADER])
             ? req.headers[EVE_HUB_SECRET_HEADER][0]
             : req.headers[EVE_HUB_SECRET_HEADER],
-          body,
+          url: req.url,
         });
         handler(req, res, body);
       });
     });
     server.listen(0, "127.0.0.1", () => {
       const addr = server.address();
-      if (!addr || typeof addr === "string") throw new Error("no addr");
-      resolve({ server, url: `http://127.0.0.1:${addr.port}`, seen });
+      if (!addr || typeof addr === "string") {
+        throw new Error("no addr");
+      }
+      resolve({ seen, server, url: `http://127.0.0.1:${addr.port}` });
     });
   });
 }
@@ -45,7 +50,9 @@ async function closedPort(): Promise<number> {
   const server = createServer();
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const addr = server.address();
-  if (!addr || typeof addr === "string") throw new Error("no addr");
+  if (!addr || typeof addr === "string") {
+    throw new Error("no addr");
+  }
   await new Promise<void>((resolve) => server.close(() => resolve()));
   return addr.port;
 }
@@ -56,16 +63,23 @@ describe("eve proxy: seat token → bot → that bot's Eve", () => {
   const priorEveUrl = process.env.COMPUTER_EVE_URL;
 
   afterEach(async () => {
-    while (opened.length) await opened.pop()!.close();
-    while (servers.length) await new Promise<void>((r) => servers.pop()!.close(() => r()));
-    if (priorEveUrl === undefined) delete process.env.COMPUTER_EVE_URL;
-    else process.env.COMPUTER_EVE_URL = priorEveUrl;
+    while (opened.length) {
+      await opened.pop()!.close();
+    }
+    while (servers.length) {
+      await new Promise<void>((r) => servers.pop()!.close(() => r()));
+    }
+    if (priorEveUrl === undefined) {
+      delete process.env.COMPUTER_EVE_URL;
+    } else {
+      process.env.COMPUTER_EVE_URL = priorEveUrl;
+    }
   });
 
   async function hubAt(eveUrl: string, extra: Parameters<typeof startHub>[0] = {}) {
     const h = await startHub({
-      eveUrls: { main: eveUrl },
       eveSecret: "eve-secret-test",
+      eveUrls: { main: eveUrl },
       ...extra,
     });
     opened.push(h);
@@ -78,9 +92,9 @@ describe("eve proxy: seat token → bot → that bot's Eve", () => {
     const { h } = await hubAt(eve.url);
 
     const res = await fetch(`${h.url}/eve/v1/session`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
       body: JSON.stringify({ message: "hi" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
     });
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({
@@ -89,21 +103,21 @@ describe("eve proxy: seat token → bot → that bot's Eve", () => {
     expect(eve.seen).toHaveLength(0);
   });
 
-  it("forwards method, body, status and JSON — without the seat token, with the hub secret", async () => {
+  it("forwards method, body, status and JSON: without the seat token, with the hub secret", async () => {
     const eve = await fakeEve((_req, res, body) => {
       res.writeHead(201, { "content-type": "application/json" });
-      res.end(JSON.stringify({ id: "sess_1", echo: JSON.parse(body || "{}") }));
+      res.end(JSON.stringify({ echo: JSON.parse(body || "{}"), id: "sess_1" }));
     });
     servers.push(eve.server);
     const { h, token } = await hubAt(eve.url);
 
     const res = await fetch(`${h.url}/eve/v1/session?foo=bar`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({ message: "say hi" }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      method: "POST",
     });
     expect(res.status).toBe(201);
-    expect(await res.json()).toEqual({ id: "sess_1", echo: { message: "say hi" } });
+    expect(await res.json()).toEqual({ echo: { message: "say hi" }, id: "sess_1" });
 
     expect(eve.seen).toHaveLength(1);
     const seen = eve.seen[0]!;
@@ -142,23 +156,23 @@ describe("eve proxy: seat token → bot → that bot's Eve", () => {
         { id: "a", display: 1, token: "token-a" },
         { id: "b", display: 2, token: "token-b" },
       ],
-      eveUrls: { a: eveA.url, b: eveB.url },
       eveSecret: "eve-secret-test",
+      eveUrls: { a: eveA.url, b: eveB.url },
     });
     opened.push(h);
     const token = await h.pair();
 
     const toA = await fetch(`${h.url}/eve/v1/session`, {
-      method: "POST",
       headers: { authorization: `Bearer ${token}`, "x-computer-bot": "a" },
+      method: "POST",
     });
     expect(await toA.json()).toEqual({ who: "a" });
     expect(eveA.seen).toHaveLength(1);
     expect(eveB.seen).toHaveLength(0);
 
     const toB = await fetch(`${h.url}/eve/v1/session?bot=b`, {
-      method: "POST",
       headers: { authorization: `Bearer ${token}` },
+      method: "POST",
     });
     expect(await toB.json()).toEqual({ who: "b" });
     expect(eveB.seen).toHaveLength(1);
@@ -204,7 +218,9 @@ describe("eve proxy: seat token → bot → that bot's Eve", () => {
     let rest = "";
     for (;;) {
       const chunk = await reader.read();
-      if (chunk.done) break;
+      if (chunk.done) {
+        break;
+      }
       rest += decoder.decode(chunk.value);
     }
     expect(rest).toContain('"two"');
@@ -237,9 +253,9 @@ describe("eve proxy: seat token → bot → that bot's Eve", () => {
     const { h, token } = await hubAt(`http://127.0.0.1:${await closedPort()}`);
 
     const res = await fetch(`${h.url}/eve/v1/session`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify({ message: "hi" }),
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      method: "POST",
     });
     expect(res.status).toBe(503);
     expect((await res.json()) as { error: { code: string; message: string } }).toMatchObject({
@@ -252,8 +268,8 @@ describe("eve proxy: seat token → bot → that bot's Eve", () => {
     opened.push(h);
     const token = await h.pair();
     const res = await fetch(`${h.url}/eve/v1/session`, {
-      method: "POST",
       headers: { authorization: `Bearer ${token}` },
+      method: "POST",
     });
     expect(res.status).toBe(503);
     expect((await res.json()) as { error: { code: string } }).toMatchObject({

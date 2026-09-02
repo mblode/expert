@@ -23,15 +23,24 @@ export function App(): React.ReactElement {
   const { data: session, isPending } = authClient.useSession();
   const [recovered, setRecovered] = useState<{ hubUrl: string; seatToken: string } | null>(null);
 
-  const seat = recovered ?? (session?.seatToken ? { hubUrl: session.hubUrl, seatToken: session.seatToken } : null);
+  const seat =
+    recovered ??
+    (session?.seatToken ? { hubUrl: session.hubUrl, seatToken: session.seatToken } : null);
 
-  if (isPending && !seat) return <div className="h-full bg-ink" />;
+  if (isPending && !seat) {
+    return <div className="h-full bg-ink" />;
+  }
 
   if (!seat) {
     return (
       <ConnectError
         message={session?.seatError ?? "Signed in, but no seat token was issued for the computer."}
-        onRetry={() => void reconnect().then((next) => next && setRecovered(next))}
+        onRetry={async () => {
+          const next = await reconnect();
+          if (next) {
+            setRecovered(next);
+          }
+        }}
         onSignOut={signOut}
       />
     );
@@ -51,8 +60,13 @@ export function App(): React.ReactElement {
 /** Ask the web server to Pair again; it holds the setup code, the browser never does. */
 async function reconnect(): Promise<{ hubUrl: string; seatToken: string } | null> {
   const res = await fetch("/api/computer/reconnect", { method: "POST" });
-  if (!res.ok) return null;
-  const body = (await res.json().catch(() => null)) as { hubUrl?: string; seatToken?: string } | null;
+  if (!res.ok) {
+    return null;
+  }
+  const body = (await res.json().catch(() => null)) as {
+    hubUrl?: string;
+    seatToken?: string;
+  } | null;
   return body?.hubUrl && body.seatToken ? { hubUrl: body.hubUrl, seatToken: body.seatToken } : null;
 }
 
@@ -68,7 +82,7 @@ function Workspace({
   seatToken: string;
 }): React.ReactElement {
   const seat = useMemo(() => createSeat(hubUrl, seatToken), [hubUrl, seatToken]);
-  const [status, setStatus] = useState<BoxStatus | undefined>(undefined);
+  const [status, setStatus] = useState<BoxStatus | undefined>();
   const [display, setDisplay] = useState(1);
   const [offline, setOffline] = useState<string | null>(null);
 
@@ -86,16 +100,18 @@ function Workspace({
     const tick = async () => {
       try {
         const next = await seat.status(display);
-        if (!live) return;
+        if (!live) {
+          return;
+        }
         setStatus(next);
         setOffline(null);
-      } catch (cause) {
+      } catch (error) {
         if (!live) return;
-        if (cause instanceof SeatError && cause.code === "UNAUTHENTICATED") {
+        if (error instanceof SeatError && error.code === "UNAUTHENTICATED") {
           await recoverSeat();
           return;
         }
-        setOffline(cause instanceof Error ? cause.message : "hub unreachable");
+        setOffline(error instanceof Error ? error.message : "hub unreachable");
       }
     };
     void tick();
@@ -112,11 +128,7 @@ function Workspace({
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex items-center gap-3 border-b border-edge px-3 py-2">
         <h1 className="text-sm font-semibold">{siteConfig.name}</h1>
-        {offline && (
-          <span className="truncate text-xs text-red-300" role="status">
-            {offline}
-          </span>
-        )}
+        {offline && <output className="truncate text-xs text-red-300">{offline}</output>}
         <button
           className="ml-auto rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
           onClick={onSignOut}

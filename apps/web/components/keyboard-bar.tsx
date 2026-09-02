@@ -14,7 +14,9 @@ export function KeyboardBar({ onSend }: { onSend: (text: string) => void }): Rea
   const [text, setText] = useState("");
 
   const send = (suffix: string) => {
-    if (!text && !suffix) return;
+    if (!text && !suffix) {
+      return;
+    }
     setText("");
     onSend(text + suffix);
   };
@@ -23,8 +25,8 @@ export function KeyboardBar({ onSend }: { onSend: (text: string) => void }): Rea
     <div className="flex items-center gap-2 border-t border-edge p-3">
       <input
         aria-label="Type into the box"
-        // iOS rewrites what a thumb types — capitals, corrections, curly quotes
-        // for straight ones — and the box would run the rewrite, not the
+        // iOS rewrites what a thumb types: capitals, corrections, curly quotes
+        // for straight ones, and the box would run the rewrite, not the
         // command. These are the attributes that turn all of it off.
         autoCapitalize="off"
         autoComplete="off"
@@ -36,7 +38,9 @@ export function KeyboardBar({ onSend }: { onSend: (text: string) => void }): Rea
         enterKeyHint="send"
         onChange={(event) => setText(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
+          if (event.key !== "Enter") {
+            return;
+          }
           event.preventDefault();
           // Return goes to the box with the line: the reason to type into a
           // terminal from a phone is to run the thing you typed.

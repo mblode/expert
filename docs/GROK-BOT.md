@@ -30,7 +30,7 @@ Research date: 2026-09-02. Sources are xAI's docs and launch post, Cursor's help
 - **A messaging app, not a task runner.** Left sidebar of named bots (avatar colour/shape, title, pin/hide/sections), a chat pane, a right-hand details panel. Conversations centre on bots. ([VentureBeat](https://venturebeat.com/orchestration/spacexais-grok-bot-turns-agents-into-persistent-digital-coworkers-that-can-operate-your-apps-for-120-per-month), [MindStudio](https://www.mindstudio.ai/blog/grok-bot-setup-guide))
 - **Onboarding.** Sign in → short questionnaire about tools → concept intro (bots, shared computer, routines) → the computer provisions in the background → "Meet a future teammate" with suggested bots or "Create new agent". A new bot's first turn is a conversational intake. ([get-started](https://docs.x.ai/grok-bot/get-started))
 - **Starting work.** A message, a scheduled routine, or an event trigger. Composer takes `/skill`, up to six attachments, voice dictation on iOS.
-- **Watching.** Two views: the conversation (tool cards, files, questions, approval cards; model reasoning stays off-screen — the transcript shows only *occurrences*) and the **Agent Computer**, a live view opened from a computer icon showing clicks, typing, navigation and status. Results arrive as file cards. ([computer-and-apps](https://docs.x.ai/grok-bot/computer-and-apps), [files-and-results](https://docs.x.ai/grok-bot/files-and-results))
+- **Watching.** Two views: the conversation (tool cards, files, questions, approval cards; model reasoning stays off-screen, the transcript shows only _occurrences_) and the **Agent Computer**, a live view opened from a computer icon showing clicks, typing, navigation and status. Results arrive as file cards. ([computer-and-apps](https://docs.x.ai/grok-bot/computer-and-apps), [files-and-results](https://docs.x.ai/grok-bot/files-and-results))
 - **Intervening.** Approval cards (Allow once / Deny / Always allow); **takeover** of the shared desktop for passwords, passkeys, 2FA, CAPTCHAs, payments, then hand back; question widgets with 1–6 options that end the turn; masked secret requests excluded from transcript and model context. ([approvals docs](https://docs.x.ai/grok-bot/approvals-security-and-privacy))
 - **Mobile.** Mirrors bots/chats/routines, shows the live computer, supports takeover; a "task dispatcher" with no routine editing or teach-a-task.
 - **Reported friction.** Metering bugs at launch, long routines hard to debug, bots stopping just before completion to verify, no dry-run mode, a HN thread centred on always-on agents holding all credentials and on token burn. ([eesel](https://www.eesel.ai/blog/grok-bot-review), [HN](https://news.ycombinator.com/item?id=49261514))
@@ -48,14 +48,14 @@ Approval gates before sending, publishing, purchasing, deleting, permission chan
 
 ### Competitors and what is converging
 
-| Product | Compute | Live view / takeover | Approvals | Scheduling |
-|---|---|---|---|---|
-| Grok Bot | 1 persistent VM per user, shared by bots | yes / yes (desktop + iPhone) | once / always / deny + Auto Review | routines + event triggers |
-| ChatGPT Workspace Agents (Apr–Jul 2026) | cloud agents; Operator and "agent mode" retired | virtual browser | review boundaries | scheduled + API/Slack triggers |
-| Claude Cowork (web/mobile Jul 2026) | fresh cloud session per task | computer-use preview | for significant actions | scheduled tasks |
-| Manus Cloud Computer | persistent Ubuntu | yes | — | scheduled + webhooks |
-| Genspark, Devin, Browser Use Cloud | cloud computer / sandbox | varies | — | some |
-| OpenClaw / Hermes (OSS) | self-hosted | varies | varies | cron |
+| Product                                 | Compute                                         | Live view / takeover         | Approvals                          | Scheduling                     |
+| --------------------------------------- | ----------------------------------------------- | ---------------------------- | ---------------------------------- | ------------------------------ |
+| Grok Bot                                | 1 persistent VM per user, shared by bots        | yes / yes (desktop + iPhone) | once / always / deny + Auto Review | routines + event triggers      |
+| ChatGPT Workspace Agents (Apr–Jul 2026) | cloud agents; Operator and "agent mode" retired | virtual browser              | review boundaries                  | scheduled + API/Slack triggers |
+| Claude Cowork (web/mobile Jul 2026)     | fresh cloud session per task                    | computer-use preview         | for significant actions            | scheduled tasks                |
+| Manus Cloud Computer                    | persistent Ubuntu                               | yes                          | ,                                  | scheduled + webhooks           |
+| Genspark, Devin, Browser Use Cloud      | cloud computer / sandbox                        | varies                       | ,                                  | some                           |
+| OpenClaw / Hermes (OSS)                 | self-hosted                                     | varies                       | varies                             | cron                           |
 
 Converging: a persistent cloud computer that outlives the device; a live screen with human takeover for auth; tiered approvals plus an automated reviewer; scheduled and event-triggered routines; teach-by-demonstration; multi-agent orchestration; connectors first, GUI automation as fallback. Grok Bot's distinctive choices are the bot-as-teammate messaging UI, one shared VM with per-bot screens, and bundling into Cursor.
 
@@ -63,41 +63,41 @@ Converging: a persistent cloud computer that outlives the device; a live screen 
 
 The substrate already matches the shape that matters: one shared Linux box, one 1280×800 screen per bot, a closed `computer` action union in pixel coordinates, XTEST input, view-only VNC with all human input through a seat FSM, `request_takeover`, question widgets and masked secret requests as turn-ending occurrences, per-bot profile/memory/transcript on `/workspace`, Grok's persistence boundary, a hub-side policy gate, runtime provisioning of bots, and Eve as the harness with a daily routine. That is more of the desktop contract than most public clones have.
 
-| Grok Bot | Here | Gap |
-|---|---|---|
-| One computer per **account** | One computer per **deployment**; every account shares it and owns it | The blocking gap for anyone but a private deployment |
-| Bot-centric messaging UI: sidebar of bots, profiles, sections | One chat pane keyed by whichever screen is selected; bot identity is a `<select>` | Whole information architecture |
-| Live Agent Computer view | Yes (noVNC iframe, take-the-seat, I'm done, multi-screen banner) | Polish: pause vs take, who holds the seat, hand-back confirmation |
-| Approval cards once / always / deny | Eve's `input.requested` cards render; hub policy has allow/ask/deny | No "always allow" memory; no action preview; approvals live in two places |
-| Question widgets, masked secrets | Hub has both (`SendMessage`, `ProvideSecret`) | **Clients never read the occurrence log**; no `AnswerWidget` RPC; web shows Eve's raw text instead |
-| Routines with schedule + triggers, run history, test run | One cron in `agent/schedules/`; no UI, no history | Everything user-facing |
-| Skills, `/skill` in the composer, teach-a-task | Skills exist in the Eve project; nothing in the UI | Composer integration, per-bot enablement |
-| Connectors / remote MCP | `COMPUTER_MCP_URL` for one MCP server | Catalogue, OAuth, per-account sharing |
-| Multi-agent DMs and group chats | Bots share `/workspace`; nothing else | All of it |
-| Memory | `memory/profile.md` read into the prompt | Inspection/edit UI |
-| Files and results as cards, attachments in the composer | Bare links; no upload | Cards, upload, preview |
-| Mobile | iOS app (pairing); web layout stacks | Web mobile layout, notifications when `WAITING` |
-| Audit | Transcript on disk | Action log view |
-| Sleep / wake-on-connect | Machine stays running | Fly suspend on idle + wake on request (an edge proxy that can carry WebSockets) |
+| Grok Bot                                                      | Here                                                                              | Gap                                                                                                |
+| ------------------------------------------------------------- | --------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| One computer per **account**                                  | One computer per **deployment**; every account shares it and owns it              | The blocking gap for anyone but a private deployment                                               |
+| Bot-centric messaging UI: sidebar of bots, profiles, sections | One chat pane keyed by whichever screen is selected; bot identity is a `<select>` | Whole information architecture                                                                     |
+| Live Agent Computer view                                      | Yes (noVNC iframe, take-the-seat, I'm done, multi-screen banner)                  | Polish: pause vs take, who holds the seat, hand-back confirmation                                  |
+| Approval cards once / always / deny                           | Eve's `input.requested` cards render; hub policy has allow/ask/deny               | No "always allow" memory; no action preview; approvals live in two places                          |
+| Question widgets, masked secrets                              | Hub has both (`SendMessage`, `ProvideSecret`)                                     | **Clients never read the occurrence log**; no `AnswerWidget` RPC; web shows Eve's raw text instead |
+| Routines with schedule + triggers, run history, test run      | One cron in `agent/schedules/`; no UI, no history                                 | Everything user-facing                                                                             |
+| Skills, `/skill` in the composer, teach-a-task                | Skills exist in the Eve project; nothing in the UI                                | Composer integration, per-bot enablement                                                           |
+| Connectors / remote MCP                                       | `COMPUTER_MCP_URL` for one MCP server                                             | Catalogue, OAuth, per-account sharing                                                              |
+| Multi-agent DMs and group chats                               | Bots share `/workspace`; nothing else                                             | All of it                                                                                          |
+| Memory                                                        | `memory/profile.md` read into the prompt                                          | Inspection/edit UI                                                                                 |
+| Files and results as cards, attachments in the composer       | Bare links; no upload                                                             | Cards, upload, preview                                                                             |
+| Mobile                                                        | iOS app (pairing); web layout stacks                                              | Web mobile layout, notifications when `WAITING`                                                    |
+| Audit                                                         | Transcript on disk                                                                | Action log view                                                                                    |
+| Sleep / wake-on-connect                                       | Machine stays running                                                             | Fly suspend on idle + wake on request (an edge proxy that can carry WebSockets)                    |
 
 ## 3. Roadmap for the web clone
 
 Ordered so each step ships on its own and the security gaps close first.
 
-**Phase 0 — make one deployment safe (this PR + P0 items in [AUDIT.md](AUDIT.md)).** Email allowlist; secrets as Fly secrets; scrubbed shell environment; token revoke and expiry; hub UID split on the guest.
+**Phase 0, make one deployment safe (this PR + P0 items in [AUDIT.md](AUDIT.md)).** Email allowlist; secrets as Fly secrets; scrubbed shell environment; token revoke and expiry; hub UID split on the guest.
 
-**Phase 1 — one voice.** Pick one of: (a) render the hub occurrence log in the web client (`Seat.Occurrences` paged, `ProvideSecret` masked field, a new `Seat.AnswerWidget`), and have Eve's `send_message` be the only text that reaches the human, which is Grok's actual behaviour; or (b) delete the voice subsystem and lean on Eve's native message parts and input requests, adding only a masked-secret input kind. (a) is faithful and keeps the harness swappable; (b) is smaller. Whichever it is, stop maintaining both.
+**Phase 1, one voice.** Pick one of: (a) render the hub occurrence log in the web client (`Seat.Occurrences` paged, `ProvideSecret` masked field, a new `Seat.AnswerWidget`), and have Eve's `send_message` be the only text that reaches the human, which is Grok's actual behaviour; or (b) delete the voice subsystem and lean on Eve's native message parts and input requests, adding only a masked-secret input kind. (a) is faithful and keeps the harness swappable; (b) is smaller. Whichever it is, stop maintaining both.
 
-**Phase 2 — bots as the unit of the UI.** A left sidebar of bots from `GET /roster` with profile (name, title, avatar from `profile.json`), "New bot" calling `CreateBot` and scaffolding an Eve project from a template, per-bot chat and per-bot screen, unread and `WAITING` badges, sections and pinning stored per user. The current desktop pane becomes the "Agent Computer" drawer opened from a chat, not the page's centre.
+**Phase 2, bots as the unit of the UI.** A left sidebar of bots from `GET /roster` with profile (name, title, avatar from `profile.json`), "New bot" calling `CreateBot` and scaffolding an Eve project from a template, per-bot chat and per-bot screen, unread and `WAITING` badges, sections and pinning stored per user. The current desktop pane becomes the "Agent Computer" drawer opened from a chat, not the page's centre.
 
-**Phase 3 — approvals and takeover, properly.** One approval model: hub policy rules and Eve approvals rendered as the same card with Allow once / Always allow (persisted per bot as a policy rule) / Deny, showing the action (argv, URL, coordinates with a screenshot crop). Takeover: distinguish "pause the bot" from "take the seat", show who holds it, confirm hand-back, notify (title flash, Web Push) when a screen goes `WAITING` in a background tab.
+**Phase 3, approvals and takeover, properly.** One approval model: hub policy rules and Eve approvals rendered as the same card with Allow once / Always allow (persisted per bot as a policy rule) / Deny, showing the action (argv, URL, coordinates with a screenshot crop). Takeover: distinguish "pause the bot" from "take the seat", show who holds it, confirm hand-back, notify (title flash, Web Push) when a screen goes `WAITING` in a background tab.
 
-**Phase 4 — routines.** A routines table per bot (cron in the user's timezone, enabled, last 20 runs with status and the transcript slice), "Test run", auto-pause after N failures. Backed by Eve schedules generated from a JSON file the hub owns, so the UI edits data rather than code. Event triggers later (a webhook endpoint on the hub that wakes a bot with `[inbound]`).
+**Phase 4, routines.** A routines table per bot (cron in the user's timezone, enabled, last 20 runs with status and the transcript slice), "Test run", auto-pause after N failures. Backed by Eve schedules generated from a JSON file the hub owns, so the UI edits data rather than code. Event triggers later (a webhook endpoint on the hub that wakes a bot with `[inbound]`).
 
-**Phase 5 — skills and connectors.** `/` in the composer lists the bot's skills; a per-bot toggle; a skills page that reads the Eve project. Remote MCP connectors with OAuth stored per account, shared across bots, surfaced in the same catalogue.
+**Phase 5, skills and connectors.** `/` in the composer lists the bot's skills; a per-bot toggle; a skills page that reads the Eve project. Remote MCP connectors with OAuth stored per account, shared across bots, surfaced in the same catalogue.
 
-**Phase 6 — one computer per account.** A Fly Machine per user provisioned on first sign-in (Machines API from the web server), the seat token scoped to that machine, idle suspend and wake-on-request through an always-on edge that can proxy WebSockets and SSE, and the persistence table finally true per account.
+**Phase 6, one computer per account.** A Fly Machine per user provisioned on first sign-in (Machines API from the web server), the seat token scoped to that machine, idle suspend and wake-on-request through an always-on edge that can proxy WebSockets and SSE, and the persistence table finally true per account.
 
-**Phase 7 — files, memory, audit, multi-agent.** File cards with preview and upload; a memory page that edits `memory/profile.md`; an action log built from the transcript plus hub tool calls; bot-to-bot messages and group chats once Phase 2's roster is stable.
+**Phase 7, files, memory, audit, multi-agent.** File cards with preview and upload; a memory page that edits `memory/profile.md`; an action log built from the transcript plus hub tool calls; bot-to-bot messages and group chats once Phase 2's roster is stable.
 
 Throughout: keep `api/DESIGN.md` the contract, keep the model's tool surface at five, and keep every human input path through the seat.

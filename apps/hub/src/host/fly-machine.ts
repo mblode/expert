@@ -1,5 +1,5 @@
 /**
- * Fly Machines API — wake / sleep for the cloud computer.
+ * Fly Machines API: wake / sleep for the cloud computer.
  *
  * Grok: Firecracker anyrun pod, memory+disk snapshot, wake-on-connect.
  * Here: a Fly Machine. Guest may suspend when idle (minutes, not 30s).
@@ -12,54 +12,69 @@
 import { existsSync } from "node:fs";
 import http from "node:http";
 
-export const DEFAULT_FLY_API = "https://api.machines.dev";
+const DEFAULT_FLY_API = "https://api.machines.dev";
 /** Inside a Fly Machine, no API token is needed. */
-export const FLY_SOCKET = "/.fly/api";
+const FLY_SOCKET = "/.fly/api";
 
 export type FlyAction = "list" | "get" | "status" | "wake" | "start" | "sleep" | "stop" | "suspend";
 
-export type FlyConfig = {
+export interface FlyConfig {
   token: string;
   app: string;
   machine: string;
   api: string;
   socket: string;
-};
+}
 
 export function resolveFlyConfig(env: NodeJS.ProcessEnv = process.env): FlyConfig {
   const socket =
     env.FLY_API_SOCKET ??
-    (env.FLY_API_TOKEN ? "" : existsSync(env.FLY_SOCKET_PATH ?? FLY_SOCKET) ? (env.FLY_SOCKET_PATH ?? FLY_SOCKET) : "");
+    (env.FLY_API_TOKEN
+      ? ""
+      : existsSync(env.FLY_SOCKET_PATH ?? FLY_SOCKET)
+        ? (env.FLY_SOCKET_PATH ?? FLY_SOCKET)
+        : "");
   return {
-    token: env.FLY_API_TOKEN ?? "",
+    api: socket ? "http://flaps" : (env.FLY_API_BASE ?? DEFAULT_FLY_API).replace(/\/$/, ""),
     app: env.FLY_APP_NAME ?? env.COMPUTER_FLY_APP ?? "",
     machine: env.FLY_MACHINE_ID ?? env.COMPUTER_FLY_MACHINE ?? "",
-    api: socket ? "http://flaps" : (env.FLY_API_BASE ?? DEFAULT_FLY_API).replace(/\/$/, ""),
     socket,
+    token: env.FLY_API_TOKEN ?? "",
   };
 }
 
 /** Map our verbs onto Machines API paths. `sleep` is stop. */
 export function machinePath(app: string, machine: string, action: FlyAction): string {
-  if (!app) throw new Error("FLY_APP_NAME is required");
+  if (!app) {
+    throw new Error("FLY_APP_NAME is required");
+  }
   const base = `/v1/apps/${encodeURIComponent(app)}/machines`;
-  if (action === "list") return base;
-  if (!machine) throw new Error("FLY_MACHINE_ID is required (or list first)");
+  if (action === "list") {
+    return base;
+  }
+  if (!machine) {
+    throw new Error("FLY_MACHINE_ID is required (or list first)");
+  }
   const id = encodeURIComponent(machine);
   switch (action) {
     case "get":
-    case "status":
+    case "status": {
       return `${base}/${id}`;
+    }
     case "wake":
-    case "start":
+    case "start": {
       return `${base}/${id}/start`;
+    }
     case "sleep":
-    case "stop":
+    case "stop": {
       return `${base}/${id}/stop`;
-    case "suspend":
+    }
+    case "suspend": {
       return `${base}/${id}/suspend`;
-    default:
+    }
+    default: {
       throw new Error(`unknown action: ${action}`);
+    }
   }
 }
 
@@ -73,14 +88,25 @@ export function methodFor(action: FlyAction): "GET" | "POST" {
  */
 export function guestState(flyState: unknown): string {
   const s = String(flyState ?? "").toLowerCase();
-  if (s === "started" || s === "running") return "running";
-  if (s === "suspended") return "hibernated";
-  if (s === "created" || s === "destroyed" || s === "stopped") return "stopped";
-  if (s === "starting" || s === "stopping" || s === "suspending") return s;
+  if (s === "started" || s === "running") {
+    return "running";
+  }
+  if (s === "suspended") {
+    return "hibernated";
+  }
+  if (s === "created" || s === "destroyed" || s === "stopped") {
+    return "stopped";
+  }
+  if (s === "starting" || s === "stopping" || s === "suspending") {
+    return s;
+  }
   return s || "unknown";
 }
 
-export type FlyFetch = (url: string, init?: { method?: string; headers?: Record<string, string> }) => Promise<{
+export type FlyFetch = (
+  url: string,
+  init?: { method?: string; headers?: Record<string, string> },
+) => Promise<{
   ok: boolean;
   status: number;
   text: () => Promise<string>;
@@ -93,10 +119,14 @@ export async function flyRequest(
   const env = opts.env ?? process.env;
   const cfg = resolveFlyConfig(env);
   const fetchFn = opts.fetch ?? (cfg.socket ? unixFetch(cfg.socket) : globalThis.fetch);
-  if (!cfg.token && !cfg.socket) throw new Error("FLY_API_TOKEN is required");
-  if (!cfg.app) throw new Error("FLY_APP_NAME is required");
+  if (!cfg.token && !cfg.socket) {
+    throw new Error("FLY_API_TOKEN is required");
+  }
+  if (!cfg.app) {
+    throw new Error("FLY_APP_NAME is required");
+  }
 
-  let machine = cfg.machine;
+  let { machine } = cfg;
   if (!machine && action !== "list") {
     const listed = await flyRequest("list", { ...opts, env });
     const machines = Array.isArray(listed.body) ? listed.body : [];
@@ -110,7 +140,7 @@ export async function flyRequest(
     } else {
       throw new Error(
         machines.length === 0
-          ? "no Machines in this app — fly deploy first"
+          ? "no Machines in this app: fly deploy first"
           : `several Machines; set FLY_MACHINE_ID (${machines.map((m) => (m as { id?: string }).id).join(", ")})`,
       );
     }
@@ -118,11 +148,11 @@ export async function flyRequest(
 
   const path = machinePath(cfg.app, machine, action);
   const res = await fetchFn(`${cfg.api}${path}`, {
-    method: methodFor(action),
     headers: {
       authorization: `Bearer ${cfg.token}`,
       "content-type": "application/json",
     },
+    method: methodFor(action),
   });
   const text = await res.text();
   let body: unknown = text;
@@ -138,7 +168,7 @@ export async function flyRequest(
         : text || `HTTP ${res.status}`;
     throw new Error(`Fly API ${res.status}: ${msg}`);
   }
-  return { status: res.status, body, machine };
+  return { body, machine, status: res.status };
 }
 
 function unixFetch(socketPath: string): FlyFetch {
@@ -147,16 +177,16 @@ function unixFetch(socketPath: string): FlyFetch {
       const u = new URL(url);
       const req = http.request(
         {
-          socketPath,
-          path: u.pathname + u.search,
-          method: init?.method ?? "GET",
           headers: init?.headers,
+          method: init?.method ?? "GET",
+          path: u.pathname + u.search,
+          socketPath,
         },
         (res) => {
           const chunks: Buffer[] = [];
           res.on("data", (c) => chunks.push(c as Buffer));
           res.on("end", () => {
-            const text = Buffer.concat(chunks).toString("utf8");
+            const text = Buffer.concat(chunks).toString("utf-8");
             resolve({
               ok: (res.statusCode ?? 500) < 400,
               status: res.statusCode ?? 500,

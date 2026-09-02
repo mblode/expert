@@ -1,14 +1,16 @@
-import { createHub, type Hub } from "../src/app.ts";
+import { createHub } from "../src/app.ts";
+import type { Hub } from "../src/app.ts";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { NoopWindowManager } from "../src/desk/windows.ts";
-import { MemoryBotStore, MemorySeatTokenStore, type SeatTokenStore } from "../src/service/provision.ts";
+import { MemoryBotStore, MemorySeatTokenStore } from "../src/service/provision.ts";
+import type { SeatTokenStore } from "../src/service/provision.ts";
 import type { PolicyService } from "../src/service/policy.ts";
 import type { BotConfig } from "../src/service/bots.ts";
 
-export const SETUP_CODE = "setup-code-test";
-export const AGENT_TOKEN = "agent-token-test";
+const SETUP_CODE = "setup-code-test";
+const AGENT_TOKEN = "agent-token-test";
 
-export type StartedHub = {
+export interface StartedHub {
   hub: Hub;
   desk: FakeDesk;
   desks: Map<number, FakeDesk>;
@@ -20,7 +22,7 @@ export type StartedHub = {
   setup: string;
   pair: () => Promise<string>;
   close: () => Promise<void>;
-};
+}
 
 /**
  * Boots a hub on a MemoryBotStore. Default roster: one bot "main" on :1
@@ -39,14 +41,13 @@ export async function startHub(
     eveSecret?: string;
   } = {},
 ): Promise<StartedHub> {
-  const configs = opts.bots ?? [{ id: "main", display: 1, token: AGENT_TOKEN }];
+  const configs = opts.bots ?? [{ display: 1, id: "main", token: AGENT_TOKEN }];
   const desks = opts.desks ?? new Map<number, FakeDesk>();
   const windows = new NoopWindowManager();
   const store = new MemoryBotStore();
   store.save(configs);
   const seatStore = opts.seatStore ?? new MemorySeatTokenStore();
   const hub = createHub({
-    setupCode: SETUP_CODE,
     deskFactory: (display) => {
       const existing = desks.get(display);
       if (existing) return existing;
@@ -54,35 +55,38 @@ export async function startHub(
       desks.set(display, desk);
       return desk;
     },
-    windows,
-    store,
-    seatStore,
+    eveSecret: opts.eveSecret,
+    eveUrls: opts.eveUrls,
     policy: opts.policy,
+    seatStore,
+    setupCode: SETUP_CODE,
+    store,
     vncBasePort: opts.vncBasePort,
     vncUrl: "http://127.0.0.1/vnc/index.html?view_only=1",
-    eveUrls: opts.eveUrls,
-    eveSecret: opts.eveSecret,
+    windows,
   });
   await hub.start();
   await new Promise<void>((resolve) => hub.server.listen(0, "127.0.0.1", resolve));
   const addr = hub.server.address();
-  if (!addr || typeof addr === "string") throw new Error("no addr");
+  if (!addr || typeof addr === "string") {
+    throw new Error("no addr");
+  }
   const url = `http://127.0.0.1:${addr.port}`;
   return {
-    hub,
+    agent: AGENT_TOKEN,
+    close: () => hub.close(),
     desk: desks.get(1)!,
     desks,
-    windows,
-    store,
-    seatStore,
-    url,
-    agent: AGENT_TOKEN,
-    setup: SETUP_CODE,
+    hub,
     pair: async () => {
       const r = await rpc(url, "/computer.v1.Seat/Pair", { code: SETUP_CODE });
       return (r as { token: string }).token;
     },
-    close: () => hub.close(),
+    seatStore,
+    setup: SETUP_CODE,
+    store,
+    url,
+    windows,
   };
 }
 
@@ -93,13 +97,13 @@ export async function rpc(
   token?: string,
 ): Promise<unknown> {
   const res = await fetch(`${url}${path}`, {
-    method: "POST",
+    body: JSON.stringify(body),
     headers: {
-      "content-type": "application/json",
       "connect-protocol-version": "1",
+      "content-type": "application/json",
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(body),
+    method: "POST",
   });
   const json = await res.json();
   if (!res.ok) {

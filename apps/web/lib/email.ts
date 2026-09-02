@@ -1,4 +1,4 @@
-import { siteConfig } from "./config";
+import { isProductionRuntime, siteConfig } from "./config";
 
 type OtpType = "change-email" | "email-verification" | "forget-password" | "sign-in";
 
@@ -11,7 +11,7 @@ const OTP_SUBJECT: Record<OtpType, string> = {
 
 /**
  * Send a one-time code email through Resend. Without `RESEND_API_KEY` the code
- * is printed to the server console — only ever outside production, where a
+ * is printed to the server console, only ever outside production, where a
  * missing key is a misconfiguration and must not turn the logs into an inbox.
  */
 export async function sendOtpEmail({
@@ -26,7 +26,7 @@ export async function sendOtpEmail({
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
-    if (process.env.NODE_ENV === "production") {
+    if (isProductionRuntime) {
       throw new Error("RESEND_API_KEY must be set in production");
     }
     console.info(`[auth] OTP for ${email} (${type}): ${otp}`);

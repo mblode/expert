@@ -3,16 +3,16 @@ import { PIXEL_REFRESH_MS, PixelRegistry, withPixelToken } from "../src/service/
 
 describe("PixelRegistry", () => {
   it("mints a grant that expires", () => {
-    const pixels = new PixelRegistry({ ttlMs: 1_000 });
+    const pixels = new PixelRegistry({ ttlMs: 1000 });
     const t0 = 1_000_000;
     const g = pixels.mint(1, t0);
     expect(pixels.lookup(g.token, t0 + 10)).toEqual(g);
-    expect(pixels.lookup(g.token, t0 + 1_001)).toBeUndefined();
+    expect(pixels.lookup(g.token, t0 + 1001)).toBeUndefined();
   });
 
   it("stamps a pixel token into vnc_url, not a caller-supplied seat token", () => {
     const pixels = new PixelRegistry({ ttlMs: 60_000 });
-    const g = pixels.mint(2, 5_000);
+    const g = pixels.mint(2, 5000);
     const url = withPixelToken("http://127.0.0.1/vnc/index.html", g);
     expect(url).toContain(`token=${g.token}`);
     expect(url).toContain("display=2");
@@ -24,7 +24,7 @@ describe("PixelRegistry", () => {
     const pixels = new PixelRegistry({ ttlMs: 15 * 60 * 1000 });
     const t0 = 1_000_000;
     const a = pixels.grantFor(1, t0);
-    const b = pixels.grantFor(1, t0 + 2_000);
+    const b = pixels.grantFor(1, t0 + 2000);
     expect(b.token).toBe(a.token);
     expect(b.expires).toBe(a.expires);
   });

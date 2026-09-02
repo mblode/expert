@@ -940,7 +940,7 @@ public nonisolated struct Computer_V1_MessageWidget: Sendable {
 
 /// Masked input on the seat. The value is delivered to the box clipboard
 /// and never enters the transcript, the occurrence log, or the model's
-/// context — the agent is told only that it was provided, and pastes.
+/// context: the agent is told only that it was provided, and pastes.
 public nonisolated struct Computer_V1_MessageSecretRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for

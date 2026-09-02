@@ -1,15 +1,15 @@
-import { readFileSync, statSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import type { ServerResponse } from "node:http";
 import { extname, resolve, sep } from "node:path";
 
 const MIME: Record<string, string> = {
-  ".html": "text/html; charset=utf-8",
-  ".js": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
-  ".svg": "image/svg+xml",
-  ".png": "image/png",
+  ".html": "text/html; charset=utf-8",
   ".ico": "image/x-icon",
+  ".js": "text/javascript; charset=utf-8",
   ".json": "application/json",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
 };
 
 /** Pixels of the screen are seat-only. The noVNC bundle under /novnc is public. */
@@ -21,9 +21,12 @@ export function needsSeatPixelAuth(pathname: string): boolean {
 export function serveStatic(res: ServerResponse, dir: string, pathname: string): boolean {
   const rel = pathname === "/vnc" || pathname === "/vnc/" ? "/vnc/index.html" : pathname;
   const file = resolve(dir, rel.replace(/^\/+/, ""));
-  if (!file.startsWith(dir + sep)) return false;
-  if (isFile(file)) {
-    writeFile(res, file, readFileSync(file));
+  if (!file.startsWith(dir + sep)) {
+    return false;
+  }
+  const body = tryRead(file);
+  if (body) {
+    writeFile(res, file, body);
     return true;
   }
   if (rel.startsWith("/novnc/")) {
@@ -41,7 +44,7 @@ function writeFile(res: ServerResponse, path: string, body: Buffer): void {
   res.end(body);
 }
 
-/** `@novnc/novnc` from node_modules — hoisted to the workspace root or local to the hub. */
+/** `@novnc/novnc` from node_modules: hoisted to the workspace root or local to the hub. */
 function tryNovnc(rel: string): { path: string; body: Buffer } | null {
   const roots = [
     resolve(import.meta.dirname, "../../node_modules/@novnc/novnc"),
@@ -49,16 +52,22 @@ function tryNovnc(rel: string): { path: string; body: Buffer } | null {
   ];
   for (const root of roots) {
     const p = resolve(root, rel);
-    if (!p.startsWith(root + sep)) continue;
-    if (isFile(p)) return { path: p, body: readFileSync(p) };
+    if (!p.startsWith(root + sep)) {
+      continue;
+    }
+    const body = tryRead(p);
+    if (body) {
+      return { body, path: p };
+    }
   }
   return null;
 }
 
-function isFile(path: string): boolean {
+/** The file's bytes, or undefined for anything that is not a readable file (ENOENT, EISDIR). */
+function tryRead(path: string): Buffer | undefined {
   try {
-    return statSync(path).isFile();
+    return readFileSync(path);
   } catch {
-    return false;
+    return undefined;
   }
 }

@@ -14,6 +14,13 @@ export const siteConfig = {
 /** The Fly computer this deployment attaches to. `NEXT_PUBLIC_HUB_URL` overrides it. */
 export const DEFAULT_HUB_URL = "https://mblode-computer.fly.dev";
 
+/**
+ * True when serving real traffic in production. `next build` also runs with
+ * NODE_ENV=production but has no secrets, so it is excluded.
+ */
+export const isProductionRuntime =
+  process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build";
+
 export function trimSlashes(url: string): string {
   return url.trim().replace(/\/+$/u, "");
 }

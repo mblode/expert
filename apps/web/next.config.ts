@@ -19,19 +19,19 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  reactCompiler: true,
-  experimental: {
-    turbopackRustReactCompiler: true,
-  },
   env: {
     NEXT_PUBLIC_HUB_PROXY_TARGET: isDev ? HUB : "",
   },
+  experimental: {
+    turbopackRustReactCompiler: true,
+  },
   headers: async () => [{ source: "/(.*)", headers: securityHeaders }],
+  reactCompiler: true,
   ...(isDev
     ? {
         rewrites: async () => [
-          { source: "/computer.v1.Seat/:path*", destination: `${HUB}/computer.v1.Seat/:path*` },
-          { source: "/eve/:path*", destination: `${HUB}/eve/:path*` },
+          { destination: `${HUB}/computer.v1.Seat/:path*`, source: "/computer.v1.Seat/:path*" },
+          { destination: `${HUB}/eve/:path*`, source: "/eve/:path*" },
         ],
       }
     : {}),

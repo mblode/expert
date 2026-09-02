@@ -1,4 +1,5 @@
-import { ComputerError, type SeatState } from "@computer/shared";
+import { ComputerError } from "@computer/shared";
+import type { SeatState } from "@computer/shared";
 
 /**
  * One seat per screen. Each Bot's display has its own instance.
@@ -14,7 +15,7 @@ import { ComputerError, type SeatState } from "@computer/shared";
  * The agent asks for a human with request_takeover, but a human never has
  * to wait to be asked: SetPresence(true) takes the seat from AGENT. The
  * agent's next call then gets SEAT_HELD, which it already knows how to
- * wait on — the person watching a machine work is the one who can see it
+ * wait on: the person watching a machine work is the one who can see it
  * going wrong, and telling them to wait for permission to grab the wheel
  * is the wrong way round.
  */
@@ -34,7 +35,7 @@ export class SeatService {
     return this.state;
   }
 
-  /** Agent.Computer / Shell / files — only when AGENT */
+  /** Agent.Computer / Shell / files, only when AGENT */
   requireAgent(): void {
     if (this.state !== "AGENT") {
       throw new ComputerError("SEAT_HELD", "human has the seat");
@@ -56,7 +57,7 @@ export class SeatService {
 
   /**
    * Seat.SetPresence: true takes the seat, false is I'm done.
-   * Taking works from AGENT too — that is a human interrupting, not a
+   * Taking works from AGENT too, that is a human interrupting, not a
    * protocol violation.
    */
   setPresence(present: boolean): SeatState {

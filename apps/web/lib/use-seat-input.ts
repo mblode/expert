@@ -21,7 +21,7 @@ const TYPE_IDLE_MS = 300;
  */
 const TAP_SLOP = 8;
 
-export type SeatInput = {
+export interface SeatInput {
   error: string | null;
   /** Attach to the drawn cursor; it is moved directly, not through React. */
   cursorRef: React.RefObject<HTMLDivElement | null>;
@@ -46,13 +46,13 @@ export type SeatInput = {
     onPaste: (event: React.ClipboardEvent) => void;
     onBlur: () => void;
   };
-};
+}
 
 /**
  * Turns browser input over the (view-only) desktop stream into Seat RPCs.
  *
  * The cursor you see is drawn here, not streamed. The real one is a round trip
- * away — RPC, docker exec, X, then a VNC frame — so a cursor made of pixels
+ * away, RPC, docker exec, X, then a VNC frame, so a cursor made of pixels
  * always trails the mouse by a visible lag and the pane feels broken. This
  * paints a local cursor the instant the mouse moves and lets the box catch up.
  *
@@ -72,7 +72,7 @@ export function useSeatInput(
   active: boolean,
   desk: { width: number; height: number },
 ): SeatInput {
-  const [error, setError] = useState<string | null>(null);
+  const [rejection, setRejection] = useState<string | null>(null);
 
   /** Where the human is pointing, in the box's pixels. The drawn cursor. */
   const aim = useRef<{ x: number; y: number } | null>(null);
@@ -96,20 +96,19 @@ export function useSeatInput(
   // Latest props for the timer and handlers, updated after commit rather than
   // during render so the React Compiler can memoise the caller.
   const activeRef = useRef(active);
-  const targetRef = useRef({ seat, display, desk });
+  const targetRef = useRef({ desk, display, seat });
   useEffect(() => {
     activeRef.current = active;
-    targetRef.current = { seat, display, desk };
+    targetRef.current = { desk, display, seat };
   }, [active, seat, display, desk]);
 
   const run = useCallback(async (call: (seat: Seat, display: number) => Promise<unknown>) => {
     const { seat: current, display: screen } = targetRef.current;
     try {
       await call(current, screen);
-      setError(null);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "input rejected");
-      throw cause;
+      setRejection(null);
+    } catch (error) {
+      setRejection(error instanceof Error ? error.message : "input rejected");
     }
   }, []);
 
@@ -117,12 +116,16 @@ export function useSeatInput(
     window.clearTimeout(typeTimer.current);
     const text = typed.current;
     typed.current = "";
-    if (text) void run((current, screen) => current.type(text, screen)).catch(() => undefined);
+    if (text) {
+      void run((current, screen) => current.type(text, screen));
+    }
   }, [run]);
 
   const send = useCallback(
     (text: string) => {
-      if (!activeRef.current || !text) return;
+      if (!activeRef.current || !text) {
+        return;
+      }
       typed.current += text;
       flushTyped();
     },
@@ -132,9 +135,13 @@ export function useSeatInput(
   // One pointer RPC in flight at a time; whatever accumulated meanwhile rides
   // on the next tick. Without this a single flick queues dozens of requests.
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      return;
+    }
     const id = window.setInterval(() => {
-      if (inFlight.current) return;
+      if (inFlight.current) {
+        return;
+      }
       const target = aim.current;
       const at = boxCursor.current;
       const dx = target && at ? Math.round(target.x - at.x) : 0;
@@ -144,7 +151,7 @@ export function useSeatInput(
       const settled = at !== null && dx === 0 && dy === 0;
       // The box presses before it moves, so grabbing with ground still to
       // cover would drag from wherever it was standing rather than from where
-      // you touched. Letting go never waits — a release that needed the box to
+      // you touched. Letting go never waits, a release that needed the box to
       // settle first could leave the button down for good.
       const grab = dragging.current && (settled || held.current);
       // Same reason the click waits: sent before the box arrives it lands
@@ -153,7 +160,9 @@ export function useSeatInput(
       const click = settled && clicking.current;
       // Nothing to say when the box is already under the drawn cursor and the
       // button has not changed.
-      if (settled && grab === held.current && !click) return;
+      if (settled && grab === held.current && !click) {
+        return;
+      }
       inFlight.current = true;
       void run(async (current, screen) => {
         if (!settled || grab !== held.current) {
@@ -173,7 +182,7 @@ export function useSeatInput(
           await current.click("left", screen);
         }
       })
-        .catch(() => undefined)
+        .catch(() => {})
         .finally(() => {
           inFlight.current = false;
         });
@@ -186,7 +195,9 @@ export function useSeatInput(
   /** Aim at where the pointer is, and paint the drawn cursor there. */
   const aimAt = (event: { clientX: number; clientY: number; currentTarget: Element }) => {
     const rect = event.currentTarget.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return;
+    if (rect.width === 0 || rect.height === 0) {
+      return;
+    }
     const { desk: size } = targetRef.current;
     const x = clamp(((event.clientX - rect.left) / rect.width) * size.width, size.width);
     const y = clamp(((event.clientY - rect.top) / rect.height) * size.height, size.height);
@@ -201,9 +212,8 @@ export function useSeatInput(
   };
 
   return {
-    error,
     cursorRef,
-    send,
+    error: rejection,
     handlers: {
       // A second finger belongs to a pinch, not to the aim.
       onPointerMove: (event) => {
@@ -248,7 +258,7 @@ export function useSeatInput(
       onClick: () => {
         if (!activeRef.current) return;
         // A drag already pressed and released; the browser's click is a
-        // duplicate. So is a click after any press the box saw at all — the
+        // duplicate. So is a click after any press the box saw at all: the
         // release the loop is about to send is itself that click.
         if (dragged.current || held.current) {
           dragged.current = false;
@@ -259,12 +269,12 @@ export function useSeatInput(
       onAuxClick: (event) => {
         if (!activeRef.current || event.button !== 1) return;
         event.preventDefault();
-        void run((current, screen) => current.click("middle", screen)).catch(() => undefined);
+        void run((current, screen) => current.click("middle", screen));
       },
       onContextMenu: (event) => {
         event.preventDefault();
         if (!activeRef.current) return;
-        void run((current, screen) => current.click("right", screen)).catch(() => undefined);
+        void run((current, screen) => current.click("right", screen));
       },
       onWheel: (event) => {
         if (!activeRef.current) return;
@@ -276,7 +286,7 @@ export function useSeatInput(
         if (dx === 0 && dy === 0) return;
         wheel.current.dx -= dx * WHEEL_NOTCH;
         wheel.current.dy -= dy * WHEEL_NOTCH;
-        void run((current, screen) => current.scroll(dx, dy, screen)).catch(() => undefined);
+        void run((current, screen) => current.scroll(dx, dy, screen));
       },
       onKeyDown: (event) => {
         if (!activeRef.current) return;
@@ -305,6 +315,7 @@ export function useSeatInput(
       },
       onBlur: flushTyped,
     },
+    send,
   };
 }
 

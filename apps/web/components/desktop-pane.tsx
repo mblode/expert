@@ -8,20 +8,20 @@ import { KeyboardBar } from "./keyboard-bar";
 
 const STATE_LABEL: Record<SeatState, string> = {
   AGENT: "Eve has the seat",
-  WAITING: "Eve needs you",
   HUMAN: "You have the seat",
+  WAITING: "Eve needs you",
 };
 
 const STATE_DOT: Record<SeatState, string> = {
   AGENT: "bg-emerald-400",
-  WAITING: "bg-amber-400",
   HUMAN: "bg-sky-400",
+  WAITING: "bg-amber-400",
 };
 
 /**
  * The box's screen, and the only way to touch it.
  *
- * The stream itself is view-only — the X server refuses RFB input — so the
+ * The stream itself is view-only, the X server refuses RFB input, so the
  * overlay over the iframe translates real input into Seat RPCs. It is live only
  * while the seat is `WAITING` or `HUMAN`; while the agent holds the seat the
  * hub rejects human input outright, and this shows pixels only.
@@ -47,12 +47,17 @@ export function DesktopPane({
     status?.screens.find((candidate) => candidate.display === display) ?? status?.screens[0];
   const state = screen?.state ?? status?.state ?? "AGENT";
   const controllable = state !== "AGENT";
-  const desk = status?.display ?? { width: 1280, height: 800 };
+  const desk = status?.display ?? { height: 800, width: 1280 };
   const elsewhereWaiting = status?.screens.find(
     (candidate) => candidate.state === "WAITING" && candidate.display !== screen?.display,
   );
 
-  const { error: inputError, cursorRef, send, handlers } = useSeatInput(seat, display, controllable, desk);
+  const {
+    error: inputError,
+    cursorRef,
+    send,
+    handlers,
+  } = useSeatInput(seat, display, controllable, desk);
   const screenId = screen ? `${screen.bot_id}:${screen.display}` : "";
   const vncSrc = useStableVncSrc(screen?.vnc_url, screenId);
 
@@ -88,10 +93,10 @@ export function DesktopPane({
           <span className="text-xs text-mute">{screen?.bot_id ?? "box"}</span>
         )}
 
-        <span className="flex items-center gap-1.5 text-xs text-mute" role="status">
+        <output className="flex items-center gap-1.5 text-xs text-mute">
           <span className={`size-2 rounded-full ${STATE_DOT[state]}`} />
           {STATE_LABEL[state]}
-        </span>
+        </output>
 
         <div className="ml-auto flex items-center gap-2">
           {/* Only offered while the seat is yours: the hub refuses typing
@@ -145,7 +150,7 @@ export function DesktopPane({
           className="flex flex-wrap items-center gap-3 border-b border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm"
           role="alert"
         >
-          <span className="font-medium text-amber-200">Eve needs you — take the seat</span>
+          <span className="font-medium text-amber-200">Eve needs you: take the seat</span>
           <button
             className="rounded-md bg-amber-400 px-2.5 py-1 text-xs font-medium text-ink disabled:opacity-50"
             disabled={busy}
@@ -174,7 +179,10 @@ export function DesktopPane({
       )}
 
       {inputError && (
-        <p className="border-b border-red-900/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-200" role="alert">
+        <p
+          className="border-b border-red-900/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-200"
+          role="alert"
+        >
           {inputError}
         </p>
       )}
@@ -203,12 +211,14 @@ export function DesktopPane({
               />
               <div
                 aria-label="Take over the screen"
-                // `touch-pinch-zoom` keeps one finger for the box — no pan, no
-                // double-tap zoom — while leaving two fingers to magnify a
+                // `touch-pinch-zoom` keeps one finger for the box: no pan, no
+                // double-tap zoom, while leaving two fingers to magnify a
                 // 1280×800 desk squeezed onto a phone. `select-none` stops the
                 // long-press selection callout from eating a held click.
                 className={`absolute inset-0 touch-pinch-zoom select-none rounded-lg outline-none ${
-                  controllable ? "cursor-none focus-visible:ring-2 focus-visible:ring-accent" : "pointer-events-none"
+                  controllable
+                    ? "cursor-none focus-visible:ring-2 focus-visible:ring-accent"
+                    : "pointer-events-none"
                 }`}
                 role="application"
                 tabIndex={controllable ? 0 : -1}
@@ -231,13 +241,20 @@ export function DesktopPane({
                     viewBox="0 0 12 19"
                     width="13"
                   >
-                    <path d="M1 1.5v14l3.2-3.4h5.3L1 1.5z" fill="white" stroke="black" strokeWidth="1.2" />
+                    <path
+                      d="M1 1.5v14l3.2-3.4h5.3L1 1.5z"
+                      fill="white"
+                      stroke="black"
+                      strokeWidth="1.2"
+                    />
                   </svg>
                 </div>
               )}
             </>
           ) : (
-            <p className="absolute inset-0 grid place-items-center text-sm text-mute">Connecting…</p>
+            <p className="absolute inset-0 grid place-items-center text-sm text-mute">
+              Connecting…
+            </p>
           )}
         </div>
       </div>
@@ -263,9 +280,11 @@ export function DesktopPane({
  * render, so the React Compiler can still memoise this component.
  */
 function useStableVncSrc(incoming: string | undefined, identity: string): string | undefined {
-  const [held, setHeld] = useState<{ identity: string; url: string } | undefined>(undefined);
+  const [held, setHeld] = useState<{ identity: string; url: string } | undefined>();
   const stale = held === undefined || held.identity !== identity || !pixelUrlFresh(held.url);
-  if (incoming && stale) {
+  // Set only when it changes: a URL the browser already judges stale would
+  // otherwise be re-set on every render, and React would refuse the loop.
+  if (incoming && stale && held?.url !== incoming) {
     setHeld({ identity, url: incoming });
     return incoming;
   }

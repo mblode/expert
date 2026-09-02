@@ -8,7 +8,11 @@ import type {
 import { Markdown } from "./markdown";
 
 /** The client's reply to a human-in-the-loop input request. */
-export type Answer = { optionId?: string; requestId: string; text?: string };
+export interface Answer {
+  optionId?: string;
+  requestId: string;
+  text?: string;
+}
 
 const MAX_SUMMARY = 40;
 
@@ -24,11 +28,17 @@ const truncate = (text: string): string =>
  * attachment is a click-to-XSS with the seat token on the other side.
  */
 function safeUrl(url: string | undefined, allowImage = false): string | undefined {
-  if (!url) return undefined;
+  if (!url) {
+    return undefined;
+  }
   try {
     const { protocol } = new URL(url, "https://x/");
-    if (protocol === "https:" || protocol === "http:" || protocol === "blob:") return url;
-    if (allowImage && protocol === "data:" && /^data:image\//i.test(url)) return url;
+    if (protocol === "https:" || protocol === "http:" || protocol === "blob:") {
+      return url;
+    }
+    if (allowImage && protocol === "data:" && /^data:image\//i.test(url)) {
+      return url;
+    }
   } catch {
     // unparseable
   }
@@ -41,21 +51,29 @@ function safeUrl(url: string | undefined, allowImage = false): string | undefine
  * rows. Ordered by how much of this agent's traffic each shape covers.
  */
 function summarizeToolInput(input: unknown): string | null {
-  if (!isRecord(input)) return null;
+  if (!isRecord(input)) {
+    return null;
+  }
 
   const { actions } = input;
   if (Array.isArray(actions) && actions.length > 0) {
     const first = isRecord(actions[0]) ? String(actions[0].type ?? "") : "";
-    if (!first) return null;
+    if (!first) {
+      return null;
+    }
     return actions.length > 1 ? `${first} +${actions.length - 1}` : first;
   }
 
   const { argv } = input;
-  if (Array.isArray(argv)) return truncate(argv.join(" "));
+  if (Array.isArray(argv)) {
+    return truncate(argv.join(" "));
+  }
 
   for (const key of ["path", "skill", "query", "search", "title", "name"]) {
     const value = input[key];
-    if (typeof value === "string" && value.trim()) return truncate(value.trim());
+    if (typeof value === "string" && value.trim()) {
+      return truncate(value.trim());
+    }
   }
   return null;
 }
@@ -73,11 +91,13 @@ const isRunning = (part: EveDynamicToolPart): boolean =>
 
 /**
  * Screenshots the `computer` tool brings back. They ride inside the tool's own
- * result rather than as message `file` parts, so they are pulled out here — the
+ * result rather than as message `file` parts, so they are pulled out here: the
  * picture is the whole point of the call.
  */
 function toolImages(part: EveDynamicToolPart): string[] {
-  if (part.state !== "output-available" || !isRecord(part.output)) return [];
+  if (part.state !== "output-available" || !isRecord(part.output)) {
+    return [];
+  }
   const images: string[] = [];
   const push = (data: unknown, mediaType: unknown) => {
     if (typeof data === "string" && data.length > 0) {
@@ -87,7 +107,9 @@ function toolImages(part: EveDynamicToolPart): string[] {
   const { results } = part.output;
   if (Array.isArray(results)) {
     for (const result of results) {
-      if (isRecord(result)) push(result.image_b64, result.media_type);
+      if (isRecord(result)) {
+        push(result.image_b64, result.media_type);
+      }
     }
   }
   push(part.output.screenshot_b64, "image/png");
@@ -146,8 +168,8 @@ function ToolSteps({ parts }: { parts: EveDynamicToolPart[] }): React.ReactEleme
  */
 const OPTION_CLASS = {
   danger: "bg-red-500 text-white hover:bg-red-400",
-  primary: "bg-accent text-ink hover:opacity-90",
   default: "border border-edge hover:border-accent",
+  primary: "bg-accent text-ink hover:opacity-90",
 } as const;
 
 /**
@@ -166,20 +188,26 @@ function InputRequestCard({
   part: EveDynamicToolPart;
   request: EveMessageInputRequest;
 }): React.ReactElement {
-  const summary = summarizeToolInput(part.input);
   const isApproval = request.kind !== "question";
+  const input = isApproval && part.input !== undefined ? JSON.stringify(part.input, null, 2) : null;
 
   return (
-    <div
+    <fieldset
       aria-label={isApproval ? "Approval required" : "Question"}
       className={`rounded-lg border border-edge bg-panel p-3 ${disabled ? "pointer-events-none opacity-60" : ""}`}
-      role="group"
+      disabled={disabled}
     >
       {isApproval && (
         <p className="pb-1 text-xs text-mute">
-          <span className="font-medium text-white">{part.toolMetadata?.eve?.name ?? part.toolName}</span>
-          {summary && <span className="ml-1.5">{summary}</span>}
+          <span className="font-medium text-white">
+            {part.toolMetadata?.eve?.name ?? part.toolName}
+          </span>
         </p>
+      )}
+      {input && (
+        <pre className="mb-2 max-h-48 overflow-auto rounded-md border border-edge bg-ink/40 p-2 font-mono text-xs text-mute">
+          {input}
+        </pre>
       )}
       <p className="text-sm leading-6">{request.prompt}</p>
       <div className="flex flex-wrap gap-2 pt-3">
@@ -196,7 +224,7 @@ function InputRequestCard({
           </button>
         ))}
       </div>
-    </div>
+    </fieldset>
   );
 }
 
@@ -212,7 +240,9 @@ function MessagePart({
   role: EveMessage["role"];
 }): React.ReactElement | null {
   if (part.type === "text") {
-    if (!part.text) return null;
+    if (!part.text) {
+      return null;
+    }
     if (role === "user") {
       return (
         <p className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl bg-panel px-3 py-2 text-sm">
@@ -226,7 +256,9 @@ function MessagePart({
   if (part.type === "file") {
     const isImage = part.mediaType.startsWith("image/");
     const url = safeUrl(part.url, isImage);
-    if (!url) return null;
+    if (!url) {
+      return null;
+    }
     return isImage ? (
       <img
         alt={part.filename ?? "Attachment"}
@@ -243,7 +275,9 @@ function MessagePart({
   if (part.type === "dynamic-tool") {
     const request = part.toolMetadata?.eve?.inputRequest;
     // Regular tool calls are grouped into the chain before reaching here.
-    if (!request) return null;
+    if (!request) {
+      return null;
+    }
     const response = part.toolMetadata?.eve?.inputResponse;
     if (response) {
       const chosen =
@@ -254,6 +288,20 @@ function MessagePart({
     }
     return (
       <InputRequestCard disabled={disabled} onAnswer={onAnswer} part={part} request={request} />
+    );
+  }
+
+  if (part.type === "reasoning") {
+    if (!part.text) {
+      return null;
+    }
+    return (
+      <details className="rounded-lg border border-edge bg-panel/60 text-xs">
+        <summary className="cursor-pointer select-none px-3 py-2 text-mute marker:text-mute">
+          Reasoning
+        </summary>
+        <p className="whitespace-pre-wrap border-t border-edge px-3 py-2 text-mute">{part.text}</p>
+      </details>
     );
   }
 
@@ -306,11 +354,15 @@ function buildItems(parts: readonly EveMessagePart[]): Item[] {
 
   for (const [index, part] of parts.entries()) {
     if (isPlainTool(part)) {
-      if (run.length === 0) runStart = index;
+      if (run.length === 0) {
+        runStart = index;
+      }
       run.push(part);
       continue;
     }
-    if (isInvisible(part)) continue;
+    if (isInvisible(part)) {
+      continue;
+    }
     flush();
     items.push({ key: `part-${index}`, kind: "single", part });
   }

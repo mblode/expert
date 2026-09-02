@@ -20,8 +20,11 @@ function walk(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
     const p = join(dir, name);
-    if (statSync(p).isDirectory()) out.push(...walk(p));
-    else if (p.endsWith(".ts")) out.push(p);
+    if (statSync(p).isDirectory()) {
+      out.push(...walk(p));
+    } else if (p.endsWith(".ts")) {
+      out.push(p);
+    }
   }
   return out;
 }
@@ -32,9 +35,9 @@ for (const { dir, forbidden } of RULES) {
     // A path segment, so `./error-handler.ts` is not a false positive.
     const pattern = new RegExp(`(?:from\\s+|import\\()["'][^"']*/${layer}/`);
     for (const file of walk(join(srcRoot, dir))) {
-      if (pattern.test(readFileSync(file, "utf8"))) {
+      if (pattern.test(readFileSync(file, "utf-8"))) {
         console.error(
-          `lint-layers: ${relative(process.cwd(), file)} imports ${layer} — ${dir} may not import ${layer} (handler → service → desk)`,
+          `lint-layers: ${relative(process.cwd(), file)} imports ${layer}: ${dir} may not import ${layer} (handler → service → desk)`,
         );
         failed = true;
       }
@@ -42,5 +45,7 @@ for (const { dir, forbidden } of RULES) {
   }
 }
 
-if (failed) process.exit(1);
+if (failed) {
+  process.exit(1);
+}
 console.log("lint-layers ok");

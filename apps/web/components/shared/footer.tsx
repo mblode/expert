@@ -25,7 +25,10 @@ export function Footer(): React.ReactElement {
         </a>
       </div>
       <div className="flex items-center gap-3 text-muted-foreground/30">
-        <Link className="text-muted-foreground transition-colors hover:text-foreground" href={siteConfig.links.login}>
+        <Link
+          className="text-muted-foreground transition-colors hover:text-foreground"
+          href={siteConfig.links.login}
+        >
           Sign in
         </Link>
         <span>&middot;</span>

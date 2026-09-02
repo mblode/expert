@@ -36,11 +36,11 @@ desk (Docker)
 
 SwiftUI, iOS 18+. TestFlight. No App Store in this plan.
 
-| Screen | What it does |
-|---|---|
-| Pair | Paste setup code / scan QR. Saves `https://computer.<tailnet>.ts.net` + token in Keychain. |
-| Chat | One thread. Stream hub agent replies. Attach “Open computer”. |
-| Computer | Full-bleed VNC. Native bottom bar. Waiting banner when seat is `WAITING`. |
+| Screen   | What it does                                                                               |
+| -------- | ------------------------------------------------------------------------------------------ |
+| Pair     | Paste setup code / scan QR. Saves `https://computer.<tailnet>.ts.net` + token in Keychain. |
+| Chat     | One thread. Stream hub agent replies. Attach “Open computer”.                              |
+| Computer | Full-bleed VNC. Native bottom bar. Waiting banner when seat is `WAITING`.                  |
 
 Computer chrome (native, not in the webview):
 
@@ -60,10 +60,10 @@ Source of truth: [api/DESIGN.md](api/DESIGN.md). Agent-loadable JSON: [api/spec.
 
 Two services. Four model tools. A seat.
 
-| Service | Audience | RPCs |
-|---|---|
-| `Agent` | model | `Spec`, `Computer`, `Shell`, `ReadFile`, `WriteFile` |
-| `Seat` | iPhone | `Pair`, `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardGet`, `ClipboardSet` |
+| Service | Audience | RPCs                                                                               |
+| ------- | -------- | ---------------------------------------------------------------------------------- |
+| `Agent` | model    | `Spec`, `Computer`, `Shell`, `ReadFile`, `WriteFile`                               |
+| `Seat`  | iPhone   | `Pair`, `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardGet`, `ClipboardSet` |
 
 Do not expose clipboard, `vncUrl`, or pointer as model tools. Chat stays a hub stream beside these services; it is not a computer-use verb.
 

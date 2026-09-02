@@ -1,13 +1,7 @@
 import { spawn } from "node:child_process";
-import {
-  ComputerError,
-  asPoint,
-  clampCursor,
-  unavailable,
-  type Button,
-  type Point,
-  type Unavailable,
-} from "@computer/shared";
+import { dirname } from "node:path";
+import { ComputerError, asPoint, clampCursor, unavailable } from "@computer/shared";
+import type { Button, Point, Unavailable } from "@computer/shared";
 import type { Desk, FocusHint, ShellResult } from "./types.ts";
 
 /**
@@ -20,7 +14,7 @@ import type { Desk, FocusHint, ShellResult } from "./types.ts";
  * cannot observe it: when the Machine is asleep this process is not
  * running. Idle timeout is the Fly proxy's, not ours.
  */
-export function classifyDeskFailure(text: string): Unavailable {
+function classifyDeskFailure(text: string): Unavailable {
   const t = text.toLowerCase();
   // The docker CLI itself is missing or unusable: no route to any box, and a
   // retry will not conjure one.
@@ -30,8 +24,10 @@ export function classifyDeskFailure(text: string): Unavailable {
   if (/no such container|is not running|is restarting/.test(t)) {
     return unavailable("instance_gone", "attach");
   }
-  // We killed it, so the command's fate is unknown — the box may be fine.
-  if (/timed out/.test(t)) return unavailable("unknown", "in_flight_cancelled");
+  // We killed it, so the command's fate is unknown: the box may be fine.
+  if (/timed out/.test(t)) {
+    return unavailable("unknown", "in_flight_cancelled");
+  }
   // Container answers but the X server on this display does not.
   if (/n't open display|not open display/.test(t)) {
     return unavailable("shutdown", "attach");
@@ -45,25 +41,25 @@ function deskDown(message: string): ComputerError {
 
 export type DeskTransport = "docker" | "local";
 
-export type DockerDeskOptions = {
+export interface DockerDeskOptions {
   /** Required when transport is docker (compose host → desk container). */
   container?: string;
   user?: string;
   /** Window index = X display number. Default 1 (primary). */
   display?: number;
   /**
-   * docker — `docker exec` into the desk container (local compose).
-   * local — same namespace as the hub (Fly Machine / cloud guest).
+   * docker: `docker exec` into the desk container (local compose).
+   * local: same namespace as the hub (Fly Machine / cloud guest).
    */
   transport?: DeskTransport;
-};
+}
 
 const BUTTON_TO_XDOTOOL: Record<Button, string> = {
+  back: "8",
+  forward: "9",
   left: "1",
   middle: "2",
   right: "3",
-  back: "8",
-  forward: "9",
 };
 
 /**
@@ -77,38 +73,40 @@ const BUTTON_TO_XDOTOOL: Record<Button, string> = {
  */
 export function toKeysym(key: string): string {
   const named = KEY_TO_KEYSYM[key.toLowerCase()];
-  if (named) return named;
+  if (named) {
+    return named;
+  }
   return key.length === 1 ? key.toLowerCase() : key;
 }
 
 /** Agent key names → X keysyms for xdotool. Unlisted names pass through. */
 const KEY_TO_KEYSYM: Record<string, string> = {
+  alt: "alt",
+  backspace: "BackSpace",
+  cmd: "super",
+  ctrl: "ctrl",
+  delete: "Delete",
+  down: "Down",
+  end: "End",
   enter: "Return",
-  return: "Return",
   esc: "Escape",
   escape: "Escape",
-  backspace: "BackSpace",
-  tab: "Tab",
-  space: "space",
-  delete: "Delete",
   home: "Home",
-  end: "End",
-  pageup: "Page_Up",
-  pagedown: "Page_Down",
-  up: "Up",
-  down: "Down",
   left: "Left",
+  pagedown: "Page_Down",
+  pageup: "Page_Up",
+  return: "Return",
   right: "Right",
-  ctrl: "ctrl",
-  alt: "alt",
   shift: "shift",
+  space: "space",
   super: "super",
-  cmd: "super",
+  tab: "Tab",
+  up: "Up",
 };
 
 /**
  * Desk driver for one window (X display) of the box: docker exec in.
- * All input is XTEST via `xdotool` with `DISPLAY=:N` — real synthesized
+ * All input is XTEST via `xdotool` with `DISPLAY=:N`: real synthesized
  * input at the X server, honoured by GTK and Chromium, and per-display.
  * Never XSendEvent, which GTK ignores.
  */
@@ -134,16 +132,18 @@ export class DockerDesk implements Desk {
   async ping(): Promise<boolean> {
     try {
       const r = await this.exec(["xdotool", "getdisplaygeometry"], { timeoutMs: 5000 });
-      if (r.exit !== 0) throw new Error(r.stderr.toString());
+      if (r.exit !== 0) {
+        throw new Error(r.stderr.toString());
+      }
       return true;
-    } catch (err) {
-      if (err instanceof ComputerError) throw err;
-      throw deskDown(err instanceof Error ? err.message : "desk exec or input is dead");
+    } catch (error) {
+      if (error instanceof ComputerError) throw error;
+      throw deskDown(error instanceof Error ? error.message : "desk exec or input is dead");
     }
   }
 
   async screenshot(): Promise<Buffer> {
-    const r = await this.exec(["/usr/local/bin/desk-shot"], { timeoutMs: 15_000, binary: true });
+    const r = await this.exec(["/usr/local/bin/desk-shot"], { binary: true, timeoutMs: 15_000 });
     if (r.exit !== 0) {
       throw deskDown(r.stderr.toString() || "screenshot failed");
     }
@@ -152,8 +152,8 @@ export class DockerDesk implements Desk {
 
   async zoom(x: number, y: number, w: number, h: number): Promise<Buffer> {
     const r = await this.exec(["/usr/local/bin/desk-shot", `${x},${y},${w},${h}`], {
-      timeoutMs: 15_000,
       binary: true,
+      timeoutMs: 15_000,
     });
     if (r.exit !== 0) {
       throw deskDown(r.stderr.toString() || "zoom failed");
@@ -197,8 +197,10 @@ export class DockerDesk implements Desk {
   }
 
   async drag(path: Point[]): Promise<void> {
-    const first = path[0];
-    if (!first) return;
+    const [first] = path;
+    if (!first) {
+      return;
+    }
     await this.move(first.x, first.y);
     await this.mouseDown("left");
     for (const p of path.slice(1)) {
@@ -227,17 +229,16 @@ export class DockerDesk implements Desk {
   }
 
   async clipboardGet(): Promise<string> {
-    const r = await this.exec(
-      ["bash", "-c", "xclip -selection clipboard -o 2>/dev/null || true"],
-      { timeoutMs: 5000 },
-    );
+    const r = await this.exec(["bash", "-c", "xclip -selection clipboard -o 2>/dev/null || true"], {
+      timeoutMs: 5000,
+    });
     return r.stdout.toString();
   }
 
   async clipboardSet(text: string): Promise<void> {
     const r = await this.exec(["bash", "-c", "xclip -selection clipboard -i"], {
-      timeoutMs: 5000,
       stdin: text,
+      timeoutMs: 5000,
     });
     if (r.exit !== 0) {
       throw deskDown(r.stderr.toString() || "clipboard set failed");
@@ -252,23 +253,25 @@ export class DockerDesk implements Desk {
    */
   async shell(argv: string[], cwd: string, timeoutSec: number): Promise<ShellResult> {
     const r = await this.exec(["timeout", "-s", "KILL", `${timeoutSec}s`, ...argv], {
-      timeoutMs: timeoutSec * 1000 + 5_000,
       cwd,
       maxOutput: SHELL_OUTPUT_CAP,
+      timeoutMs: timeoutSec * 1000 + 5000,
     });
     return {
       exit: r.exit,
-      stdout: r.stdout.toString("utf8"),
-      stderr: r.stderr.toString("utf8"),
-      stdout_truncated: r.stdoutTruncated,
+      stderr: r.stderr.toString("utf-8"),
       stderr_truncated: r.stderrTruncated,
+      stdout: r.stdout.toString("utf-8"),
+      stdout_truncated: r.stdoutTruncated,
     };
   }
 
   async readFile(path: string): Promise<string> {
     const r = await this.exec(["cat", path], { timeoutMs: 15_000 });
-    if (r.exit !== 0) throw fileError(r.stderr.toString(), `read failed: ${path}`);
-    return r.stdout.toString("utf8");
+    if (r.exit !== 0) {
+      throw fileError(r.stderr.toString(), `read failed: ${path}`);
+    }
+    return r.stdout.toString("utf-8");
   }
 
   async writeFile(path: string, content: string): Promise<number> {
@@ -281,13 +284,15 @@ export class DockerDesk implements Desk {
 
   /** Truncate or append; the parent directory is made either way. `path` is absolute (resolveWorkspacePath). */
   private async put(path: string, content: string, redirect: ">" | ">>"): Promise<number> {
-    const dir = path.slice(0, path.lastIndexOf("/"));
+    const dir = dirname(path);
     const r = await this.exec(
       ["bash", "-c", `mkdir -p ${shellQuote(dir)} && cat ${redirect} ${shellQuote(path)}`],
-      { timeoutMs: 15_000, stdin: content },
+      { stdin: content, timeoutMs: 15_000 },
     );
-    if (r.exit !== 0) throw fileError(r.stderr.toString(), `write failed: ${path}`);
-    return Buffer.byteLength(content, "utf8");
+    if (r.exit !== 0) {
+      throw fileError(r.stderr.toString(), `write failed: ${path}`);
+    }
+    return Buffer.byteLength(content, "utf-8");
   }
 
   async focusHint(): Promise<FocusHint> {
@@ -298,9 +303,9 @@ export class DockerDesk implements Desk {
     const title = r.stdout.toString().trim();
     const lower = title.toLowerCase();
     return {
-      title,
-      password: /password|passcode|authentication|sudo/.test(lower),
       confirm: /are you sure|confirm|delete|overwrite|uninstall/.test(lower),
+      password: /password|passcode|authentication|sudo/.test(lower),
+      title,
     };
   }
 
@@ -335,13 +340,19 @@ export class DockerDesk implements Desk {
   private async scrollBy(dx: number, dy: number): Promise<void> {
     const y = Math.trunc(dy);
     const x = Math.trunc(dx);
-    if (y !== 0) await this.xdotool("click", "--repeat", String(Math.abs(y)), y > 0 ? "5" : "4");
-    if (x !== 0) await this.xdotool("click", "--repeat", String(Math.abs(x)), x > 0 ? "7" : "6");
+    if (y !== 0) {
+      await this.xdotool("click", "--repeat", String(Math.abs(y)), y > 0 ? "5" : "4");
+    }
+    if (x !== 0) {
+      await this.xdotool("click", "--repeat", String(Math.abs(x)), x > 0 ? "7" : "6");
+    }
   }
 
   private async sendKeys(keys: string[]): Promise<void> {
     const combo = keys.map(toKeysym).join("+");
-    if (combo) await this.xdotool("key", combo);
+    if (combo) {
+      await this.xdotool("key", combo);
+    }
   }
 
   private exec(
@@ -365,7 +376,7 @@ export class DockerDesk implements Desk {
             "-u",
             this.user,
             // Always: this driver *is* one window, and a command that forgets its
-            // DISPLAY silently targets :1 — which made every fork Bot screenshot
+            // DISPLAY silently targets :1, which made every fork Bot screenshot
             // screen 1 while acting on its own.
             "-e",
             `DISPLAY=:${this.display}`,
@@ -375,9 +386,9 @@ export class DockerDesk implements Desk {
           ];
     return new Promise((resolve, reject) => {
       const child = spawn(cmd, spawnArgv, {
-        stdio: ["pipe", "pipe", "pipe"],
         cwd: this.transport === "local" ? opts.cwd : undefined,
         env: this.transport === "local" ? localEnv(this.display) : process.env,
+        stdio: ["pipe", "pipe", "pipe"],
       });
       const stdout = new Sink(opts.maxOutput);
       const stderr = new Sink(opts.maxOutput);
@@ -398,23 +409,23 @@ export class DockerDesk implements Desk {
         clearTimeout(t);
         resolve({
           exit: code ?? 1,
-          stdout: stdout.buffer(),
           stderr: stderr.buffer(),
-          stdoutTruncated: stdout.truncated,
           stderrTruncated: stderr.truncated,
+          stdout: stdout.buffer(),
+          stdoutTruncated: stdout.truncated,
         });
       });
     });
   }
 }
 
-type ExecResult = {
+interface ExecResult {
   exit: number;
   stdout: Buffer;
   stderr: Buffer;
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
-};
+}
 
 /** What `shell` returns per stream. Anything past it is dropped as it arrives, not buffered. */
 const SHELL_OUTPUT_CAP = 200_000;
@@ -461,12 +472,12 @@ class Sink {
 function localEnv(display: number): NodeJS.ProcessEnv {
   const home = process.env.HOME ?? "/home/box";
   return {
-    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
-    HOME: home,
-    USER: process.env.USER ?? "box",
-    LANG: process.env.LANG ?? "C.UTF-8",
-    TERM: "dumb",
     DISPLAY: `:${display}`,
+    HOME: home,
+    LANG: process.env.LANG ?? "C.UTF-8",
+    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+    TERM: "dumb",
+    USER: process.env.USER ?? "box",
   };
 }
 
@@ -480,5 +491,5 @@ function fileError(stderr: string, fallback: string): ComputerError {
 }
 
 function shellQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
+  return `'${s.replaceAll("'", `'\\''`)}'`;
 }

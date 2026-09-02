@@ -4,7 +4,7 @@ import type { Seat } from "../lib/seat";
 
 /**
  * The box's clipboard, both ways. It is the only reliable channel for anything
- * a person cannot type — a long token, a 2FA code pasted from a phone.
+ * a person cannot type, a long token, a 2FA code pasted from a phone.
  */
 export function ClipboardPanel({
   display,
@@ -26,8 +26,8 @@ export function ClipboardPanel({
         setText(String((result as { text: unknown }).text ?? ""));
       }
       setNote(label);
-    } catch (cause) {
-      setNote(cause instanceof Error ? cause.message : "clipboard failed");
+    } catch (error) {
+      setNote(error instanceof Error ? error.message : "clipboard failed");
     } finally {
       setBusy(false);
     }

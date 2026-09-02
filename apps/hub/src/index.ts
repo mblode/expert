@@ -42,8 +42,8 @@ const hub = createHub({
   store: new FileBotStore(rosterPath),
   seatStore: new FileSeatTokenStore(join(dataDir, "seats.json")),
   pixels: new PixelRegistry({
-    ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
     tokenDir: process.env.COMPUTER_VNC_TOKEN_DIR ?? join(dataDir, "vnc-tokens"),
+    ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
   }),
   policy: loadPolicy(join(dataDir, "policy.json")),
   vncUrl,

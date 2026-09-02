@@ -19,7 +19,9 @@ export function ChatComposer({
 
   const send = () => {
     const message = text.trim();
-    if (!message || busy || disabled) return;
+    if (!message || busy || disabled) {
+      return;
+    }
     setText("");
     onSend(message);
   };

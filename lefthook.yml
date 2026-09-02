@@ -1,0 +1,15 @@
+pre-commit:
+  jobs:
+    # --no-error-on-unmatched-pattern: oxlint lints neither JSON nor CSS and
+    # exits 1 when handed only those, so a CSS-only commit would fail the hook.
+    - run: npx ultracite fix --no-error-on-unmatched-pattern {staged_files}
+      glob:
+        - "**/*.js"
+        - "**/*.jsx"
+        - "**/*.mjs"
+        - "**/*.ts"
+        - "**/*.tsx"
+        - "**/*.json"
+        - "**/*.jsonc"
+        - "**/*.css"
+      stage_fixed: true

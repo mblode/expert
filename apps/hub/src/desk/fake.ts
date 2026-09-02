@@ -1,18 +1,21 @@
-import { asPoint, clampCursor, ComputerError, unavailable, type Button, type Point } from "@computer/shared";
+import { asPoint, clampCursor, ComputerError, unavailable } from "@computer/shared";
+import type { Button, Point } from "@computer/shared";
 import type { Desk, FocusHint, ShellResult } from "./types.ts";
 
 /** Minimal valid 1×1 PNG. Tests do not decode pixels. */
-export const TINY_PNG = Buffer.from(
+const TINY_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
   "base64",
 );
 
-type FileEntry = { content: string };
+interface FileEntry {
+  content: string;
+}
 
-export type FakeDeskOptions = {
+export interface FakeDeskOptions {
   failPing?: boolean;
   display?: number;
-};
+}
 
 export class FakeDesk implements Desk {
   readonly display: number;
@@ -20,7 +23,7 @@ export class FakeDesk implements Desk {
   clipboard = "";
   files = new Map<string, FileEntry>();
   log: string[] = [];
-  hint: FocusHint = { title: "", password: false, confirm: false };
+  hint: FocusHint = { confirm: false, password: false, title: "" };
   lastKeys: string[] = [];
   lastType = "";
   grabs = 0;
@@ -71,7 +74,9 @@ export class FakeDesk implements Desk {
   }
 
   async keypress(keys: string[]): Promise<void> {
-    if (this.failKeys && keys.includes(this.failKeys)) throw new Error("xdotool key failed");
+    if (this.failKeys && keys.includes(this.failKeys)) {
+      throw new Error("xdotool key failed");
+    }
     this.lastKeys = keys;
     this.log.push(`keypress ${keys.join("+")}`);
   }
@@ -87,14 +92,18 @@ export class FakeDesk implements Desk {
   }
 
   async drag(path: Point[]): Promise<void> {
-    const last = path[path.length - 1];
-    if (last) this.cursor = last;
+    const last = path.at(-1);
+    if (last) {
+      this.cursor = last;
+    }
     this.log.push(`drag ${path.length}`);
   }
 
   async pointerDelta(dx: number, dy: number, grab = false): Promise<Point> {
     this.cursor = clampCursor(this.cursor.x + dx, this.cursor.y + dy);
-    if (grab) this.grabs += 1;
+    if (grab) {
+      this.grabs += 1;
+    }
     this.log.push(`delta ${dx},${dy}${grab ? " grab" : ""}`);
     return this.cursor;
   }
@@ -119,41 +128,49 @@ export class FakeDesk implements Desk {
   async shell(argv: string[], cwd: string, timeoutSec: number): Promise<ShellResult> {
     this.log.push(`shell ${argv.join(" ")} cwd=${cwd} t=${timeoutSec}`);
     if (argv[0] === "false") {
-      return { exit: 1, stdout: "", stderr: "false", stdout_truncated: false, stderr_truncated: false };
+      return {
+        exit: 1,
+        stderr: "false",
+        stderr_truncated: false,
+        stdout: "",
+        stdout_truncated: false,
+      };
     }
     if (argv[0] === "echo") {
       return {
         exit: 0,
-        stdout: argv.slice(1).join(" ") + "\n",
         stderr: "",
-        stdout_truncated: false,
         stderr_truncated: false,
+        stdout: `${argv.slice(1).join(" ")}\n`,
+        stdout_truncated: false,
       };
     }
     return {
       exit: 0,
-      stdout: "",
       stderr: "",
-      stdout_truncated: false,
       stderr_truncated: false,
+      stdout: "",
+      stdout_truncated: false,
     };
   }
 
   async readFile(path: string): Promise<string> {
     const f = this.files.get(path);
-    if (!f) throw new ComputerError("VALIDATION", `no such file: ${path}`);
+    if (!f) {
+      throw new ComputerError("VALIDATION", `no such file: ${path}`);
+    }
     return f.content;
   }
 
   async writeFile(path: string, content: string): Promise<number> {
     this.files.set(path, { content });
-    return Buffer.byteLength(content, "utf8");
+    return Buffer.byteLength(content, "utf-8");
   }
 
   async appendFile(path: string, content: string): Promise<number> {
     const before = this.files.get(path)?.content ?? "";
     this.files.set(path, { content: before + content });
-    return Buffer.byteLength(content, "utf8");
+    return Buffer.byteLength(content, "utf-8");
   }
 
   async focusHint(): Promise<FocusHint> {

@@ -25,20 +25,20 @@ describe("FileService", () => {
 
   it("shell echoes and is idempotent", async () => {
     const files = new FileService(new FakeDesk(), new SeatService());
-    const a = await files.shell({ request_id: "sh1", argv: ["echo", "ok"] });
+    const a = await files.shell({ argv: ["echo", "ok"], request_id: "sh1" });
     expect(a.stdout).toBe("ok\n");
-    const b = await files.shell({ request_id: "sh1", argv: ["echo", "ok"] });
+    const b = await files.shell({ argv: ["echo", "ok"], request_id: "sh1" });
     expect(b).toEqual(a);
-    await expect(
-      files.shell({ request_id: "sh1", argv: ["echo", "other"] }),
-    ).rejects.toMatchObject({ code: "CONFLICT" });
+    await expect(files.shell({ argv: ["echo", "other"], request_id: "sh1" })).rejects.toMatchObject(
+      { code: "CONFLICT" },
+    );
   });
 
   it("rejects shell while the human has the seat", async () => {
     const seat = new SeatService();
     const files = new FileService(new FakeDesk(), seat);
     seat.requestTakeover();
-    await expect(files.shell({ request_id: "x", argv: ["echo", "no"] })).rejects.toMatchObject({
+    await expect(files.shell({ argv: ["echo", "no"], request_id: "x" })).rejects.toMatchObject({
       code: "SEAT_HELD",
     });
   });

@@ -6,7 +6,8 @@ import { asPixelX, asPixelY } from "@computer/shared";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { ComputerService } from "../src/service/computer.ts";
 import { FileService } from "../src/service/files.ts";
-import { PolicyService, loadPolicy, type PolicyRule } from "../src/service/policy.ts";
+import { PolicyService, loadPolicy } from "../src/service/policy.ts";
+import type { PolicyRule } from "../src/service/policy.ts";
 import { SeatService } from "../src/service/seat.ts";
 import { rpc, startHub } from "./helper.ts";
 
@@ -19,36 +20,44 @@ const policy = (rules: PolicyRule[]) => new PolicyService(rules, { checkTimeoutM
 const CLICK = { type: "click", x: asPixelX(10), y: asPixelY(10) } as const;
 
 describe("policy: the gate is in the hub", () => {
-  it("no rules allows everything — the box ships open", async () => {
+  it("no rules allows everything: the box ships open", async () => {
     const p = new PolicyService();
-    expect(await p.evaluate({ tool: "computer", action: CLICK })).toMatchObject({ decision: "allow" });
-    expect(await p.evaluate({ tool: "shell", argv: ["rm", "-rf", "/"], cwd: "/workspace" })).toMatchObject({
+    expect(await p.evaluate({ action: CLICK, tool: "computer" })).toMatchObject({
+      decision: "allow",
+    });
+    expect(
+      await p.evaluate({ argv: ["rm", "-rf", "/"], cwd: "/workspace", tool: "shell" }),
+    ).toMatchObject({
       decision: "allow",
     });
   });
 
   it("deny beats ask beats allow, whatever the rule order", async () => {
     const rules: PolicyRule[] = [
-      { id: "allow-all", tool: "computer", decision: "allow" },
-      { id: "deny-type", tool: "computer", action: "type", decision: "deny" },
-      { id: "ask-type", tool: "computer", action: "type", decision: "ask" },
+      { decision: "allow", id: "allow-all", tool: "computer" },
+      { action: "type", decision: "deny", id: "deny-type", tool: "computer" },
+      { action: "type", decision: "ask", id: "ask-type", tool: "computer" },
     ];
     const p = policy(rules);
-    const typed = { tool: "computer", action: { type: "type", text: "hi" } } as const;
+    const typed = { action: { text: "hi", type: "type" }, tool: "computer" } as const;
     expect(await p.evaluate(typed)).toMatchObject({ decision: "deny", rule: "deny-type" });
 
     const noDeny = policy(rules.filter((r) => r.id !== "deny-type"));
     expect(await noDeny.evaluate(typed)).toMatchObject({ decision: "ask", rule: "ask-type" });
     // A rule for another action type does not match.
-    expect(await noDeny.evaluate({ tool: "computer", action: CLICK })).toMatchObject({ decision: "allow" });
+    expect(await noDeny.evaluate({ action: CLICK, tool: "computer" })).toMatchObject({
+      decision: "allow",
+    });
   });
 
   it("shell rules match on the joined argv", async () => {
-    const p = policy([{ id: "no-curl", tool: "shell", argv: "^curl ", decision: "deny" }]);
-    expect(await p.evaluate({ tool: "shell", argv: ["curl", "evil"], cwd: "/workspace" })).toMatchObject({
+    const p = policy([{ argv: "^curl ", decision: "deny", id: "no-curl", tool: "shell" }]);
+    expect(
+      await p.evaluate({ argv: ["curl", "evil"], cwd: "/workspace", tool: "shell" }),
+    ).toMatchObject({
       decision: "deny",
     });
-    expect(await p.evaluate({ tool: "shell", argv: ["ls"], cwd: "/workspace" })).toMatchObject({
+    expect(await p.evaluate({ argv: ["ls"], cwd: "/workspace", tool: "shell" })).toMatchObject({
       decision: "allow",
     });
   });
@@ -56,18 +65,20 @@ describe("policy: the gate is in the hub", () => {
   it("a check gets the request on stdin and its decision wins", async () => {
     const p = policy([
       {
-        id: "inspect",
-        tool: "shell",
         check: node(
           `let s="";process.stdin.on("data",c=>s+=c).on("end",()=>{const r=JSON.parse(s);console.log(JSON.stringify({decision:r.argv[0]==="rm"?"deny":"allow",reason:r.cwd}))})`,
         ),
+        id: "inspect",
+        tool: "shell",
       },
     ]);
-    expect(await p.evaluate({ tool: "shell", argv: ["rm", "x"], cwd: "/workspace" })).toMatchObject({
-      decision: "deny",
-      reason: "/workspace",
-    });
-    expect(await p.evaluate({ tool: "shell", argv: ["ls"], cwd: "/workspace" })).toMatchObject({
+    expect(await p.evaluate({ argv: ["rm", "x"], cwd: "/workspace", tool: "shell" })).toMatchObject(
+      {
+        decision: "deny",
+        reason: "/workspace",
+      },
+    );
+    expect(await p.evaluate({ argv: ["ls"], cwd: "/workspace", tool: "shell" })).toMatchObject({
       decision: "allow",
     });
   });
@@ -90,31 +101,33 @@ describe("policy fails closed", () => {
 
   for (const [name, check] of broken) {
     it(`denies when the check ${name}`, async () => {
-      const p = policy([{ id: "gate", tool: "computer", check }]);
-      expect(await p.evaluate({ tool: "computer", action: CLICK })).toMatchObject({
+      const p = policy([{ check, id: "gate", tool: "computer" }]);
+      expect(await p.evaluate({ action: CLICK, tool: "computer" })).toMatchObject({
         decision: "deny",
         rule: "gate",
       });
     });
 
     it(`allows when the check ${name} and the rule opts out with fail_open`, async () => {
-      const p = policy([{ id: "gate", tool: "computer", check, fail_open: true }]);
-      expect(await p.evaluate({ tool: "computer", action: CLICK })).toMatchObject({ decision: "allow" });
+      const p = policy([{ check, fail_open: true, id: "gate", tool: "computer" }]);
+      expect(await p.evaluate({ action: CLICK, tool: "computer" })).toMatchObject({
+        decision: "allow",
+      });
     });
   }
 
   it("says why it denied, so a broken check is not mistaken for a real rule", async () => {
-    const p = policy([{ id: "gate", tool: "computer", check: node("process.exit(3)") }]);
-    const v = await p.evaluate({ tool: "computer", action: CLICK });
+    const p = policy([{ check: node("process.exit(3)"), id: "gate", tool: "computer" }]);
+    const v = await p.evaluate({ action: CLICK, tool: "computer" });
     expect(v.reason).toMatch(/check failed: exit 3/);
   });
 
   it("fail_open on one rule does not excuse another rule's denial", async () => {
     const p = policy([
-      { id: "soft", tool: "computer", check: node("process.exit(1)"), fail_open: true },
-      { id: "hard", tool: "computer", check: node("process.exit(1)") },
+      { check: node("process.exit(1)"), fail_open: true, id: "soft", tool: "computer" },
+      { check: node("process.exit(1)"), id: "hard", tool: "computer" },
     ]);
-    expect(await p.evaluate({ tool: "computer", action: CLICK })).toMatchObject({
+    expect(await p.evaluate({ action: CLICK, tool: "computer" })).toMatchObject({
       decision: "deny",
       rule: "hard",
     });
@@ -124,7 +137,9 @@ describe("policy fails closed", () => {
 describe("policy config", () => {
   const dirs: string[] = [];
   afterEach(() => {
-    while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+    while (dirs.length) {
+      rmSync(dirs.pop()!, { recursive: true, force: true });
+    }
   });
 
   const write = (body: string): string => {
@@ -151,13 +166,15 @@ describe("policy config", () => {
     expect(() =>
       loadPolicy(write('[{"id":"x","tool":"shell","decision":"deny","check":["true"]}]')),
     ).toThrow(/exactly one of/);
-    expect(() => loadPolicy(write('[{"id":"x","tool":"nope","decision":"deny"}]'))).toThrow(/tool must be/);
-    expect(() => loadPolicy(write('[{"id":"x","tool":"computer","action":"fly","decision":"deny"}]'))).toThrow(
-      /unknown action/,
+    expect(() => loadPolicy(write('[{"id":"x","tool":"nope","decision":"deny"}]'))).toThrow(
+      /tool must be/,
     );
-    expect(() => loadPolicy(write('[{"id":"x","tool":"shell","argv":"[","decision":"deny"}]'))).toThrow(
-      /not a valid regex/,
-    );
+    expect(() =>
+      loadPolicy(write('[{"id":"x","tool":"computer","action":"fly","decision":"deny"}]')),
+    ).toThrow(/unknown action/);
+    expect(() =>
+      loadPolicy(write('[{"id":"x","tool":"shell","argv":"[","decision":"deny"}]')),
+    ).toThrow(/not a valid regex/);
   });
 
   it("loads a real rule set", () => {
@@ -172,15 +189,23 @@ describe("Denied is a terminal outcome, not advice", () => {
     const computer = new ComputerService(
       desk,
       new SeatService(),
-      policy([{ id: "no-typing", tool: "computer", action: "type", decision: "deny", reason: "typing is gated" }]),
+      policy([
+        {
+          action: "type",
+          decision: "deny",
+          id: "no-typing",
+          reason: "typing is gated",
+          tool: "computer",
+        },
+      ]),
     );
     const r = await computer.run("d1", [
       { type: "click", x: asPixelX(1), y: asPixelY(1) },
-      { type: "type", text: "secret" },
+      { text: "secret", type: "type" },
       { type: "click", x: asPixelX(2), y: asPixelY(2) },
     ]);
     expect(r.results[0]?.kind).toBe("ok");
-    expect(r.results[1]).toEqual({ kind: "denied", rule: "no-typing", reason: "typing is gated" });
+    expect(r.results[1]).toEqual({ kind: "denied", reason: "typing is gated", rule: "no-typing" });
     expect(r.results[2]).toEqual({ kind: "skipped", reason: "after_denied" });
     expect(desk.lastType).toBe("");
   });
@@ -189,10 +214,24 @@ describe("Denied is a terminal outcome, not advice", () => {
     const computer = new ComputerService(
       new FakeDesk(),
       new SeatService(),
-      policy([{ id: "confirm-drag", tool: "computer", action: "drag", decision: "ask", reason: "drag needs a human" }]),
+      policy([
+        {
+          action: "drag",
+          decision: "ask",
+          id: "confirm-drag",
+          reason: "drag needs a human",
+          tool: "computer",
+        },
+      ]),
     );
     const r = await computer.run("a1", [
-      { type: "drag", path: [{ x: asPixelX(1), y: asPixelY(1) }, { x: asPixelX(2), y: asPixelY(2) }] },
+      {
+        path: [
+          { x: asPixelX(1), y: asPixelY(1) },
+          { x: asPixelX(2), y: asPixelY(2) },
+        ],
+        type: "drag",
+      },
     ]);
     expect(r.results[0]).toMatchObject({ kind: "denied", rule: "confirm-drag" });
     expect(r.pending_checks[0]?.message).toMatch(/confirm-drag needs the human/);
@@ -203,24 +242,32 @@ describe("Denied is a terminal outcome, not advice", () => {
     const files = new FileService(
       desk,
       new SeatService(),
-      policy([{ id: "no-rm", tool: "shell", argv: "^rm ", decision: "deny", reason: "rm is gated" }]),
+      policy([
+        { argv: "^rm ", decision: "deny", id: "no-rm", reason: "rm is gated", tool: "shell" },
+      ]),
     );
-    await expect(files.shell({ request_id: "s1", argv: ["rm", "-rf", "/workspace"] })).rejects.toMatchObject({
+    await expect(
+      files.shell({ argv: ["rm", "-rf", "/workspace"], request_id: "s1" }),
+    ).rejects.toMatchObject({
       code: "DENIED",
       message: expect.stringContaining("rm is gated"),
     });
     expect(desk.log.some((l) => l.startsWith("shell"))).toBe(false);
     // Still runnable afterwards: the gate refuses a call, it does not wedge the Bot.
-    await expect(files.shell({ request_id: "s2", argv: ["ls"] })).resolves.toMatchObject({ exit: 0 });
+    await expect(files.shell({ argv: ["ls"], request_id: "s2" })).resolves.toMatchObject({
+      exit: 0,
+    });
   });
 
   it("the gate holds over HTTP, where no harness can skip it", async () => {
     const h = await startHub({
-      policy: policy([{ id: "no-shell", tool: "shell", decision: "deny", reason: "this box does not shell" }]),
+      policy: policy([
+        { decision: "deny", id: "no-shell", reason: "this box does not shell", tool: "shell" },
+      ]),
     });
     try {
       await expect(
-        rpc(h.url, "/computer.v1.Agent/Shell", { request_id: "r1", argv: ["ls"] }, h.agent),
+        rpc(h.url, "/computer.v1.Agent/Shell", { argv: ["ls"], request_id: "r1" }, h.agent),
       ).rejects.toMatchObject({ code: "DENIED", status: 403 });
     } finally {
       await h.close();

@@ -1,19 +1,25 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { ComputerError, unavailable, type ErrorCode } from "@computer/shared";
-import { ALL_METHODS, type AuthPolicy } from "@computer/proto";
-import { AuthRegistry, bearerFromHeader } from "./auth.ts";
+import { ComputerError, unavailable } from "@computer/shared";
+import type { ErrorCode } from "@computer/shared";
+import { ALL_METHODS } from "@computer/proto";
+import type { AuthPolicy } from "@computer/proto";
+import type { AuthRegistry } from "./auth.ts";
+import { bearerFromHeader } from "./auth.ts";
 
 type Handler = (ctx: RpcContext) => Promise<unknown>;
 
-export type RpcContext = {
+export interface RpcContext {
   body: unknown;
   bearer?: string;
   kind: "agent" | "seat" | "public";
   /** Set for agent calls: the Bot the bearer token belongs to. */
   botId?: string;
-};
+}
 
-type Route = { policy: AuthPolicy; handler: Handler };
+interface Route {
+  policy: AuthPolicy;
+  handler: Handler;
+}
 
 /**
  * Connect-JSON unary router.
@@ -21,22 +27,29 @@ type Route = { policy: AuthPolicy; handler: Handler };
  */
 export class ConnectRouter {
   private readonly routes = new Map<string, Route>();
-  private readonly extras = new Map<string, { method: string; policy: AuthPolicy; handler: Handler }>();
+  private readonly extras = new Map<
+    string,
+    { method: string; policy: AuthPolicy; handler: Handler }
+  >();
 
   constructor(private readonly auth: AuthRegistry) {}
 
   rpc(path: string, policy: AuthPolicy, handler: Handler): void {
-    if (!policy) throw new Error(`Connect method ${path} registered without an auth policy`);
+    if (!policy) {
+      throw new Error(`Connect method ${path} registered without an auth policy`);
+    }
     if (!ALL_METHODS.includes(path as (typeof ALL_METHODS)[number]) && !path.startsWith("/")) {
       throw new Error(`invalid path ${path}`);
     }
-    this.routes.set(path, { policy, handler });
+    this.routes.set(path, { handler, policy });
   }
 
   /** Extra HTTP JSON endpoints (GET /spec, /healthz, /roster). Still require a policy. */
   extra(method: string, path: string, policy: AuthPolicy, handler: Handler): void {
-    if (!policy) throw new Error(`Connect method ${path} registered without an auth policy`);
-    this.extras.set(`${method} ${path}`, { method, policy, handler });
+    if (!policy) {
+      throw new Error(`Connect method ${path} registered without an auth policy`);
+    }
+    this.extras.set(`${method} ${path}`, { handler, method, policy });
   }
 
   assertAllPolicies(): void {
@@ -55,9 +68,13 @@ export class ConnectRouter {
       await this.dispatch(req, res, extra.policy, extra.handler);
       return true;
     }
-    if (req.method !== "POST") return false;
+    if (req.method !== "POST") {
+      return false;
+    }
     const route = this.routes.get(url.pathname);
-    if (!route) return false;
+    if (!route) {
+      return false;
+    }
     await this.dispatch(req, res, route.policy, route.handler);
     return true;
   }
@@ -72,10 +89,10 @@ export class ConnectRouter {
       const bearer = bearerFromHeader(header(req, "authorization"));
       const verified = this.auth.verify(policy, bearer);
       const body = req.method === "GET" || req.method === "HEAD" ? {} : await readJson(req);
-      const result = await handler({ body, bearer, kind: verified.kind, botId: verified.botId });
+      const result = await handler({ bearer, body, botId: verified.botId, kind: verified.kind });
       writeJson(res, 200, result ?? {});
-    } catch (err) {
-      writeError(res, err);
+    } catch (error) {
+      writeError(res, error);
     }
   }
 }
@@ -89,7 +106,11 @@ export function writeError(res: ServerResponse, err: unknown): void {
   // unknown/unknown rather than inventing a reason the client would act on.
   const message = err instanceof Error ? err.message : "internal";
   writeJson(res, 500, {
-    error: { code: "DAEMON_DOWN" satisfies ErrorCode, message, ...unavailable("unknown", "unknown") },
+    error: {
+      code: "DAEMON_DOWN" satisfies ErrorCode,
+      message,
+      ...unavailable("unknown", "unknown"),
+    },
   });
 }
 
@@ -100,19 +121,19 @@ export function writeError(res: ServerResponse, err: unknown): void {
  */
 export function corsHeaders(): Record<string, string> {
   return {
-    "access-control-allow-origin": "*",
     "access-control-allow-headers":
       "authorization, content-type, connect-protocol-version, x-computer-bot",
     "access-control-allow-methods": "GET, POST, OPTIONS",
+    "access-control-allow-origin": "*",
   };
 }
 
 export function writeJson(res: ServerResponse, status: number, body: unknown): void {
   const data = JSON.stringify(body);
   res.writeHead(status, {
-    "content-type": "application/json; charset=utf-8",
-    "content-length": Buffer.byteLength(data),
     "cache-control": "no-store",
+    "content-length": Buffer.byteLength(data),
+    "content-type": "application/json; charset=utf-8",
     ...corsHeaders(),
   });
   res.end(data);
@@ -131,12 +152,18 @@ async function readJson(req: IncomingMessage): Promise<unknown> {
   let size = 0;
   for await (const c of req) {
     size += (c as Buffer).length;
-    if (size > MAX_BODY_BYTES) throw new ComputerError("VALIDATION", "body too large");
+    if (size > MAX_BODY_BYTES) {
+      throw new ComputerError("VALIDATION", "body too large");
+    }
     chunks.push(c as Buffer);
   }
-  if (chunks.length === 0) return {};
-  const raw = Buffer.concat(chunks).toString("utf8");
-  if (!raw.trim()) return {};
+  if (chunks.length === 0) {
+    return {};
+  }
+  const raw = Buffer.concat(chunks).toString("utf-8");
+  if (!raw.trim()) {
+    return {};
+  }
   try {
     return JSON.parse(raw);
   } catch {

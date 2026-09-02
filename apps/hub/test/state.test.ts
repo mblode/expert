@@ -23,7 +23,9 @@ class DeadBoxDesk extends FakeDesk {
 describe("per-Bot state on the box", () => {
   const opened: Opened[] = [];
   afterEach(async () => {
-    while (opened.length) await opened.pop()!.close();
+    while (opened.length) {
+      await opened.pop()!.close();
+    }
   });
 
   /** Boots a hub over `desks`, so a second call is the same box with a new hub. */
@@ -47,7 +49,7 @@ describe("per-Bot state on the box", () => {
     const desks = new Map<number, FakeDesk>();
     const h = await boot(desks);
     const profile = JSON.parse(h.desk.files.get("/workspace/.bots/main/profile.json")!.content);
-    expect(profile).toMatchObject({ id: "main", name: "main", description: "", title: "" });
+    expect(profile).toMatchObject({ description: "", id: "main", name: "main", title: "" });
     expect(profile.avatar_shape).toBeTruthy();
     expect(profile.avatar_color).toMatch(/^#[0-9a-f]{6}$/);
 
@@ -69,7 +71,9 @@ describe("per-Bot state on the box", () => {
     const created = (await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "night" }, seat)) as {
       token: string;
     };
-    for (const bot of h.hub.bots.all()) await bot.voice.flushed();
+    for (const bot of h.hub.bots.all()) {
+      await bot.voice.flushed();
+    }
 
     // Everything the box holds: names and contents of every file on every screen.
     const box = [...h.desks.values()].flatMap((d) =>
@@ -86,22 +90,42 @@ describe("per-Bot state on the box", () => {
     const desks = new Map<number, FakeDesk>();
     const first = await boot(desks);
     const seat = await first.pair();
-    await rpc(first.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "on it" }, first.agent);
-    await rpc(first.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "done" }, first.agent);
+    await rpc(
+      first.url,
+      "/computer.v1.Agent/SendMessage",
+      { kind: "text", text: "on it" },
+      first.agent,
+    );
+    await rpc(
+      first.url,
+      "/computer.v1.Agent/SendMessage",
+      { kind: "text", text: "done" },
+      first.agent,
+    );
     await first.hub.bots.byId("main").voice.flushed();
     await first.close();
     opened.pop();
 
-    // Same box, new hub — what the phone asks for next is the same thread.
+    // Same box, new hub: what the phone asks for next is the same thread.
     const second = await boot(desks);
-    const page = (await rpc(second.url, "/computer.v1.Seat/Occurrences", {}, await second.pair())) as {
+    const page = (await rpc(
+      second.url,
+      "/computer.v1.Seat/Occurrences",
+      {},
+      await second.pair(),
+    )) as {
       entries: { seq: number; text: string }[];
     };
     expect(page.entries.map((e) => e.text)).toEqual(["on it", "done"]);
     expect(seat).toBeTruthy();
 
     // seq keeps counting, so a cursor the phone held still means what it meant.
-    await rpc(second.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "and again" }, second.agent);
+    await rpc(
+      second.url,
+      "/computer.v1.Agent/SendMessage",
+      { kind: "text", text: "and again" },
+      second.agent,
+    );
     const next = (await rpc(
       second.url,
       "/computer.v1.Seat/Occurrences",
@@ -118,7 +142,7 @@ describe("per-Bot state on the box", () => {
     await rpc(
       first.url,
       "/computer.v1.Agent/SendMessage",
-      { kind: "widget", prompt: "Which?", options: ["a", "b"] },
+      { kind: "widget", options: ["a", "b"], prompt: "Which?" },
       first.agent,
     );
     await first.hub.bots.byId("main").voice.flushed();
@@ -128,7 +152,12 @@ describe("per-Bot state on the box", () => {
     // The human is still being waited on. Crashing is not a way to talk again.
     const second = await boot(desks);
     await expect(
-      rpc(second.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "never mind" }, second.agent),
+      rpc(
+        second.url,
+        "/computer.v1.Agent/SendMessage",
+        { kind: "text", text: "never mind" },
+        second.agent,
+      ),
     ).rejects.toThrow(/turn ended/);
   });
 
@@ -137,9 +166,17 @@ describe("per-Bot state on the box", () => {
     const seat = await h.pair();
     await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "night" }, seat);
     const night = h.hub.bots.byId("night");
-    await rpc(h.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "worked all night" }, night.token);
+    await rpc(
+      h.url,
+      "/computer.v1.Agent/SendMessage",
+      { kind: "text", text: "worked all night" },
+      night.token,
+    );
     await night.voice.flushed();
-    await night.desk.writeFile(night.state.memoryPath, "- (2026-09-01) [note] the wifi drops at 3am\n");
+    await night.desk.writeFile(
+      night.state.memoryPath,
+      "- (2026-09-01) [note] the wifi drops at 3am\n",
+    );
 
     await rpc(h.url, "/computer.v1.Seat/DeleteBot", { id: "night" }, seat);
     const desk = h.desks.get(2)!;
@@ -151,7 +188,8 @@ describe("per-Bot state on the box", () => {
     const reborn = h.hub.bots.byId("night");
     const kept = reborn.voice.page().entries;
     expect(kept.map((e) => (e.kind === "text" ? e.text : e.kind))).toEqual(["worked all night"]);
-    expect((await reborn.state.memory()).map((m) => m.text)).toEqual(["the wifi drops at 3am"]);
+    const memory = await reborn.state.memory();
+    expect(memory.map((m) => m.text)).toEqual(["the wifi drops at 3am"]);
   });
 
   it("a box that will not answer costs the tail of the log, not the voice", async () => {

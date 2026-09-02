@@ -12,7 +12,7 @@ services:
     volumes:
       # Grok's persistence boundary, matched: /workspace and ~/.config
       # survive a rebuild; ~/.local/state and apt packages do not.
-      # One volume for ~/.config, not a nested chromium one — nesting works
+      # One volume for ~/.config, not a nested chromium one: nesting works
       # but hides the profile from anyone inspecting or backing up the
       # parent, and every window's profile (chromium, chromium-2…8) is
       # already under here.

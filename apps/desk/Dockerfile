@@ -1,4 +1,4 @@
-# The local desk: Debian, not Ubuntu — Ubuntu's `chromium-browser` is a snap
+# The local desk: Debian, not Ubuntu: Ubuntu's `chromium-browser` is a snap
 # stub that cannot run in a container; Debian ships a real chromium on amd64
 # and arm64. The Fly guest (deploy/fly/Dockerfile) installs the same list.
 FROM debian:12-slim

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 
 import { authClient } from "@/lib/auth-client";
 
@@ -28,7 +29,9 @@ export function LoginForm({
   const verifyingRef = useRef(false);
 
   useEffect(() => {
-    if (cooldown <= 0) return;
+    if (cooldown <= 0) {
+      return;
+    }
     const id = setTimeout(() => setCooldown((value) => value - 1), 1000);
     return () => clearTimeout(id);
   }, [cooldown]);
@@ -47,7 +50,9 @@ export function LoginForm({
 
   const requestOtp = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (pending) return;
+    if (pending) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -63,11 +68,15 @@ export function LoginForm({
   };
 
   const resendOtp = async () => {
-    if (pending || cooldown > 0) return;
+    if (pending || cooldown > 0) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
-      if (await sendCode()) setCooldown(RESEND_COOLDOWN_SECONDS);
+      if (await sendCode()) {
+        setCooldown(RESEND_COOLDOWN_SECONDS);
+      }
     } catch {
       setError(NETWORK_ERROR);
     } finally {
@@ -76,7 +85,9 @@ export function LoginForm({
   };
 
   const submitOtp = async (code: string) => {
-    if (verifyingRef.current) return;
+    if (verifyingRef.current) {
+      return;
+    }
     verifyingRef.current = true;
     setPending(true);
     setError(null);
@@ -103,7 +114,9 @@ export function LoginForm({
   };
 
   const social = async (provider: "google" | "apple") => {
-    if (pending) return;
+    if (pending) {
+      return;
+    }
     setPending(true);
     setError(null);
     try {
@@ -125,12 +138,22 @@ export function LoginForm({
     googleEnabled || appleEnabled ? (
       <div className="space-y-2">
         {googleEnabled && (
-          <button className={ghostClass} disabled={pending} onClick={() => void social("google")} type="button">
+          <button
+            className={ghostClass}
+            disabled={pending}
+            onClick={() => void social("google")}
+            type="button"
+          >
             Continue with Google
           </button>
         )}
         {appleEnabled && (
-          <button className={ghostClass} disabled={pending} onClick={() => void social("apple")} type="button">
+          <button
+            className={ghostClass}
+            disabled={pending}
+            onClick={() => void social("apple")}
+            type="button"
+          >
             Continue with Apple
           </button>
         )}
@@ -148,7 +171,10 @@ export function LoginForm({
         }}
       >
         <div className="space-y-1.5">
-          <label className="block text-center text-xs font-medium uppercase tracking-wide text-mute" htmlFor="login-otp">
+          <label
+            className="block text-center text-xs font-medium uppercase tracking-wide text-mute"
+            htmlFor="login-otp"
+          >
             One-time code
           </label>
           <InputOTP
@@ -181,11 +207,18 @@ export function LoginForm({
           </p>
         </div>
         {error && (
-          <p className="rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-200" role="alert">
+          <p
+            className="rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-200"
+            role="alert"
+          >
             {error}
           </p>
         )}
-        <button className={primaryClass} disabled={pending || otp.length !== OTP_LENGTH} type="submit">
+        <button
+          className={primaryClass}
+          disabled={pending || otp.length !== OTP_LENGTH}
+          type="submit"
+        >
           {pending ? "Verifying…" : "Verify and sign in"}
         </button>
         <button
@@ -221,7 +254,10 @@ export function LoginForm({
         />
       </label>
       {error && (
-        <p className="rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-200" role="alert">
+        <p
+          className="rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-200"
+          role="alert"
+        >
           {error}
         </p>
       )}

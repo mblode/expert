@@ -1,6 +1,6 @@
 # Engineering audit
 
-Date: 2026-09-02. Scope: the whole repository — `apps/hub`, `apps/web`, `apps/eve`, `apps/desk`, `deploy/`, `scripts/`, `packages/`, `api/`, and the docs. `apps/ios` was read for its API surface only; it was not built.
+Date: 2026-09-02. Scope: the whole repository, `apps/hub`, `apps/web`, `apps/eve`, `apps/desk`, `deploy/`, `scripts/`, `packages/`, `api/`, and the docs. `apps/ios` was read for its API surface only; it was not built.
 
 Method: every source file was read in full. Three independent reviews (hub, web, guest/deploy) were cross-checked against each other and against `api/DESIGN.md`. Baseline before changes: typecheck, 175 hub tests, layer lint, proto check and the Next build all passed. This document records what was found, what this pass fixed, and what is still open, ranked.
 
@@ -18,17 +18,17 @@ Categories 1 and 2 are fixed in this pass. Category 3 is partly mitigated (email
 
 ### Removed
 
-| Removed | Why |
-|---|---|
-| `apps/hub/src/service/chat.ts`, `handler/chat.ts`, `/chat` route and tests | A second agent harness (OpenAI tool loop) that no client called. Eve is the harness. |
-| `apps/hub/src/host/edge.ts`, `edge-cli.ts`, `deploy/fly/edge-entrypoint.sh`, `edge.test.ts` | The always-on edge / idle-suspend process. Not in `fly.toml`, never ran; its proxy could not carry WebSockets anyway. |
-| `apps/hub/src/service/adapters.ts` + test | OpenAI/Claude/Gemini action adapters with no route. The mapping rules stay in `api/RESEARCH.md`. |
-| `apps/hub/src/static/debug.html`, the `webDir` static-panel path, `COMPUTER_WEB_DIR` | The hub no longer serves a panel; the product web is Vercel. |
-| `api/types.ts` | A stale third copy of the types. `packages/shared/src/index.ts` is the one source. |
-| `apps/eve/bots/night/**`, `apps/eve/.vercelignore`, `@ai-sdk/openai` | A degraded copy of `main` with weaker safety instructions, built into the image; an ignore file for a package that is not a Vercel app; a dependency imported nowhere. |
-| `apps/web/components/pair-view.tsx`, `login-gate.tsx`, `hero-headline.tsx`, `app/app/page.tsx`, `vercel.json`, `loadSeat`/`saveSeat`/`screenSrc`/`defaultHubUrl`/`pair()` | Unreachable or one-line wrappers; a duplicate route. |
-| Unused exports: `verifyVncUpgrade`, `PixelRegistry.reuse/novncPort/rfbPort`, `withSeatToken`, `issueSeatToken`, `VoiceService.subscribe`, `asRequestId`, `PACKAGE`, `assertInBounds`, empty branches in `router.ts` and `computer.ts` | Dead. |
-| `plan.md`, `plan-notes.md` (moved to `docs/history/` with a banner) | Historical; contradicted the code on Next/Vercel/Fly, TigerVNC, workspaces, the shell approval gate. |
+| Removed                                                                                                                                                                                                                               | Why                                                                                                                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `apps/hub/src/service/chat.ts`, `handler/chat.ts`, `/chat` route and tests                                                                                                                                                            | A second agent harness (OpenAI tool loop) that no client called. Eve is the harness.                                                                                   |
+| `apps/hub/src/host/edge.ts`, `edge-cli.ts`, `deploy/fly/edge-entrypoint.sh`, `edge.test.ts`                                                                                                                                           | The always-on edge / idle-suspend process. Not in `fly.toml`, never ran; its proxy could not carry WebSockets anyway.                                                  |
+| `apps/hub/src/service/adapters.ts` + test                                                                                                                                                                                             | OpenAI/Claude/Gemini action adapters with no route. The mapping rules stay in `api/RESEARCH.md`.                                                                       |
+| `apps/hub/src/static/debug.html`, the `webDir` static-panel path, `COMPUTER_WEB_DIR`                                                                                                                                                  | The hub no longer serves a panel; the product web is Vercel.                                                                                                           |
+| `api/types.ts`                                                                                                                                                                                                                        | A stale third copy of the types. `packages/shared/src/index.ts` is the one source.                                                                                     |
+| `apps/eve/bots/night/**`, `apps/eve/.vercelignore`, `@ai-sdk/openai`                                                                                                                                                                  | A degraded copy of `main` with weaker safety instructions, built into the image; an ignore file for a package that is not a Vercel app; a dependency imported nowhere. |
+| `apps/web/components/pair-view.tsx`, `login-gate.tsx`, `hero-headline.tsx`, `app/app/page.tsx`, `vercel.json`, `loadSeat`/`saveSeat`/`screenSrc`/`defaultHubUrl`/`pair()`                                                             | Unreachable or one-line wrappers; a duplicate route.                                                                                                                   |
+| Unused exports: `verifyVncUpgrade`, `PixelRegistry.reuse/novncPort/rfbPort`, `withSeatToken`, `issueSeatToken`, `VoiceService.subscribe`, `asRequestId`, `PACKAGE`, `assertInBounds`, empty branches in `router.ts` and `computer.ts` | Dead.                                                                                                                                                                  |
+| `plan.md`, `plan-notes.md` (moved to `docs/history/` with a banner)                                                                                                                                                                   | Historical; contradicted the code on Next/Vercel/Fly, TigerVNC, workspaces, the shell approval gate.                                                                   |
 
 ### Fixed in the hub
 
@@ -73,13 +73,13 @@ Categories 1 and 2 are fixed in this pass. Category 3 is partly mitigated (email
 
 ## Open findings, ranked
 
-### P0 — product security
+### P0, product security
 
 1. **One computer for every account.** `apps/web/lib/computer-seat.ts` pairs every user with the single hub using the single setup code, and the hub treats every paired seat as the box owner (`CreateBot`, `DeleteBot`, clipboard read, `ProvideSecret`, the Eve thread). The marketing copy promises "your" computer. `AUTH_ALLOWED_EMAILS` makes a private deployment safe; a public one needs one machine per account (Fly Machine per user, or at least a seat token that cannot provision) before anyone else signs up. See the roadmap in `docs/GROK-BOT.md`.
 2. **Secrets on the Fly volume are readable by the model.** The roster (`bots.json`), `seats.json`, `eve-secret` and the minted `setup-code` live under `/workspace/.computer`, owned by `box`, and every `shell`/`read_file` runs as `box`. The scrubbed environment closes the `env` leak; the files remain. Fix: run the hub as its own UID owning `/workspace/.computer` at 0700, hand Eve its token through a per-bot 0400 file or an inherited fd, and require `COMPUTER_SETUP_CODE` as a Fly secret (the entrypoint now warns, not refuses).
 3. **No token revocation or expiry.** Seat tokens are permanent, appended to `seats.json` forever, and never revoked on sign-out (`apps/hub/src/handler/auth.ts`, `apps/web/app-shell.tsx`). `/api/computer/reconnect` lets any signed-in user mint more. Needed: `Seat.Revoke`, expiry on seat tokens, revoke on sign-out, and a bot-token rotate path.
 
-### P1 — correctness and product
+### P1, correctness and product
 
 4. **The voice is written but never read.** `Agent.SendMessage` writes occurrences into `/workspace/.bots/<id>/transcript.jsonl`, but neither the web client nor iOS reads `Seat.Occurrences`, answers a widget, or calls `ProvideSecret`; the web renders Eve's raw assistant text instead. So the "only `send_message` reaches the human" contract from `api/RESEARCH.md` is not what the product does, and there is no `AnswerWidget` RPC at all. Decide: render the occurrence log in the clients (Grok's behaviour) or drop the voice subsystem and use Eve's native input-request protocol, which the web already renders. Do not keep both.
 5. **Nothing supervises the children.** Eve processes are spawned detached and unref'd (`apps/hub/src/host/start-eves.ts`); if one dies, `/eve/v1` returns `DAEMON_DOWN` until the Machine restarts. `tini` reaps but does not restart. `/healthz` returns `ok` unconditionally, so a Machine with no X server is "healthy". Needed: a supervisor (s6 or a small restart loop with backoff) and a health check that probes the primary display and each Eve port.
@@ -89,7 +89,7 @@ Categories 1 and 2 are fixed in this pass. Category 3 is partly mitigated (email
 9. **Cross-Bot transcript forgery.** Any Bot can `write_file` another Bot's `transcript.jsonl`, and `VoiceService.restore` trusts every line, including `turnEnded`. Accepted by "Bots are not security boundaries", but the transcript is described as the human's record; it should at least be validated on load.
 10. **`Pair` is still unauthenticated with CORS `*`.** The lockout stops online guessing; a body-cap exists; but a permanent owner credential from one correct guess is a lot. Tie the setup code to a one-time use (rotate after pairing) or make Pair a web-server-only path.
 
-### P2 — quality
+### P2, quality
 
 11. **The proto is not the wire.** `computer.proto` uses `oneof` actions, `bytes` images and enum states; the hub speaks a hand-rolled JSON shape (`{type:"click"}`, `screenshot_b64`, `"AGENT"`). A buf-generated client cannot talk to this hub; the Swift codegen is committed and unused. Either generate real Connect handlers from the proto or demote it to documentation and stop generating.
 12. **`customSession` runs the hub Pair inside every session read** (`apps/web/lib/auth.ts`). A new user's first `/login` render waits up to 15 s on the hub. Move pairing to an explicit, cached endpoint.
@@ -102,6 +102,15 @@ Categories 1 and 2 are fixed in this pass. Category 3 is partly mitigated (email
 19. **Mobile layout** of `apps/web`: a fixed 20 rem chat row under the desk, `h-full` that ignores the keyboard, no tab switcher, pinch zooms the page.
 20. **`Reveal` renders children at `opacity: 0` on the server** and ignores `prefers-reduced-motion`.
 
+## Second pass: house standards and AX
+
+The repository was then measured against the conventions in [mblode/agent-skills](https://github.com/mblode/agent-skills) (`agents-md`, `codebase-architecture` Harden mode, `readme-creator`, `pr-creator`, `tidy`, `ax-audit`).
+
+- **Instruction files.** A root `AGENTS.md` (commands, contract, gotchas from this audit, conventions) with `CLAUDE.md` as an `@AGENTS.md` pointer. The README was rewritten for the reader deciding whether to use the project; contributor content moved to `AGENTS.md`.
+- **Guardrails.** Ultracite (oxlint + oxfmt) with a lefthook pre-commit hook, and knip for dead code and unused dependencies, both in `npm run lint` and therefore in CI. Every source file was formatted once. The oxlint preset is adopted with an explicit, commented exemption list in `oxlint.config.ts` (enforcement ladder rung 3: style rules the existing code takes the other way); correctness rules are on. Both checks were proven to fail on a planted violation and pass after its removal. knip found a further 19 dead exports and 2 unused dependencies on the first run; all removed.
+- **Tidy pass over the branch diff.** Applied: one `RequestCache` for the `request_id` idiom the hub had twice; a render loop in the held VNC URL when the browser judged an incoming grant stale; a rethrow-and-swallow pattern in the input hook; two "is production" predicates collapsed into one; `dirname` over hand-rolled slicing; per-request Eve URL resolution without rebuilding a map; the compose entrypoint no longer shipped into the Fly image; an Eve base port named once in the CLI; every em dash removed from the prose this branch wrote.
+- **AX audit** (27 rules; verdict NOT READY, 4 blockers, 7 fix-this-sprint). The blockers are the P0/P1 items above seen from the user's side: the hub's policy gate ships empty and turns `ask` into a denial the model is asked to honour rather than a question a human answers; the daily routine ran with the shell gate removed and a prompt inviting unattended fixes (now changed: scheduled runs read and report, and a person approves anything else); the web client cannot answer a `widget` or `secret_request`, so after one of them a Bot's next `send_message` is `CONFLICT` until an iOS client answers; nothing discloses or revokes what the agent can reach (retained browser logins, provided secrets, an attached MCP server). Sprint items: the approval card shows 40 characters of `argv` (now the full input), `focusHint` runs after the click rather than before a `type` into a password field, Stop does not abort an in-flight hub batch, the agent's notes have no view, and Eve `reasoning` parts were dropped on the floor (now rendered). The trust question the audit leaves for research: do owners want per-action approval cards for typing into password and confirm dialogs, or is the live screen plus take-the-seat enough control?
+
 ## Verification
 
-After the changes: `npm run check` (typecheck for six workspaces, layer lint, oxlint, 163 hub tests, proto check) passes, and `next build` completes with no warnings other than Better Auth's base-URL notice at build time. The Fly and desk images and the desk smoke test were not built here (no Docker daemon in this environment); CI does that.
+After the changes: `npm run check` (typecheck for six workspaces, layer lint, `ultracite check`, knip, 166 hub tests, proto check) passes, and `next build` completes with no warnings other than Better Auth's base-URL notice at build time. The Fly and desk images and the desk smoke test were not built here (no Docker daemon in this environment); CI does that.

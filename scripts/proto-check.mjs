@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * proto:check — api/computer.proto is the source of truth.
+ * proto:check: api/computer.proto is the source of truth.
  * 1. packages/proto/computer.proto stays a byte-identical copy
  * 2. buf lint
  * 3. buf generate
@@ -26,11 +26,13 @@ const b = readFileSync(copy);
 const ha = createHash("sha256").update(a).digest("hex");
 const hb = createHash("sha256").update(b).digest("hex");
 if (ha !== hb) {
-  console.error("proto:check: packages/proto/computer.proto is not identical to api/computer.proto");
+  console.error(
+    "proto:check: packages/proto/computer.proto is not identical to api/computer.proto",
+  );
   process.exit(1);
 }
 
-const spec = JSON.parse(readFileSync(resolve(root, "api/spec.json"), "utf8"));
+const spec = JSON.parse(readFileSync(resolve(root, "api/spec.json"), "utf-8"));
 if (spec.id !== "computer.v1") {
   console.error("proto:check: spec.json id must be computer.v1");
   process.exit(1);
@@ -46,15 +48,19 @@ run("npx buf lint");
 run("npx buf generate");
 
 // Against HEAD, so staged-but-uncommitted drift is caught too.
-const unstaged = execSync("git diff HEAD -- packages/proto/gen", { cwd: root, encoding: "utf8" });
+const unstaged = execSync("git diff HEAD -- packages/proto/gen", { cwd: root, encoding: "utf-8" });
 const untracked = execSync("git ls-files --others --exclude-standard -- packages/proto/gen", {
   cwd: root,
-  encoding: "utf8",
+  encoding: "utf-8",
 });
 if (unstaged.trim() || untracked.trim()) {
-  if (unstaged.trim()) process.stdout.write(unstaged);
-  if (untracked.trim()) console.error("untracked:\n" + untracked);
-  console.error("proto:check: packages/proto/gen is stale — run npm run proto:gen and commit");
+  if (unstaged.trim()) {
+    process.stdout.write(unstaged);
+  }
+  if (untracked.trim()) {
+    console.error(`untracked:\n${untracked}`);
+  }
+  console.error("proto:check: packages/proto/gen is stale, run npm run proto:gen and commit");
   process.exit(1);
 }
 

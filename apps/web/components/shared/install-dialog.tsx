@@ -5,10 +5,13 @@ import Link from "next/link";
 
 import { siteConfig } from "@/lib/config";
 
+/** The trigger is the button itself: `children` is its label, `className` its look. */
 export function InstallDialog({
   children,
+  className,
 }: {
   children: React.ReactNode;
+  className?: string;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -18,9 +21,13 @@ export function InstallDialog({
   const close = useCallback(() => setOpen(false), []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      return;
+    }
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
+      if (event.key === "Escape") {
+        close();
+      }
     };
     document.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
@@ -44,9 +51,9 @@ export function InstallDialog({
 
   return (
     <>
-      <span className="inline-flex" onClick={() => setOpen(true)}>
+      <button className={className} onClick={() => setOpen(true)} type="button">
         {children}
-      </span>
+      </button>
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button
@@ -55,11 +62,11 @@ export function InstallDialog({
             onClick={close}
             type="button"
           />
-          <div
+          <dialog
             aria-labelledby={titleId}
             aria-modal="true"
-            className="relative z-10 grid w-full max-w-lg gap-4 rounded-2xl border border-white/10 bg-background p-6 shadow-lg"
-            role="dialog"
+            className="relative z-10 grid w-full max-w-lg gap-4 rounded-2xl border border-white/10 bg-background p-6 text-foreground shadow-lg"
+            open
           >
             <div className="flex flex-col gap-2 text-center sm:text-left">
               <h2 className="font-display text-2xl font-light" id={titleId}>
@@ -67,7 +74,7 @@ export function InstallDialog({
               </h2>
               <p className="text-sm text-muted-foreground">
                 Paste this command into your terminal. Works with Claude, Codex, OpenCode, and
-                Cursor. Humans sign in at hello.expert — that is install.
+                Cursor. Humans sign in at hello.expert, that is install.
               </p>
             </div>
             <code className="flex min-w-0 items-center justify-between gap-2 rounded-lg bg-muted px-4 py-3 font-mono text-sm">
@@ -91,12 +98,7 @@ export function InstallDialog({
             >
               Already have an account? Sign in
             </Link>
-            <button
-              className="sr-only"
-              onClick={close}
-              ref={closeRef}
-              type="button"
-            >
+            <button className="sr-only" onClick={close} ref={closeRef} type="button">
               Close
             </button>
             <button
@@ -107,7 +109,7 @@ export function InstallDialog({
             >
               ×
             </button>
-          </div>
+          </dialog>
         </div>
       )}
     </>

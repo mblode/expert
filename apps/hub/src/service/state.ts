@@ -7,7 +7,7 @@ import type { Occurrence } from "./voice.ts";
  *
  * **Where.** Grok Bot keeps this at `/home/box/sand-data/agents/<id>/`. We
  * deliberately do not. `$HOME` is not on a volume here, so `sand-data` would
- * be erased by the next rebuild — the exact row the README's "What survives"
+ * be erased by the next rebuild: the exact row the README's "What survives"
  * table calls out. `/workspace` survives a rebuild, and
  * `/workspace/.window-assignments.json` already sets the precedent for box
  * state living there, for the same reason: a rebuild must not cost a Bot its
@@ -16,7 +16,7 @@ import type { Occurrence } from "./voice.ts";
  * **What is here and what is not.** Profile, memory and transcript are on the
  * box. The Bot's token never is. `/workspace` is shared by every Bot and read
  * by every agent on the machine, so a per-Bot directory is *organisation, not
- * isolation* — one `box` user, no boundary — and everything written here is
+ * isolation*, one `box` user, no boundary, and everything written here is
  * readable by every other Bot. Identity and credentials stay host-side in
  * `data/bots.json` (mode 0600); the box only ever sees `sha256(token)`, and
  * only in the window claim.
@@ -24,27 +24,27 @@ import type { Occurrence } from "./voice.ts";
  * Grok also keeps `settings.json` and `automations/` here. We have neither
  * feature, so neither file: an empty stub is not a contract.
  */
-export const BOX_STATE_ROOT = "/workspace/.bots";
+const BOX_STATE_ROOT = "/workspace/.bots";
 
 /** Grok's profile fields, snake_cased like the rest of our on-box JSON. */
-export type BotProfile = {
+export interface BotProfile {
   id: string;
   name: string;
   description: string;
   title: string;
   avatar_shape: string;
   avatar_color: string;
-};
+}
 
-export type MemoryKind = "note" | "episode";
+type MemoryKind = "note" | "episode";
 
-export type MemoryEntry = {
-  /** sha1 of the normalised content — the same fact written twice is one entry. */
+export interface MemoryEntry {
+  /** sha1 of the normalised content: the same fact written twice is one entry. */
   id: string;
   date: string;
   kind: MemoryKind;
   text: string;
-};
+}
 
 const AVATAR_SHAPES = ["circle", "square", "hexagon", "diamond"] as const;
 const AVATAR_COLORS = ["#e5484d", "#f76b15", "#f5d90a", "#46a758", "#0091ff", "#8e4ec6"] as const;
@@ -64,13 +64,13 @@ const MEMORY_LINE = /^-\s+\((\d{4}-\d{2}-\d{2})\)\s+(?:\[(note|episode)\]\s*)?(\
  * consider two lines "the same": case and whitespace only.
  */
 export function memoryId(text: string): string {
-  const normalised = text.toLowerCase().replace(/\s+/g, " ").trim();
+  const normalised = text.toLowerCase().replaceAll(/\s+/g, " ").trim();
   return createHash("sha1").update(normalised).digest("hex").slice(0, 16);
 }
 
 /**
  * Read side of the memory contract. The agent writes these lines itself with
- * `write_file` — it already has the tool, so there is no second door — and
+ * `write_file`, it already has the tool, so there is no second door, and
  * this enforces the shape on the way back in: anything that is not a fact
  * line (the header, a stray note) is ignored, over-long lines are truncated,
  * and a repeated fact appears once.
@@ -80,12 +80,16 @@ export function parseMemory(markdown: string): MemoryEntry[] {
   const out: MemoryEntry[] = [];
   for (const line of markdown.split("\n")) {
     const m = MEMORY_LINE.exec(line.trim());
-    if (!m) continue;
+    if (!m) {
+      continue;
+    }
     const text = m[3]!.trim().slice(0, MEMORY_MAX_CHARS);
     const id = memoryId(text);
-    if (seen.has(id)) continue;
+    if (seen.has(id)) {
+      continue;
+    }
     seen.add(id);
-    out.push({ id, date: m[1]!, kind: (m[2] as MemoryKind) ?? "note", text });
+    out.push({ date: m[1]!, id, kind: (m[2] as MemoryKind) ?? "note", text });
   }
   return out;
 }
@@ -99,11 +103,11 @@ What you want to still know next time. One fact per line, oldest first:
 - (YYYY-MM-DD) [episode] something that happened
 
 Keep a line under ${MEMORY_MAX_CHARS} characters. Writing a fact you already
-wrote changes nothing — an entry is identified by its own text.
+wrote changes nothing, an entry is identified by its own text.
 `;
 
 export class BotState {
-  /** `/workspace/.bots/<id>` — this Bot's directory on the box. */
+  /** `/workspace/.bots/<id>`: this Bot's directory on the box. */
   readonly dir: string;
 
   constructor(
@@ -133,7 +137,10 @@ export class BotState {
    */
   async init(): Promise<void> {
     if (!(await this.read(this.profilePath))) {
-      await this.desk.writeFile(this.profilePath, JSON.stringify(defaultProfile(this.botId), null, 2) + "\n");
+      await this.desk.writeFile(
+        this.profilePath,
+        `${JSON.stringify(defaultProfile(this.botId), null, 2)}\n`,
+      );
     }
     if (!(await this.read(this.memoryPath))) {
       await this.desk.writeFile(this.memoryPath, MEMORY_HEADER);
@@ -143,18 +150,20 @@ export class BotState {
   async profile(): Promise<BotProfile> {
     const raw = await this.read(this.profilePath);
     const fallback = defaultProfile(this.botId);
-    if (!raw) return fallback;
+    if (!raw) {
+      return fallback;
+    }
     try {
       // The agent can edit this file, so treat every field as untrusted and
       // fall back per-field: a hand-broken profile must not break the prompt.
       const o = JSON.parse(raw) as Partial<BotProfile>;
       return {
+        avatar_color: str(o.avatar_color) ?? fallback.avatar_color,
+        avatar_shape: str(o.avatar_shape) ?? fallback.avatar_shape,
+        description: str(o.description) ?? fallback.description,
         id: this.botId,
         name: str(o.name) ?? fallback.name,
-        description: str(o.description) ?? fallback.description,
         title: str(o.title) ?? fallback.title,
-        avatar_shape: str(o.avatar_shape) ?? fallback.avatar_shape,
-        avatar_color: str(o.avatar_color) ?? fallback.avatar_color,
       };
     } catch {
       return fallback;
@@ -167,7 +176,7 @@ export class BotState {
 
   /** One occurrence, one line. Append so a write cannot lose the log before it. */
   async appendOccurrence(o: Occurrence): Promise<void> {
-    await this.desk.appendFile(this.transcriptPath, JSON.stringify(o) + "\n");
+    await this.desk.appendFile(this.transcriptPath, `${JSON.stringify(o)}\n`);
   }
 
   /**
@@ -177,10 +186,14 @@ export class BotState {
    */
   async loadTranscript(): Promise<Occurrence[]> {
     const raw = await this.read(this.transcriptPath);
-    if (!raw) return [];
+    if (!raw) {
+      return [];
+    }
     const out: Occurrence[] = [];
     for (const line of raw.split("\n")) {
-      if (!line.trim()) continue;
+      if (!line.trim()) {
+        continue;
+      }
       try {
         out.push(JSON.parse(line) as Occurrence);
       } catch {
@@ -199,9 +212,11 @@ export class BotState {
   async prompt(): Promise<string> {
     const p = await this.profile();
     const lines = [`You are ${p.name}${p.title ? `, ${p.title}` : ""}.`];
-    if (p.description) lines.push(p.description);
+    if (p.description) {
+      lines.push(p.description);
+    }
     lines.push(
-      `Your own files are in ${this.dir}. ${this.memoryPath} is your memory — read it, and write_file a new "- (date) [note] fact" line when something is worth keeping.`,
+      `Your own files are in ${this.dir}. ${this.memoryPath} is your memory, read it, and write_file a new "- (date) [note] fact" line when something is worth keeping.`,
     );
     const entries = await this.memory();
     if (entries.length) {
@@ -213,7 +228,7 @@ export class BotState {
     return lines.join("\n");
   }
 
-  /** Missing file, unreadable box — both are "nothing there yet" to every caller here. */
+  /** Missing file, unreadable box: both are "nothing there yet" to every caller here. */
   private async read(path: string): Promise<string | undefined> {
     try {
       return await this.desk.readFile(path);
@@ -226,12 +241,12 @@ export class BotState {
 function defaultProfile(id: string): BotProfile {
   const h = createHash("sha1").update(id).digest();
   return {
+    avatar_color: AVATAR_COLORS[h[1]! % AVATAR_COLORS.length]!,
+    avatar_shape: AVATAR_SHAPES[h[0]! % AVATAR_SHAPES.length]!,
+    description: "",
     id,
     name: id,
-    description: "",
     title: "",
-    avatar_shape: AVATAR_SHAPES[h[0]! % AVATAR_SHAPES.length]!,
-    avatar_color: AVATAR_COLORS[h[1]! % AVATAR_COLORS.length]!,
   };
 }
 

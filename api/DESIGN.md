@@ -10,10 +10,10 @@ types live in `packages/shared/src/index.ts`.
 
 ## Audiences
 
-| Who | Sees | Never sees |
-|---|---|---|
-| Model | `send_message`, `computer`, `shell`, `read_file`, `write_file` | pairing, VNC URL, clipboard, trackpad, "I'm done" |
-| Human client | pair, `vnc_url`, pointer, clipboard, presence, the thread | action verbs, file paths, shell |
+| Who          | Sees                                                           | Never sees                                        |
+| ------------ | -------------------------------------------------------------- | ------------------------------------------------- |
+| Model        | `send_message`, `computer`, `shell`, `read_file`, `write_file` | pairing, VNC URL, clipboard, trackpad, "I'm done" |
+| Human client | pair, `vnc_url`, pointer, clipboard, presence, the thread      | action verbs, file paths, shell                   |
 
 Clipboard is not a model tool. A page that copies a prompt into the
 clipboard would otherwise become an injection path.
@@ -70,7 +70,7 @@ bearer-authenticated and nothing reads cookies.
 
 ## Screens
 
-One shared box; each Bot owns one **screen** — a window index that is
+One shared box; each Bot owns one **screen**, a window index that is
 an X display number. Primary is `:1`; forks are `:2`–`:8`. This is
 Grok's shape: the machine is shared, the screen is not.
 
@@ -78,7 +78,7 @@ Grok's shape: the machine is shared, the screen is not.
   bearer token identifies its Bot, and the hub routes to that Bot's
   screen.
 - **Seat calls take an additive `display`** (absent = primary). Any
-  paired seat token may view or take any screen — one human, many
+  paired seat token may view or take any screen, one human, many
   Bots. The seat FSM below runs **per screen**; `SEAT_HELD` on one
   screen says nothing about another.
 - `Status` returns `screens: { bot_id, display, state, vnc_url }[]`
@@ -110,11 +110,11 @@ Grok's shape: the machine is shared, the screen is not.
      └── SetPresence(true): a human takes the seat, unasked
 ```
 
-| State | `computer` / `shell` / files | Human pointer |
-|---|---|---|
-| `AGENT` | runs | rejected `SEAT_HELD` |
-| `WAITING` | rejected `SEAT_HELD` | first contact → `HUMAN` |
-| `HUMAN` | rejected `SEAT_HELD` | runs |
+| State     | `computer` / `shell` / files | Human pointer           |
+| --------- | ---------------------------- | ----------------------- |
+| `AGENT`   | runs                         | rejected `SEAT_HELD`    |
+| `WAITING` | rejected `SEAT_HELD`         | first contact → `HUMAN` |
+| `HUMAN`   | rejected `SEAT_HELD`         | runs                    |
 
 A human never has to wait to be asked. `SetPresence({ present: true })`
 takes the seat from `AGENT`; the agent's next call gets `SEAT_HELD`, which
@@ -136,17 +136,17 @@ Plain model text is a private scratchpad. The human sees exactly the
 occurrences `Agent.SendMessage` writes into the Bot's thread, and
 nothing else. Three kinds:
 
-| `kind` | Human sees | Ends the turn? |
-|---|---|---|
-| `text` | a bubble, optional base64 PNG `images` | no |
-| `widget` | `prompt` and 1–6 `options` | **yes** |
-| `secret_request` | `prompt` and a masked field labelled `label` | **yes** |
+| `kind`           | Human sees                                   | Ends the turn? |
+| ---------------- | -------------------------------------------- | -------------- |
+| `text`           | a bubble, optional base64 PNG `images`       | no             |
+| `widget`         | `prompt` and 1–6 `options`                   | **yes**        |
+| `secret_request` | `prompt` and a masked field labelled `label` | **yes**        |
 
 A turn that ended waits on the human; a second send is `CONFLICT`. The
 turn re-opens when the human speaks: a message, a widget answer, or a
 delivered secret. `Seat.ProvideSecret { occurrence_id, value }` puts the
-value on the box clipboard and nowhere else — not the thread, not the
-response, not the model's context — and clears it after two minutes if
+value on the box clipboard and nowhere else, not the thread, not the
+response, not the model's context, and clears it after two minutes if
 it is still there. It works once per request.
 
 `Seat.Occurrences { cursor?, limit? }` pages the thread oldest-first;
@@ -171,19 +171,19 @@ ComputerRequest {
 
 A closed union. Eleven members. Not eleven MCP tools.
 
-| Action | Fields | Notes |
-|---|---|---|
-| `screenshot` | | Capture now. |
-| `click` | `x`, `y`, `button?` | `left` default. `right`, `middle`, `back`, `forward`. |
-| `double_click` | `x`, `y`, `button?` | |
-| `scroll` | `x`, `y`, `dx`, `dy` | Wheel ticks at a point, each in −20..20. |
-| `keypress` | `keys` | Chord of 1–5, e.g. `["ctrl","c"]`. |
-| `type` | `text` | Unicode, 1–4000 chars. Pasted via the clipboard, so it overwrites it. Not an editor API. |
-| `move` | `x`, `y` | Pointer only. |
-| `drag` | `path: {x,y}[]` | 2–32 points. Down at first, up at last. |
-| `wait` | `ms` | 1–8000. |
-| `zoom` | `x`, `y`, `w`, `h` | Region at native pixels. See coordinates. |
-| `request_takeover` | | Seat → `WAITING`. Terminal in the batch. |
+| Action             | Fields               | Notes                                                                                    |
+| ------------------ | -------------------- | ---------------------------------------------------------------------------------------- |
+| `screenshot`       |                      | Capture now.                                                                             |
+| `click`            | `x`, `y`, `button?`  | `left` default. `right`, `middle`, `back`, `forward`.                                    |
+| `double_click`     | `x`, `y`, `button?`  |                                                                                          |
+| `scroll`           | `x`, `y`, `dx`, `dy` | Wheel ticks at a point, each in −20..20.                                                 |
+| `keypress`         | `keys`               | Chord of 1–5, e.g. `["ctrl","c"]`.                                                       |
+| `type`             | `text`               | Unicode, 1–4000 chars. Pasted via the clipboard, so it overwrites it. Not an editor API. |
+| `move`             | `x`, `y`             | Pointer only.                                                                            |
+| `drag`             | `path: {x,y}[]`      | 2–32 points. Down at first, up at last.                                                  |
+| `wait`             | `ms`                 | 1–8000.                                                                                  |
+| `zoom`             | `x`, `y`, `w`, `h`   | Region at native pixels. See coordinates.                                                |
+| `request_takeover` |                      | Seat → `WAITING`. Terminal in the batch.                                                 |
 
 No `navigate`. Chromium is an app; the address bar is pixels and keys.
 No `form_input`. That is a browser product, not a desktop.
@@ -192,12 +192,12 @@ No `form_input`. That is a browser product, not a desktop.
 
 1. Validate the whole batch first. Any action outside its limits is a
    `VALIDATION` (or `OUT_OF_BOUNDS`) error for the whole request, and
-   nothing runs — so the id is free to reuse with a fixed body.
+   nothing runs, so the id is free to reuse with a fixed body.
 2. Run actions in order.
 3. On the first failure, do not run the rest. Mark them `skipped`.
 4. Return one result per requested action, same order.
 5. After the batch, attach one screenshot of the display, unless the
-   last *executed* action was `screenshot` or `zoom` (those results
+   last _executed_ action was `screenshot` or `zoom` (those results
    already carry the image). A batch that ran nothing still gets one.
 6. `request_takeover` is terminal. Anything after it is `skipped`.
 
@@ -240,7 +240,7 @@ pending_checks?: {
 The hub emits `credential` when a password field is focused, and
 `destructive` when a known confirm dialog is frontmost or a policy rule
 answered `ask`. The model calls `request_takeover`. The human uses the
-seat. There is no model-side acknowledge RPC — the seat *is* the
+seat. There is no model-side acknowledge RPC, the seat _is_ the
 acknowledge.
 
 Policy is hub-side (`data/policy.json`): a rule can `allow`, `ask` or
@@ -279,19 +279,19 @@ One envelope everywhere:
 { "error": { "code": "SEAT_HELD", "message": "human has the seat" } }
 ```
 
-| Code | HTTP | When |
-|---|---|---|
-| `UNAUTHENTICATED` | 401 | missing or bad bearer; bad or locked-out setup code |
-| `SEAT_HELD` | 409 | caller does not own the seat |
-| `OUT_OF_BOUNDS` | 400 | coordinate outside 1280×800 |
-| `PATH_REJECTED` | 400 | path escapes `/workspace` |
-| `DAEMON_DOWN` | 503 | desk exec or input is dead |
-| `VALIDATION` | 400 | bad request |
-| `CONFLICT` | 409 | `request_id` reused with a different body; turn already ended; secret already provided |
-| `DENIED` | 403 | a shell call refused by policy |
+| Code              | HTTP | When                                                                                   |
+| ----------------- | ---- | -------------------------------------------------------------------------------------- |
+| `UNAUTHENTICATED` | 401  | missing or bad bearer; bad or locked-out setup code                                    |
+| `SEAT_HELD`       | 409  | caller does not own the seat                                                           |
+| `OUT_OF_BOUNDS`   | 400  | coordinate outside 1280×800                                                            |
+| `PATH_REJECTED`   | 400  | path escapes `/workspace`                                                              |
+| `DAEMON_DOWN`     | 503  | desk exec or input is dead                                                             |
+| `VALIDATION`      | 400  | bad request                                                                            |
+| `CONFLICT`        | 409  | `request_id` reused with a different body; turn already ended; secret already provided |
+| `DENIED`          | 403  | a shell call refused by policy                                                         |
 
 `DAEMON_DOWN` carries `reason`, `phase` and `retryable` beside
-`code`/`message` — the first-party `workspace_unavailable` shape,
+`code`/`message`, the first-party `workspace_unavailable` shape,
 restricted to what this box can tell apart. `retryable` is the client
 contract: false only when no route to the box exists.
 
@@ -306,11 +306,11 @@ Seat calls take an additive `display` to pick a screen (see Screens).
 `Pointer` is the trackpad: `{ type: "move", dx, dy, grab? }`,
 `{ type: "click", button? }` at the current pointer, or
 `{ type: "scroll", dx, dy }` in wheel notches (−20..20). It does not
-take screenshot coordinates — the human is looking at the stream.
+take screenshot coordinates, the human is looking at the stream.
 `Type` is the keyboard: unicode into the focused field, 1–4000 chars.
 `ClipboardGet` / `ClipboardSet` are UTF-8 only.
 `SetPresence(false)` is `I'm done`.
-`CreateBot` / `DeleteBot` provision Bots (see Screens) — the phone is
+`CreateBot` / `DeleteBot` provision Bots (see Screens), the phone is
 the box owner, so provisioning lives on the seat, never on the model.
 
 The VNC stream is view-only at the X server. The client never sends

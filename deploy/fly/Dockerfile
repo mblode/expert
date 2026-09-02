@@ -32,7 +32,7 @@ RUN useradd --create-home --uid 1000 --shell /bin/bash box \
     && mkdir -p /workspace /home/box/.config/chromium /opt/computer \
     && chown -R box:box /workspace /home/box /opt/computer
 
-COPY --chmod=755 apps/desk/bin/ /usr/local/bin/
+COPY --chmod=755 apps/desk/bin/desk-shot apps/desk/bin/desk-up apps/desk/bin/start-window apps/desk/bin/stop-window /usr/local/bin/
 COPY --chmod=755 deploy/fly/guest-entrypoint.sh /usr/local/bin/guest-entrypoint.sh
 
 # Install and build as `box`, the user that runs everything, so the tree is
@@ -46,6 +46,8 @@ COPY --chown=box:box apps/eve/package.json apps/eve/
 COPY --chown=box:box apps/eve/bots/main/package.json apps/eve/bots/main/
 COPY --chown=box:box packages/shared/package.json packages/shared/
 COPY --chown=box:box packages/proto/package.json packages/proto/
+# LEFTHOOK=0: no git hooks in an image, so `prepare` is a no-op here.
+ENV LEFTHOOK=0
 RUN npm ci --no-audit --no-fund
 
 COPY --chown=box:box apps/hub apps/hub

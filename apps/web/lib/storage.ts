@@ -2,7 +2,7 @@ import type { ClientSessionState } from "eve/client";
 
 /**
  * What survives a reload: where each Bot's conversation got to. The seat token
- * itself is never stored here — it rides on the auth session.
+ * itself is never stored here: it rides on the auth session.
  */
 
 const SESSION_KEY = "computer.web.session";
@@ -10,7 +10,9 @@ const SESSION_KEY = "computer.web.session";
 function read<T>(key: string, valid: (value: unknown) => value is T): T | undefined {
   try {
     const raw = window.localStorage.getItem(key);
-    if (!raw) return undefined;
+    if (!raw) {
+      return undefined;
+    }
     const parsed: unknown = JSON.parse(raw);
     return valid(parsed) ? parsed : undefined;
   } catch {
@@ -20,8 +22,11 @@ function read<T>(key: string, valid: (value: unknown) => value is T): T | undefi
 
 function write(key: string, value: unknown): void {
   try {
-    if (value === undefined) window.localStorage.removeItem(key);
-    else window.localStorage.setItem(key, JSON.stringify(value));
+    if (value === undefined) {
+      window.localStorage.removeItem(key);
+    } else {
+      window.localStorage.setItem(key, JSON.stringify(value));
+    }
   } catch {
     // Private browsing or a full quota: the app still works, it just forgets.
   }
@@ -53,9 +58,13 @@ export function clearSessions(): void {
     const keys: string[] = [];
     for (let i = 0; i < window.localStorage.length; i++) {
       const key = window.localStorage.key(i);
-      if (key?.startsWith(prefix)) keys.push(key);
+      if (key?.startsWith(prefix)) {
+        keys.push(key);
+      }
     }
-    for (const key of keys) window.localStorage.removeItem(key);
+    for (const key of keys) {
+      window.localStorage.removeItem(key);
+    }
   } catch {
     // Same as write(): private browsing or a full quota.
   }

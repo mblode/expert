@@ -5,7 +5,7 @@ import { ConnectRouter } from "../src/handler/router.ts";
 
 describe("router", () => {
   it("assertAllPolicies fails if a Connect method is missing", () => {
-    const auth = new AuthRegistry({ setupCode: "s", agentTokens: () => [] });
+    const auth = new AuthRegistry({ agentTokens: () => [], setupCode: "s" });
     const router = new ConnectRouter(auth);
     expect(() => router.assertAllPolicies()).toThrow(/auth policy/);
     for (const path of ALL_METHODS) {
@@ -25,7 +25,7 @@ describe("router", () => {
   });
 
   it("rpc() throws when policy is omitted", () => {
-    const auth = new AuthRegistry({ setupCode: "s", agentTokens: () => [] });
+    const auth = new AuthRegistry({ agentTokens: () => [], setupCode: "s" });
     const router = new ConnectRouter(auth);
     expect(() =>
       router.rpc("/computer.v1.Agent/Spec", undefined as never, async () => ({})),

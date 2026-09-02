@@ -1,7 +1,6 @@
 {
   "name": "computer",
   "private": true,
-  "type": "module",
   "workspaces": [
     "packages/shared",
     "packages/proto",
@@ -10,6 +9,7 @@
     "apps/eve",
     "apps/eve/bots/main"
   ],
+  "type": "module",
   "scripts": {
     "up": "node scripts/computer.mjs up",
     "qr": "node scripts/computer.mjs qr",
@@ -17,23 +17,29 @@
     "machine": "npm exec --workspace=apps/hub -- tsx src/host/machine-cli.ts",
     "proto:gen": "buf generate",
     "proto:check": "node scripts/proto-check.mjs",
-    "lint": "node scripts/lint-layers.mjs && oxlint",
+    "lint": "node scripts/lint-layers.mjs && ultracite check && knip",
+    "fix": "ultracite fix",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm test --workspace=apps/hub",
+    "check": "npm run typecheck && npm run lint && npm test && npm run proto:check",
     "hub": "npm run start --workspace=apps/hub",
     "eve": "npm run dev --workspace=@computer/eve-main",
     "web": "npm run dev --workspace=@computer/web",
-    "check": "npm run typecheck && npm run lint && npm test && npm run proto:check"
+    "prepare": "lefthook install"
+  },
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.57.2",
     "@bufbuild/protoc-gen-es": "^2.10.0",
-    "oxlint": "^1.81.0"
+    "knip": "^5.62.0",
+    "lefthook": "^2.0.0",
+    "oxfmt": "^0.35.0",
+    "oxlint": "^1.81.0",
+    "ultracite": "7.10.7"
   },
   "engines": {
     "node": "24.x"
-  },
-  "dependencies": {
-    "qrcode-terminal": "^0.12.0"
   }
 }

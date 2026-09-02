@@ -15,7 +15,9 @@ export const metadata: Metadata = {
 
 export default async function LoginPage() {
   const session = await getSessionCached();
-  if (session) redirect("/");
+  if (session) {
+    redirect("/");
+  }
 
   const social = socialProvidersAvailable();
 
@@ -27,7 +29,7 @@ export default async function LoginPage() {
           <div>
             <h1 className="font-display text-3xl font-light tracking-tight">Sign in</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              New or returning — email a code. The computer connects.
+              New or returning: email a code. The computer connects.
             </p>
           </div>
           <LoginForm appleEnabled={social.apple} googleEnabled={social.google} />

@@ -8,16 +8,24 @@ const saved = new Map<string, string | undefined>();
 
 function setMode(env: Record<string, string | undefined>): void {
   for (const k of KEYS) {
-    if (!saved.has(k)) saved.set(k, process.env[k]);
-    if (env[k] === undefined) delete process.env[k];
-    else process.env[k] = env[k];
+    if (!saved.has(k)) {
+      saved.set(k, process.env[k]);
+    }
+    if (env[k] === undefined) {
+      Reflect.deleteProperty(process.env, k);
+    } else {
+      process.env[k] = env[k];
+    }
   }
 }
 
 afterEach(() => {
   for (const [k, v] of saved) {
-    if (v === undefined) delete process.env[k];
-    else process.env[k] = v;
+    if (v === undefined) {
+      Reflect.deleteProperty(process.env, k);
+    } else {
+      process.env[k] = v;
+    }
   }
   saved.clear();
 });

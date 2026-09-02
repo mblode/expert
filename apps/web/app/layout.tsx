@@ -38,9 +38,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html className={`${glide.variable} ${emilioLight.variable} h-full`} lang="en">
       <body className="h-full">

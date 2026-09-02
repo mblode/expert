@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { asPixelX, asPixelY, asPoint, ComputerError, type Action } from "@computer/shared";
+import { asPixelX, asPixelY, asPoint, ComputerError } from "@computer/shared";
+import type { Action } from "@computer/shared";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { ComputerService } from "../src/service/computer.ts";
 import { SeatService } from "../src/service/seat.ts";
@@ -15,7 +16,7 @@ describe("ComputerService", () => {
     expect(r.results).toHaveLength(2);
     expect(r.results.every((x) => x.kind === "ok")).toBe(true);
     expect(r.screenshot_b64).toBeTruthy();
-    expect(r.display).toEqual({ width: 1280, height: 800, scale: 1 });
+    expect(r.display).toEqual({ height: 800, scale: 1, width: 1280 });
     expect(desk.log.filter((l) => l === "screenshot")).toHaveLength(1);
   });
 
@@ -28,7 +29,7 @@ describe("ComputerService", () => {
     expect((shot.results[0] as { image_b64?: string }).image_b64).toBeTruthy();
 
     const zoom = await computer.run("z1", [
-      { type: "zoom", x: asPixelX(0), y: asPixelY(0), w: 100, h: 80 },
+      { h: 80, type: "zoom", w: 100, x: asPixelX(0), y: asPixelY(0) },
     ]);
     expect(zoom.screenshot_b64).toBeUndefined();
     expect((zoom.results[0] as { image_b64?: string }).image_b64).toBeTruthy();
@@ -40,11 +41,11 @@ describe("ComputerService", () => {
     const computer = new ComputerService(desk, new SeatService());
     const r = await computer.run("fail1", [
       { type: "click", x: asPixelX(10), y: asPixelY(10) },
-      { type: "keypress", keys: ["boom"] },
-      { type: "type", text: "nope" },
+      { keys: ["boom"], type: "keypress" },
+      { text: "nope", type: "type" },
     ]);
     expect(r.results[0]?.kind).toBe("ok");
-    expect(r.results[1]).toMatchObject({ kind: "error", code: "DAEMON_DOWN" });
+    expect(r.results[1]).toMatchObject({ code: "DAEMON_DOWN", kind: "error" });
     expect(r.results[2]).toEqual({ kind: "skipped", reason: "prior_failed" });
     expect(r.screenshot_b64).toBeTruthy();
   });
@@ -58,11 +59,11 @@ describe("ComputerService", () => {
         { type: "click", x: asPixelX(9000), y: asPixelY(10) },
       ]),
     ).rejects.toMatchObject({ code: "OUT_OF_BOUNDS" });
-    await expect(computer.run("v2", [{ type: "wait", ms: 9000 }])).rejects.toMatchObject({
+    await expect(computer.run("v2", [{ ms: 9000, type: "wait" }])).rejects.toMatchObject({
       code: "VALIDATION",
     });
     await expect(
-      computer.run("v3", [{ type: "drag", path: [asPoint(1, 1)] }]),
+      computer.run("v3", [{ path: [asPoint(1, 1)], type: "drag" }]),
     ).rejects.toMatchObject({ code: "VALIDATION" });
     await expect(
       computer.run("v4", [{ type: "click", x: asPixelX(10.5), y: asPixelY(10) }]),
@@ -83,7 +84,9 @@ describe("ComputerService", () => {
     expect(r.results[0]?.kind).toBe("ok");
     expect(r.results[1]).toEqual({ kind: "skipped", reason: "after_takeover" });
     expect(r.seat).toBe("WAITING");
-    await expect(computer.run("tk2", [{ type: "screenshot" }])).rejects.toBeInstanceOf(ComputerError);
+    await expect(computer.run("tk2", [{ type: "screenshot" }])).rejects.toBeInstanceOf(
+      ComputerError,
+    );
   });
 
   it("a human taking the seat mid-batch stops the rest of it", async () => {
@@ -91,7 +94,7 @@ describe("ComputerService", () => {
     const desk = new FakeDesk();
     const computer = new ComputerService(desk, seat);
     const run = computer.run("mid", [
-      { type: "wait", ms: 30 },
+      { ms: 30, type: "wait" },
       { type: "click", x: asPixelX(1), y: asPixelY(1) },
     ]);
     // The first action is already underway when the human grabs the wheel.
@@ -120,7 +123,7 @@ describe("ComputerService", () => {
     const desk = new FakeDesk();
     const computer = new ComputerService(desk, new SeatService());
     const body: Action[] = [
-      { type: "wait", ms: 20 },
+      { ms: 20, type: "wait" },
       { type: "click", x: asPixelX(3), y: asPixelY(4) },
     ];
     const [a, b] = await Promise.all([computer.run("dup", body), computer.run("dup", body)]);
@@ -143,7 +146,7 @@ describe("ComputerService", () => {
     const desk = new FakeDesk();
     const computer = new ComputerService(desk, new SeatService());
     await computer.run("zm", [
-      { type: "zoom", x: asPixelX(100), y: asPixelY(100), w: 200, h: 200 },
+      { h: 200, type: "zoom", w: 200, x: asPixelX(100), y: asPixelY(100) },
       { type: "click", x: asPixelX(110), y: asPixelY(110) },
     ]);
     expect(desk.log.some((l) => l === "click left 110,110")).toBe(true);
@@ -151,7 +154,7 @@ describe("ComputerService", () => {
 
   it("emits credential pending_check when a password field is focused", async () => {
     const desk = new FakeDesk();
-    desk.hint = { title: "Password", password: true, confirm: false };
+    desk.hint = { confirm: false, password: true, title: "Password" };
     const computer = new ComputerService(desk, new SeatService());
     const r = await computer.run("pc", [{ type: "screenshot" }]);
     expect(r.pending_checks[0]?.code).toBe("credential");

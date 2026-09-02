@@ -28,7 +28,7 @@ if [[ -z "${COMPUTER_PUBLIC_URL:-}" && -n "${FLY_APP_NAME:-}" ]]; then
 fi
 
 # The pairing code should be a Fly secret (`fly secrets set COMPUTER_SETUP_CODE`).
-# Without one, a code is minted onto the volume so the box still pairs — but
+# Without one, a code is minted onto the volume so the box still pairs, but
 # then it is readable by anything running as `box`, the model included.
 if [[ -z "${COMPUTER_SETUP_CODE:-}" ]]; then
   if [[ -f /workspace/.computer/setup-code ]]; then

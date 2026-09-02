@@ -117,7 +117,7 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     func `provideSecret`(request: Computer_V1_ProvideSecretRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_ProvideSecretResponse>
 
     /// Provisioning: a paired seat is the box owner. The hub allocates the
-    /// next free screen and mints the Bot's token — returned exactly once.
+    /// next free screen and mints the Bot's token, returned exactly once.
     @available(iOS 13, *)
     func `createBot`(request: Computer_V1_CreateBotRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BotCredentials>
 

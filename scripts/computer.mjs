@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * computer — the box in one command.
+ * computer: the box in one command.
  *
  *   npm run up               build the desk, start the hub, print the pairing QR
  *   npm run bot -- new night provision a Bot on the fly (next free screen, token shown once)
@@ -21,6 +21,8 @@ import { resolve } from "node:path";
 const require = createRequire(import.meta.url);
 
 const root = resolve(import.meta.dirname, "..");
+/** First Eve listens here; display N uses EVE_BASE_PORT + (N - 1). Mirrors apps/hub/src/host/eve.ts. */
+const EVE_BASE_PORT = 2000;
 const envPath = resolve(root, ".env");
 
 const [cmd, ...args] = process.argv.slice(2);
@@ -37,27 +39,32 @@ const USAGE = [
 
 try {
   switch (cmd) {
-    case "up":
+    case "up": {
       await up();
       break;
-    case "qr":
+    }
+    case "qr": {
       printPairing(loadEnv());
       break;
-    case "bot":
+    }
+    case "bot": {
       await bot(args);
       break;
+    }
     case undefined:
     case "help":
     case "--help":
-    case "-h":
+    case "-h": {
       console.log(USAGE);
       break;
-    default:
+    }
+    default: {
       console.error(`unknown command: ${cmd}\n${USAGE}`);
       process.exit(1);
+    }
   }
-} catch (err) {
-  console.error(`error: ${err instanceof Error ? err.message : err}`);
+} catch (error) {
+  console.error(`error: ${error instanceof Error ? error.message : error}`);
   process.exit(1);
 }
 
@@ -72,11 +79,15 @@ async function up() {
     console.log("• building the desk (first run takes a few minutes)…");
     exec("docker", ["compose", "up", "-d", "--build", "--force-recreate"]);
   } else if (has("docker")) {
-    console.log("• docker is installed but its daemon is not running — start Docker Desktop or OrbStack, then re-run `npm run up`");
+    console.log(
+      "• docker is installed but its daemon is not running, start Docker Desktop or OrbStack, then re-run `npm run up`",
+    );
     console.log("  continuing with a fake desk so you can still pair and poke around");
     run.COMPUTER_DESK = "fake";
   } else {
-    console.log("• docker not found — running with a fake desk (install Docker or OrbStack for the real thing)");
+    console.log(
+      "• docker not found: running with a fake desk (install Docker or OrbStack for the real thing)",
+    );
     run.COMPUTER_DESK = "fake";
   }
 
@@ -86,13 +97,20 @@ async function up() {
       exec("tailscale", ["serve", "--bg", `http://127.0.0.1:${env.COMPUTER_PORT}`]);
       const status = JSON.parse(capture("tailscale", ["status", "--json"]));
       const dns = status?.Self?.DNSName?.replace(/\.$/, "");
-      if (dns) env.COMPUTER_PUBLIC_URL = run.COMPUTER_PUBLIC_URL = `https://${dns}`;
+      if (dns) {
+        env.COMPUTER_PUBLIC_URL = `https://${dns}`;
+        run.COMPUTER_PUBLIC_URL = env.COMPUTER_PUBLIC_URL;
+      }
       console.log(`• published via Tailscale Serve: ${env.COMPUTER_PUBLIC_URL}`);
     } catch {
-      console.log("• tailscale serve failed — pairing will use the local URL; run `tailscale up` and retry");
+      console.log(
+        "• tailscale serve failed: pairing will use the local URL; run `tailscale up` and retry",
+      );
     }
   } else {
-    console.log("• tailscale not found — pairing will only work on this machine (https://tailscale.com/download)");
+    console.log(
+      "• tailscale not found: pairing will only work on this machine (https://tailscale.com/download)",
+    );
   }
   saveEnv(env);
 
@@ -105,8 +123,8 @@ async function up() {
   console.log("• starting the hub (ctrl-c stops it; the desk keeps running)…\n");
   const child = spawn("npx", ["tsx", "apps/hub/src/index.ts"], {
     cwd: root,
-    stdio: "inherit",
     env: { ...process.env, ...run },
+    stdio: "inherit",
   });
   child.on("exit", (code) => process.exit(code ?? 0));
 }
@@ -115,28 +133,30 @@ async function up() {
 function startEve(env) {
   const mainDir = resolve(root, "apps/eve/bots/main");
   if (!existsSync(resolve(mainDir, "package.json"))) {
-    console.log("• no apps/eve/bots/main — copy that dir, mint a token, then re-run `up`");
+    console.log("• no apps/eve/bots/main: copy that dir, mint a token, then re-run `up`");
     return;
   }
   if (!process.env.AI_GATEWAY_API_KEY && !env.AI_GATEWAY_API_KEY) {
-    console.log("• AI_GATEWAY_API_KEY is unset — Eve will start but model calls will fail");
+    console.log("• AI_GATEWAY_API_KEY is unset: Eve will start but model calls will fail");
   }
-  if (portInUse(2000)) {
-    console.log("• an Eve process is already listening on :2000 from a previous `up`; leaving it");
+  if (portInUse(EVE_BASE_PORT)) {
+    console.log(
+      `• an Eve process is already listening on :${EVE_BASE_PORT} from a previous \`up\`; leaving it`,
+    );
     return;
   }
   try {
     execFileSync("npx", ["tsx", "apps/hub/src/host/boot-eves.ts"], {
       cwd: root,
-      stdio: "inherit",
       env: {
         ...process.env,
         ...env,
         COMPUTER_URL: env.COMPUTER_URL ?? `http://127.0.0.1:${env.COMPUTER_PORT}`,
       },
+      stdio: "inherit",
     });
   } catch {
-    console.log("• boot-eves failed — chat will show Eve as not running");
+    console.log("• boot-eves failed: chat will show Eve as not running");
   }
 }
 
@@ -152,8 +172,12 @@ async function bot(argv) {
       console.log(`  token: ${r.token}`);
       console.log("");
       console.log("This token is the Bot's identity. Give it a brain: copy apps/eve/bots/main");
-      console.log(`→ apps/eve/bots/${id}, customise agent/instructions.md, skills/, schedules/, then restart.`);
-      console.log(`Port is 2000 + (display - 1) = ${2000 + Number(r.display) - 1}.`);
+      console.log(
+        `→ apps/eve/bots/${id}, customise agent/instructions.md, skills/, schedules/, then restart.`,
+      );
+      console.log(
+        `Port is ${EVE_BASE_PORT} + (display - 1) = ${EVE_BASE_PORT + Number(r.display) - 1}.`,
+      );
       break;
     }
     case "rm": {
@@ -175,19 +199,26 @@ async function bot(argv) {
     }
     case "token": {
       requireId(id);
-      const store = JSON.parse(readFileSync(resolve(root, env.COMPUTER_DATA ?? "data/bots.json"), "utf8"));
+      const store = JSON.parse(
+        readFileSync(resolve(root, env.COMPUTER_DATA ?? "data/bots.json"), "utf-8"),
+      );
       const entry = store.find((b) => b.id === id);
-      if (!entry) throw new Error(`no bot ${id} — run \`npm run bot -- ls\``);
+      if (!entry) {
+        throw new Error(`no bot ${id}, run \`npm run bot -- ls\``);
+      }
       console.log(entry.token);
       break;
     }
-    default:
+    default: {
       throw new Error("usage: npm run bot -- new|ls|rm|token [id]");
+    }
   }
 }
 
 function requireId(id) {
-  if (!id) throw new Error("bot id required, e.g. `npm run bot -- new night`");
+  if (!id) {
+    throw new Error("bot id required, e.g. `npm run bot -- new night`");
+  }
 }
 
 // --- pairing / rpc ---
@@ -200,8 +231,8 @@ async function seatRpc(env, path, body) {
   if (env.COMPUTER_SEAT_TOKEN) {
     try {
       return await rpc(env, path, body, env.COMPUTER_SEAT_TOKEN);
-    } catch (err) {
-      if (!/seat token|UNAUTHENTICATED/i.test(String(err?.message))) throw err;
+    } catch (error) {
+      if (!/seat token|UNAUTHENTICATED/i.test(String(error?.message))) throw error;
       // The hub forgot it (a fresh data dir). Pair again below.
     }
   }
@@ -214,13 +245,16 @@ async function pairSeat(env) {
   try {
     const r = await rpc(env, "/computer.v1.Seat/Pair", { code: env.COMPUTER_SETUP_CODE });
     return r.token;
-  } catch (err) {
-    if (/setup code/i.test(String(err?.message))) {
-      throw new Error(".env's COMPUTER_SETUP_CODE does not match the running hub — restart it with `npm run up`", {
-        cause: err,
-      });
+  } catch (error) {
+    if (/setup code/i.test(String(error?.message))) {
+      throw new Error(
+        ".env's COMPUTER_SETUP_CODE does not match the running hub: restart it with `npm run up`",
+        {
+          cause: error,
+        },
+      );
     }
-    throw err;
+    throw error;
   }
 }
 
@@ -229,15 +263,15 @@ async function rpc(env, path, body, token) {
   let res;
   try {
     res = await fetch(`${base}${path}`, {
-      method: "POST",
+      body: JSON.stringify(body),
       headers: {
         "content-type": "application/json",
         ...(token ? { authorization: `Bearer ${token}` } : {}),
       },
-      body: JSON.stringify(body),
+      method: "POST",
     });
   } catch {
-    throw new Error(`hub is not running on ${base} — start it with \`npm run up\``);
+    throw new Error(`hub is not running on ${base}, start it with \`npm run up\``);
   }
   const text = await res.text();
   let json = null;
@@ -246,7 +280,9 @@ async function rpc(env, path, body, token) {
   } catch {
     // not JSON
   }
-  if (!res.ok) throw new Error(json?.error?.message ?? `HTTP ${res.status}: ${text.slice(0, 200)}`);
+  if (!res.ok) {
+    throw new Error(json?.error?.message ?? `HTTP ${res.status}: ${text.slice(0, 200)}`);
+  }
   return json;
 }
 
@@ -283,16 +319,21 @@ function ensureEnv() {
 
 function loadEnv(required = true) {
   if (!existsSync(envPath)) {
-    if (required) throw new Error("no .env yet — run `npm run up` first");
+    if (required) {
+      throw new Error("no .env yet, run `npm run up` first");
+    }
     return {};
   }
   const env = {};
-  for (const line of readFileSync(envPath, "utf8").split("\n")) {
+  for (const line of readFileSync(envPath, "utf-8").split("\n")) {
     const m = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
-    if (m) env[m[1]] = m[2];
+    if (m) {
+      const [, key, value] = m;
+      env[key] = value;
+    }
   }
   if (required && !env.COMPUTER_SETUP_CODE) {
-    throw new Error(".env has no COMPUTER_SETUP_CODE — run `npm run up` to generate one");
+    throw new Error(".env has no COMPUTER_SETUP_CODE, run `npm run up` to generate one");
   }
   return env;
 }
@@ -301,7 +342,7 @@ function saveEnv(env) {
   const lines = Object.entries(env)
     .filter(([, v]) => v !== undefined && v !== "")
     .map(([k, v]) => `${k}=${v}`);
-  writeFileSync(envPath, lines.join("\n") + "\n", { mode: 0o600 });
+  writeFileSync(envPath, `${lines.join("\n")}\n`, { mode: 0o600 });
 }
 
 // --- shell ---
@@ -340,5 +381,5 @@ function exec(bin, argv) {
 }
 
 function capture(bin, argv) {
-  return execFileSync(bin, argv, { cwd: root, encoding: "utf8" });
+  return execFileSync(bin, argv, { cwd: root, encoding: "utf-8" });
 }
