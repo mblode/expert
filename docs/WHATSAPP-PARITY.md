@@ -2,14 +2,14 @@
 
 Plan date: 2026-09-02. Companion to [`GROK-BOT.md`](GROK-BOT.md) (the product target) and [`AUDIT.md`](AUDIT.md) (the open findings). This document is the order of work for making Expert the thing that runs Vibey, with WhatsApp group and DM as one channel of one Bot on one tenant computer, and computer use, plugins, routines, skills and instructions all editable from that chat or from hello.expert.
 
-Scope rule from Matt: **do not merge `vcmc-agent` into `expert` yet.** `vcmc-agent` keeps its repo, its bridge on Railway and its production deployment until Phase 4 cuts it over onto the runtime this plan builds. Everything generic (the channel, the bridge, invites, plugins, routines, self-update) is built in `expert`; everything VCMC-specific (the archive, the lore, the persona, the member data, the digest prompts) stays tenant content in `vcmc-agent`.
+Two scope rules from Matt. **Do not merge `vcmc-agent` into `expert` yet:** `vcmc-agent` keeps its repo and its production deployment (including today's Railway bridge) until Phase 4 cuts it over onto the runtime this plan builds. **Everything new runs on Fly:** no Railway, no Vercel Functions for the agent; the WhatsApp socket is a process on the tenant's Machine, linked from a hello.expert page by QR or pairing code. Everything generic (the channel, the bridge, invites, plugins, routines, self-update) is built in `expert`; everything VCMC-specific (the archive, the lore, the persona, the member data, the digest prompts) stays tenant content in `vcmc-agent`.
 
 ## 1. Is the picture right?
 
 The picture as stated: Expert runs Eve on a persistent Linux computer with computer use, the agent updates its own files, drives a real browser, and WhatsApp is just a channel. Yes, with five corrections that shape the plan. Each one is a real gap today, not a nuance.
 
 1. **Eve does not hot-reload in production.** `eve start` serves the previously built `.output/`; only `eve dev` watches files. An agent that edits `agent/skills/foo.md` on disk with `write_file` changes nothing until someone runs `eve build` and restarts the process. The documented route to runtime self-update is `defineDynamic` resolvers (instructions, skills, connections, tools, model, subagents) that read a data store at `session.started`, plus the dynamic-scheduling dispatcher pattern for routines. So "self-updating files" has to mean: the Bot's editable surface is **data files a deployed resolver reads**, and code changes (new TypeScript tools, channels, `agent.ts`) go through a supervised rebuild and restart. Section 3 draws that line.
-2. **On the Expert guest, the hub is the only public door.** `fly.vcmc.toml` exposes the hub on `:8080`; Eve is loopback on `:2000` and reachable only through `/eve/v1`, which requires a hello.expert seat token. The Railway bridge cannot reach `POST /eve/v1/whatsapp/message` on that box. `vcmc-agent`'s own `fly.toml` solves it by exposing Eve directly on `:2000`, which is a different image on the same Fly app and bypasses the hub, the policy gate and the wake path. The channel needs a hub ingress.
+2. **On the Expert guest, the hub is the only public door.** `fly.vcmc.toml` exposes the hub on `:8080`; Eve is loopback on `:2000` and reachable only through `/eve/v1`, which requires a hello.expert seat token. Today's Railway bridge cannot reach `POST /eve/v1/whatsapp/message` on that box. `vcmc-agent`'s own `fly.toml` solves it by exposing Eve directly on `:2000`, which is a different image on the same Fly app and bypasses the hub, the policy gate and the wake path. With the socket on the Machine the hop is loopback, but it still goes through a hub channel ingress, so policy and the audit trail see it and the same door serves webhooks and Slack later.
 3. **hello.expert only knows account holders, and every seat is a box owner.** VCMC members do not sign in. `expert-invite` in `vcmc-agent` already posts to `https://hello.expert/api/invite`, which does not exist. Linking out from WhatsApp to "take the mouse" or "add a plugin" needs single-use, expiring, display-scoped guest seats, which means seat tokens with scope and expiry (AUDIT P0 #3) first.
 4. **Vibey's memory, audit log and episodes live on Vercel Blob, and its model calls go through the Vercel AI Gateway.** Neither is on the computer. Parity "all inside expert" ends with memory on the tenant volume behind the same screens (`looksLikeDirective`, category caps, fence escaping, log, revert). That is Phase 5, not Phase 1, because the screens are the boundary and must move intact.
 5. **Version and state skew.** `vcmc-agent` is on eve 0.30.6, `expert` on 0.47.6, current is 0.49.0 with deprecations (`defineInstructions({ markdown })`, channel `receive` renamed around `to(channel, target).send`). And Eve's durable run state lives under `.eve/.workflow-data` in the project directory, which for the image Bot at `/opt/computer/apps/eve/bots/main` is on the image, not the volume: a redeploy drops every in-flight and parked session. The overlay at `/workspace/eve/bots` is on the volume and does not have this problem.
@@ -18,18 +18,18 @@ The picture as stated: Expert runs Eve on a persistent Linux computer with compu
 
 Nouns, one sentence each, so the rest of the plan can use them without redefining.
 
-| Noun         | What it is                                                                                                              | Where it lives                                                                   |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Computer     | The tenant. One Fly app, one Machine, one volume, one hub, one setup code. VCMC is `vcmc-computer`.                     | `fly.<tenant>.toml`, `/workspace` on that volume                                 |
-| Bot          | One Eve project directory and one screen. `main` on `:1` for Vibey.                                                     | `/workspace/eve/bots/<id>` (code), `/workspace/.bots/<id>` (state and config)    |
-| Channel      | A way messages reach a Bot and replies leave it. WhatsApp, the hello.expert thread, a webhook. Not a persona.           | `agent/channels/<kind>.ts` in the generic runtime; per-tenant secrets in the hub |
-| Plugin       | A remote MCP or OpenAPI connection with a credential a human consented to on hello.expert.                              | `plugins.json` (public descriptor) + hub-owned credential store                  |
-| Routine      | A prompt on a cron in a timezone, delivered through a channel to a recipient, with run history and a test-run button.   | `routines.json`, dispatched by one schedule                                      |
-| Skill        | A markdown procedure loaded on demand by `load_skill`. Adds instructions, never tools.                                  | `config/skills/<name>.md`                                                        |
-| Instructions | The always-on prompt. Short and stable; long procedures are skills.                                                     | `config/instructions.md` + dynamic memory block                                  |
-| Memory       | What the Bot authored about a chat. Per chat JID, screened on write, fenced on render.                                  | Blob today; the tenant volume after Phase 5                                      |
-| Seat         | A human's grip on a screen. Owner seats come from sign-in; guest seats come from invites and expire.                    | Hub `seats.json`; scope and expiry are new                                       |
-| Bridge       | The Baileys process that owns the WhatsApp socket, login and live tail. Transport for the WhatsApp channel, not a peer. | Railway now; a supervised guest process is a later option                        |
+| Noun         | What it is                                                                                                            | Where it lives                                                                   |
+| ------------ | --------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Computer     | The tenant. One Fly app, one Machine, one volume, one hub, one setup code. VCMC is `vcmc-computer`.                   | `fly.<tenant>.toml`, `/workspace` on that volume                                 |
+| Bot          | One Eve project directory and one screen. `main` on `:1` for Vibey.                                                   | `/workspace/eve/bots/<id>` (code), `/workspace/.bots/<id>` (state and config)    |
+| Channel      | A way messages reach a Bot and replies leave it. WhatsApp, the hello.expert thread, a webhook. Not a persona.         | `agent/channels/<kind>.ts` in the generic runtime; per-tenant secrets in the hub |
+| Plugin       | A remote MCP or OpenAPI connection with a credential a human consented to on hello.expert.                            | `plugins.json` (public descriptor) + hub-owned credential store                  |
+| Routine      | A prompt on a cron in a timezone, delivered through a channel to a recipient, with run history and a test-run button. | `routines.json`, dispatched by one schedule                                      |
+| Skill        | A markdown procedure loaded on demand by `load_skill`. Adds instructions, never tools.                                | `config/skills/<name>.md`                                                        |
+| Instructions | The always-on prompt. Short and stable; long procedures are skills.                                                   | `config/instructions.md` + dynamic memory block                                  |
+| Memory       | What the Bot authored about a chat. Per chat JID, screened on write, fenced on render.                                | Blob today; the tenant volume after Phase 5                                      |
+| Seat         | A human's grip on a screen. Owner seats come from sign-in; guest seats come from invites and expire.                  | Hub `seats.json`; scope and expiry are new                                       |
+| Bridge       | The process that owns the WhatsApp socket, login and live tail. Transport for the WhatsApp channel, not a peer.       | A hub-supervised process on the tenant Machine, auth state under the hub UID     |
 
 Invariants the plan holds to, because each one is a lesson already paid for in one of the two repos:
 
@@ -38,6 +38,7 @@ Invariants the plan holds to, because each one is a lesson already paid for in o
 - **The model's tool surface stays five plus tenant tools.** `send_message`, `computer`, `shell`, `read_file`, `write_file` from `api/DESIGN.md`, then whatever the tenant adds (`search-chat`, `who-is`). Clipboard read, seat minting, VNC URLs and provisioning stay Seat RPCs. An invite is the one new agent-callable RPC, and it grants the model nothing (Section 4, Phase 2).
 - **Secrets never appear in chat, on argv, in the model's context or in a tool result.** A WhatsApp reply carries a public URL or a one-line fallback, never a token; `sanitizeOutbound` in `vcmc-agent` already enforces this and the generic channel keeps it.
 - **Bots are not security boundaries.** Same box user, shared `/workspace`. A tenant that needs isolation is a second computer, not a second Bot.
+- **Everything on Fly, one Machine per tenant.** The socket, the hub, Eve, the desk and the data are on that Machine and its volume. A tenant with a linked WhatsApp number is always on (the socket cannot suspend); a tenant without one still suspends to zero.
 - **Never post to a group on a timer.** Proactive delivery is a DM to an allowlisted JID (`handleSend` refuses `@g.us`). A reply into the group that mentioned the Bot is a reply, not a broadcast, and Phase 3 gives it a scoped capability rather than widening the allowlist.
 - **Human input is never RFB.** Mobile takeover is `Seat.Pointer` and `Seat.Type` over a view-only stream, same as iOS.
 
@@ -45,23 +46,22 @@ Invariants the plan holds to, because each one is a lesson already paid for in o
 
 ```
 WhatsApp group / DM
-     │  Baileys
+     │  Baileys socket (one per linked number)
      ▼
-whatsapp-bridge (Railway, one per tenant number)
-     │  POST https://vcmc-computer.fly.dev/channels/whatsapp/message   x-channel-secret
+whatsapp-bridge :2100  (hub-supervised process on the tenant Machine, hub UID)
+     │  POST http://127.0.0.1:8080/channels/whatsapp/message   x-channel-secret
      ▼
-hub :8080 (public door; wakes the Machine; checks channels.json)
+hub :8080 (the door: public for hello.expert, loopback for the bridge; checks channels.json)
      │  loopback, x-computer-eve-secret
      ▼
 eve start :2000 for Bot main  ── Agent RPCs ──► hub ──► desk (Xvfb, Chromium, XTEST)
      │  reads /workspace/.bots/main/config/* at session.started
-     │  BRIDGE_URL tools (messages, resources, send, send-media)
+     │  BRIDGE_URL=http://127.0.0.1:2100 tools (messages, resources, send, send-media)
      ▼
 reply: sync in the webhook response (Phase 1), async via bridge /send with a reply capability (Phase 3)
 
-hello.expert (Vercel)
-     ├─ owner: sign in → seat → chat, desk, Bot page (instructions, skills, routines, plugins), deploy
-     └─ member: /i/<computer>/<code> → guest seat (15 min, one display) → mobile desk or plugin consent
+hello.expert (Vercel, the control plane only)
+     └─ owner: Bot page → Channels → WhatsApp → link by QR or pairing code (Seat.WhatsAppLink)
 ```
 
 On the volume, per Bot:
@@ -78,6 +78,8 @@ On the volume, per Bot:
   changes.jsonl                        who changed what, when, from which path (chat tool or hello.expert), revert id
 /workspace/.bots/main/routines/<id>/runs.jsonl   last 20 runs: started, finished, status, transcript slice
 /workspace/.computer/                  hub secrets: bots.json, seats.json, eve-secret, channels.json, plugins/<id>.cred
+/workspace/.computer/whatsapp/<acct>/  Baileys auth state (creds, signal keys) and the bridge's config. Hub UID, 0700: the model must never read this.
+/workspace/whatsapp/<acct>/            the bridge's store: messages, resources, reactions, participants, lid map. Readable, no secrets.
 ```
 
 Hot versus cold, which is the whole design of self-update:
@@ -95,30 +97,46 @@ Hot versus cold, which is the whole design of self-update:
 
 Two ways to edit, one set of files. The Bot edits through a typed `bot_config` tool (get and set on instructions, a skill, a routine, a plugin descriptor) that validates with zod, runs the directive screen and size caps from `vcmc-agent`'s memory path, appends to `changes.jsonl`, and answers "done" only after reading the file back. `write_file` stays as the escape hatch, and the resolvers validate on read so a malformed file degrades to the last good copy rather than a broken session. hello.expert edits through new Seat RPCs that write the same files and the same log. Grok's rule, "everything on the profile page is also set up through chat", falls out of that.
 
+### The WhatsApp socket: library, placement, multi-account
+
+Three candidates, checked against their own docs on 2026-09-02.
+
+| Library                     | Language | Login                              | Accounts per process                                                       | Real-time inbound                                                                            | Verdict                                                                         |
+| --------------------------- | -------- | ---------------------------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Baileys (`@whiskeysockets`) | TS       | QR and `requestPairingCode(phone)` | Many: one `makeWASocket` per account, each with its own auth state         | Yes, `messages.upsert` and friends                                                           | Keep. The bridge's 30 files of hard-won logic are on it; the hub is TypeScript. |
+| whatsmeow (`tulir`)         | Go       | QR and `PairPhone`                 | Many: one `sqlstore` container, `GetAllDevices()`, one `Client` per device | Yes, event handlers; used by mautrix-whatsapp                                                | The escape hatch: lower memory, a stricter protocol implementation, same wire.  |
+| wacli (`wacli.sh`)          | Go       | `wacli auth`                       | Named account stores with `--account`                                      | Only `sync --follow` with `--events` NDJSON; "a daemon, MCP server, web UI" are out of scope | Not a bridge. Keep it for what it already does: `scripts/import-wacli.ts`.      |
+
+The socket runs **on the tenant Machine** as a child the hub supervises, like Eve, under the hub UID (Phase 0) so its Baileys auth state is not readable through `shell`. Inbound goes to the hub ingress on loopback; Eve's tools call the bridge on loopback. No public port, no cross-service secret, no second app to provision, and the bridge's store sits on the same volume as memory and the transcript. The price is suspend: a Machine holding a WhatsApp socket must stay running, so linking a number flips that tenant to `auto_stop_machines = "off"` and `min_machines_running = 1`. Blode keeps suspending until Matt links a number there.
+
+Multi-tenancy is per Machine, not per process. Within one Machine the bridge is multi-account: `accounts.json` maps each linked number (`acct` id) to a Bot and a channel secret, one `makeWASocket` per account, one auth directory each, so a tenant can give a second Bot its own number without a second process. Baileys and whatsmeow both support this; the difference is Go versus Node memory, and the bridge's HTTP contract (bridge protocol v1, Section 4) is what the channel and the tools depend on, so a whatsmeow sidecar speaking the same routes could replace the Node process for a tenant that needs it. A single shared gateway app serving every tenant's numbers was considered and rejected: it puts a cross-tenant boundary in application code, one crash takes every number down, and it needs the public ingress and per-tenant secrets that the per-Machine layout avoids.
+
+Linking a number happens on hello.expert, owner seat only: Bot page → Channels → WhatsApp → Link. The page offers two paths because a phone cannot scan a QR shown on its own screen: **pairing code** (enter the number, the bridge calls `requestPairingCode`, the page shows the 8-character code to type into WhatsApp → Linked devices) and **QR** (the raw string from the bridge rendered client-side, re-rendered as WhatsApp rotates it every 20 to 60 seconds). The hub mediates through `Seat.WhatsAppLink { action: "start" | "status" | "unlink", phone? }`; the web never talks to the bridge. Once `connection.open` fires the page shows the number, the groups the account is in, and the channel settings that used to be Railway env (`allowed groups`, `TRIGGER_MODE`, DM policy, `IMAGE_SENDS_PER_DAY`, maintainer and digest JIDs), written to the account's config under the hub UID. Unlink logs out the device and deletes the auth state.
+
 How the generic layer is shared without merging repos: `apps/eve/lib` becomes a published package (working name `@computer/eve`, subpath exports `./channels/whatsapp`, `./tools/*`, `./dynamic/*`, `./hub`, `./auth`), versioned with changesets and published from `expert` CI. `apps/eve/bots/main` consumes it the way it already re-exports from `../../lib`; `vcmc-agent` consumes it by pinning a version and re-exporting into its own `agent/` slots so tool names stay `computer`, not `expert__computer`. An eve extension package is the alternative; it prefixes names and cannot contribute `agent.ts`, memory or sandbox, so the re-export layout wins until that changes.
 
 ## 4. What parity means
 
 Inventory of `vcmc-agent`, and where each piece lands.
 
-| In `vcmc-agent` today                                                                                 | Lands in `expert` (generic)                                                       | Stays tenant content                             |
-| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `agent/channels/whatsapp.ts` (payload, context fencing, media, empty-reply fallback, `outboundReply`) | `lib/channels/whatsapp.ts` + `lib/format-reply.ts`, bridge protocol versioned     |                                                  |
-| `bridge/` (Baileys, trigger modes, mentions, media pipeline, transcription, HTTP API, allowlists, QR) | `apps/whatsapp-bridge`, tenant-agnostic, `members.ts` overlay becomes a JSON file | the VCMC member overlay data                     |
-| `computer`, `shell`, `read_file`, `write_file`, `lib/hub.ts` (degrade to `available:false`)           | already `lib/tools/*`; adopt the degrade behaviour                                |                                                  |
-| `expert-invite`                                                                                       | `lib/tools/expert_invite.ts` calling the hub, not a web URL                       |                                                  |
-| `computer-use` skill                                                                                  | `bots/main/agent/skills/computer-use/SKILL.md`, one copy                          |                                                  |
-| `instructions.ts` (base + memory block)                                                               | dynamic instructions resolver reading `config/instructions.md`                    | `base-instructions.ts` becomes the tenant's file |
-| `easter-eggs`, `group-lore`, `how-im-built`, `matthew-blode` skills                                   | dynamic skills resolver                                                           | the skill files                                  |
-| `daily-digest` schedule + `digest` channel                                                            | routines dispatcher + DM delivery through the channel                             | the digest prompts and subscribers               |
-| `memory-consolidation` schedule                                                                       | stays a TypeScript schedule (tenant code) until memory moves                      | `consolidation.ts`, `stale-scan.ts`              |
-| `save-memory`, `memory-log`, `revert-memory`, `audit-memory`, `memory-store.ts` (Blob)                | Phase 5: `MemoryStore` interface with a volume backend; screens unchanged         | categories, health scoring                       |
-| `search-chat`, `get-group-stats`, `get-reactions`, `who-is`, `group-history`, archive blob, reingest  |                                                                                   | all of it                                        |
-| `read-url`, `get-youtube-transcript`, `generate-image`                                                | candidates for the generic tool set later; not needed for parity                  | for now                                          |
-| `report-feature-request`, `invite-member` (bridge `/report`, `/invite`, `MAINTAINER_JID`)             | bridge routes stay generic                                                        | the tools                                        |
-| `evals/` (`eve eval`, routing, safety, voice)                                                         | an `evals/` for the generic channel: formatting, fencing, no-token-in-reply       | VCMC suites                                      |
-| `deploy/fly` Eve-only image, `boot-eve.sh`                                                            | retired: the Expert guest image plus the supervisor is the deployment             |                                                  |
-| Vercel project (fallback), Blob, AI Gateway                                                           | Phase 5 retires Vercel for the agent; the gateway key stays a Fly secret          |                                                  |
+| In `vcmc-agent` today                                                                                 | Lands in `expert` (generic)                                                                    | Stays tenant content                             |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `agent/channels/whatsapp.ts` (payload, context fencing, media, empty-reply fallback, `outboundReply`) | `lib/channels/whatsapp.ts` + `lib/format-reply.ts`, bridge protocol versioned                  |                                                  |
+| `bridge/` (Baileys, trigger modes, mentions, media pipeline, transcription, HTTP API, allowlists, QR) | `apps/whatsapp-bridge` on the Machine, multi-account, `members.ts` overlay becomes a JSON file | the VCMC member overlay data                     |
+| `computer`, `shell`, `read_file`, `write_file`, `lib/hub.ts` (degrade to `available:false`)           | already `lib/tools/*`; adopt the degrade behaviour                                             |                                                  |
+| `expert-invite`                                                                                       | `lib/tools/expert_invite.ts` calling the hub, not a web URL                                    |                                                  |
+| `computer-use` skill                                                                                  | `bots/main/agent/skills/computer-use/SKILL.md`, one copy                                       |                                                  |
+| `instructions.ts` (base + memory block)                                                               | dynamic instructions resolver reading `config/instructions.md`                                 | `base-instructions.ts` becomes the tenant's file |
+| `easter-eggs`, `group-lore`, `how-im-built`, `matthew-blode` skills                                   | dynamic skills resolver                                                                        | the skill files                                  |
+| `daily-digest` schedule + `digest` channel                                                            | routines dispatcher + DM delivery through the channel                                          | the digest prompts and subscribers               |
+| `memory-consolidation` schedule                                                                       | stays a TypeScript schedule (tenant code) until memory moves                                   | `consolidation.ts`, `stale-scan.ts`              |
+| `save-memory`, `memory-log`, `revert-memory`, `audit-memory`, `memory-store.ts` (Blob)                | Phase 5: `MemoryStore` interface with a volume backend; screens unchanged                      | categories, health scoring                       |
+| `search-chat`, `get-group-stats`, `get-reactions`, `who-is`, `group-history`, archive blob, reingest  |                                                                                                | all of it                                        |
+| `read-url`, `get-youtube-transcript`, `generate-image`                                                | candidates for the generic tool set later; not needed for parity                               | for now                                          |
+| `report-feature-request`, `invite-member` (bridge `/report`, `/invite`, `MAINTAINER_JID`)             | bridge routes stay generic                                                                     | the tools                                        |
+| `evals/` (`eve eval`, routing, safety, voice)                                                         | an `evals/` for the generic channel: formatting, fencing, no-token-in-reply                    | VCMC suites                                      |
+| `deploy/fly` Eve-only image, `boot-eve.sh`                                                            | retired: the Expert guest image plus the supervisor is the deployment                          |                                                  |
+| Vercel project (fallback), Blob, AI Gateway                                                           | Phase 5 retires Vercel for the agent; the gateway key stays a Fly secret                       |                                                  |
 
 ## 5. Phases
 
@@ -145,18 +163,21 @@ Done when: `npm run check` is green on eve 0.49; a parked approval on the Fly gu
 
 The generic channel and the bridge, in `expert`, tested against a throwaway WhatsApp number and a test group. Vibey does not move.
 
-- [ ] Hub channel ingress: `POST /channels/<channel_id>/<path>` in `apps/hub/src/handler/channels.ts`, authenticated by `x-channel-secret` against `/workspace/.computer/channels.json` (`{ id, bot, secret, paths[] }`), forwarded to that Bot's Eve at the listed path with `x-computer-eve-secret`. Body cap, no seat token accepted, `DAEMON_DOWN` if the Bot has no Eve. Lockout after repeated bad secrets like `Pair`. The Fly `http_service` on `:8080` already wakes a suspended Machine, so the bridge's POST is the wake path.
+- [ ] Hub channel ingress: `POST /channels/<channel_id>/<path>` in `apps/hub/src/handler/channels.ts`, authenticated by `x-channel-secret` against `/workspace/.computer/channels.json` (`{ id, bot, secret, paths[] }`), forwarded to that Bot's Eve at the listed path with `x-computer-eve-secret`. Body cap, no seat token accepted, `DAEMON_DOWN` if the Bot has no Eve. Lockout after repeated bad secrets like `Pair`. The WhatsApp bridge uses it on loopback; the same route is the public door for webhook and Slack channels later.
 - [ ] `npm run bot -- channel add|rm|ls <bot> <kind>` in `scripts/computer.mjs` to mint and rotate a channel secret without printing the old one.
 - [ ] `apps/eve/lib/channels/whatsapp.ts` ported from `vcmc-agent/agent/channels/whatsapp.ts`: same `BridgePayload` (name it bridge protocol v1 and pin it in a shared type), `<whatsapp_context>` block, `<untrusted_context>` fencing, two-image cap, `EMPTY_REPLY_FALLBACK`, sync reply in the response. Auth accepts the hub secret header (ingress path) or `x-bridge-secret` (direct path, so the Vercel fallback and the eve TUI still work). `turnPolicy: "queue"` for groups.
 - [ ] `apps/eve/lib/format-reply.ts` ported (`cleanReply`, `outboundReply`, `sanitizeOutbound`) with its tests. Single `*` bold, no headings, tables, fences or em dashes, secrets and credential query params stripped.
 - [ ] `apps/eve/lib/tools/expert_invite.ts` placeholder that returns `available: false` with the sign-in fallback line until Phase 2 lands the hub RPC. The channel copy in `bots/main/agent/instructions.md` learns the "a hello.expert link is only for the mouse or a plugin" rule from `vcmc-agent`'s context block.
-- [ ] `apps/whatsapp-bridge`: the Baileys bridge moved in as a workspace with its own lockfile and `node --test` suite, tenant-agnostic. `EVE_URL` becomes `COMPUTER_INGRESS_URL` + `CHANNEL_SECRET`; `members.ts` becomes an optional `MEMBERS_OVERLAY_FILE` JSON on the bridge volume; `MAINTAINER_JID`, `OWNER_JIDS`, `DIGEST_RECIPIENT_JID`, `TRIGGER_MODE`, `IMAGE_SENDS_PER_DAY`, `VISION_ENABLED` and transcription stay env. `handleSend` keeps refusing group JIDs. Railway `railway.json` and a `deploy-bridge.yml` workflow come with it.
-- [ ] Bridge timeouts cover Machine wake plus a turn: raise the agent-client timeout and keep the existing backoff; log the wake latency so the async path in Phase 3 has a number to beat.
+- [ ] `apps/whatsapp-bridge`: the Baileys bridge moved in as a workspace with its own `node --test` suite, tenant-agnostic and multi-account. One process, `accounts.json` (`{ acct, bot, phone?, channel_secret, config }`) under `/workspace/.computer/whatsapp/`, one `makeWASocket` and one `useMultiFileAuthState` directory per account, `makeCacheableSignalKeyStore` kept. Per-account config replaces the Railway env: allowed groups, `TRIGGER_MODE`, DM policy, `IMAGE_SENDS_PER_DAY`, `VISION_ENABLED`, maintainer, owner and digest JIDs, an optional members overlay JSON. `handleSend` keeps refusing group JIDs. `railway.json`, `.railwayignore` and the Railway deploy workflow do not come along.
+- [ ] The bridge as a hub child: `apps/hub/src/host/start-bridge.ts` starts it under the Phase 0 supervisor (restart with backoff, `/health` probe, log file), loopback only on `:2100`, running as the hub UID with `/workspace/.computer/whatsapp/` at 0700 so `shell` and `read_file` cannot reach the Baileys creds. Store at `/workspace/whatsapp/<acct>/`. Transcription and image generation keep using the gateway key, passed by the supervisor and never on argv.
+- [ ] Link page: `Seat.WhatsAppLink { action: "start" | "status" | "unlink", acct, phone? }` on the hub (owner seat only) proxying the bridge's pairing state (today's `GET /qr` shape, plus a pairing-code path from `requestPairingCode`). hello.expert Bot page → Channels → WhatsApp: pairing code by default on a phone, QR rendered client-side from the raw string on a laptop, 2 s status poll, linked state with the number and group list, the account settings form, and Unlink. Mobile-first.
+- [ ] Always-on when linked: linking an account sets the tenant to `auto_stop_machines = "off"` and `min_machines_running = 1`; document it in `fly.vcmc.toml` and `fly.toml` with the cost reason. Confirm the box fits: Chromium, Eve, the hub and a Baileys socket on 2 GB; raise `[[vm]] memory` or add swap in the guest image if the health probe shows pressure (AUDIT P2 #17).
+- [ ] Deploy-time seeding: an existing Baileys auth directory can be copied to `/workspace/.computer/whatsapp/<acct>/auth/` to avoid relinking; otherwise the link page pairs a fresh device and history sync backfills the tail.
 - [ ] `bots/main` gets the channel enabled by file presence (`agent/channels/whatsapp.ts` re-export) and the `computer-use` skill absorbs `vcmc-agent`'s wording on `available:false`, `SEAT_HELD`, and takeover links.
 - [ ] Tests: vitest for the channel (payload validation, fencing, fallback, auth paths), the hub ingress (secret, lockout, forwarding, no seat token), and the bridge suite as moved. An `evals/` directory in `apps/eve/bots/main` with three `eve eval` cases: plain-text formatting, quoted-payload fencing (`context-injection`), and never-a-token-in-reply (`no-secrets`), run non-blocking in CI as `vcmc-agent` does.
 - [ ] Docs: `apps/eve/README.md` "Enable WhatsApp on a Bot", `AGENTS.md` gotchas for the ingress and the never-post-to-group rule, `api/DESIGN.md` Channels section.
 
-Done when: a message @mentioning the test number in a test group reaches `bots/main` on a suspended `blode`-shaped dev Machine through `/channels/whatsapp/message`, wakes it, and the reply lands in the group in plain text; a DM from a non-member is logged and not answered; `npm run check` green.
+Done when: a throwaway number is linked from the hello.expert page by pairing code on a phone; a message @mentioning it in a test group reaches `bots/main` through the loopback ingress and the reply lands in the group in plain text; a DM from a non-member is logged and not answered; `read_file /workspace/.computer/whatsapp/test/auth/creds.json` from the Bot is refused; `npm run check` green.
 
 ### Phase 2: link out, take the mouse, add a plugin
 
@@ -199,8 +220,8 @@ Cut `vcmc-agent` over. The repo stays; its generic code goes; its content stays.
 - [ ] `vcmc-agent` depends on `@computer/eve` and re-exports: `agent/channels/whatsapp.ts`, `agent/tools/{computer,shell,read_file,write_file,expert-invite}.ts`, `agent/lib/hub.ts`, `agent/lib/format-reply.ts` become one-line re-exports or are deleted. `tests/agent/tool-list.test.ts` and `how-im-built.md` keep reconciling the tool list.
 - [ ] Content moves to config files on `vcmc-computer`: `base-instructions.ts` → `config/instructions.md`; the four skills → `config/skills/`; `DIGEST_SUBSCRIBERS` → `routines.json` entries with the two digest styles as prompts and the transcript assembly kept as a tenant tool the routine prompt calls; `.mcp.json`'s chrome-devtools entry → `plugins.json` if still wanted (it is a stdio server, so probably not: the desk is the browser).
 - [ ] `memory-consolidation` stays a tenant TypeScript schedule until Phase 5; confirm it runs under the supervisor and still reads `revertedIds` from the audit trail.
-- [ ] Deployment: delete `vcmc-agent/deploy/fly` and `vcmc-agent/fly.toml` (the Eve-only image conflicts with the Expert guest on the same app); `vcmc-computer` runs `fly.vcmc.toml` from `expert`; the tenant project is a git checkout at `/workspace/eve/bots/main` deployed by `Seat.DeployBot`. Tenant secrets (`BRIDGE_URL`, `WHATSAPP_BRIDGE_SECRET`, `FIRECRAWL_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `AI_GATEWAY_API_KEY`) become Fly secrets on `vcmc-computer`, passed to the Eve child by the supervisor, never on argv.
-- [ ] Bridge cutover: the Railway bridge gets `COMPUTER_INGRESS_URL=https://vcmc-computer.fly.dev` and the channel secret; first pointed at a test group, then the VCMC group; the old `EVE_URL` path stays configured until the new one has answered for a week. The bridge code itself comes from `apps/whatsapp-bridge` in `expert`; `vcmc-agent/bridge/` is deleted once Railway builds from `expert`.
+- [ ] Deployment: delete `vcmc-agent/deploy/fly` and `vcmc-agent/fly.toml` (the Eve-only image conflicts with the Expert guest on the same app); `vcmc-computer` runs `fly.vcmc.toml` from `expert`; the tenant project is a git checkout at `/workspace/eve/bots/main` deployed by `Seat.DeployBot`. Tenant secrets (`FIRECRAWL_API_KEY`, `BLOB_READ_WRITE_TOKEN`, `AI_GATEWAY_API_KEY`) become Fly secrets on `vcmc-computer`, passed to the Eve child by the supervisor, never on argv; `BRIDGE_URL` and `WHATSAPP_BRIDGE_SECRET` are gone, replaced by the loopback bridge and the per-account channel secret the hub hands Eve.
+- [ ] Bridge cutover: link the VCMC number on `vcmc-computer` from the hello.expert page (or seed its auth directory from the Railway volume), configure the account (allowed group, `TRIGGER_MODE=mention`, maintainer and digest JIDs) on the page, and point it at a test group first. WhatsApp allows one linked device per bridge session, so the Railway bridge is stopped at the moment of relink, not run in parallel; keep its volume for a week as the rollback. Then delete `vcmc-agent/bridge/`, `.github/workflows/deploy-bridge.yml` and the Railway project. Railway is gone after this step.
 - [ ] Evals: the full `vcmc-agent` suite (`npm run test:evals`) against the new runtime; `evals/routing/skills.eval.ts` must still route to the dynamic skills; `elon-image-prompt-injection` and `no-secrets` unchanged.
 - [ ] Docs: `vcmc-agent/CLAUDE.md` topology section rewritten (three pieces become two: tenant content in this repo, runtime and bridge in `expert`), `deploy/README.md` replaced by a pointer, `docs/build-your-own-whatsapp-agent.md` updated to "enable the channel on an Expert Bot".
 
@@ -212,7 +233,7 @@ Done when: Vibey answers in the VCMC group and DMs from the Expert runtime with 
 - [ ] Episodes and the audit log follow the same path; `memory-log` and `revert-memory` unchanged from the model's view.
 - [ ] Consider Eve's own `defineMemory` with a custom `MemoryDocumentBackend` on the volume for the generic Bot (`bots/main` has none today beyond `memory.md`); keep Vibey's category store, which is richer than one document per scope.
 - [ ] Retire the `vcmc-agent` Vercel project. The AI Gateway key stays a Fly secret (or a direct provider key in `agent.ts`), `BLOB_READ_WRITE_TOKEN` is removed from the box.
-- [ ] Bridge placement decision: move `apps/whatsapp-bridge` onto the guest as a supervised process (then `min_machines_running = 1` in `fly.vcmc.toml`, no suspend, Railway gone, one fewer secret pair) or keep Railway (suspend keeps compute at zero). Measure the two monthly bills and the ban risk of a Baileys socket on a Fly IP before deciding.
+- [ ] Bridge store on the volume gets the same backup as memory; the Baileys auth directory is part of the snapshot, so a restored volume relinks nothing.
 - [ ] Volume backup runbook (AUDIT P2 #17): nightly `fly volumes snapshot` and a restore test, since after this phase the volume holds the roster, the transcript, memory and the Bot's config.
 
 Done when: `BLOB_READ_WRITE_TOKEN` is unset on `vcmc-computer` and every memory eval passes; a restored volume snapshot boots a working Vibey.
@@ -233,7 +254,7 @@ From `GROK-BOT.md` Phases 2, 3, 5 and 7, now that the pieces exist.
 Each of these changes the shape of a phase; the plan assumes the first option.
 
 1. **Package versus extension** for sharing the generic layer (Section 3): a published `@computer/eve` with re-exports (keeps tool names) versus an eve extension (prefixed names, no `agent.ts`). Assumed: package.
-2. **Bridge placement** after Phase 5: Railway (suspend stays possible) versus on the guest (one machine, always on). Assumed: Railway until measured.
+2. **Socket library**: keep Baileys (TypeScript, the existing bridge) versus a whatsmeow sidecar in Go behind the same HTTP contract. Assumed: Baileys, with the contract kept swappable and whatsmeow tried only if Node memory or protocol breakage on the Machine forces it.
 3. **Sessions in WhatsApp** (Phase 3): per-chat continuation with queueing versus fresh per message. Assumed: per-chat behind an option, measured first.
 4. **Model per tenant**: Vibey stays on `anthropic/claude-sonnet-5` with adaptive thinking; `bots/main` stays on `openai/gpt-5`. Assumed: per-Bot `profile.json.model`, no global default.
 5. **Who may mint a desk invite from chat**: any member who can @mention the Bot (the shared-desk product) versus owner DMs only. Assumed: any member, rate-limited, every link logged in the thread, and Chromium sessions on the shared desk treated as shared.
@@ -245,7 +266,8 @@ Each of these changes the shape of a phase; the plan assumes the first option.
 - **Dynamic skills under just-bash** is unverified (Phase 3). The fallback is authored skills plus a supervised rebuild, which still edits the same files but adds a restart.
 - **Any member can write the Bot's instructions through `bot_config`** once Phase 3 lands, the same trade `vcmc-agent` already made for memory. The screen, the caps, the fence and the change log are the boundary; the owner page and `revert` are the undo. Do not relax one to make an edit land.
 - **eve 0.30 → 0.49 in `vcmc-agent`** may cost more than the spike suggests. Phase 0 sizes it before Phase 4 depends on it.
-- **The Fly suspend path** adds seconds to the first reply after idle. Phase 1 measures it; Phase 3's async delivery makes it a typing indicator rather than a timeout.
+- **A linked number means an always-on Machine.** Suspend-to-zero is gone for that tenant, and Chromium, three Node processes and a Baileys socket share 2 GB. Phase 1 measures memory under load and sizes the Machine before Vibey moves.
+- **IP reputation.** Every tenant's socket now originates from Fly's address space rather than Railway's; there is no evidence either is treated differently by WhatsApp, but a ban on one tenant's number is not shared with another, and the dedicated-number rule stands.
 
 ## 8. Verification, throughout
 
