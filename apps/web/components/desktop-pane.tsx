@@ -30,12 +30,15 @@ const STATE_DOT: Record<SeatState, string> = {
  */
 export function DesktopPane({
   display,
+  layout = "workspace",
   onDisplayChange,
   onStatus,
   seat,
   status,
 }: {
   display: number;
+  /** Phone invite: large hit targets, take/yield, no hover chrome. */
+  layout?: "workspace" | "phone";
   onDisplayChange: (display: number) => void;
   onStatus: (status: BoxStatus) => void;
   seat: Seat;
@@ -74,8 +77,11 @@ export function DesktopPane({
     }
   };
 
+  const phone = layout === "phone";
+  const hit = phone ? "lg" : "xs";
+
   return (
-    <section className="flex min-h-0 min-w-0 flex-col">
+    <section className={`flex min-h-0 min-w-0 flex-col overscroll-none ${phone ? "h-full" : ""}`}>
       <header className="flex flex-wrap items-center gap-2 border-b border-edge px-3 py-2">
         {status && status.screens.length > 1 ? (
           <div className="w-fit min-w-40">
@@ -109,7 +115,7 @@ export function DesktopPane({
             <Button
               aria-expanded={showKeyboard}
               onClick={() => setShowKeyboard((open) => !open)}
-              size="xs"
+              size={hit}
               type="button"
               variant="outline"
             >
@@ -119,15 +125,15 @@ export function DesktopPane({
           <Button
             aria-expanded={showClipboard}
             onClick={() => setShowClipboard((open) => !open)}
-            size="xs"
+            size={hit}
             type="button"
             variant="outline"
           >
             Clipboard
           </Button>
           {controllable ? (
-            <Button disabled={busy} onClick={() => void presence(false)} size="xs" type="button">
-              I&apos;m done
+            <Button disabled={busy} onClick={() => void presence(false)} size={hit} type="button">
+              {phone ? "Yield seat" : "I'm done"}
             </Button>
           ) : (
             // Without this the pane is silently dead: you move the mouse over
@@ -137,11 +143,11 @@ export function DesktopPane({
             <Button
               disabled={busy}
               onClick={() => void presence(true)}
-              size="xs"
+              size={hit}
               type="button"
               variant="outline"
             >
-              Take the seat
+              {phone ? "Take seat" : "Take the seat"}
             </Button>
           )}
         </div>
@@ -156,11 +162,11 @@ export function DesktopPane({
           <Button
             disabled={busy}
             onClick={() => void presence(true)}
-            size="xs"
+            size={hit}
             type="button"
             variant="warning"
           >
-            Take the seat
+            {phone ? "Take seat" : "Take the seat"}
           </Button>
         </div>
       )}
@@ -191,7 +197,9 @@ export function DesktopPane({
         </p>
       )}
 
-      <div className="flex min-h-0 flex-1 items-center justify-center bg-black p-3">
+      <div
+        className={`flex min-h-0 flex-1 items-center justify-center bg-black ${phone ? "p-1" : "p-3"}`}
+      >
         {/* Letterboxed to the box's own aspect so the overlay's CSS pixels map
             cleanly onto its screen. */}
         <div
@@ -263,13 +271,15 @@ export function DesktopPane({
         </div>
       </div>
 
-      <p className="px-3 pb-2 text-xs text-mute">
-        {controllable
-          ? "Point where you want the cursor and the box follows. Type here, or open Keyboard on a phone; Backspace and the arrow keys do not go through."
-          : "View only while Eve is working. Take the seat to drive it yourself, or wait for it to ask."}
-      </p>
+      {!phone && (
+        <p className="px-3 pb-2 text-xs text-mute">
+          {controllable
+            ? "Point where you want the cursor and the box follows. Type here, or open Keyboard on a phone; Backspace and the arrow keys do not go through."
+            : "View only while Eve is working. Take the seat to drive it yourself, or wait for it to ask."}
+        </p>
+      )}
 
-      {controllable && showKeyboard && <KeyboardBar onSend={send} />}
+      {controllable && showKeyboard && <KeyboardBar large={phone} onSend={send} />}
       {showClipboard && <ClipboardPanel display={display} seat={seat} />}
     </section>
   );

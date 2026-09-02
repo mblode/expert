@@ -13,7 +13,13 @@ import { Input } from "@/components/ui/input";
  * can take it back, and Backspace does not go through. Seeing the line before
  * it leaves is the only place a thumbed typo can still be fixed.
  */
-export function KeyboardBar({ onSend }: { onSend: (text: string) => void }): React.ReactElement {
+export function KeyboardBar({
+  large = false,
+  onSend,
+}: {
+  large?: boolean;
+  onSend: (text: string) => void;
+}): React.ReactElement {
   const [text, setText] = useState("");
 
   const send = (suffix: string) => {
@@ -25,7 +31,9 @@ export function KeyboardBar({ onSend }: { onSend: (text: string) => void }): Rea
   };
 
   return (
-    <div className="flex items-center gap-2 border-t border-edge p-3">
+    <div
+      className={`flex items-center gap-2 border-t border-edge ${large ? "p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "p-3"}`}
+    >
       <div className="min-w-0 flex-1">
         <Input
           aria-label="Type into the box"
@@ -55,7 +63,13 @@ export function KeyboardBar({ onSend }: { onSend: (text: string) => void }): Rea
           value={text}
         />
       </div>
-      <Button disabled={!text} onClick={() => send("")} type="button" variant="outline">
+      <Button
+        disabled={!text}
+        onClick={() => send("")}
+        size={large ? "lg" : "default"}
+        type="button"
+        variant="outline"
+      >
         Send
       </Button>
     </div>
