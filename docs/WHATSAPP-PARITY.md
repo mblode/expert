@@ -18,18 +18,18 @@ The picture as stated: Expert runs Eve on a persistent Linux computer with compu
 
 Nouns, one sentence each, so the rest of the plan can use them without redefining.
 
-| Noun         | What it is                                                                                                              | Where it lives                                                                          |
-| ------------ | ----------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| Computer     | The tenant. One Fly app, one Machine, one volume, one hub, one setup code. VCMC is `vcmc-computer`.                     | `fly.<tenant>.toml`, `/workspace` on that volume                                        |
-| Bot          | One Eve project directory and one screen. `main` on `:1` for Vibey.                                                     | `/workspace/eve/bots/<id>` (code), `/workspace/.bots/<id>` (state and config)           |
-| Channel      | A way messages reach a Bot and replies leave it. WhatsApp, the hello.expert thread, a webhook. Not a persona.           | `agent/channels/<kind>.ts` in the generic runtime; per-tenant secrets in the hub        |
-| Plugin       | A remote MCP or OpenAPI connection with a credential a human consented to on hello.expert.                              | `plugins.json` (public descriptor) + hub-owned credential store                         |
-| Routine      | A prompt on a cron in a timezone, delivered through a channel to a recipient, with run history and a test-run button.   | `routines.json`, dispatched by one schedule                                             |
-| Skill        | A markdown procedure loaded on demand by `load_skill`. Adds instructions, never tools.                                  | `config/skills/<name>.md`                                                               |
-| Instructions | The always-on prompt. Short and stable; long procedures are skills.                                                     | `config/instructions.md` + dynamic memory block                                         |
-| Memory       | What the Bot authored about a chat. Per chat JID, screened on write, fenced on render.                                  | Blob today; the tenant volume after Phase 5                                             |
-| Seat         | A human's grip on a screen. Owner seats come from sign-in; guest seats come from invites and expire.                    | Hub `seats.json`; scope and expiry are new                                              |
-| Bridge       | The Baileys process that owns the WhatsApp socket, login and live tail. Transport for the WhatsApp channel, not a peer. | Railway now; a supervised guest process is a later option                               |
+| Noun         | What it is                                                                                                              | Where it lives                                                                   |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Computer     | The tenant. One Fly app, one Machine, one volume, one hub, one setup code. VCMC is `vcmc-computer`.                     | `fly.<tenant>.toml`, `/workspace` on that volume                                 |
+| Bot          | One Eve project directory and one screen. `main` on `:1` for Vibey.                                                     | `/workspace/eve/bots/<id>` (code), `/workspace/.bots/<id>` (state and config)    |
+| Channel      | A way messages reach a Bot and replies leave it. WhatsApp, the hello.expert thread, a webhook. Not a persona.           | `agent/channels/<kind>.ts` in the generic runtime; per-tenant secrets in the hub |
+| Plugin       | A remote MCP or OpenAPI connection with a credential a human consented to on hello.expert.                              | `plugins.json` (public descriptor) + hub-owned credential store                  |
+| Routine      | A prompt on a cron in a timezone, delivered through a channel to a recipient, with run history and a test-run button.   | `routines.json`, dispatched by one schedule                                      |
+| Skill        | A markdown procedure loaded on demand by `load_skill`. Adds instructions, never tools.                                  | `config/skills/<name>.md`                                                        |
+| Instructions | The always-on prompt. Short and stable; long procedures are skills.                                                     | `config/instructions.md` + dynamic memory block                                  |
+| Memory       | What the Bot authored about a chat. Per chat JID, screened on write, fenced on render.                                  | Blob today; the tenant volume after Phase 5                                      |
+| Seat         | A human's grip on a screen. Owner seats come from sign-in; guest seats come from invites and expire.                    | Hub `seats.json`; scope and expiry are new                                       |
+| Bridge       | The Baileys process that owns the WhatsApp socket, login and live tail. Transport for the WhatsApp channel, not a peer. | Railway now; a supervised guest process is a later option                        |
 
 Invariants the plan holds to, because each one is a lesson already paid for in one of the two repos:
 
@@ -82,16 +82,16 @@ On the volume, per Bot:
 
 Hot versus cold, which is the whole design of self-update:
 
-| Surface             | Path                                   | Mechanism                                                                                   | Rebuild? |
-| ------------------- | -------------------------------------- | ------------------------------------------------------------------------------------------- | -------- |
-| Instructions        | `config/instructions.md`               | `defineDynamic` instructions at `session.started`, appends the memory block                 | no       |
-| Skills              | `config/skills/*.md`                   | `defineDynamic` skills returning a `defineSkill` map from the directory                     | no       |
-| Plugins             | `plugins.json` + hub credential        | `defineDynamic` connections, `defineMcpClientConnection` per entry with `instanceKey`       | no       |
-| Routines            | `routines.json`                        | one dispatcher `defineSchedule`, lease via a schedule store, deliver with `to(channel, …)`   | no       |
-| Model               | `profile.json.model`                   | `defineDynamic` model resolver                                                              | no       |
-| Profile             | `profile.json`                         | hub `BotState`, already exists                                                              | no       |
-| Tools, channels     | `agent/tools/*.ts`, `agent/channels/`  | supervisor: fetch, `npm ci`, `eve build` in a staging dir, health check, swap, rollback     | yes      |
-| `agent.ts`, sandbox | `agent/agent.ts`, `agent/sandbox.ts`   | same                                                                                        | yes      |
+| Surface             | Path                                  | Mechanism                                                                                  | Rebuild? |
+| ------------------- | ------------------------------------- | ------------------------------------------------------------------------------------------ | -------- |
+| Instructions        | `config/instructions.md`              | `defineDynamic` instructions at `session.started`, appends the memory block                | no       |
+| Skills              | `config/skills/*.md`                  | `defineDynamic` skills returning a `defineSkill` map from the directory                    | no       |
+| Plugins             | `plugins.json` + hub credential       | `defineDynamic` connections, `defineMcpClientConnection` per entry with `instanceKey`      | no       |
+| Routines            | `routines.json`                       | one dispatcher `defineSchedule`, lease via a schedule store, deliver with `to(channel, …)` | no       |
+| Model               | `profile.json.model`                  | `defineDynamic` model resolver                                                             | no       |
+| Profile             | `profile.json`                        | hub `BotState`, already exists                                                             | no       |
+| Tools, channels     | `agent/tools/*.ts`, `agent/channels/` | supervisor: fetch, `npm ci`, `eve build` in a staging dir, health check, swap, rollback    | yes      |
+| `agent.ts`, sandbox | `agent/agent.ts`, `agent/sandbox.ts`  | same                                                                                       | yes      |
 
 Two ways to edit, one set of files. The Bot edits through a typed `bot_config` tool (get and set on instructions, a skill, a routine, a plugin descriptor) that validates with zod, runs the directive screen and size caps from `vcmc-agent`'s memory path, appends to `changes.jsonl`, and answers "done" only after reading the file back. `write_file` stays as the escape hatch, and the resolvers validate on read so a malformed file degrades to the last good copy rather than a broken session. hello.expert edits through new Seat RPCs that write the same files and the same log. Grok's rule, "everything on the profile page is also set up through chat", falls out of that.
 
@@ -101,24 +101,24 @@ How the generic layer is shared without merging repos: `apps/eve/lib` becomes a 
 
 Inventory of `vcmc-agent`, and where each piece lands.
 
-| In `vcmc-agent` today                                                                                    | Lands in `expert` (generic)                                                            | Stays tenant content                                  |
-| -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `agent/channels/whatsapp.ts` (payload, context fencing, media, empty-reply fallback, `outboundReply`)    | `lib/channels/whatsapp.ts` + `lib/format-reply.ts`, bridge protocol versioned          |                                                       |
-| `bridge/` (Baileys, trigger modes, mentions, media pipeline, transcription, HTTP API, allowlists, QR)     | `apps/whatsapp-bridge`, tenant-agnostic, `members.ts` overlay becomes a JSON file      | the VCMC member overlay data                          |
-| `computer`, `shell`, `read_file`, `write_file`, `lib/hub.ts` (degrade to `available:false`)              | already `lib/tools/*`; adopt the degrade behaviour                                     |                                                       |
-| `expert-invite`                                                                                          | `lib/tools/expert_invite.ts` calling the hub, not a web URL                             |                                                       |
-| `computer-use` skill                                                                                     | `bots/main/agent/skills/computer-use/SKILL.md`, one copy                                |                                                       |
-| `instructions.ts` (base + memory block)                                                                  | dynamic instructions resolver reading `config/instructions.md`                          | `base-instructions.ts` becomes the tenant's file      |
-| `easter-eggs`, `group-lore`, `how-im-built`, `matthew-blode` skills                                      | dynamic skills resolver                                                                 | the skill files                                       |
-| `daily-digest` schedule + `digest` channel                                                               | routines dispatcher + DM delivery through the channel                                   | the digest prompts and subscribers                    |
-| `memory-consolidation` schedule                                                                          | stays a TypeScript schedule (tenant code) until memory moves                            | `consolidation.ts`, `stale-scan.ts`                   |
-| `save-memory`, `memory-log`, `revert-memory`, `audit-memory`, `memory-store.ts` (Blob)                    | Phase 5: `MemoryStore` interface with a volume backend; screens unchanged               | categories, health scoring                            |
-| `search-chat`, `get-group-stats`, `get-reactions`, `who-is`, `group-history`, archive blob, reingest      |                                                                                        | all of it                                             |
-| `read-url`, `get-youtube-transcript`, `generate-image`                                                   | candidates for the generic tool set later; not needed for parity                        | for now                                               |
-| `report-feature-request`, `invite-member` (bridge `/report`, `/invite`, `MAINTAINER_JID`)                | bridge routes stay generic                                                              | the tools                                             |
-| `evals/` (`eve eval`, routing, safety, voice)                                                            | an `evals/` for the generic channel: formatting, fencing, no-token-in-reply             | VCMC suites                                           |
-| `deploy/fly` Eve-only image, `boot-eve.sh`                                                               | retired: the Expert guest image plus the supervisor is the deployment                   |                                                       |
-| Vercel project (fallback), Blob, AI Gateway                                                              | Phase 5 retires Vercel for the agent; the gateway key stays a Fly secret                |                                                       |
+| In `vcmc-agent` today                                                                                 | Lands in `expert` (generic)                                                       | Stays tenant content                             |
+| ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `agent/channels/whatsapp.ts` (payload, context fencing, media, empty-reply fallback, `outboundReply`) | `lib/channels/whatsapp.ts` + `lib/format-reply.ts`, bridge protocol versioned     |                                                  |
+| `bridge/` (Baileys, trigger modes, mentions, media pipeline, transcription, HTTP API, allowlists, QR) | `apps/whatsapp-bridge`, tenant-agnostic, `members.ts` overlay becomes a JSON file | the VCMC member overlay data                     |
+| `computer`, `shell`, `read_file`, `write_file`, `lib/hub.ts` (degrade to `available:false`)           | already `lib/tools/*`; adopt the degrade behaviour                                |                                                  |
+| `expert-invite`                                                                                       | `lib/tools/expert_invite.ts` calling the hub, not a web URL                       |                                                  |
+| `computer-use` skill                                                                                  | `bots/main/agent/skills/computer-use/SKILL.md`, one copy                          |                                                  |
+| `instructions.ts` (base + memory block)                                                               | dynamic instructions resolver reading `config/instructions.md`                    | `base-instructions.ts` becomes the tenant's file |
+| `easter-eggs`, `group-lore`, `how-im-built`, `matthew-blode` skills                                   | dynamic skills resolver                                                           | the skill files                                  |
+| `daily-digest` schedule + `digest` channel                                                            | routines dispatcher + DM delivery through the channel                             | the digest prompts and subscribers               |
+| `memory-consolidation` schedule                                                                       | stays a TypeScript schedule (tenant code) until memory moves                      | `consolidation.ts`, `stale-scan.ts`              |
+| `save-memory`, `memory-log`, `revert-memory`, `audit-memory`, `memory-store.ts` (Blob)                | Phase 5: `MemoryStore` interface with a volume backend; screens unchanged         | categories, health scoring                       |
+| `search-chat`, `get-group-stats`, `get-reactions`, `who-is`, `group-history`, archive blob, reingest  |                                                                                   | all of it                                        |
+| `read-url`, `get-youtube-transcript`, `generate-image`                                                | candidates for the generic tool set later; not needed for parity                  | for now                                          |
+| `report-feature-request`, `invite-member` (bridge `/report`, `/invite`, `MAINTAINER_JID`)             | bridge routes stay generic                                                        | the tools                                        |
+| `evals/` (`eve eval`, routing, safety, voice)                                                         | an `evals/` for the generic channel: formatting, fencing, no-token-in-reply       | VCMC suites                                      |
+| `deploy/fly` Eve-only image, `boot-eve.sh`                                                            | retired: the Expert guest image plus the supervisor is the deployment             |                                                  |
+| Vercel project (fallback), Blob, AI Gateway                                                           | Phase 5 retires Vercel for the agent; the gateway key stays a Fly secret          |                                                  |
 
 ## 5. Phases
 
