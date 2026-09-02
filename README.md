@@ -58,9 +58,9 @@ fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)"
 fly secrets set AI_GATEWAY_API_KEY="…"
 fly deploy
 
-# VCMC (separate app, volume, setup code)
-fly launch --copy-config --no-deploy -c fly.vcmc.toml
-fly volumes create vcmc_workspace --size 20 --region syd -c fly.vcmc.toml
+# VCMC (separate app, existing 10 GB `vcmc_workspace` in syd, setup code)
+# Suspends when idle: CPU/RAM go to $0; the volume still bills. Do not
+# create a new volume. `fly deploy` without `-c` still targets Matt's app.
 fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)" -c fly.vcmc.toml
 fly secrets set AI_GATEWAY_API_KEY="…" -c fly.vcmc.toml
 fly deploy -c fly.vcmc.toml

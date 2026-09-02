@@ -198,6 +198,17 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(vcmc).toContain('primary_region = "syd"');
     expect(vcmc).toContain('dockerfile = "deploy/fly/Dockerfile"');
     expect(vcmc).toContain("/workspace/eve/bots");
+    expect(vcmc).not.toMatch(/volumes create/);
+    expect(vcmc).not.toMatch(/--size 20/);
+    expect(vcmc).toMatch(/auto_stop_machines = "suspend"/);
+    expect(vcmc).toMatch(/min_machines_running = 0/);
+    expect(vcmc).toMatch(/auto_start_machines = true/);
+    expect(vcmc).toMatch(/cpus = 2/);
+    expect(vcmc).toMatch(/memory = "2gb"/);
+    expect(vcmc).not.toMatch(/cpus = 4/);
+    expect(vcmc).not.toMatch(/memory = "4gb"/);
+    expect(matt).toMatch(/auto_stop_machines = "off"/);
+    expect(matt).toMatch(/min_machines_running = 1/);
   });
 
   it("eve bot apps declare just-bash so eve start can init the guest sandbox", () => {

@@ -1,13 +1,16 @@
 # VCMC tenant guest. Same image as fly.toml (desk + hub + Eve runner).
 # Deploy only with this file so `fly deploy` from the repo root still
 # targets Matt's app and cannot mutate mblode-computer:
-#   fly volumes create vcmc_workspace --size 20 --region syd -c fly.vcmc.toml
 #   fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)" -c fly.vcmc.toml
 #   fly deploy -c fly.vcmc.toml
 #
-# Pairing code is this Machine's secret, not Matt's. Volume is this app's.
+# Pairing code is this Machine's secret, not Matt's. Volume is this app's
+# existing `vcmc_workspace` (10 GB, syd). Do not create a second volume.
 # A later Eve tree (vcmc-agent) goes on the volume at /workspace/eve/bots
 # (standalone Eve app or bots/main). Do not copy that source into this repo.
+#
+# CPU can idle to $0. Disk cannot. This guest suspends; Matt's fly.toml stays
+# always-on.
 
 app = "vcmc-computer"
 primary_region = "syd"
@@ -24,6 +27,8 @@ COMPUTER_BIND = "0.0.0.0"
 COMPUTER_PORT = "8080"
 COMPUTER_URL = "http://127.0.0.1:8080"
 HOME = "/home/box"
+# Guest-side idle hint. Fly Proxy suspend (auto_stop_machines) is what
+# zeros compute. This env is not a substitute for auto_stop = off.
 COMPUTER_IDLE_SUSPEND_SEC = "1200"
 COMPUTER_VNC_TTL_SEC = "900"
 COMPUTER_NOVNC_BASE = "6080"
@@ -39,9 +44,11 @@ COMPUTER_EVE_BOTS = "/opt/computer/apps/eve/bots"
 processes = ["computer"]
 internal_port = 8080
 force_https = true
-auto_stop_machines = "off"
+# Suspend (not stop): faster wake; CPU/RAM bill $0 while suspended.
+# Railway WhatsApp bridge POST starts it again.
+auto_stop_machines = "suspend"
 auto_start_machines = true
-min_machines_running = 1
+min_machines_running = 0
 
 [http_service.concurrency]
 type = "requests"
@@ -60,11 +67,12 @@ source = "vcmc_workspace"
 destination = "/workspace"
 processes = ["computer"]
 
+# WhatsApp + a desk. Not Matt's 4/4gb always-on size.
 [[vm]]
 processes = ["computer"]
 cpu_kind = "shared"
-cpus = 4
-memory = "4gb"
+cpus = 2
+memory = "2gb"
 
 [deploy]
 strategy = "immediate"
