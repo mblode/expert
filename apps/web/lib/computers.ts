@@ -3,8 +3,15 @@ import { DEFAULT_HUB_URL, trimSlashes } from "./config";
 /** Process env or a test fixture. Avoids requiring NODE_ENV on every call. */
 export type EnvMap = Record<string, string | undefined>;
 
-export const DEFAULT_COMPUTER_ID = "matt";
-export const VCMC_HUB_URL = "https://vcmc-computer.fly.dev";
+export const DEFAULT_COMPUTER_ID = "blode";
+export const VIBEY_HUB_URL = "https://vcmc-computer.fly.dev";
+
+/** Live COMPUTER_BINDINGS and stored seats may still say matt/vcmc. */
+const COMPUTER_ID_ALIASES: Record<string, string> = { matt: "blode", vcmc: "vibey" };
+
+function canonicalComputerId(id: string): string {
+  return COMPUTER_ID_ALIASES[id] ?? id;
+}
 
 export interface ComputerRecord {
   id: string;
@@ -21,18 +28,25 @@ export interface ComputerChoice {
 
 /** Seeded tenants. Hub URLs can be overridden per id; setup codes stay in env. */
 export function computersFromEnv(env: EnvMap): ComputerRecord[] {
-  const mattHub = trimSlashes(
-    env.COMPUTER_HUB_URL_MATT ?? env.COMPUTER_HUB_URL ?? env.NEXT_PUBLIC_HUB_URL ?? DEFAULT_HUB_URL,
+  const blodeHub = trimSlashes(
+    env.COMPUTER_HUB_URL_BLODE ??
+      env.COMPUTER_HUB_URL_MATT ??
+      env.COMPUTER_HUB_URL ??
+      env.NEXT_PUBLIC_HUB_URL ??
+      DEFAULT_HUB_URL,
   );
-  const vcmcHub = trimSlashes(env.COMPUTER_HUB_URL_VCMC ?? VCMC_HUB_URL);
+  const vibeyHub = trimSlashes(
+    env.COMPUTER_HUB_URL_VIBEY ?? env.COMPUTER_HUB_URL_VCMC ?? VIBEY_HUB_URL,
+  );
   return [
-    { hubUrl: mattHub, id: "matt", label: "Matt", setupCodeEnv: "COMPUTER_SETUP_CODE" },
-    { hubUrl: vcmcHub, id: "vcmc", label: "VCMC", setupCodeEnv: "COMPUTER_SETUP_CODE_VCMC" },
+    { hubUrl: blodeHub, id: "blode", label: "Blode", setupCodeEnv: "COMPUTER_SETUP_CODE" },
+    { hubUrl: vibeyHub, id: "vibey", label: "Vibey", setupCodeEnv: "COMPUTER_SETUP_CODE_VCMC" },
   ];
 }
 
 export function computerById(id: string, env: EnvMap): ComputerRecord | undefined {
-  return computersFromEnv(env).find((computer) => computer.id === id);
+  const canonical = canonicalComputerId(id);
+  return computersFromEnv(env).find((computer) => computer.id === canonical);
 }
 
 /** `email:computerId,...` (case-insensitive email). First binding for an email wins. */
@@ -67,12 +81,14 @@ export function parseEmailList(raw: string | undefined): Set<string> {
 
 export function defaultComputerId(email: string, env: EnvMap): string {
   const bound = parseComputerBindings(env.COMPUTER_BINDINGS).get(email.trim().toLowerCase());
-  if (bound && computerById(bound, env)) {
-    return bound;
+  const fromBinding = bound ? computerById(bound, env) : undefined;
+  if (fromBinding) {
+    return fromBinding.id;
   }
   const fallback = env.DEFAULT_COMPUTER_ID?.trim();
-  if (fallback && computerById(fallback, env)) {
-    return fallback;
+  const fromFallback = fallback ? computerById(fallback, env) : undefined;
+  if (fromFallback) {
+    return fromFallback.id;
   }
   return DEFAULT_COMPUTER_ID;
 }

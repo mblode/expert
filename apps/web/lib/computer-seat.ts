@@ -6,6 +6,7 @@ import type { ComputerChoice, ComputerRecord } from "./computers";
 import {
   accessibleComputers,
   choicesOf,
+  computerById,
   computersFromEnv,
   defaultComputerId,
   pairComputer,
@@ -93,7 +94,8 @@ async function pairAndPersist(
 function pickBound(email: string, storedId: string | undefined): ComputerRecord | undefined {
   const allowed = catalog(email);
   if (storedId) {
-    const kept = allowed.find((row) => row.id === storedId);
+    const wanted = computerById(storedId, process.env);
+    const kept = wanted && allowed.find((row) => row.id === wanted.id);
     if (kept) {
       return kept;
     }
@@ -163,7 +165,8 @@ export async function bindComputerSeat(
   email: string,
   computerId: string,
 ): Promise<ComputerSeat> {
-  const target = catalog(email).find((row) => row.id === computerId);
+  const wanted = computerById(computerId, process.env);
+  const target = wanted && catalog(email).find((row) => row.id === wanted.id);
   if (!target) {
     const fallback = pickBound(email, undefined);
     if (!fallback) {

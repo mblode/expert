@@ -12,7 +12,7 @@ Humans install by signing in there. That is install. Agents install this skill.
 ## What this is
 
 - Product site: `https://hello.expert` (Vercel).
-- Computer: the hub on the signed-in session (`hubUrl`). Matt's box is `https://mblode-computer.fly.dev`; VCMC is a separate guest.
+- Computer: the hub on the signed-in session (`hubUrl`). Blode is `https://mblode-computer.fly.dev`; Vibey is a separate guest.
 - After the user signs in, the web server Pairs with **that** hub using a **server-only** setup code and puts a seat token on the session.
 - You drive the box with **Seat RPCs**, never RFB input.
 

@@ -1,4 +1,4 @@
-# Matt's cloud computer — one Fly Machine in syd. Eve, desk, and hub share it.
+# Blode computer. One Fly Machine in syd. Eve, desk, and hub share it.
 # Eve is a child of this guest (loopback), not a Vercel app and not a
 # second Fly process group.
 #
@@ -21,7 +21,8 @@ COMPUTER_BIND = "0.0.0.0"
 COMPUTER_PORT = "8080"
 COMPUTER_URL = "http://127.0.0.1:8080"
 HOME = "/home/box"
-# 20 minutes. Not Sprites' 30s — a desktop cannot hibernate that fast.
+# Guest-side idle hint. Fly Proxy suspend (auto_stop_machines) is what
+# zeros compute. This env is not a substitute for auto_stop = off.
 COMPUTER_IDLE_SUSPEND_SEC = "1200"
 COMPUTER_VNC_TTL_SEC = "900"
 COMPUTER_NOVNC_BASE = "6080"
@@ -36,9 +37,11 @@ COMPUTER_EVE_BOTS = "/opt/computer/apps/eve/bots"
 processes = ["computer"]
 internal_port = 8080
 force_https = true
-auto_stop_machines = "off"
+# Suspend (not stop): faster wake; CPU/RAM bill $0 while suspended.
+# 2 GB is Fly's max for machine suspend.
+auto_stop_machines = "suspend"
 auto_start_machines = true
-min_machines_running = 1
+min_machines_running = 0
 
 [http_service.concurrency]
 type = "requests"
@@ -58,14 +61,13 @@ source = "computer_workspace"
 destination = "/workspace"
 processes = ["computer"]
 
-# Guest: start at 4 shared vCPU / 4 GB. Grok measured 8 vCPU / 16 GB / 128 GB.
-#   fly scale vm shared-cpu-8x --memory 16384 --process-group computer
-#   fly volumes extend computer_workspace --size 128
+# shared-cpu-2x / 2 GB. Chromium + Xvfb + Eve + hub will not fit in 1 GB;
+# 1 vCPU stutters VNC when Eve drives the desk.
 [[vm]]
 processes = ["computer"]
 cpu_kind = "shared"
-cpus = 4
-memory = "4gb"
+cpus = 2
+memory = "2gb"
 
 [deploy]
 strategy = "immediate"
