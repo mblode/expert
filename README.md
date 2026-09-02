@@ -15,7 +15,7 @@ Sign in at [hello.expert](https://hello.expert) to watch the desk and talk to th
 ## Install
 
 ```bash
-git clone https://github.com/mblode/expert-computer && cd expert-computer && npm install
+git clone https://github.com/mblode/expert && cd expert && npm install
 ```
 
 Requires Node 24 and a running Docker daemon (Docker Desktop, OrbStack, colima). Without Docker the hub runs against a fake desk so you can still pair and poke around.
@@ -82,6 +82,9 @@ The product web is `apps/web` on Vercel with Root Directory `apps/web`. It is th
 | `NEXT_PUBLIC_HUB_URL`                    | Fallback hub (`https://mblode-computer.fly.dev`) when a session has no bind |
 | `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers. Unset: every signed-in user                       |
 | `COMPUTER_BINDINGS`                      | Optional `email:blode,email:vibey` default bind                             |
+| `INVITE_MINT_SECRET`                     | Optional bearer for minting `/desk` and `/plugins` invite links (WhatsApp)  |
+
+A WhatsApp tap opens a short-lived invite: `/desk/<token>` is the phone desk (take/yield seat, pointer, keyboard). `/plugins/<token>` adds an Eve connection file under `agent/connections/` on the guest. Plugins are files, not a database table. Skills stay as files too.
 
 Push the schema once with `cd apps/web && npx drizzle-kit push`. An always-on VPS is the alternative: [deploy/cloud-init.yaml](deploy/cloud-init.yaml).
 

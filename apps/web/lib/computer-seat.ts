@@ -38,7 +38,7 @@ function viewFor(
   };
 }
 
-async function ensureComputers(): Promise<void> {
+export async function ensureComputerCatalog(): Promise<void> {
   for (const row of computersFromEnv(process.env)) {
     await db
       .insert(computer)
@@ -66,7 +66,7 @@ async function pairAndPersist(
     return viewFor(email, target, { seatError: paired.error });
   }
   try {
-    await ensureComputers();
+    await ensureComputerCatalog();
     await db
       .insert(computerSeat)
       .values({

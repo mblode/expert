@@ -3,7 +3,7 @@ export const siteConfig = {
   installCommand: "npx skills add https://hello.expert",
   links: {
     author: "https://blode.co",
-    github: "https://github.com/mblode/expert-computer",
+    github: "https://github.com/mblode/expert",
     login: "/login",
   },
   name: "Expert",
