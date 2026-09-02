@@ -21,7 +21,7 @@
     "lint": "node scripts/lint-layers.mjs && ultracite check && knip",
     "fix": "ultracite fix",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm test --workspace=apps/hub && npm test --workspace=apps/web && npm test --workspace=apps/eve",
+    "test": "npm test --workspace=apps/hub && npm test --workspace=apps/web && npm test --workspace=apps/eve && npm test --workspace=apps/whatsapp-bridge",
     "check": "npm run typecheck && npm run lint && npm test && npm run proto:check",
     "hub": "npm run start --workspace=apps/hub",
     "eve": "npm run dev --workspace=@computer/eve-main",

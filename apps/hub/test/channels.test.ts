@@ -69,17 +69,32 @@ describe("channel registry", () => {
     expect(reg.remove("whatsapp-main")).toBe(false);
   });
 
-  it("locks a channel after ten bad secrets, per channel", () => {
+  it("refuses a wrong or missing secret without locking the door", () => {
     const reg = new ChannelRegistry();
     const a = reg.add({ bot: "main", id: "a", kind: "webhook" });
-    const b = reg.add({ bot: "main", id: "b", kind: "webhook" });
-    const now = 1_000_000;
-    for (let i = 0; i < 10; i += 1) {
-      expect(() => reg.verify("a", "wrong", now)).toThrow(/bad channel secret/);
+    for (let i = 0; i < 20; i += 1) {
+      expect(() => reg.verify("a", "wrong")).toThrow(/bad channel secret/);
     }
-    expect(() => reg.verify("a", a.secret, now + 1)).toThrow(/too many/);
-    expect(reg.verify("b", b.secret, now + 1).id).toBe("b");
-    expect(reg.verify("a", a.secret, now + 60_001).id).toBe("a");
+    expect(() => reg.verify("a", undefined)).toThrow(/bad channel secret/);
+    expect(() => reg.verify("nope", a.secret)).toThrow(/bad channel secret/);
+    // The bridge's next message still goes through: a flood of junk secrets
+    // at the public ingress must not become a denial of service.
+    expect(reg.verify("a", a.secret).id).toBe("a");
+  });
+
+  it("sees a door written to channels.json by another process", () => {
+    const dir = mkdtempSync(join(tmpdir(), "hub-channels-"));
+    dirs.push(dir);
+    const path = join(dir, "channels.json");
+    const hub = new ChannelRegistry(new FileChannelStore(path));
+    hub.add({ bot: "main", id: "first", kind: "webhook" });
+    // `npm run bot -- channel add` behind a running hub.
+    const cli = new ChannelRegistry(new FileChannelStore(path));
+    const hook = cli.add({ bot: "main", id: "hooks", kind: "webhook" });
+    expect(hub.verify("hooks", hook.secret).id).toBe("hooks");
+    // And the hub's next write keeps it.
+    hub.rotate("first");
+    expect(cli.list().map((r) => r.id)).toEqual(["first", "hooks"]);
   });
 
   it("persists 0600 in a 0700 dir and reloads", () => {

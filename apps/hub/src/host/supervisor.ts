@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";
-import { mkdirSync, openSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 
 /**
@@ -186,10 +186,14 @@ export class Supervisor {
         uid: m.spec.uid,
       });
     } catch (error) {
-      // spawn itself can throw (EACCES on uid without root). Treat as an exit.
+      // spawn itself can throw (a bad uid without root). Treat as an exit.
       this.log(`${m.spec.id}: spawn failed: ${(error as Error).message}`);
       this.onExit(m, null, null);
       return;
+    } finally {
+      // The child holds its own copy of the descriptor; keeping ours would
+      // leak one per restart, and PID 1 restarts for the life of the box.
+      closeSync(out);
     }
     m.child = child;
     m.startedAt = Date.now();
@@ -197,12 +201,21 @@ export class Supervisor {
     m.healthy = null;
     this.setState(m, "starting");
     this.log(`${m.spec.id}: started pid ${child.pid ?? "?"}`);
+    // Only the first of "error" and "exit" counts: a spawn failure (ENOENT,
+    // EACCES, EMFILE) arrives as "error" with no pid and may never "exit", and
+    // without this a missing binary sat "up" forever with nothing running.
+    const done = (code: number | null, signal: NodeJS.Signals | null): void => {
+      if (m.child === child) {
+        this.onExit(m, code, signal);
+      }
+    };
     child.on("error", (error) => {
       this.log(`${m.spec.id}: ${error.message}`);
+      if (child.pid === undefined) {
+        done(null, null);
+      }
     });
-    child.on("exit", (code, signal) => {
-      this.onExit(m, code, signal);
-    });
+    child.on("exit", done);
     if (m.spec.healthUrl) {
       this.scheduleHealth(m, 500);
     } else if (!m.spec.oneShot) {

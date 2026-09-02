@@ -175,7 +175,13 @@ const sup = new Supervisor({
   statusFile,
 });
 
-/** The login's worth for box children, plus the model keys Eve needs. Never the setup code or the bridge secret. */
+/**
+ * The login's worth for box children, plus the model keys Eve needs. Never the
+ * setup code or the bridge secret: Eve shares uid box with the model's `shell`,
+ * so anything in its environ is the model's too. WhatsApp reaches Eve through
+ * the hub's channel door with the Eve secret; a Bot that needs to call the
+ * bridge back gets a per-account credential in Phase 4, not the admin secret.
+ */
 const DENY = new Set(["COMPUTER_SETUP_CODE", "WHATSAPP_BRIDGE_SECRET", "FLY_API_TOKEN"]);
 function childEnv(extra: NodeJS.ProcessEnv, home: string): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
@@ -212,9 +218,6 @@ for (const launch of eves) {
         HOST: "127.0.0.1",
         PORT: String(launch.port),
         USER: box.name,
-        // The bridge is loopback; Eve's tools that read the live tail use it.
-        BRIDGE_URL: `http://127.0.0.1:${bridgePort}`,
-        WHATSAPP_BRIDGE_SECRET: bridgeSecret,
       },
       "/home/box",
     ),

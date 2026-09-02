@@ -189,9 +189,12 @@ agent token, and by everything else through a **channel**: a record
 own secret, minted once and rotated or removed on its own. The ingress
 maps `POST /channels/<id>/<rest>` with header `x-channel-secret` onto that
 Bot's Eve at `/eve/v1/<kind>/<rest>`, adding the hub's loopback secret;
-`paths` narrows which Eve routes the door may reach. Ten bad secrets lock
-one channel for a minute, per channel. A seat token is not a channel
-secret and a channel secret opens nothing else.
+`paths` narrows which Eve routes the door may reach. There is no lockout
+on this door, unlike `Pair`: it is public and its ids are guessable, so a
+lockout would let a stranger block the real bridge; the 256-bit secret and
+a constant-time compare are the defence. Bodies are capped at 12 MiB (two
+bridge images as data URLs). A seat token is not a channel secret and a
+channel secret opens nothing else.
 
 The WhatsApp bridge is a hub-supervised process on the same Machine, one
 Baileys socket per linked number. Linking is an owner's job on

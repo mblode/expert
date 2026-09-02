@@ -8,8 +8,13 @@ import { EVE_HUB_SECRET_HEADER } from "../host/eve.ts";
 import { writeError } from "./router.ts";
 
 const PREFIX = "/channels/";
-/** Same cap as the Connect router: a WhatsApp message with two images fits; a dump does not. */
-const MAX_BODY = 1_000_000;
+/**
+ * Wider than the seat router's 1 MiB: the bridge attaches up to two 4 MB
+ * images or a 3 MB PDF as base64 data URLs (4/3 growth), so a real photo is
+ * ~5.5 MB on the wire. The bridge's own caps are the real limit; this only
+ * stops a dump.
+ */
+const MAX_BODY = 12 * 1024 * 1024;
 /** The header a channel presents. Never the seat token, never the Eve secret. */
 export const CHANNEL_SECRET_HEADER = "x-channel-secret";
 

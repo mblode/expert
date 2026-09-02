@@ -87,6 +87,24 @@ describe("supervisor", () => {
     expect(onDisk.children[0]!.id).toBe("crashy");
   });
 
+  it("a binary that cannot be spawned is restarted, not reported up", async () => {
+    const dir = tmp();
+    const sup = new Supervisor({ backoff: { initialMs: 50, maxMs: 100, stableMs: 10_000 } });
+    sups.push(sup);
+    // ENOENT arrives as an "error" event with no pid and no "exit".
+    sup.start({
+      args: [],
+      cmd: join(dir, "no-such-binary"),
+      id: "ghost",
+      log: join(dir, "ghost.log"),
+    });
+    await until(() => sup.status().children[0]!.restarts >= 2);
+    const [ghost] = sup.status().children;
+    expect(ghost!.state).toBe("restarting");
+    expect(ghost!.pid).toBeNull();
+    expect(sup.status().ok).toBe(false);
+  });
+
   it("a one-shot child that exits 0 is done, not restarted", async () => {
     const dir = tmp();
     const sup = new Supervisor();

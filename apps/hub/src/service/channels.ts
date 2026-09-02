@@ -63,8 +63,6 @@ export class FileChannelStore implements ChannelStore {
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,47}$/;
 const KIND_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
-const MAX_FAILURES = 10;
-const LOCKOUT_MS = 60_000;
 
 function channelRecordFrom(entry: unknown, path: string): ChannelRecord {
   if (!entry || typeof entry !== "object") {
@@ -97,23 +95,31 @@ export function mintChannelSecret(): string {
   return randomBytes(32).toString("base64url");
 }
 
+/**
+ * Stateless over its store on purpose: `npm run bot -- channel add` edits
+ * `channels.json` behind a running hub, and a registry that cached the file
+ * at boot would neither see that door nor keep it on its next write. The
+ * file is a handful of records, so reading it per call costs nothing.
+ *
+ * No lockout here, unlike `Pair`. The ingress is public and a channel id is
+ * guessable (`whatsapp-<acct>`), so a per-id lockout would let anyone on the
+ * internet block the real bridge for a minute at a time with ten junk
+ * requests. A 256-bit secret is not an online-guessing target; the
+ * constant-time compare is the whole defence.
+ */
 export class ChannelRegistry {
-  private readonly records = new Map<string, ChannelRecord>();
-  /** Per channel id: bad-secret attempts, so one noisy door cannot lock the others. */
-  private readonly failures = new Map<string, { count: number; blockedUntil: number }>();
+  constructor(private readonly store: ChannelStore = new MemoryChannelStore()) {}
 
-  constructor(private readonly store: ChannelStore = new MemoryChannelStore()) {
-    for (const r of store.load()) {
-      this.records.set(r.id, r);
-    }
+  private records(): Map<string, ChannelRecord> {
+    return new Map(this.store.load().map((r) => [r.id, r]));
   }
 
   list(): ChannelSummary[] {
-    return [...this.records.values()].map(summary);
+    return this.store.load().map(summary);
   }
 
   byId(id: string): ChannelRecord | undefined {
-    return this.records.get(id);
+    return this.records().get(id);
   }
 
   /** Mint a door. The secret is returned here and never listed again. */
@@ -127,7 +133,8 @@ export class ChannelRegistry {
     if (!opts.bot) {
       throw new ComputerError("VALIDATION", "channel needs a bot");
     }
-    if (this.records.has(opts.id)) {
+    const records = this.records();
+    if (records.has(opts.id)) {
       throw new ComputerError("CONFLICT", `channel ${opts.id} already exists`);
     }
     const record: ChannelRecord = {
@@ -138,58 +145,40 @@ export class ChannelRegistry {
       paths: opts.paths,
       secret: mintChannelSecret(),
     };
-    this.records.set(record.id, record);
-    this.persist();
+    records.set(record.id, record);
+    this.store.save([...records.values()]);
     return record;
   }
 
   /** New secret, same door. The old one stops working the moment this returns. */
   rotate(id: string): ChannelRecord {
-    const existing = this.records.get(id);
+    const records = this.records();
+    const existing = records.get(id);
     if (!existing) {
       throw new ComputerError("VALIDATION", `no channel ${id}`);
     }
     const next = { ...existing, secret: mintChannelSecret() };
-    this.records.set(id, next);
-    this.persist();
+    records.set(id, next);
+    this.store.save([...records.values()]);
     return next;
   }
 
   remove(id: string): boolean {
-    const had = this.records.delete(id);
+    const records = this.records();
+    const had = records.delete(id);
     if (had) {
-      this.failures.delete(id);
-      this.persist();
+      this.store.save([...records.values()]);
     }
     return had;
   }
 
-  /**
-   * Check a presented secret. Wrong secrets are counted per channel and lock
-   * that channel for a minute after ten, the same shape as `Pair`, so a
-   * leaked channel id is not an online-guessing target for its secret.
-   */
-  verify(id: string, secret: string | undefined, now = Date.now()): ChannelRecord {
-    const record = this.records.get(id);
-    const state = this.failures.get(id) ?? { blockedUntil: 0, count: 0 };
-    if (state.blockedUntil > now) {
-      throw new ComputerError("UNAUTHENTICATED", "too many bad channel secrets, try again later");
-    }
+  /** Check a presented secret. A missing door and a wrong secret read the same from outside. */
+  verify(id: string, secret: string | undefined): ChannelRecord {
+    const record = this.byId(id);
     if (!record || !secret || !safeEqual(secret, record.secret)) {
-      state.count += 1;
-      if (state.count >= MAX_FAILURES) {
-        state.count = 0;
-        state.blockedUntil = now + LOCKOUT_MS;
-      }
-      this.failures.set(id, state);
       throw new ComputerError("UNAUTHENTICATED", "bad channel secret");
     }
-    this.failures.delete(id);
     return record;
-  }
-
-  private persist(): void {
-    this.store.save([...this.records.values()]);
   }
 }
 

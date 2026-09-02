@@ -118,11 +118,20 @@ export const buildContext = (payload: BridgePayload): string[] => {
   const context = [buildContextBlock(payload)];
   for (const block of payload.context ?? []) {
     if (block.trim()) {
-      context.push(`<untrusted_context>\n${block}\n</untrusted_context>`);
+      context.push(`<untrusted_context>\n${neutraliseFence(block)}\n</untrusted_context>`);
     }
   }
   return context;
 };
+
+/**
+ * A member who types `</untrusted_context>` into the chat would otherwise
+ * close the fence from inside it and have the rest of the tail read as
+ * unfenced context. Entity-escape the tag either way round; the model still
+ * sees the words, they just cannot terminate the block.
+ */
+export const neutraliseFence = (block: string): string =>
+  block.replaceAll(/<(?<slash>\/?)untrusted_context>/giu, "&lt;$<slash>untrusted_context&gt;");
 
 /** What `from(address).send` accepts: a string or the AI SDK's user content parts. */
 export type ChannelMessage = Parameters<ChannelSource["send"]>[0];
