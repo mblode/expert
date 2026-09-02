@@ -1,5 +1,6 @@
 import { defineTool, toolOutput, toolOutputPart } from "eve/tools";
 import type { ToolModelOutputPart } from "eve/tools";
+import { never } from "eve/tools/approval";
 import { z } from "zod";
 import { hubRpc } from "../hub.ts";
 
@@ -65,6 +66,7 @@ interface ComputerResponse {
 }
 
 export default defineTool({
+  approval: never(),
   description:
     "Use my computer's screen (1280×800). Actions run in order; coordinates are pixels of the last full-display screenshot. Returns per-action results and a fresh screenshot. See the computer-use skill before first use.",
   async execute(input) {

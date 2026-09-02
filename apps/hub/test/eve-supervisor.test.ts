@@ -147,6 +147,13 @@ describe("eve supervisor: N Eves from the roster", () => {
       expect(sandbox).toMatch(/backend:\s*justbash\s*\(/);
       expect(sandbox).not.toMatch(/backend:\s*docker\s*\(/);
       expect(sandbox).not.toMatch(/backend:\s*vercel\s*\(/);
+      const bash = readFileSync(join(bots, id, "agent/tools/bash.ts"), "utf-8");
+      expect(bash, `${id} re-exports shared bash`).toMatch(/lib\/tools\/bash\.ts/);
+      const shared = readFileSync(
+        resolve(import.meta.dirname, "../../../apps/eve/lib/tools/bash.ts"),
+        "utf-8",
+      );
+      expect(shared).toMatch(/disableTool\s*\(/);
     }
   });
 });
