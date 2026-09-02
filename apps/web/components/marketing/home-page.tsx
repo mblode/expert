@@ -65,8 +65,7 @@ export function MarketingHome(): React.ReactElement {
               </h1>
               <Reveal delay={0.35}>
                 <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-lg text-muted-foreground">
-                  Vercel Eve, on a computer you can see. Same computer on the web, desktop, and
-                  iOS.
+                  Vercel Eve, on a computer you can see. Same computer on the web, desktop, and iOS.
                 </p>
               </Reveal>
               <Reveal delay={0.5}>
