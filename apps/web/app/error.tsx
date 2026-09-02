@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 export default function ErrorPage({
   error,
   reset,
@@ -17,13 +19,9 @@ export default function ErrorPage({
         >
           {error.message || "Unexpected error."}
         </p>
-        <button
-          className="w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-ink"
-          onClick={reset}
-          type="button"
-        >
+        <Button className="w-full" onClick={reset} size="input" type="button">
           Try again
-        </button>
+        </Button>
       </div>
     </div>
   );
