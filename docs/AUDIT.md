@@ -113,4 +113,4 @@ The repository was then measured against the conventions in [mblode/agent-skills
 
 ## Verification
 
-After the changes: `npm run check` (typecheck for six workspaces, layer lint, `ultracite check`, knip, 166 hub tests, proto check) passes, and `next build` completes with no warnings other than Better Auth's base-URL notice at build time. The Fly and desk images and the desk smoke test were not built here (no Docker daemon in this environment); CI does that.
+After the changes: `npm run check` (typecheck for six workspaces, layer lint, `ultracite check`, knip, 168 hub tests, proto check) passes, and `next build` completes with no warnings other than Better Auth's base-URL notice at build time. The Fly and desk images and the desk smoke test were not built here (no Docker daemon in this environment); CI does that.
