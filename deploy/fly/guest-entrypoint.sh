@@ -43,35 +43,23 @@ if [[ -z "${COMPUTER_SETUP_CODE:-}" ]]; then
 fi
 
 echo "computer guest: desk-up, then Eve per roster bot, then hub on ${COMPUTER_BIND}:${COMPUTER_PORT}"
-runuser -u box -- env HOME=/home/box /usr/local/bin/desk-up
+# HOME is already exported. Do not re-list secrets on the runuser command
+# line: that puts the gateway key, setup code, and Eve secret in `ps`.
+runuser -u box --preserve-environment -- /usr/local/bin/desk-up
 
 # Tokens and the hub→Eve secret live on the volume. `eve build` already ran
-# in the image; this only starts `eve start` on loopback. The secret is read
-# back from the file so start logs cannot become COMPUTER_EVE_SECRET.
+# in the image; this only starts `eve start` on loopback. Fly already injects
+# AI_GATEWAY_API_KEY (and friends). Preserve that environment into box,
+# do not rewrite secrets onto the runuser argv.
 cd /opt/computer
-runuser -u box -- env HOME=/home/box \
-  COMPUTER_DATA="$COMPUTER_DATA" \
-  COMPUTER_URL="$COMPUTER_URL" \
-  COMPUTER_PORT="$COMPUTER_PORT" \
-  COMPUTER_EVE_BOTS="$COMPUTER_EVE_BOTS" \
-  COMPUTER_EVE_SECRET="${COMPUTER_EVE_SECRET:-}" \
-  AI_GATEWAY_API_KEY="${AI_GATEWAY_API_KEY:-}" \
+runuser -u box --preserve-environment -- \
   npm exec --workspace=apps/hub -- tsx src/host/boot-eves.ts
+
+# Read the secret from the file, since boot-eves logs must not become
+# COMPUTER_EVE_SECRET. Export so the hub inherits it without argv.
 COMPUTER_EVE_SECRET="$(tr -d '\n' < /workspace/.computer/eve-secret)"
 export COMPUTER_EVE_SECRET
 
-exec runuser -u box -- env HOME=/home/box \
-  COMPUTER_CLOUD="$COMPUTER_CLOUD" \
-  COMPUTER_BIND="$COMPUTER_BIND" \
-  COMPUTER_PORT="$COMPUTER_PORT" \
-  COMPUTER_DESK="$COMPUTER_DESK" \
-  COMPUTER_DATA="$COMPUTER_DATA" \
-  COMPUTER_VNC_HOST="$COMPUTER_VNC_HOST" \
-  COMPUTER_VNC_PORT="$COMPUTER_VNC_PORT" \
-  COMPUTER_VNC_TOKEN_DIR="$COMPUTER_VNC_TOKEN_DIR" \
-  COMPUTER_VNC_TTL_SEC="${COMPUTER_VNC_TTL_SEC:-900}" \
-  COMPUTER_PUBLIC_URL="${COMPUTER_PUBLIC_URL:-}" \
-  COMPUTER_SETUP_CODE="$COMPUTER_SETUP_CODE" \
-  COMPUTER_EVE_SECRET="$COMPUTER_EVE_SECRET" \
-  COMPUTER_URL="$COMPUTER_URL" \
+cd /opt/computer
+exec runuser -u box --preserve-environment -- \
   npm run start --workspace=apps/hub
