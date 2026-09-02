@@ -102,8 +102,9 @@ export function LoginForm({
     verifyingRef.current = true;
     setPending(true);
     setError(null);
+    let data: unknown;
     try {
-      const { data, error: verifyError } = await authClient.signIn.emailOtp({
+      const { data: signInData, error: verifyError } = await authClient.signIn.emailOtp({
         email: email.trim().toLowerCase(),
         otp: code,
       });
@@ -113,23 +114,26 @@ export function LoginForm({
         setPending(false);
         return;
       }
-      // Identify from the sign-in body. Do not getSession here: that runs
-      // customSession pairing and a throw would leave a consumed code on /login.
-      // The desk still identifies on bootstrap after this full reload.
-      try {
-        const user = userFromSignIn(data);
-        if (user) {
-          identifyUser(user.id, user.email ?? email.trim().toLowerCase());
-        }
-        captureEvent("login_completed", { method: "email_otp" });
-      } finally {
-        window.location.assign("/");
-      }
+      data = signInData;
     } catch {
       setError(NETWORK_ERROR);
       verifyingRef.current = false;
       setPending(false);
+      return;
     }
+    // Identify from the sign-in body. Do not getSession here: that runs
+    // customSession pairing and a throw would leave a consumed code on /login.
+    // Keep pending/verifying locked: the code is already consumed.
+    try {
+      const user = userFromSignIn(data);
+      if (user) {
+        identifyUser(user.id, user.email ?? email.trim().toLowerCase());
+      }
+      captureEvent("login_completed", { method: "email_otp" });
+    } catch {
+      // Analytics must not unlock the form or paint a network error.
+    }
+    window.location.assign("/");
   };
 
   const social = async (provider: "google" | "apple") => {
