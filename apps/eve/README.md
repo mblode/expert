@@ -29,7 +29,7 @@ screen. Port is `2000 + (display - 1)`.
    deploy. The supervisor starts `eve start --host 127.0.0.1 --port …` only
    if `<id>` is on the roster and a project exists.
 
-A tenant that is not this tree (for example VCMC's Eve app, which stays in
+A tenant that is not this tree (for example Vibey's Eve app, which stays in
 its own repo) is not copied here. Point `COMPUTER_EVE_BOTS` at it, or put
 it on the guest volume at `/workspace/eve/bots` (either `bots/main` or a
 standalone Eve project with `package.json` + `agent/`). The overlay wins

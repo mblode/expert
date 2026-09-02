@@ -10,7 +10,7 @@ export const siteConfig = {
   url: "https://hello.expert",
 };
 
-/** Matt's Fly computer. Fallback when a session has no bound hub yet. */
+/** Blode Fly computer. Fallback when a session has no bound hub yet. */
 export const DEFAULT_HUB_URL = "https://mblode-computer.fly.dev";
 
 /**

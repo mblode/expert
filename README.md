@@ -10,7 +10,7 @@ Sign in, watch the screen, take over when the agent gets stuck, hand it back.
 
 ## Demo
 
-Sign in at [hello.expert](https://hello.expert) to watch the desk and talk to the agent. One Fly Machine per tenant: Matt's personal computer stays `mblode-computer`; VCMC is a second computer (`vcmc-computer`). Vibey is not on Matt's desk.
+Sign in at [hello.expert](https://hello.expert) to watch the desk and talk to the agent. One Fly Machine per tenant: Blode stays `mblode-computer`; Vibey is a second computer (`vcmc-computer`).
 
 ## Install
 
@@ -50,23 +50,23 @@ npm run bot -- rm night    # frees the screen
 
 ## Deploy
 
-The cloud path is one Fly Machine per tenant in `syd` running the desk, one agent process per Bot, and the hub. Matt's guest is [fly.toml](fly.toml). A second tenant is a second app and volume, same guest image, from [fly.vcmc.toml](fly.vcmc.toml). Do not `fly deploy` without `-c` when you mean VCMC: that command targets `mblode-computer`.
+The cloud path is one Fly Machine per tenant in `syd` running the desk, one agent process per Bot, and the hub. Blode is [fly.toml](fly.toml). Vibey is a second app and volume, same guest image, from [fly.vcmc.toml](fly.vcmc.toml). Both guests are shared-cpu-2x / 2 GB and suspend when idle. Do not `fly deploy` without `-c` when you mean Vibey: that command targets `mblode-computer`.
 
 ```bash
-# Matt (existing)
+# Blode (existing)
 fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)"
 fly secrets set AI_GATEWAY_API_KEY="…"
 fly deploy
 
-# VCMC (separate app, existing 10 GB `vcmc_workspace` in syd, setup code)
-# Suspends when idle: CPU/RAM go to $0; the volume still bills. Do not
-# create a new volume. `fly deploy` without `-c` still targets Matt's app.
+# Vibey (separate app, existing 10 GB `vcmc_workspace` in syd, setup code)
+# Both suspend when idle: CPU/RAM go to $0; the volume still bills. Do not
+# create a new volume. `fly deploy` without `-c` still targets Blode.
 fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)" -c fly.vcmc.toml
 fly secrets set AI_GATEWAY_API_KEY="…" -c fly.vcmc.toml
 fly deploy -c fly.vcmc.toml
 ```
 
-A later Eve tree that is not `apps/eve/bots/main` (the VCMC agent lives in its own repo) goes on that tenant's volume at `/workspace/eve/bots`. The guest prefers that overlay when it looks like an Eve project.
+A later Eve tree that is not `apps/eve/bots/main` (the Vibey agent lives in its own repo) goes on that tenant's volume at `/workspace/eve/bots`. The guest prefers that overlay when it looks like an Eve project.
 
 The product web is `apps/web` on Vercel with Root Directory `apps/web`. It is the control plane: a signed-in user is bound to a computer. Required variables:
 
@@ -77,11 +77,11 @@ The product web is `apps/web` on Vercel with Root Directory `apps/web`. It is th
 | `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                   |
 | `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                      |
 | `RESEND_API_KEY`                         | Sign-in codes by email; required in production                              |
-| `COMPUTER_SETUP_CODE`                    | Matt's Fly hub secret; server-only                                          |
-| `COMPUTER_SETUP_CODE_VCMC`               | VCMC's Fly hub secret; server-only. Not Matt's code                         |
+| `COMPUTER_SETUP_CODE`                    | Blode Fly hub secret; server-only                                           |
+| `COMPUTER_SETUP_CODE_VCMC`               | Vibey Fly hub secret; server-only. Not Blode's code                         |
 | `NEXT_PUBLIC_HUB_URL`                    | Fallback hub (`https://mblode-computer.fly.dev`) when a session has no bind |
 | `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers. Unset: every signed-in user                       |
-| `COMPUTER_BINDINGS`                      | Optional `email:matt,email:vcmc` default bind                               |
+| `COMPUTER_BINDINGS`                      | Optional `email:blode,email:vibey` default bind                             |
 
 Push the schema once with `cd apps/web && npx drizzle-kit push`. An always-on VPS is the alternative: [deploy/cloud-init.yaml](deploy/cloud-init.yaml).
 
