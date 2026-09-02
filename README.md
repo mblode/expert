@@ -15,7 +15,7 @@ Sign in at [hello.expert](https://hello.expert) to watch the desk and talk to th
 ## Install
 
 ```bash
-git clone https://github.com/mblode/expert-computer && cd expert-computer && npm install
+git clone https://github.com/mblode/expert && cd expert && npm install
 ```
 
 Requires Node 24 and a running Docker daemon (Docker Desktop, OrbStack, colima). Without Docker the hub runs against a fake desk so you can still pair and poke around.
@@ -70,18 +70,22 @@ A later Eve tree that is not `apps/eve/bots/main` (the Vibey agent lives in its 
 
 The product web is `apps/web` on Vercel with Root Directory `apps/web`. It is the control plane: a signed-in user is bound to a computer. Required variables:
 
-| Variable                                 | Notes                                                                       |
-| ---------------------------------------- | --------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it           |
-| `BETTER_AUTH_URL`                        | `https://hello.expert`                                                      |
-| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                   |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                      |
-| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                              |
-| `COMPUTER_SETUP_CODE`                    | Blode Fly hub secret; server-only                                           |
-| `COMPUTER_SETUP_CODE_VCMC`               | Vibey Fly hub secret; server-only. Not Blode's code                         |
-| `NEXT_PUBLIC_HUB_URL`                    | Fallback hub (`https://mblode-computer.fly.dev`) when a session has no bind |
-| `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers. Unset: every signed-in user                       |
-| `COMPUTER_BINDINGS`                      | Optional `email:blode,email:vibey` default bind                             |
+| Variable                                 | Notes                                                                         |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it             |
+| `BETTER_AUTH_URL`                        | `https://hello.expert`                                                        |
+| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                     |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                        |
+| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                                |
+| `COMPUTER_SETUP_CODE`                    | Blode Fly hub secret; server-only                                             |
+| `COMPUTER_SETUP_CODE_VCMC`               | Vibey Fly hub secret; server-only. Not Blode's code                           |
+| `NEXT_PUBLIC_HUB_URL`                    | Fallback hub (`https://mblode-computer.fly.dev`) when a session has no bind   |
+| `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers. Unset: every signed-in user                         |
+| `COMPUTER_BINDINGS`                      | Optional `email:blode,email:vibey` default bind                               |
+| `INVITE_MINT_SECRET`                     | Mint secret for `/desk` and `/plugins` links. Alias of `EXPERT_INVITE_SECRET` |
+| `EXPERT_INVITE_SECRET`                   | Same mint secret. Eve sends it as `x-invite-secret` (WhatsApp)                |
+
+A WhatsApp tap opens a short-lived invite: `/desk/<token>` is the phone desk (take/yield seat, pointer, keyboard). `/plugins/<token>` adds an Eve connection file under `agent/connections/` on the guest. Plugins are files, not a database table. Skills stay as files too.
 
 Push the schema once with `cd apps/web && npx drizzle-kit push`. An always-on VPS is the alternative: [deploy/cloud-init.yaml](deploy/cloud-init.yaml).
 
