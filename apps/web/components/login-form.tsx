@@ -5,7 +5,13 @@ import type { FormEvent } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldGroup, FieldLabel, FieldSeparator } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { authClient } from "@/lib/auth-client";
@@ -257,7 +263,13 @@ export function LoginForm({
           />
         </Field>
         {errorAlert}
-        <Button className="w-full" disabled={!email.trim()} loading={pending} size="input" type="submit">
+        <Button
+          className="w-full"
+          disabled={!email.trim()}
+          loading={pending}
+          size="input"
+          type="submit"
+        >
           Send me a one-time password
         </Button>
       </FieldGroup>

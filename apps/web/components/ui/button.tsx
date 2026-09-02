@@ -4,7 +4,8 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
-import { isValidElement, type ReactElement } from "react";
+import { isValidElement } from "react";
+import type { ReactElement } from "react";
 import type * as React from "react";
 
 import { Spinner } from "@/components/ui/spinner";

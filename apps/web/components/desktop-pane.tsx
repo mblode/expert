@@ -153,7 +153,13 @@ export function DesktopPane({
           role="alert"
         >
           <span className="font-medium text-amber-200">Eve needs you: take the seat</span>
-          <Button disabled={busy} onClick={() => void presence(true)} size="xs" type="button" variant="warning">
+          <Button
+            disabled={busy}
+            onClick={() => void presence(true)}
+            size="xs"
+            type="button"
+            variant="warning"
+          >
             Take the seat
           </Button>
         </div>
@@ -165,7 +171,12 @@ export function DesktopPane({
           <span className="text-amber-200">
             {elsewhereWaiting.bot_id} needs you on screen {elsewhereWaiting.display}
           </span>
-          <Button onClick={() => onDisplayChange(elsewhereWaiting.display)} size="xs" type="button" variant="outline">
+          <Button
+            onClick={() => onDisplayChange(elsewhereWaiting.display)}
+            size="xs"
+            type="button"
+            variant="outline"
+          >
             Switch
           </Button>
         </div>
