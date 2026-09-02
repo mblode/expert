@@ -1,12 +1,4 @@
-import {
-  asPoint,
-  clampCursor,
-  ComputerError,
-  DISPLAY,
-  unavailable,
-  type Button,
-  type Point,
-} from "@computer/shared";
+import { asPoint, clampCursor, ComputerError, unavailable, type Button, type Point } from "@computer/shared";
 import type { Desk, FocusHint, ShellResult } from "./types.ts";
 
 /** Minimal valid 1×1 PNG. Tests do not decode pixels. */
@@ -33,6 +25,8 @@ export class FakeDesk implements Desk {
   lastType = "";
   grabs = 0;
   failPing: boolean;
+  /** A keypress containing this key throws, to exercise the skip-the-rest rule. */
+  failKeys: string | undefined;
 
   constructor(opts: FakeDeskOptions = {}) {
     this.failPing = opts.failPing ?? false;
@@ -77,6 +71,7 @@ export class FakeDesk implements Desk {
   }
 
   async keypress(keys: string[]): Promise<void> {
+    if (this.failKeys && keys.includes(this.failKeys)) throw new Error("xdotool key failed");
     this.lastKeys = keys;
     this.log.push(`keypress ${keys.join("+")}`);
   }
@@ -92,9 +87,7 @@ export class FakeDesk implements Desk {
   }
 
   async drag(path: Point[]): Promise<void> {
-    const first = path[0];
     const last = path[path.length - 1];
-    if (first) this.cursor = first;
     if (last) this.cursor = last;
     this.log.push(`drag ${path.length}`);
   }

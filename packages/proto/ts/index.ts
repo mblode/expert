@@ -19,12 +19,9 @@ export {
   type BoxStatus,
   type Button,
   type Point,
-  type RequestId,
 } from "@computer/shared";
 
 import { Agent, Seat } from "../gen/es/computer_pb.ts";
-
-export const PACKAGE = "computer.v1" as const;
 
 function path(service: { typeName: string }, method: { name: string }): string {
   return `/${service.typeName}/${method.name}`;

@@ -1,7 +1,7 @@
 import { ComputerError, type SeatState } from "@computer/shared";
 
 /**
- * One box, one seat.
+ * One seat per screen. Each Bot's display has its own instance.
  *
  *   AGENT ──request_takeover──► WAITING ──I'm done──► AGENT
  *     ▲                           │

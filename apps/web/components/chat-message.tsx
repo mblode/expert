@@ -19,6 +19,23 @@ const truncate = (text: string): string =>
   text.length > MAX_SUMMARY ? `${text.slice(0, MAX_SUMMARY - 1)}…` : text;
 
 /**
+ * URLs here come from the agent, and the agent reads web pages. Only schemes a
+ * browser can render safely are allowed into `href`/`src`; a `javascript:`
+ * attachment is a click-to-XSS with the seat token on the other side.
+ */
+function safeUrl(url: string | undefined, allowImage = false): string | undefined {
+  if (!url) return undefined;
+  try {
+    const { protocol } = new URL(url, "https://x/");
+    if (protocol === "https:" || protocol === "http:" || protocol === "blob:") return url;
+    if (allowImage && protocol === "data:" && /^data:image\//i.test(url)) return url;
+  } catch {
+    // unparseable
+  }
+  return undefined;
+}
+
+/**
  * The one argument that tells two calls of the same tool apart. A turn calls
  * `computer` a dozen times; without this the chain reads as a dozen identical
  * rows. Ordered by how much of this agent's traffic each shape covers.
@@ -107,11 +124,11 @@ function ToolSteps({ parts }: { parts: EveDynamicToolPart[] }): React.ReactEleme
                   {part.state === "output-error" ? `Failed: ${toolLabel(part)}` : toolLabel(part)}
                 </span>
               </div>
-              {images.map((src) => (
+              {images.map((src, index) => (
                 <img
                   alt="Screen"
                   className="max-h-56 w-auto max-w-full rounded-md border border-edge"
-                  key={src.slice(-48)}
+                  key={`${part.toolCallId}-${index}`}
                   src={src}
                 />
               ))}
@@ -207,15 +224,17 @@ function MessagePart({
   }
 
   if (part.type === "file") {
-    if (!part.url) return null;
-    return part.mediaType.startsWith("image/") ? (
+    const isImage = part.mediaType.startsWith("image/");
+    const url = safeUrl(part.url, isImage);
+    if (!url) return null;
+    return isImage ? (
       <img
         alt={part.filename ?? "Attachment"}
         className="max-h-64 w-auto max-w-full rounded-lg border border-edge"
-        src={part.url}
+        src={url}
       />
     ) : (
-      <a className="text-sm text-accent underline" href={part.url} rel="noreferrer" target="_blank">
+      <a className="text-sm text-accent underline" href={url} rel="noreferrer" target="_blank">
         {part.filename ?? "Attachment"}
       </a>
     );
@@ -239,18 +258,14 @@ function MessagePart({
   }
 
   if (part.type === "authorization") {
+    const url = part.state === "required" ? safeUrl(part.authorization?.url) : undefined;
     return (
       <p className="rounded-lg border border-edge bg-panel p-3 text-sm">
         {part.state === "completed"
           ? `${part.displayName} authorization ${part.outcome}`
           : part.description}
-        {part.state === "required" && part.authorization?.url && (
-          <a
-            className="ml-2 text-accent underline"
-            href={part.authorization.url}
-            rel="noreferrer"
-            target="_blank"
-          >
+        {url && (
+          <a className="ml-2 text-accent underline" href={url} rel="noreferrer" target="_blank">
             Sign in
           </a>
         )}

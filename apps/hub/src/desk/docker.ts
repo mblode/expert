@@ -180,8 +180,13 @@ export class DockerDesk implements Desk {
     await this.sendKeys(keys);
   }
 
+  /**
+   * Unicode via clipboard + ctrl+v: XTEST keysyms cannot cover every
+   * codepoint. Two consequences the caller should know: the box clipboard is
+   * overwritten by whatever was typed, and ctrl+v is not paste in a terminal
+   * emulator (xterm wants shift+insert).
+   */
   async type(text: string): Promise<void> {
-    // Unicode via clipboard + ctrl+v (XTEST keysyms cannot cover every codepoint).
     await this.clipboardSet(text);
     await this.sendKeys(["ctrl", "v"]);
   }
@@ -223,14 +228,14 @@ export class DockerDesk implements Desk {
 
   async clipboardGet(): Promise<string> {
     const r = await this.exec(
-      ["bash", "-lc", "xclip -selection clipboard -o 2>/dev/null || true"],
+      ["bash", "-c", "xclip -selection clipboard -o 2>/dev/null || true"],
       { timeoutMs: 5000 },
     );
     return r.stdout.toString();
   }
 
   async clipboardSet(text: string): Promise<void> {
-    const r = await this.exec(["bash", "-lc", "xclip -selection clipboard -i"], {
+    const r = await this.exec(["bash", "-c", "xclip -selection clipboard -i"], {
       timeoutMs: 5000,
       stdin: text,
     });
@@ -239,28 +244,30 @@ export class DockerDesk implements Desk {
     }
   }
 
+  /**
+   * The timeout runs *inside* the box: killing the `docker exec` client (or
+   * the local child) leaves the workload alive, so coreutils `timeout` wraps
+   * the command and delivers the SIGKILL where the process actually is. The
+   * hub's own deadline is a little longer, for the exec round trip.
+   */
   async shell(argv: string[], cwd: string, timeoutSec: number): Promise<ShellResult> {
-    const r = await this.exec(argv, {
-      timeoutMs: timeoutSec * 1000,
+    const r = await this.exec(["timeout", "-s", "KILL", `${timeoutSec}s`, ...argv], {
+      timeoutMs: timeoutSec * 1000 + 5_000,
       cwd,
+      maxOutput: SHELL_OUTPUT_CAP,
     });
-    const stdout = r.stdout.toString();
-    const stderr = r.stderr.toString();
-    const cap = 200_000;
     return {
       exit: r.exit,
-      stdout: stdout.slice(0, cap),
-      stderr: stderr.slice(0, cap),
-      stdout_truncated: stdout.length > cap,
-      stderr_truncated: stderr.length > cap,
+      stdout: r.stdout.toString("utf8"),
+      stderr: r.stderr.toString("utf8"),
+      stdout_truncated: r.stdoutTruncated,
+      stderr_truncated: r.stderrTruncated,
     };
   }
 
   async readFile(path: string): Promise<string> {
     const r = await this.exec(["cat", path], { timeoutMs: 15_000 });
-    if (r.exit !== 0) {
-      throw new ComputerError("VALIDATION", r.stderr.toString() || `read failed: ${path}`);
-    }
+    if (r.exit !== 0) throw fileError(r.stderr.toString(), `read failed: ${path}`);
     return r.stdout.toString("utf8");
   }
 
@@ -272,22 +279,20 @@ export class DockerDesk implements Desk {
     return this.put(path, content, ">>");
   }
 
-  /** Truncate or append; the parent directory is made either way. */
+  /** Truncate or append; the parent directory is made either way. `path` is absolute (resolveWorkspacePath). */
   private async put(path: string, content: string, redirect: ">" | ">>"): Promise<number> {
-    const dir = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "/workspace";
+    const dir = path.slice(0, path.lastIndexOf("/"));
     const r = await this.exec(
-      ["bash", "-lc", `mkdir -p ${shellQuote(dir)} && cat ${redirect} ${shellQuote(path)}`],
+      ["bash", "-c", `mkdir -p ${shellQuote(dir)} && cat ${redirect} ${shellQuote(path)}`],
       { timeoutMs: 15_000, stdin: content },
     );
-    if (r.exit !== 0) {
-      throw new ComputerError("VALIDATION", r.stderr.toString() || `write failed: ${path}`);
-    }
+    if (r.exit !== 0) throw fileError(r.stderr.toString(), `write failed: ${path}`);
     return Buffer.byteLength(content, "utf8");
   }
 
   async focusHint(): Promise<FocusHint> {
     const r = await this.exec(
-      ["bash", "-lc", "xdotool getactivewindow getwindowname 2>/dev/null || true"],
+      ["bash", "-c", "xdotool getactivewindow getwindowname 2>/dev/null || true"],
       { timeoutMs: 3000 },
     );
     const title = r.stdout.toString().trim();
@@ -346,9 +351,10 @@ export class DockerDesk implements Desk {
       cwd?: string;
       stdin?: string;
       binary?: boolean;
-      user?: string;
+      /** Bytes kept per stream. Absent = keep everything (screenshots, file reads). */
+      maxOutput?: number;
     },
-  ): Promise<{ exit: number; stdout: Buffer; stderr: Buffer }> {
+  ): Promise<ExecResult> {
     const cmd = this.transport === "local" ? argv[0]! : "docker";
     const spawnArgv =
       this.transport === "local"
@@ -357,7 +363,7 @@ export class DockerDesk implements Desk {
             "exec",
             "-i",
             "-u",
-            opts.user ?? this.user,
+            this.user,
             // Always: this driver *is* one window, and a command that forgets its
             // DISPLAY silently targets :1 — which made every fork Bot screenshot
             // screen 1 while acting on its own.
@@ -367,25 +373,18 @@ export class DockerDesk implements Desk {
             this.container,
             ...argv,
           ];
-    const env =
-      this.transport === "local"
-        ? { ...process.env, DISPLAY: `:${this.display}`, HOME: process.env.HOME ?? "/home/box" }
-        : process.env;
     return new Promise((resolve, reject) => {
       const child = spawn(cmd, spawnArgv, {
         stdio: ["pipe", "pipe", "pipe"],
         cwd: this.transport === "local" ? opts.cwd : undefined,
-        env,
+        env: this.transport === "local" ? localEnv(this.display) : process.env,
       });
-      const stdout: Buffer[] = [];
-      const stderr: Buffer[] = [];
+      const stdout = new Sink(opts.maxOutput);
+      const stderr = new Sink(opts.maxOutput);
       child.stdout.on("data", (c: Buffer) => stdout.push(c));
       child.stderr.on("data", (c: Buffer) => stderr.push(c));
-      if (opts.stdin !== undefined) {
-        child.stdin.end(opts.stdin);
-      } else {
-        child.stdin.end();
-      }
+      child.stdin.on("error", () => {});
+      child.stdin.end(opts.stdin);
       const t = setTimeout(() => {
         child.kill("SIGKILL");
         reject(deskDown(`desk exec timed out: ${argv[0]}`));
@@ -399,12 +398,85 @@ export class DockerDesk implements Desk {
         clearTimeout(t);
         resolve({
           exit: code ?? 1,
-          stdout: Buffer.concat(stdout),
-          stderr: Buffer.concat(stderr),
+          stdout: stdout.buffer(),
+          stderr: stderr.buffer(),
+          stdoutTruncated: stdout.truncated,
+          stderrTruncated: stderr.truncated,
         });
       });
     });
   }
+}
+
+type ExecResult = {
+  exit: number;
+  stdout: Buffer;
+  stderr: Buffer;
+  stdoutTruncated: boolean;
+  stderrTruncated: boolean;
+};
+
+/** What `shell` returns per stream. Anything past it is dropped as it arrives, not buffered. */
+const SHELL_OUTPUT_CAP = 200_000;
+
+/** Collects a child's output up to a cap, dropping the rest instead of holding it. */
+class Sink {
+  private readonly chunks: Buffer[] = [];
+  private size = 0;
+  truncated = false;
+
+  constructor(private readonly max: number | undefined) {}
+
+  push(chunk: Buffer): void {
+    if (this.max === undefined) {
+      this.chunks.push(chunk);
+      return;
+    }
+    const room = this.max - this.size;
+    if (room <= 0) {
+      this.truncated = true;
+      return;
+    }
+    if (chunk.length > room) {
+      this.chunks.push(chunk.subarray(0, room));
+      this.size = this.max;
+      this.truncated = true;
+      return;
+    }
+    this.chunks.push(chunk);
+    this.size += chunk.length;
+  }
+
+  buffer(): Buffer {
+    return Buffer.concat(this.chunks);
+  }
+}
+
+/**
+ * The `local` transport shares a process namespace with the hub, so the
+ * model's shell would otherwise inherit the hub's environment: every token
+ * and key the guest was started with. Hand the box what a login would get and
+ * nothing else.
+ */
+function localEnv(display: number): NodeJS.ProcessEnv {
+  const home = process.env.HOME ?? "/home/box";
+  return {
+    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+    HOME: home,
+    USER: process.env.USER ?? "box",
+    LANG: process.env.LANG ?? "C.UTF-8",
+    TERM: "dumb",
+    DISPLAY: `:${display}`,
+  };
+}
+
+/** `cat`/`bash` said no. A missing file is the model's mistake; a dead box is not. */
+function fileError(stderr: string, fallback: string): ComputerError {
+  const message = stderr.trim() || fallback;
+  if (/no such file|is a directory|permission denied|not a directory/i.test(message)) {
+    return new ComputerError("VALIDATION", message);
+  }
+  return deskDown(message);
 }
 
 function shellQuote(s: string): string {

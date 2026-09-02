@@ -83,7 +83,6 @@ export class VoiceService {
   /** Set while a secret_request is outstanding, so the value has a home. */
   private pendingSecret: string | null = null;
   private clearTimer: ReturnType<typeof setTimeout> | null = null;
-  private readonly listeners = new Set<(o: Occurrence) => void>();
   /** Serialises the write-behind appends so the file keeps the log's order. */
   private writes: Promise<void> = Promise.resolve();
   /** Persistence starts only once the previous run has been read back in. */
@@ -171,6 +170,9 @@ export class VoiceService {
     if (!s || s.kind !== "secret_request") {
       throw new ComputerError("VALIDATION", `no open secret request ${occurrenceId}`);
     }
+    // Once. A delivered request cannot be replayed to rewrite the clipboard
+    // and re-open the turn behind the agent's back.
+    if (s.provided) throw new ComputerError("CONFLICT", `secret request ${occurrenceId} was already provided`);
     if (!value) throw new ComputerError("VALIDATION", "secret value is required");
     await this.desk.clipboardSet(value);
     this.scheduleClear(value);
@@ -220,12 +222,6 @@ export class VoiceService {
       entries,
       next_cursor: more && entries.length ? String(entries[entries.length - 1]!.seq) : null,
     };
-  }
-
-  /** Live tail for the SSE chat stream. */
-  subscribe(fn: (o: Occurrence) => void): () => void {
-    this.listeners.add(fn);
-    return () => this.listeners.delete(fn);
   }
 
   /**
@@ -296,7 +292,6 @@ export class VoiceService {
     this.log.push(o);
     if (this.log.length > MAX_LOG) this.log.splice(0, this.log.length - MAX_LOG);
     this.persist(o);
-    for (const fn of this.listeners) fn(o);
     return o;
   }
 }

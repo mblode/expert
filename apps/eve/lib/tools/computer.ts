@@ -2,37 +2,61 @@ import { defineTool, toolOutput, toolOutputPart, type ToolModelOutputPart } from
 import { z } from "zod";
 import { hubRpc } from "../hub.ts";
 
-const action = z
-  .object({
-    type: z.enum([
-      "screenshot",
-      "click",
-      "double_click",
-      "scroll",
-      "keypress",
-      "type",
-      "move",
-      "drag",
-      "wait",
-      "zoom",
-      "request_takeover",
-    ]),
-  })
-  .catchall(z.unknown());
+/** 1280×800, origin top-left. The hub rejects anything outside. */
+const x = z.number().int().min(0).max(1279);
+const y = z.number().int().min(0).max(799);
+const button = z.enum(["left", "right", "middle", "back", "forward"]).optional();
+
+/**
+ * The action union from api/spec.json, as the schema the model sees. A closed
+ * union here means a malformed action is caught before it costs a round trip
+ * to the hub, and the model reads the fields off the schema instead of a skill.
+ */
+const action = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("screenshot") }),
+  z.object({ type: z.literal("click"), x, y, button }),
+  z.object({ type: z.literal("double_click"), x, y, button }),
+  z.object({
+    type: z.literal("scroll"),
+    x,
+    y,
+    dx: z.number().int().min(-20).max(20).describe("Wheel ticks right (+) or left (-)"),
+    dy: z.number().int().min(-20).max(20).describe("Wheel ticks down (+) or up (-)"),
+  }),
+  z.object({
+    type: z.literal("keypress"),
+    keys: z.array(z.string().min(1)).min(1).max(5).describe('One chord, e.g. ["ctrl","l"]'),
+  }),
+  z.object({ type: z.literal("type"), text: z.string().min(1).max(4000) }),
+  z.object({ type: z.literal("move"), x, y }),
+  z.object({
+    type: z.literal("drag"),
+    path: z.array(z.object({ x, y })).min(2).max(32).describe("Down at the first point, up at the last"),
+  }),
+  z.object({ type: z.literal("wait"), ms: z.number().int().min(1).max(8000) }),
+  z.object({
+    type: z.literal("zoom"),
+    x,
+    y,
+    w: z.number().int().min(1).max(1280),
+    h: z.number().int().min(1).max(800),
+  }),
+  z.object({ type: z.literal("request_takeover") }),
+]);
 
 type ActionResult = {
-  kind: "ok" | "error" | "skipped";
+  kind: "ok" | "error" | "denied" | "skipped";
   image_b64?: string;
   media_type?: string;
   [k: string]: unknown;
 };
 
 type ComputerResponse = {
-  results: ActionResult[];
+  results?: ActionResult[];
   screenshot_b64?: string;
   cursor?: { x: number; y: number };
-  seat: string;
-  pending_checks: { id: string; code: string; message: string }[];
+  seat?: string;
+  pending_checks?: { id: string; code: string; message: string }[];
 };
 
 export default defineTool({
@@ -47,14 +71,15 @@ export default defineTool({
   },
   toModelOutput(output) {
     const parts: ToolModelOutputPart[] = [];
+    const results = output.results ?? [];
     const summary = {
-      results: output.results.map(({ image_b64: _i, media_type: _m, ...rest }: ActionResult) => rest),
+      results: results.map(({ image_b64: _i, media_type: _m, ...rest }) => rest),
       cursor: output.cursor,
       seat: output.seat,
-      pending_checks: output.pending_checks,
+      pending_checks: output.pending_checks ?? [],
     };
     parts.push(toolOutputPart.text(JSON.stringify(summary)));
-    for (const r of output.results) {
+    for (const r of results) {
       if (r.image_b64) {
         parts.push(toolOutputPart.file(r.image_b64, { mediaType: r.media_type ?? "image/png" }));
       }

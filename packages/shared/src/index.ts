@@ -5,7 +5,6 @@
 
 export type PixelX = number & { readonly __brand: "PixelX" };
 export type PixelY = number & { readonly __brand: "PixelY" };
-export type RequestId = string & { readonly __brand: "RequestId" };
 
 export const DISPLAY = { width: 1280, height: 800, scale: 1 } as const;
 export type Display = typeof DISPLAY;
@@ -148,7 +147,7 @@ export type ActionResult =
   | { kind: "ok"; duration_ms: number; image_b64?: string; media_type?: string }
   | ({ kind: "error"; duration_ms: number; code: ErrorCode; message: string } & Partial<Unavailable>)
   | { kind: "denied"; rule: string; reason: string }
-  | { kind: "skipped"; reason: "prior_failed" | "after_takeover" | "after_denied" };
+  | { kind: "skipped"; reason: "prior_failed" | "after_takeover" | "after_denied" | "seat_taken" };
 
 export type PendingCheck = {
   id: string;
@@ -178,10 +177,6 @@ export function asPixelY(n: number): PixelY {
   return n as PixelY;
 }
 
-export function asRequestId(s: string): RequestId {
-  return s as RequestId;
-}
-
 export function asPoint(x: number, y: number): Point {
   return { x: asPixelX(x), y: asPixelY(y) };
 }
@@ -195,12 +190,6 @@ export function inBounds(x: number, y: number): boolean {
     y >= 0 &&
     y < DISPLAY.height
   );
-}
-
-export function assertInBounds(x: number, y: number): void {
-  if (!inBounds(x, y)) {
-    throw new ComputerError("OUT_OF_BOUNDS", `coordinate ${x},${y} outside ${DISPLAY.width}x${DISPLAY.height}`);
-  }
 }
 
 /** Absolute paths must start with /workspace. Relative paths resolve there. `..` after resolve is PATH_REJECTED. */

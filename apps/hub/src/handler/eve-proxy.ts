@@ -5,12 +5,7 @@ import type { AuthRegistry } from "./auth.ts";
 import { tokenFromRequest } from "./auth.ts";
 import { writeJson } from "./router.ts";
 import type { BotRegistry } from "../service/bots.ts";
-import {
-  EVE_BOT_HEADER,
-  EVE_HUB_SECRET_HEADER,
-  eveUrlForDisplay,
-  pickEveBotId,
-} from "../host/eve.ts";
+import { EVE_HUB_SECRET_HEADER, eveUrlForDisplay, pickEveBotId } from "../host/eve.ts";
 
 const PREFIX = "/eve/v1/";
 
@@ -18,10 +13,11 @@ export type EveProxyDeps = {
   auth: AuthRegistry;
   bots: BotRegistry;
   /**
-   * Per-bot Eve URLs. Missing id → derive from that Bot's display
+   * Per-bot Eve URLs, read per request so Bots provisioned after boot are
+   * found. Missing id → derive from that Bot's display
    * (`127.0.0.1:2000+(display-1)`). Empty string means this Bot has no Eve.
    */
-  eveUrls?: Record<string, string>;
+  eveUrls: () => Record<string, string>;
   /** Shared secret the Eve channel expects on loopback (`eve start`). */
   eveSecret?: string;
   cors: Record<string, string>;
@@ -55,7 +51,7 @@ export async function handleEveProxy(
     return;
   }
 
-  const mapped = deps.eveUrls?.[bot.id];
+  const mapped = deps.eveUrls()[bot.id];
   const base = (mapped !== undefined ? mapped : eveUrlForDisplay(bot.display)).replace(/\/$/, "");
   if (!base) {
     daemonDown(res, bot.id);
@@ -136,5 +132,3 @@ async function requestBody(req: IncomingMessage): Promise<Uint8Array<ArrayBuffer
   for await (const c of req) chunks.push(c as Buffer);
   return chunks.length ? new Uint8Array(Buffer.concat(chunks)) : undefined;
 }
-
-export { EVE_BOT_HEADER, EVE_HUB_SECRET_HEADER };

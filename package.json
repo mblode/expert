@@ -3,11 +3,12 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "apps/hub",
     "packages/shared",
     "packages/proto",
-    "apps/*",
-    "apps/eve/bots/*"
+    "apps/hub",
+    "apps/web",
+    "apps/eve",
+    "apps/eve/bots/main"
   ],
   "scripts": {
     "up": "node scripts/computer.mjs up",
@@ -16,16 +17,18 @@
     "machine": "npm exec --workspace=apps/hub -- tsx src/host/machine-cli.ts",
     "proto:gen": "buf generate",
     "proto:check": "node scripts/proto-check.mjs",
-    "lint": "node scripts/lint-layers.mjs",
-    "typecheck": "npm run typecheck --workspace=packages/shared && npm run typecheck --workspace=packages/proto && npm run typecheck --workspace=apps/hub && npm run typecheck --workspace=@computer/web",
+    "lint": "node scripts/lint-layers.mjs && oxlint",
+    "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm test --workspace=apps/hub",
     "hub": "npm run start --workspace=apps/hub",
     "eve": "npm run dev --workspace=@computer/eve-main",
-    "web": "npm --prefix apps/web run dev"
+    "web": "npm run dev --workspace=@computer/web",
+    "check": "npm run typecheck && npm run lint && npm test && npm run proto:check"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.57.2",
-    "@bufbuild/protoc-gen-es": "^2.10.0"
+    "@bufbuild/protoc-gen-es": "^2.10.0",
+    "oxlint": "^1.81.0"
   },
   "engines": {
     "node": "24.x"

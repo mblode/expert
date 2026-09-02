@@ -7,7 +7,6 @@ import { CtaSection } from "../shared/cta-section";
 import { Footer } from "../shared/footer";
 import { InstallDialog } from "../shared/install-dialog";
 import { Navbar } from "../shared/navbar";
-import { HeroHeadline } from "./hero-headline";
 import { Reveal } from "./reveal";
 
 const howItWorks = [
@@ -61,7 +60,9 @@ export function MarketingHome(): React.ReactElement {
               className="hero-glow pointer-events-none absolute inset-x-0 top-0 h-full rounded-b-[2rem]"
             />
             <div className="relative mx-auto max-w-2xl px-4 text-center sm:px-6">
-              <HeroHeadline />
+              <h1 className="text-balance font-display text-5xl font-light tracking-tight sm:text-6xl sm:tracking-[-0.03em]">
+                The Linux computer your AI agent uses.
+              </h1>
               <Reveal delay={0.35}>
                 <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-lg text-muted-foreground">
                   A standing Linux computer your agents drive. Sign in at hello.expert — that is
@@ -108,15 +109,15 @@ export function MarketingHome(): React.ReactElement {
               </Reveal>
               <ol className="mt-10 grid gap-8 sm:grid-cols-3">
                 {howItWorks.map((item, index) => (
-                  <Reveal delay={0.1 * (index + 1)} key={item.step}>
-                    <li>
+                  <li key={item.step}>
+                    <Reveal delay={0.1 * (index + 1)}>
                       <span className="font-mono text-[0.625rem] text-growth-green/70 sm:text-xs">
                         {item.step}
                       </span>
                       <h3 className="mt-1 text-lg font-semibold">{item.title}</h3>
                       <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
-                    </li>
-                  </Reveal>
+                    </Reveal>
+                  </li>
                 ))}
               </ol>
             </div>
@@ -129,12 +130,12 @@ export function MarketingHome(): React.ReactElement {
               </Reveal>
               <ul className="mt-10 grid gap-6 sm:grid-cols-3">
                 {who.map((item, index) => (
-                  <Reveal delay={0.1 * (index + 1)} key={item.role}>
-                    <li className="rounded-2xl border border-white/[0.08] p-6">
+                  <li className="rounded-2xl border border-white/[0.08] p-6" key={item.role}>
+                    <Reveal delay={0.1 * (index + 1)}>
                       <h3 className="font-display text-xl font-light tracking-tight">{item.role}</h3>
                       <p className="mt-3 text-pretty text-sm text-white/70">{item.description}</p>
-                    </li>
-                  </Reveal>
+                    </Reveal>
+                  </li>
                 ))}
               </ul>
             </div>

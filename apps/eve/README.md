@@ -9,8 +9,7 @@ loopback. See [eve.dev](https://eve.dev): the directory is the agent.
 
 ```
 apps/eve/lib/           shared tools, hub RPC, hubLoopbackAuth
-apps/eve/bots/main/     production desk agent (roster bot on display 1, :2000)
-apps/eve/bots/night/    copy-dir example (started only if `night` is on the roster)
+apps/eve/bots/main/     the desk agent (roster bot on display 1, :2000)
 ```
 
 Each bot is its own eve.dev project: `agent/instructions.md`, `agent/skills/`,
@@ -22,14 +21,16 @@ screen. Port is `2000 + (display - 1)`.
 
 ## Add a bot
 
-1. Copy `bots/main` to `bots/<id>`.
+1. Copy `bots/main` to `bots/<id>` and add `apps/eve/bots/<id>` to the
+   `workspaces` list in the root `package.json`.
 2. Rewrite `agent/instructions.md` (and skills / schedules) for that bot.
 3. Mint a token: `npm run bot -- new <id>` (or restore one on the volume).
-4. Restart the guest. The supervisor starts `eve start --host 127.0.0.1 --port …`
-   only if `<id>` is on the roster and `bots/<id>/package.json` exists.
+4. On Fly, add an `eve build` line for it in `deploy/fly/Dockerfile` and
+   deploy. The supervisor starts `eve start --host 127.0.0.1 --port …` only
+   if `<id>` is on the roster and `bots/<id>/package.json` exists.
 
-Do not invent a setup code, book Cal.com, or pretend the agent holds a seat
-token. Production is `eve start`, not `eve dev` / `EVE_DEV=1`.
+Do not invent a setup code or pretend the agent holds a seat token.
+Production is `eve start`, not `eve dev` / `EVE_DEV=1`.
 
 ## Auth
 

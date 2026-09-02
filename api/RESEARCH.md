@@ -204,8 +204,9 @@ oversight, and each has a cost.
 - **VNC descriptors expire.** `bot.vncDescriptor` returns
   `{ vncUrl, expiresHint }` — a port-token expiry the client refreshes
   before, with `null` reserved for the legacy never-expiring form. Ours
-  mints one permanent seat token, stamps it into the URL query string, and
-  never rotates it. A leaked `vnc_url` is leaked for the life of the box.
+  stamps a 15-minute pixel token bound to one display into `vnc_url` and
+  reuses it across close `Status` polls; the durable seat token still opens
+  `/vnc` for old pair sessions. `expires` rides in the URL as the hint.
 - **Status enums degrade, they do not throw.** `BotRunState`
   (`absent | hibernated | running | unknown`) has a hand-written
   `Deserialize` whose whole job is that an unknown wire string becomes
@@ -261,7 +262,8 @@ an alternate in deploy/cloud-init.yaml. Per-second sandboxes (E2B,
 Daytona, Modal, Morph) are ~10× for an always-on pet machine; Fly.io
 suspend/resume is the only cheap off-the-shelf imitation of Grok's
 hibernation, and that path is checked in as fly.toml (one Machine,
-desk+hub guest, volumes for /workspace and ~/.config).
+desk+hub guest, one volume for /workspace). Suspend is not wired yet:
+the Machine stays running until someone runs `npm run machine -- suspend`.
 
 ## Hosted computer-use APIs
 

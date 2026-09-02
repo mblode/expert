@@ -32,7 +32,7 @@ const USAGE = [
   "  npm run bot -- new <id>    provision a Bot (token shown once)",
   "  npm run bot -- ls [--json] list Bots",
   "  npm run bot -- rm <id>     delete a Bot",
-  "  npm run bot -- token <id>  reprint a Bot's token",
+  "  npm run bot -- token <id>  reprint a Bot's token from the local roster",
 ].join("\n");
 
 try {
@@ -52,10 +52,6 @@ try {
     case "-h":
       console.log(USAGE);
       break;
-    case "--version":
-    case "-v":
-      console.log(JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).version ?? "0.0.0");
-      break;
     default:
       console.error(`unknown command: ${cmd}\n${USAGE}`);
       process.exit(1);
@@ -67,32 +63,30 @@ try {
 
 async function up() {
   const env = ensureEnv();
+  // Per-run overrides. Never written back to .env: a Docker daemon that was
+  // down once must not leave the box on a fake desk for good.
+  const run = { ...env };
 
   // 1. Desk container (skipped gracefully without a running Docker).
   if (dockerReady()) {
     console.log("• building the desk (first run takes a few minutes)…");
-    run("docker", ["compose", "up", "-d", "--build", "--force-recreate"]);
+    exec("docker", ["compose", "up", "-d", "--build", "--force-recreate"]);
   } else if (has("docker")) {
     console.log("• docker is installed but its daemon is not running — start Docker Desktop or OrbStack, then re-run `npm run up`");
     console.log("  continuing with a fake desk so you can still pair and poke around");
-    env.COMPUTER_DESK = "fake";
+    run.COMPUTER_DESK = "fake";
   } else {
     console.log("• docker not found — running with a fake desk (install Docker or OrbStack for the real thing)");
-    env.COMPUTER_DESK = "fake";
+    run.COMPUTER_DESK = "fake";
   }
 
-  // 2. The control panel, so a phone browser has something to open. Static
-  //    export served by the hub itself — one origin, one thing to publish.
-  //    A failure here is not fatal: the phone app and the RPCs do not need it.
-  buildWeb();
-
-  // 3. Publish over Tailscale when available.
+  // 2. Publish over Tailscale when available.
   if (has("tailscale")) {
     try {
-      run("tailscale", ["serve", "--bg", `http://127.0.0.1:${env.COMPUTER_PORT}`]);
-      const status = JSON.parse(exec("tailscale", ["status", "--json"]));
+      exec("tailscale", ["serve", "--bg", `http://127.0.0.1:${env.COMPUTER_PORT}`]);
+      const status = JSON.parse(capture("tailscale", ["status", "--json"]));
       const dns = status?.Self?.DNSName?.replace(/\.$/, "");
-      if (dns) env.COMPUTER_PUBLIC_URL = `https://${dns}`;
+      if (dns) env.COMPUTER_PUBLIC_URL = run.COMPUTER_PUBLIC_URL = `https://${dns}`;
       console.log(`• published via Tailscale Serve: ${env.COMPUTER_PUBLIC_URL}`);
     } catch {
       console.log("• tailscale serve failed — pairing will use the local URL; run `tailscale up` and retry");
@@ -102,17 +96,17 @@ async function up() {
   }
   saveEnv(env);
 
-  // 4. One Eve process per roster bot that has apps/eve/bots/<id>.
+  // 3. One Eve process per roster bot that has apps/eve/bots/<id>.
   //    Loopback only; the hub proxies /eve/v1 so clients know one origin.
-  startEve(env);
+  startEve(run);
 
-  // 5. Pairing QR, then the hub in the foreground.
+  // 4. Pairing QR, then the hub in the foreground.
   printPairing(env);
   console.log("• starting the hub (ctrl-c stops it; the desk keeps running)…\n");
   const child = spawn("npx", ["tsx", "apps/hub/src/index.ts"], {
     cwd: root,
     stdio: "inherit",
-    env: { ...process.env, ...env },
+    env: { ...process.env, ...run },
   });
   child.on("exit", (code) => process.exit(code ?? 0));
 }
@@ -126,6 +120,10 @@ function startEve(env) {
   }
   if (!process.env.AI_GATEWAY_API_KEY && !env.AI_GATEWAY_API_KEY) {
     console.log("• AI_GATEWAY_API_KEY is unset — Eve will start but model calls will fail");
+  }
+  if (portInUse(2000)) {
+    console.log("• an Eve process is already listening on :2000 from a previous `up`; leaving it");
+    return;
   }
   try {
     execFileSync("npx", ["tsx", "apps/hub/src/host/boot-eves.ts"], {
@@ -142,44 +140,31 @@ function startEve(env) {
   }
 }
 
-/**
- * Product web is the Vercel Next app (Better Auth + auto-Pair). The hub no
- * longer serves a static export of apps/web — Fly is the computer, not the
- * front door. `npm run web` talks to this hub in local dev.
- */
-function buildWeb() {
-  console.log("• product web is the Vercel Next app (`npm run web`); the hub does not serve a static export");
-}
-
-async function bot(args) {
-  const [sub, id] = args;
+async function bot(argv) {
+  const [sub, id] = argv;
   const env = loadEnv();
   switch (sub) {
     case "new": {
       requireId(id);
-      const token = await pairSeat(env);
-      const r = await rpc(env, "/computer.v1.Seat/CreateBot", { id }, token);
+      const r = await seatRpc(env, "/computer.v1.Seat/CreateBot", { id });
       console.log(`Bot ${r.id} is live on screen ${r.display}.`);
       console.log("");
       console.log(`  token: ${r.token}`);
       console.log("");
-      console.log("This token is the Bot's identity — it is shown once.");
-      console.log("Give it a brain: copy apps/eve/bots/main → apps/eve/bots/" + id + ",");
-      console.log("customise agent/instructions.md, skills/, schedules/, then restart.");
+      console.log("This token is the Bot's identity. Give it a brain: copy apps/eve/bots/main");
+      console.log(`→ apps/eve/bots/${id}, customise agent/instructions.md, skills/, schedules/, then restart.`);
       console.log(`Port is 2000 + (display - 1) = ${2000 + Number(r.display) - 1}.`);
       break;
     }
     case "rm": {
       requireId(id);
-      const token = await pairSeat(env);
-      await rpc(env, "/computer.v1.Seat/DeleteBot", { id }, token);
+      await seatRpc(env, "/computer.v1.Seat/DeleteBot", { id });
       console.log(`Bot ${id} deleted; its screen is free.`);
       break;
     }
     case "ls": {
-      const token = await pairSeat(env);
-      const s = await rpc(env, "/computer.v1.Seat/Status", {}, token);
-      if (args.includes("--json")) {
+      const s = await seatRpc(env, "/computer.v1.Seat/Status", {});
+      if (argv.includes("--json")) {
         console.log(JSON.stringify(s.screens ?? [], null, 2));
         break;
       }
@@ -207,13 +192,33 @@ function requireId(id) {
 
 // --- pairing / rpc ---
 
+/**
+ * A Seat call as this CLI. The seat token is paired once and kept in .env:
+ * pairing per command minted a durable token every time and never revoked it.
+ */
+async function seatRpc(env, path, body) {
+  if (env.COMPUTER_SEAT_TOKEN) {
+    try {
+      return await rpc(env, path, body, env.COMPUTER_SEAT_TOKEN);
+    } catch (err) {
+      if (!/seat token|UNAUTHENTICATED/i.test(String(err?.message))) throw err;
+      // The hub forgot it (a fresh data dir). Pair again below.
+    }
+  }
+  env.COMPUTER_SEAT_TOKEN = await pairSeat(env);
+  saveEnv(env);
+  return rpc(env, path, body, env.COMPUTER_SEAT_TOKEN);
+}
+
 async function pairSeat(env) {
   try {
     const r = await rpc(env, "/computer.v1.Seat/Pair", { code: env.COMPUTER_SETUP_CODE });
     return r.token;
   } catch (err) {
     if (/setup code/i.test(String(err?.message))) {
-      throw new Error(".env's COMPUTER_SETUP_CODE does not match the running hub — restart it with `npm run up`");
+      throw new Error(".env's COMPUTER_SETUP_CODE does not match the running hub — restart it with `npm run up`", {
+        cause: err,
+      });
     }
     throw err;
   }
@@ -234,8 +239,14 @@ async function rpc(env, path, body, token) {
   } catch {
     throw new Error(`hub is not running on ${base} — start it with \`npm run up\``);
   }
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error?.message ?? `HTTP ${res.status}`);
+  const text = await res.text();
+  let json = null;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    // not JSON
+  }
+  if (!res.ok) throw new Error(json?.error?.message ?? `HTTP ${res.status}: ${text.slice(0, 200)}`);
   return json;
 }
 
@@ -277,7 +288,7 @@ function loadEnv(required = true) {
   }
   const env = {};
   for (const line of readFileSync(envPath, "utf8").split("\n")) {
-    const m = /^([A-Z_]+)=(.*)$/.exec(line.trim());
+    const m = /^([A-Z][A-Z0-9_]*)=(.*)$/.exec(line.trim());
     if (m) env[m[1]] = m[2];
   }
   if (required && !env.COMPUTER_SETUP_CODE) {
@@ -314,10 +325,20 @@ function dockerReady() {
   }
 }
 
-function run(bin, argv) {
-  execFileSync(bin, argv, { cwd: root, stdio: "inherit" });
+function portInUse(port) {
+  try {
+    // Linux and macOS both ship lsof; a missing binary reads as "free".
+    execFileSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"], { stdio: "ignore" });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function exec(bin, argv) {
+  execFileSync(bin, argv, { cwd: root, stdio: "inherit" });
+}
+
+function capture(bin, argv) {
   return execFileSync(bin, argv, { cwd: root, encoding: "utf8" });
 }

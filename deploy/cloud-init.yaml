@@ -5,8 +5,7 @@
 #
 #   1. Create the server with this file as cloud-init user data.
 #   2. ssh in, run: tailscale up
-#   3. cd /opt/computer && npm run up
-#   4. Scan the QR from Computer.app. Done.
+#   3. cd /opt/computer && npm run up   (needs the Docker daemon; prints the QR)
 #
 # The hub stays on loopback; Tailscale Serve is the only way in.
 # This is not wake-on-connect: the VM stays billed while it runs.
@@ -20,7 +19,8 @@ packages:
 runcmd:
   - curl -fsSL https://get.docker.com | sh
   - curl -fsSL https://tailscale.com/install.sh | sh
-  - curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+  # Node 24, matching `engines` in package.json.
+  - curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
   - apt-get install -y nodejs
   - git clone https://github.com/mblode/expert-computer /opt/computer
-  - cd /opt/computer && npm install
+  - cd /opt/computer && npm ci

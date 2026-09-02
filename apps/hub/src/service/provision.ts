@@ -99,6 +99,7 @@ function readTokenFile(path: string, what: string): unknown[] | undefined {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return undefined;
     throw new Error(
       `${what} ${path} could not be read (${(err as Error).message}). It is the only record of these tokens — fix the file or its permissions, or move it aside to start fresh.`,
+      { cause: err },
     );
   }
   let parsed: unknown;
@@ -107,6 +108,7 @@ function readTokenFile(path: string, what: string): unknown[] | undefined {
   } catch (err) {
     throw new Error(
       `${what} ${path} is not valid JSON (${(err as Error).message}). It is the only record of these tokens — restore it from a backup, or move it aside to start fresh.`,
+      { cause: err },
     );
   }
   if (!Array.isArray(parsed)) {

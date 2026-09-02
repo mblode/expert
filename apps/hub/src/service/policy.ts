@@ -112,13 +112,13 @@ export function loadPolicy(path: string): PolicyService {
     raw = readFileSync(path, "utf8");
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return new PolicyService();
-    throw new Error(`policy ${path} could not be read (${(err as Error).message})`);
+    throw new Error(`policy ${path} could not be read (${(err as Error).message})`, { cause: err });
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    throw new Error(`policy ${path} is not valid JSON (${(err as Error).message})`);
+    throw new Error(`policy ${path} is not valid JSON (${(err as Error).message})`, { cause: err });
   }
   if (!Array.isArray(parsed)) {
     throw new Error(`policy ${path} must be a JSON array of rules`);
@@ -147,9 +147,9 @@ function validateRule(rule: PolicyRule, i: number): PolicyRule {
   }
   if (rule.argv !== undefined) {
     try {
-      new RegExp(rule.argv);
+      RegExp(rule.argv);
     } catch (err) {
-      throw new Error(`${at}: argv is not a valid regex (${(err as Error).message})`);
+      throw new Error(`${at}: argv is not a valid regex (${(err as Error).message})`, { cause: err });
     }
   }
   return rule;

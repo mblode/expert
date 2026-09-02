@@ -6,6 +6,9 @@ import type { Seat } from "./seat";
 const POINTER_TICK_MS = 40;
 /** One wheel notch in `deltaMode: pixel`. The hub scrolls in notches. */
 const WHEEL_NOTCH = 100;
+/** Pixels per line and per page for the other two `deltaMode`s (Firefox reports lines). */
+const LINE_PX = 16;
+const PAGE_PX = 800;
 const MAX_NOTCHES = 8;
 /**
  * `Seat.Type` pastes (clipboard + ctrl-v on the box), so a keystroke per RPC
@@ -32,7 +35,7 @@ export type SeatInput = {
   handlers: {
     onPointerMove: (event: React.PointerEvent) => void;
     onPointerDown: (event: React.PointerEvent) => void;
-    onPointerUp: () => void;
+    onPointerUp: (event: React.PointerEvent) => void;
     onPointerCancel: () => void;
     onPointerLeave: () => void;
     onClick: () => void;
@@ -84,16 +87,20 @@ export function useSeatInput(
   const downAt = useRef<{ x: number; y: number } | null>(null);
   /** A click the box owes, once it has been steered to where you tapped. */
   const clicking = useRef(false);
-  /** What the box last heard about the left button, so `grab` is edge-driven. */
+  /** What the box last confirmed about the left button, so `grab` is edge-driven. */
   const held = useRef(false);
   const wheel = useRef({ dx: 0, dy: 0 });
   const typed = useRef("");
   const typeTimer = useRef<number | undefined>(undefined);
 
+  // Latest props for the timer and handlers, updated after commit rather than
+  // during render so the React Compiler can memoise the caller.
   const activeRef = useRef(active);
-  activeRef.current = active;
   const targetRef = useRef({ seat, display, desk });
-  targetRef.current = { seat, display, desk };
+  useEffect(() => {
+    activeRef.current = active;
+    targetRef.current = { seat, display, desk };
+  }, [active, seat, display, desk]);
 
   const run = useCallback(async (call: (seat: Seat, display: number) => Promise<unknown>) => {
     const { seat: current, display: screen } = targetRef.current;
@@ -102,6 +109,7 @@ export function useSeatInput(
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "input rejected");
+      throw cause;
     }
   }, []);
 
@@ -109,7 +117,7 @@ export function useSeatInput(
     window.clearTimeout(typeTimer.current);
     const text = typed.current;
     typed.current = "";
-    if (text) void run((current, screen) => current.type(text, screen));
+    if (text) void run((current, screen) => current.type(text, screen)).catch(() => undefined);
   }, [run]);
 
   const send = useCallback(
@@ -149,8 +157,11 @@ export function useSeatInput(
       inFlight.current = true;
       void run(async (current, screen) => {
         if (!settled || grab !== held.current) {
-          held.current = grab;
           const result = await current.move(dx, dy, grab, screen);
+          // Only once the box has acknowledged the button state. Recording it
+          // before the call meant a failed release left the box holding the
+          // button with nothing left to send.
+          held.current = grab;
           // The box is the authority on where its cursor ended up; believing
           // it is what keeps the aim from drifting away over a long drag. The
           // fallback only stops a desk that answers without a cursor from
@@ -161,9 +172,11 @@ export function useSeatInput(
           clicking.current = false;
           await current.click("left", screen);
         }
-      }).finally(() => {
-        inFlight.current = false;
-      });
+      })
+        .catch(() => undefined)
+        .finally(() => {
+          inFlight.current = false;
+        });
     }, POINTER_TICK_MS);
     return () => window.clearInterval(id);
   }, [active, run]);
@@ -218,8 +231,10 @@ export function useSeatInput(
         dragged.current = false;
       },
       // Letting go is an edge the flush loop notices: it sends the next move
-      // with `grab` off, which is what releases the button on the box.
-      onPointerUp: () => {
+      // with `grab` off, which is what releases the button on the box. Only
+      // the left button's release ends a left drag.
+      onPointerUp: (event) => {
+        if (!event.isPrimary || event.button !== 0) return;
         dragging.current = false;
       },
       // A pinch steals the gesture mid-press. Without this the box is left
@@ -244,23 +259,24 @@ export function useSeatInput(
       onAuxClick: (event) => {
         if (!activeRef.current || event.button !== 1) return;
         event.preventDefault();
-        void run((current, screen) => current.click("middle", screen));
+        void run((current, screen) => current.click("middle", screen)).catch(() => undefined);
       },
       onContextMenu: (event) => {
         event.preventDefault();
         if (!activeRef.current) return;
-        void run((current, screen) => current.click("right", screen));
+        void run((current, screen) => current.click("right", screen)).catch(() => undefined);
       },
       onWheel: (event) => {
         if (!activeRef.current) return;
-        wheel.current.dx += event.deltaX;
-        wheel.current.dy += event.deltaY;
+        const scale = event.deltaMode === 1 ? LINE_PX : event.deltaMode === 2 ? PAGE_PX : 1;
+        wheel.current.dx += event.deltaX * scale;
+        wheel.current.dy += event.deltaY * scale;
         const dx = clampNotches(wheel.current.dx);
         const dy = clampNotches(wheel.current.dy);
         if (dx === 0 && dy === 0) return;
         wheel.current.dx -= dx * WHEEL_NOTCH;
         wheel.current.dy -= dy * WHEEL_NOTCH;
-        void run((current, screen) => current.scroll(dx, dy, screen));
+        void run((current, screen) => current.scroll(dx, dy, screen)).catch(() => undefined);
       },
       onKeyDown: (event) => {
         if (!activeRef.current) return;

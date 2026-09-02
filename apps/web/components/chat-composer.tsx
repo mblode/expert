@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 /**
  * Enter sends, shift-Enter breaks a line. While a turn is in flight the send
@@ -16,7 +16,6 @@ export function ChatComposer({
   onStop: () => void;
 }): React.ReactElement {
   const [text, setText] = useState("");
-  const ref = useRef<HTMLTextAreaElement>(null);
 
   const send = () => {
     const message = text.trim();
@@ -38,7 +37,6 @@ export function ChatComposer({
           }
         }}
         placeholder="Ask Eve to do something on the box…"
-        ref={ref}
         rows={1}
         value={text}
       />

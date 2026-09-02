@@ -1,3 +1,5 @@
+> **Historical.** This is the original plan / run log, kept for the reasoning behind decisions (XTEST over uinput, Debian over Ubuntu, the persistence boundary). Where it contradicts the code, the code and [README.md](../../README.md) / [api/DESIGN.md](../../api/DESIGN.md) win. Notably: the product now has a Next.js web app on Vercel and a Fly guest, both of which the plan ruled out; `apps/eve` is a root workspace; the hub's fallback chat loop and the Fly edge process described here were removed.
+
 # Computer implementation notes
 
 ## Deviations

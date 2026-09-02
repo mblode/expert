@@ -6,7 +6,6 @@ import { AuthRegistry, tokenFromRequest } from "./handler/auth.ts";
 import { ConnectRouter, corsHeaders, writeError, writeJson } from "./handler/router.ts";
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
-import { handleChat } from "./handler/chat.ts";
 import { handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
 import { eveUrlMap } from "./host/eve.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
@@ -36,9 +35,6 @@ export type HubOptions = {
   vncBasePort?: number;
   /** Short-lived noVNC tokens. Default: 15-minute in-memory grants. */
   pixels?: PixelRegistry;
-  apiKey?: string;
-  llmBaseUrl?: string;
-  llmModel?: string;
   /**
    * Per-bot Eve URLs. Absent entries are derived from display
    * (`127.0.0.1:2000+(display-1)`). Pass `{ main: "" }` to force DAEMON_DOWN.
@@ -46,12 +42,6 @@ export type HubOptions = {
   eveUrls?: Record<string, string>;
   /** Shared secret injected on hub→Eve loopback requests (`eve start`). */
   eveSecret?: string;
-  /**
-   * Optional leftover static files (`apps/web/out`). Product web is the Vercel
-   * Next app; the hub no longer requires an export. Absent = no panel, and
-   * the hub still serves pixels and RPCs.
-   */
-  webDir?: string;
 };
 
 export type Hub = {
@@ -90,18 +80,14 @@ export function createHub(opts: HubOptions): Hub {
   router.assertAllPolicies();
 
   const staticDir = resolve(import.meta.dirname, "static");
-  // Env fallback for the same reason as eveUrl below: a hub started straight
-  // from createHub should still find the panel without threading an option.
-  const webDir =
-    opts.webDir ??
-    process.env.COMPUTER_WEB_DIR ??
-    resolve(import.meta.dirname, "../../web/out");
   const eveSecret = opts.eveSecret ?? process.env.COMPUTER_EVE_SECRET;
-  const eveUrls =
-    opts.eveUrls ??
-    (process.env.COMPUTER_EVE_URL
-      ? { [bots.primary().id]: process.env.COMPUTER_EVE_URL }
-      : eveUrlMap(bots.configs()));
+  // Resolved per request: the roster changes at runtime (CreateBot), and at
+  // construction time a fresh box has no primary yet.
+  const eveUrls = (): Record<string, string> => {
+    if (opts.eveUrls) return opts.eveUrls;
+    const override = process.env.COMPUTER_EVE_URL;
+    return eveUrlMap(bots.configs(), override ? { urls: { [bots.primary().id]: override } } : {});
+  };
 
   const server = createServer(async (req, res) => {
     try {
@@ -117,23 +103,17 @@ export function createHub(opts: HubOptions): Hub {
         await handleEveProxy(req, res, { auth, bots, eveUrls, eveSecret, cors: corsHeaders() });
         return;
       }
-      if (req.method === "POST" && url.pathname === "/chat") {
-        await handleChat(req, res, { bots, auth, apiKey: opts.apiKey, llmBaseUrl: opts.llmBaseUrl, llmModel: opts.llmModel });
-        return;
-      }
       const handled = await router.handle(req, res);
       if (handled) return;
       if (req.method === "GET" || req.method === "HEAD") {
-        const pixels = needsSeatPixelAuth(url.pathname);
-        if (pixels && !auth.canViewPixels(tokenFromRequest(req))) {
+        // Pixels (the noVNC page and its websocket) are the only static
+        // content, and they need a seat or pixel token. The product web is
+        // the Vercel app; the hub serves no panel.
+        if (needsSeatPixelAuth(url.pathname) && !auth.canViewPixels(tokenFromRequest(req))) {
           writeJson(res, 401, { error: { code: "UNAUTHENTICATED", message: "seat or pixel token required" } });
           return;
         }
-        // The panel wins `/`; the hub's own static dir keeps the pixels and the
-        // novnc bundle. Checked in this order so an unbuilt panel cannot shadow
-        // a gated path, and a built one cannot be shadowed by the debug page.
-        if (!pixels && serveStatic(req, res, webDir, url.pathname)) return;
-        if (serveStatic(req, res, staticDir, url.pathname)) return;
+        if (serveStatic(res, staticDir, url.pathname)) return;
       }
       writeJson(res, 404, { error: { code: "VALIDATION", message: "not found" } });
     } catch (err) {
@@ -141,6 +121,8 @@ export function createHub(opts: HubOptions): Hub {
     }
   });
 
+  // Token checked on the upgrade (a bad one is refused before the socket
+  // opens); the display binding is checked once the URL is parsed in the proxy.
   const wss = new WebSocketServer({
     server,
     verifyClient: (info: { req: IncomingMessage }) => auth.canViewPixels(tokenFromRequest(info.req)),

@@ -8,8 +8,12 @@ export type TokenKind = "agent" | "seat";
 
 export type Verified = { kind: TokenKind | "public"; botId?: string };
 
+const PAIR_MAX_FAILURES = 10;
+const PAIR_LOCKOUT_MS = 60_000;
+
 export class AuthRegistry {
   private readonly setupCode: string;
+  private readonly pairFailures = { count: 0, blockedUntil: 0 };
   /** Live view of the roster: [token, botId] pairs. Provisioning needs no auth sync. */
   private readonly agentTokens: () => Iterable<[string, string]>;
   private readonly seats: SeatTokenStore;
@@ -37,10 +41,24 @@ export class AuthRegistry {
     this.pixels = opts.pixels ?? new PixelRegistry();
   }
 
-  pair(code: string): string {
+  /**
+   * Pair is the one unauthenticated write. A wrong code costs the caller a
+   * growing delay and, after enough misses in a window, a refusal — so a
+   * setup code cannot be guessed online at network speed.
+   */
+  pair(code: string, now = Date.now()): string {
+    if (this.pairFailures.blockedUntil > now) {
+      throw new ComputerError("UNAUTHENTICATED", "too many bad setup codes — try again later");
+    }
     if (!safeEqual(code, this.setupCode)) {
+      this.pairFailures.count += 1;
+      if (this.pairFailures.count >= PAIR_MAX_FAILURES) {
+        this.pairFailures.count = 0;
+        this.pairFailures.blockedUntil = now + PAIR_LOCKOUT_MS;
+      }
       throw new ComputerError("UNAUTHENTICATED", "bad setup code");
     }
+    this.pairFailures.count = 0;
     return this.mint();
   }
 
@@ -76,11 +94,6 @@ export class AuthRegistry {
     return this.hasSeatToken(token) || this.pixels.lookup(token) !== undefined;
   }
 
-  /** Test helper */
-  issueSeatToken(): string {
-    return this.mint();
-  }
-
   /**
    * Persist before returning. A token handed to a phone that never reached
    * disk is worse than a failed pairing: the phone believes it is paired and
@@ -111,18 +124,6 @@ export function tokenFromRequest(req: { url?: string; headers: { authorization?:
     return new URL(req.url ?? "/", "http://127.0.0.1").searchParams.get("token") ?? undefined;
   } catch {
     return undefined;
-  }
-}
-
-export function withSeatToken(base: string, token: string): string {
-  try {
-    const u = new URL(base);
-    u.searchParams.set("view_only", "1");
-    u.searchParams.set("token", token);
-    return u.toString();
-  } catch {
-    const sep = base.includes("?") ? "&" : "?";
-    return `${base}${sep}view_only=1&token=${encodeURIComponent(token)}`;
   }
 }
 

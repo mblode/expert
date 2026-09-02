@@ -140,33 +140,6 @@ describe("bots: one shared box, one screen per Bot", () => {
     ).rejects.toMatchObject({ code: "SEAT_HELD" });
   });
 
-  it("chat runs per bot and rejects a concurrent chat for a busy bot", async () => {
-    const h = await startTwoBots();
-    opened.push(h);
-    const token = await h.pair();
-
-    const chat = (body: unknown) =>
-      fetch(`${h.url}/chat`, {
-        method: "POST",
-        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-    // Unknown bot is a 400.
-    const unknown = await chat({ message: "hi", bot_id: "nope" });
-    expect(unknown.status).toBe(400);
-
-    // Two bots chat concurrently (echo loop, no API key).
-    const [ra, rb] = await Promise.all([
-      chat({ message: "hi", bot_id: "a" }),
-      chat({ message: "hi", bot_id: "b" }),
-    ]);
-    expect(ra.status).toBe(200);
-    expect(rb.status).toBe(200);
-    expect(await ra.text()).toContain("Hub is up");
-    expect(await rb.text()).toContain("Hub is up");
-  });
-
   it("registry rejects duplicates, bad ids, and out-of-range displays", () => {
     const factory = (display: number) => new FakeDesk({ display });
     const make = (configs: Parameters<typeof BotRegistry.prototype.add>[0][]) =>

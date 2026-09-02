@@ -2,7 +2,7 @@
 /**
  * Hub layering: handler → service → desk.
  * A layer may only import from the layers below it, so:
- *   - desk may not import handler (or service)
+ *   - desk may not import handler or service
  *   - service may not import handler
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -10,10 +10,10 @@ import { join, relative } from "node:path";
 
 const srcRoot = join(import.meta.dirname, "../apps/hub/src");
 
-/** Each rule: files under `dir` may not import from `forbidden`. */
+/** Each rule: files under `dir` may not import from any of `forbidden`. */
 const RULES = [
-  { dir: "desk", forbidden: "handler" },
-  { dir: "service", forbidden: "handler" },
+  { dir: "desk", forbidden: ["handler", "service"] },
+  { dir: "service", forbidden: ["handler"] },
 ];
 
 function walk(dir) {
@@ -28,15 +28,16 @@ function walk(dir) {
 
 let failed = false;
 for (const { dir, forbidden } of RULES) {
-  const from = new RegExp(`from\\s+["'][^"']*${forbidden}`);
-  const dynamic = new RegExp(`import\\(["'][^"']*${forbidden}`);
-  for (const file of walk(join(srcRoot, dir))) {
-    const text = readFileSync(file, "utf8");
-    if (from.test(text) || dynamic.test(text)) {
-      console.error(
-        `lint-layers: ${relative(process.cwd(), file)} imports ${forbidden} — ${dir} may not import ${forbidden} (handler → service → desk)`,
-      );
-      failed = true;
+  for (const layer of forbidden) {
+    // A path segment, so `./error-handler.ts` is not a false positive.
+    const pattern = new RegExp(`(?:from\\s+|import\\()["'][^"']*/${layer}/`);
+    for (const file of walk(join(srcRoot, dir))) {
+      if (pattern.test(readFileSync(file, "utf8"))) {
+        console.error(
+          `lint-layers: ${relative(process.cwd(), file)} imports ${layer} — ${dir} may not import ${layer} (handler → service → desk)`,
+        );
+        failed = true;
+      }
     }
   }
 }

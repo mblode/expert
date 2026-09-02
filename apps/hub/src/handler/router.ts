@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { ComputerError, ERROR_HTTP_STATUS, unavailable, type ErrorCode } from "@computer/shared";
+import { ComputerError, unavailable, type ErrorCode } from "@computer/shared";
 import { ALL_METHODS, type AuthPolicy } from "@computer/proto";
 import { AuthRegistry, bearerFromHeader } from "./auth.ts";
 
@@ -33,9 +33,7 @@ export class ConnectRouter {
     this.routes.set(path, { policy, handler });
   }
 
-  /**
-   * Extra HTTP JSON endpoints (chat, GET /spec). Still require a policy.
-   */
+  /** Extra HTTP JSON endpoints (GET /spec, /healthz, /roster). Still require a policy. */
   extra(method: string, path: string, policy: AuthPolicy, handler: Handler): void {
     if (!policy) throw new Error(`Connect method ${path} registered without an auth policy`);
     this.extras.set(`${method} ${path}`, { method, policy, handler });
@@ -56,9 +54,6 @@ export class ConnectRouter {
     if (extra) {
       await this.dispatch(req, res, extra.policy, extra.handler);
       return true;
-    }
-    if (req.method === "GET" && url.pathname === "/spec") {
-      // registered via extra
     }
     if (req.method !== "POST") return false;
     const route = this.routes.get(url.pathname);
@@ -98,7 +93,11 @@ export function writeError(res: ServerResponse, err: unknown): void {
   });
 }
 
-/** Same CORS on OPTIONS and on JSON so a Vercel-hosted panel can read Pair/Status. */
+/**
+ * Same CORS on OPTIONS and on JSON so the Vercel-hosted web app can call the
+ * hub cross-origin. `*` is safe only because every call is bearer-authenticated
+ * and nothing here reads cookies.
+ */
 export function corsHeaders(): Record<string, string> {
   return {
     "access-control-allow-origin": "*",
@@ -124,9 +123,17 @@ function header(req: IncomingMessage, name: string): string | undefined {
   return Array.isArray(v) ? v[0] : v;
 }
 
+/** Largest JSON body: a 20-action batch or a 4000-char type is kilobytes; a screenshot never goes this way. */
+const MAX_BODY_BYTES = 1024 * 1024;
+
 async function readJson(req: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
+  let size = 0;
+  for await (const c of req) {
+    size += (c as Buffer).length;
+    if (size > MAX_BODY_BYTES) throw new ComputerError("VALIDATION", "body too large");
+    chunks.push(c as Buffer);
+  }
   if (chunks.length === 0) return {};
   const raw = Buffer.concat(chunks).toString("utf8");
   if (!raw.trim()) return {};
@@ -143,5 +150,3 @@ export function requireObject(body: unknown): Record<string, unknown> {
   }
   return body as Record<string, unknown>;
 }
-
-void ERROR_HTTP_STATUS;

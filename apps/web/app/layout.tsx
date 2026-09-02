@@ -23,7 +23,6 @@ const emilioLight = localFont({
 const siteTitle = `${siteConfig.name} | The Linux computer your AI agent uses`;
 
 export const metadata: Metadata = {
-  alternates: { canonical: "/" },
   description: siteConfig.description,
   metadataBase: new URL(siteConfig.url),
   openGraph: {

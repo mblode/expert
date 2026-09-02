@@ -1,15 +1,11 @@
 import type { ClientSessionState } from "eve/client";
 
 /**
- * What survives a reload: the paired seat, and where the conversation got to.
- * Both are per-browser; the seat token is the box owner's credential, so this
- * is the same trust boundary as staying signed in.
+ * What survives a reload: where each Bot's conversation got to. The seat token
+ * itself is never stored here — it rides on the auth session.
  */
 
-const SEAT_KEY = "computer.web.seat";
 const SESSION_KEY = "computer.web.session";
-
-export type StoredSeat = { hubUrl: string; seatToken: string };
 
 function read<T>(key: string, valid: (value: unknown) => value is T): T | undefined {
   try {
@@ -31,24 +27,27 @@ function write(key: string, value: unknown): void {
   }
 }
 
-export function loadSeat(): StoredSeat | undefined {
+function sessionKey(botId: string): string {
+  return `${SESSION_KEY}.${botId}`;
+}
+
+export function loadSession(botId: string): ClientSessionState | undefined {
   return read(
-    SEAT_KEY,
-    (v): v is StoredSeat =>
+    sessionKey(botId),
+    (v): v is ClientSessionState =>
       typeof v === "object" &&
       v !== null &&
-      typeof (v as StoredSeat).hubUrl === "string" &&
-      typeof (v as StoredSeat).seatToken === "string",
+      typeof (v as ClientSessionState).sessionId === "string" &&
+      typeof (v as ClientSessionState).streamIndex === "number",
   );
 }
 
-export function saveSeat(seat: StoredSeat): void {
-  write(SEAT_KEY, seat);
+export function saveSession(session: ClientSessionState | undefined, botId: string): void {
+  write(sessionKey(botId), session);
 }
 
-export function clearSeat(): void {
-  write(SEAT_KEY, undefined);
-  write(SESSION_KEY, undefined);
+/** Sign-out: forget every Bot's cursor so the next person here starts fresh. */
+export function clearSessions(): void {
   try {
     const prefix = `${SESSION_KEY}.`;
     const keys: string[] = [];
@@ -60,23 +59,4 @@ export function clearSeat(): void {
   } catch {
     // Same as write(): private browsing or a full quota.
   }
-}
-
-function sessionKey(botId?: string): string {
-  return botId ? `${SESSION_KEY}.${botId}` : SESSION_KEY;
-}
-
-export function loadSession(botId?: string): ClientSessionState | undefined {
-  return read(
-    sessionKey(botId),
-    (v): v is ClientSessionState =>
-      typeof v === "object" &&
-      v !== null &&
-      typeof (v as ClientSessionState).sessionId === "string" &&
-      typeof (v as ClientSessionState).streamIndex === "number",
-  );
-}
-
-export function saveSession(session: ClientSessionState | undefined, botId?: string): void {
-  write(sessionKey(botId), session);
 }

@@ -12,8 +12,6 @@ import { rpc, startHub } from "./helper.ts";
 
 /** A check command that is a real process, so the failure modes are real ones. */
 const node = (script: string): string[] => [process.execPath, "-e", script];
-const says = (decision: string, reason = "because"): string[] =>
-  node(`console.log(JSON.stringify({decision:${JSON.stringify(decision)},reason:${JSON.stringify(reason)}}))`);
 
 /** Short timeout: the point is the deny, not the wait. */
 const policy = (rules: PolicyRule[]) => new PolicyService(rules, { checkTimeoutMs: 200 });

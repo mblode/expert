@@ -1,9 +1,10 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import type { BoxStatus, Screen, Seat, SeatState } from "../lib/seat";
-import { pixelUrlFresh, screenSrc } from "../lib/seat";
+import { pixelUrlFresh } from "../lib/seat";
 import { useSeatInput } from "../lib/use-seat-input";
 import { ClipboardPanel } from "./clipboard-panel";
+import { KeyboardBar } from "./keyboard-bar";
 
 const STATE_LABEL: Record<SeatState, string> = {
   AGENT: "Eve has the seat",
@@ -51,7 +52,7 @@ export function DesktopPane({
     (candidate) => candidate.state === "WAITING" && candidate.display !== screen?.display,
   );
 
-  const input = useSeatInput(seat, display, controllable, desk);
+  const { error: inputError, cursorRef, send, handlers } = useSeatInput(seat, display, controllable, desk);
   const screenId = screen ? `${screen.bot_id}:${screen.display}` : "";
   const vncSrc = useStableVncSrc(screen?.vnc_url, screenId);
 
@@ -87,7 +88,7 @@ export function DesktopPane({
           <span className="text-xs text-mute">{screen?.bot_id ?? "box"}</span>
         )}
 
-        <span className="flex items-center gap-1.5 text-xs text-mute">
+        <span className="flex items-center gap-1.5 text-xs text-mute" role="status">
           <span className={`size-2 rounded-full ${STATE_DOT[state]}`} />
           {STATE_LABEL[state]}
         </span>
@@ -140,7 +141,10 @@ export function DesktopPane({
       </header>
 
       {state === "WAITING" && (
-        <div className="flex flex-wrap items-center gap-3 border-b border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm">
+        <div
+          className="flex flex-wrap items-center gap-3 border-b border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm"
+          role="alert"
+        >
           <span className="font-medium text-amber-200">Eve needs you — take the seat</span>
           <button
             className="rounded-md bg-amber-400 px-2.5 py-1 text-xs font-medium text-ink disabled:opacity-50"
@@ -169,9 +173,9 @@ export function DesktopPane({
         </div>
       )}
 
-      {input.error && (
+      {inputError && (
         <p className="border-b border-red-900/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-200" role="alert">
-          {input.error}
+          {inputError}
         </p>
       )}
 
@@ -184,10 +188,17 @@ export function DesktopPane({
         >
           {screen ? (
             <>
+              {/* Cross-origin to the hub, with a 15-minute pixel token in the
+                  URL. Sandboxed to scripts only: noVNC needs no storage and
+                  no same-origin powers, and the frame cannot navigate this
+                  window or open popups. No referrer, so the token never
+                  leaks to anything the frame might load. */}
               <iframe
                 className="absolute inset-0 size-full rounded-lg border border-edge bg-black"
                 key={screenId}
-                src={screenSrc(seat.hubUrl, vncSrc ?? screen.vnc_url)}
+                referrerPolicy="no-referrer"
+                sandbox="allow-scripts"
+                src={vncSrc ?? screen.vnc_url}
                 title={`${screen.bot_id} screen`}
               />
               <div
@@ -201,7 +212,7 @@ export function DesktopPane({
                 }`}
                 role="application"
                 tabIndex={controllable ? 0 : -1}
-                {...input.handlers}
+                {...handlers}
               />
               {/* The cursor you steer. The box's own cursor is in the video a
                   round trip behind, so this one is drawn here and moved on
@@ -210,7 +221,7 @@ export function DesktopPane({
                 <div
                   aria-hidden
                   className="pointer-events-none absolute z-10 opacity-0 transition-opacity"
-                  ref={input.cursorRef}
+                  ref={cursorRef}
                   style={{ left: 0, top: 0 }}
                 >
                   <svg
@@ -237,7 +248,7 @@ export function DesktopPane({
           : "View only while Eve is working. Take the seat to drive it yourself, or wait for it to ask."}
       </p>
 
-      {controllable && showKeyboard && <KeyboardBar onSend={input.send} />}
+      {controllable && showKeyboard && <KeyboardBar onSend={send} />}
       {showClipboard && <ClipboardPanel display={display} seat={seat} />}
     </section>
   );
@@ -247,72 +258,16 @@ export function DesktopPane({
  * Hold the current pixel URL until the grant is close to expiry or the
  * screen identity changes. Rewriting `src` (or keying on `vnc_url`) on
  * every Status poll tears down noVNC.
+ *
+ * Derived from the previous render with state, not a ref written during
+ * render, so the React Compiler can still memoise this component.
  */
 function useStableVncSrc(incoming: string | undefined, identity: string): string | undefined {
-  const held = useRef<{ identity: string; url: string } | undefined>(undefined);
-  if (!incoming) {
-    return held.current?.identity === identity ? held.current.url : undefined;
+  const [held, setHeld] = useState<{ identity: string; url: string } | undefined>(undefined);
+  const stale = held === undefined || held.identity !== identity || !pixelUrlFresh(held.url);
+  if (incoming && stale) {
+    setHeld({ identity, url: incoming });
+    return incoming;
   }
-  if (!held.current || held.current.identity !== identity || !pixelUrlFresh(held.current.url)) {
-    held.current = { identity, url: incoming };
-  }
-  return held.current.url;
-}
-
-/**
- * A phone cannot type into the pane the way a laptop does: iOS raises the soft
- * keyboard for a focused form field and for nothing else, and the overlay that
- * catches keystrokes is a `role="application"` div. So typing gets a real one.
- *
- * It composes a line and sends it whole rather than forwarding each keystroke,
- * because `Seat.Type` is a paste: once a character is on the box nothing here
- * can take it back, and Backspace does not go through. Seeing the line before
- * it leaves is the only place a thumbed typo can still be fixed.
- */
-function KeyboardBar({ onSend }: { onSend: (text: string) => void }): React.ReactElement {
-  const [text, setText] = useState("");
-
-  const send = (suffix: string) => {
-    if (!text && !suffix) return;
-    setText("");
-    onSend(text + suffix);
-  };
-
-  return (
-    <div className="flex items-center gap-2 border-t border-edge p-3">
-      <input
-        aria-label="Type into the box"
-        // iOS rewrites what a thumb types — capitals, corrections, curly quotes
-        // for straight ones — and the box would run the rewrite, not the
-        // command. These are the attributes that turn all of it off.
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-        // Mounting is the gesture that asked for the keyboard, and iOS only
-        // raises it inside one.
-        autoFocus
-        className="min-w-0 flex-1 rounded-lg border border-edge bg-panel px-3 py-2 font-mono text-sm outline-none focus:border-accent"
-        enterKeyHint="send"
-        onChange={(event) => setText(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter") return;
-          event.preventDefault();
-          // Return goes to the box with the line: the reason to type into a
-          // terminal from a phone is to run the thing you typed.
-          send("\n");
-        }}
-        placeholder="Type into the box…"
-        spellCheck={false}
-        value={text}
-      />
-      <button
-        className="rounded-lg border border-edge px-3 py-2 text-sm hover:border-accent disabled:opacity-50"
-        disabled={!text}
-        onClick={() => send("")}
-        type="button"
-      >
-        Send
-      </button>
-    </div>
-  );
+  return held?.identity === identity ? held.url : undefined;
 }

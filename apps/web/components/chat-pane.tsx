@@ -39,10 +39,14 @@ export function ChatPane({
   // Read once: the hook builds its store on first render and keeps it.
   // Remount this pane (`key={botId}`) when the selected Bot changes.
   const [initialSession] = useState(() => loadSession(botId));
+  // The hook captures its options on first render; the latest credentials
+  // reach it through refs that are updated after each commit.
   const tokenRef = useRef(seat.token);
-  tokenRef.current = seat.token;
   const botRef = useRef(botId);
-  botRef.current = botId;
+  useEffect(() => {
+    tokenRef.current = seat.token;
+    botRef.current = botId;
+  });
 
   const agent = useEveAgent({
     auth: { bearer: () => tokenRef.current },
@@ -64,7 +68,9 @@ export function ChatPane({
 
   // Follow the stream, unless the reader has scrolled up to read something.
   useEffect(() => {
-    if (pinned.current) scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+    if (pinned.current && messages.length > 0) {
+      scroller.current?.scrollTo({ top: scroller.current.scrollHeight });
+    }
   }, [messages]);
 
   const send = (text: string) => {
@@ -90,7 +96,9 @@ export function ChatPane({
     <section className="flex min-h-0 min-w-0 flex-col border-edge max-lg:border-t lg:border-l">
       <header className="flex items-center gap-2 border-b border-edge px-3 py-2">
         <h2 className="text-sm font-medium">Eve</h2>
-        <span className={`text-xs ${down ? "text-amber-300" : "text-mute"}`}>{statusLabel}</span>
+        <span className={`text-xs ${down ? "text-amber-300" : "text-mute"}`} role="status">
+          {statusLabel}
+        </span>
         <span className="truncate text-xs text-mute">{botId}</span>
         <button
           className="ml-auto rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
@@ -105,6 +113,7 @@ export function ChatPane({
       </header>
 
       <div
+        aria-live="polite"
         className="min-h-0 flex-1 space-y-4 overflow-y-auto p-3"
         onScroll={(event) => {
           const el = event.currentTarget;
@@ -114,7 +123,7 @@ export function ChatPane({
       >
         {down && messages.length === 0 && !resuming && (
           <p className="pt-8 text-center text-sm text-mute">
-            Eve is not running for <span className="text-ink">{botId}</span>. The guest starts
+            Eve is not running for <span className="text-white">{botId}</span>. The guest starts
             one process per roster bot with <code className="text-xs">eve start</code>.
           </p>
         )}

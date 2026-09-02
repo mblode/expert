@@ -1,6 +1,6 @@
-import { existsSync, readFileSync } from "node:fs";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { extname, join, resolve } from "node:path";
+import { readFileSync, statSync } from "node:fs";
+import type { ServerResponse } from "node:http";
+import { extname, resolve, sep } from "node:path";
 
 const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -10,52 +10,30 @@ const MIME: Record<string, string> = {
   ".png": "image/png",
   ".ico": "image/x-icon",
   ".json": "application/json",
-  // A Next export ships its own fonts and route manifests. Without these the
-  // browser gets application/octet-stream and silently drops the font.
-  ".woff2": "font/woff2",
-  ".woff": "font/woff",
-  ".ttf": "font/ttf",
-  ".txt": "text/plain; charset=utf-8",
-  ".map": "application/json",
-  ".webmanifest": "application/manifest+json",
 };
 
-/**
- * Pixels of the screen are seat-only; the rest of the bundle is public.
- *
- * `/` is deliberately not here. It is the control panel, and the control panel
- * is where you pair — gating it behind the token pairing produces is a door
- * locked with the key inside. It ships no pixels of its own: the desktop
- * arrives through the `/vnc/` iframe, which is still gated below, and the
- * WebSocket behind it checks the seat token again on upgrade.
- */
+/** Pixels of the screen are seat-only. The noVNC bundle under /novnc is public. */
 export function needsSeatPixelAuth(pathname: string): boolean {
-  return (
-    pathname === "/vnc" ||
-    pathname.startsWith("/vnc/") ||
-    pathname === "/debug.html"
-  );
+  return pathname === "/vnc" || pathname.startsWith("/vnc/");
 }
 
-export function serveStatic(req: IncomingMessage, res: ServerResponse, dir: string, pathname: string): boolean {
-  let rel = pathname === "/" ? "/index.html" : pathname;
-  if (rel.startsWith("/vnc") && (rel === "/vnc" || rel === "/vnc/")) rel = "/vnc/index.html";
-  const safe = join(dir, rel.replace(/^\/+/, ""));
-  if (!safe.startsWith(dir)) return false;
-  if (!existsSync(safe)) {
-    // optional @novnc/novnc from node_modules
-    if (rel.startsWith("/novnc/")) {
-      const novnc = tryNovnc(rel.slice("/novnc/".length));
-      if (novnc) {
-        writeFile(res, novnc.path, novnc.body);
-        return true;
-      }
-    }
-    return false;
+/** Serve a file from `dir`; `/vnc` and `/vnc/` resolve to the noVNC page. */
+export function serveStatic(res: ServerResponse, dir: string, pathname: string): boolean {
+  const rel = pathname === "/vnc" || pathname === "/vnc/" ? "/vnc/index.html" : pathname;
+  const file = resolve(dir, rel.replace(/^\/+/, ""));
+  if (!file.startsWith(dir + sep)) return false;
+  if (isFile(file)) {
+    writeFile(res, file, readFileSync(file));
+    return true;
   }
-  writeFile(res, safe, readFileSync(safe));
-  void req;
-  return true;
+  if (rel.startsWith("/novnc/")) {
+    const novnc = tryNovnc(rel.slice("/novnc/".length));
+    if (novnc) {
+      writeFile(res, novnc.path, novnc.body);
+      return true;
+    }
+  }
+  return false;
 }
 
 function writeFile(res: ServerResponse, path: string, body: Buffer): void {
@@ -63,18 +41,24 @@ function writeFile(res: ServerResponse, path: string, body: Buffer): void {
   res.end(body);
 }
 
+/** `@novnc/novnc` from node_modules — hoisted to the workspace root or local to the hub. */
 function tryNovnc(rel: string): { path: string; body: Buffer } | null {
   const roots = [
-    resolve(process.cwd(), "node_modules/@novnc/novnc"),
     resolve(import.meta.dirname, "../../node_modules/@novnc/novnc"),
     resolve(import.meta.dirname, "../../../../node_modules/@novnc/novnc"),
   ];
   for (const root of roots) {
-    const p = join(root, rel);
-    // Defence in depth: URL normalisation already blocks "..", the containment
-    // check makes the novnc branch match its sibling above.
-    if (!p.startsWith(root)) continue;
-    if (existsSync(p)) return { path: p, body: readFileSync(p) };
+    const p = resolve(root, rel);
+    if (!p.startsWith(root + sep)) continue;
+    if (isFile(p)) return { path: p, body: readFileSync(p) };
   }
   return null;
+}
+
+function isFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
 }

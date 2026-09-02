@@ -1,9 +1,8 @@
 import { eq } from "drizzle-orm";
 
 import { computerSeat } from "../db/computer-seat";
+import { DEFAULT_HUB_URL, trimSlashes } from "./config";
 import { db } from "./db";
-
-const DEFAULT_HUB = "https://mblode-computer.fly.dev";
 
 export type ComputerSeat = {
   hubUrl: string;
@@ -12,10 +11,7 @@ export type ComputerSeat = {
 };
 
 export function hubUrl(): string {
-  return (process.env.COMPUTER_HUB_URL ?? process.env.NEXT_PUBLIC_HUB_URL ?? DEFAULT_HUB).replace(
-    /\/+$/u,
-    "",
-  );
+  return trimSlashes(process.env.COMPUTER_HUB_URL ?? process.env.NEXT_PUBLIC_HUB_URL ?? DEFAULT_HUB_URL);
 }
 
 async function pairWithHub(hub: string): Promise<{ token: string } | { error: string }> {
@@ -46,50 +42,36 @@ async function pairWithHub(hub: string): Promise<{ token: string } | { error: st
   }
 }
 
-async function persistSeat(userId: string, token: string, hub: string): Promise<void> {
-  await db
-    .insert(computerSeat)
-    .values({ userId, seatToken: token, hubUrl: hub, updatedAt: new Date() })
-    .onConflictDoUpdate({
-      target: computerSeat.userId,
-      set: { seatToken: token, hubUrl: hub, updatedAt: new Date() },
-    });
+/** Pair, then remember the token for this user. A failed write still returns the token for this request. */
+async function pairAndPersist(userId: string, hub: string): Promise<ComputerSeat> {
+  const paired = await pairWithHub(hub);
+  if ("error" in paired) return { hubUrl: hub, seatError: paired.error };
+  try {
+    await db
+      .insert(computerSeat)
+      .values({ userId, seatToken: paired.token, hubUrl: hub, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: computerSeat.userId,
+        set: { seatToken: paired.token, hubUrl: hub, updatedAt: new Date() },
+      });
+  } catch {
+    // The next getSession will Pair again; the token is still good now.
+  }
+  return { seatToken: paired.token, hubUrl: hub };
 }
 
 export async function getOrCreateComputerSeat(userId: string): Promise<ComputerSeat> {
   const hub = hubUrl();
   try {
-    const existing = await db.select().from(computerSeat).where(eq(computerSeat.userId, userId)).limit(1);
-    const row = existing[0];
-    if (row?.seatToken) {
-      return { seatToken: row.seatToken, hubUrl: row.hubUrl || hub };
-    }
+    const [row] = await db.select().from(computerSeat).where(eq(computerSeat.userId, userId)).limit(1);
+    if (row?.seatToken) return { seatToken: row.seatToken, hubUrl: row.hubUrl || hub };
   } catch {
-    // Table may not exist yet on a fresh Turso — Pair still works; persist may fail below.
+    // Table may not exist yet on a fresh Turso — Pair still works.
   }
-
-  const paired = await pairWithHub(hub);
-  if ("error" in paired) {
-    return { hubUrl: hub, seatError: paired.error };
-  }
-  try {
-    await persistSeat(userId, paired.token, hub);
-  } catch {
-    // Session still carries the token this request; the next getSession will Pair again.
-  }
-  return { seatToken: paired.token, hubUrl: hub };
+  return pairAndPersist(userId, hub);
 }
 
-export async function refreshComputerSeat(userId: string): Promise<ComputerSeat> {
-  const hub = hubUrl();
-  const paired = await pairWithHub(hub);
-  if ("error" in paired) {
-    return { hubUrl: hub, seatError: paired.error };
-  }
-  try {
-    await persistSeat(userId, paired.token, hub);
-  } catch {
-    // Same as getOrCreate: the token is still returned on this request.
-  }
-  return { seatToken: paired.token, hubUrl: hub };
+/** The hub forgot this token (a wiped seats.json): pair again and replace it. */
+export function refreshComputerSeat(userId: string): Promise<ComputerSeat> {
+  return pairAndPersist(userId, hubUrl());
 }

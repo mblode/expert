@@ -21,7 +21,8 @@ export function attachVncProxy(
   },
 ): void {
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
-    if (!opts.auth.canViewPixels(tokenFromRequest(req))) {
+    const token = tokenFromRequest(req);
+    if (!opts.auth.canViewPixels(token)) {
       ws.close(4401, "unauthenticated");
       return;
     }
@@ -33,6 +34,12 @@ export function attachVncProxy(
     const display = parseDisplayParam(url.searchParams.get("display"));
     if (display === null || !opts.hasDisplay(display)) {
       ws.close(4404, "unknown display");
+      return;
+    }
+    // A pixel grant is minted for one screen; a seat token may view any.
+    const grant = opts.auth.pixels.lookup(token);
+    if (grant && grant.display !== display) {
+      ws.close(4403, "token is for another display");
       return;
     }
     const sock = createConnection({ host: opts.host, port: opts.basePort + display });
@@ -57,8 +64,4 @@ function parseDisplayParam(v: string | null): number | null {
   const n = Number(v);
   if (!Number.isInteger(n) || n < 1 || n > MAX_DISPLAYS) return null;
   return n;
-}
-
-export function verifyVncUpgrade(auth: AuthRegistry, req: IncomingMessage): boolean {
-  return auth.canViewPixels(tokenFromRequest(req));
 }

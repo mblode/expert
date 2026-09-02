@@ -6,6 +6,8 @@
  * these RPCs. `display` picks the screen; absent means the primary one.
  */
 
+import { DEFAULT_HUB_URL, trimSlashes } from "./config";
+
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
 /** Where the box says its cursor actually is, after a move. */
@@ -24,8 +26,6 @@ export type BoxStatus = {
   display: { width: number; height: number; scale: number };
   screens: Screen[];
 };
-
-export type PairResult = { token: string; vnc_url: string; status: BoxStatus };
 
 export type Button = "left" | "right" | "middle" | "back" | "forward";
 
@@ -47,40 +47,16 @@ export class SeatError extends Error {
  * hub echoes CORS on JSON.
  */
 const PROXY_TARGET = process.env.NEXT_PUBLIC_HUB_PROXY_TARGET ?? "";
-/** Fly computer. Set `NEXT_PUBLIC_HUB_URL` on Vercel; used as the Vercel-build fallback. */
-const FLY_HUB = "https://mblode-computer.fly.dev";
-const PUBLIC_HUB = (
-  process.env.NEXT_PUBLIC_HUB_URL || (process.env.VERCEL ? FLY_HUB : "")
-).replace(/\/+$/u, "");
+const PUBLIC_HUB = trimSlashes(process.env.NEXT_PUBLIC_HUB_URL || (process.env.VERCEL ? DEFAULT_HUB_URL : ""));
 
 export function apiBase(hubUrl: string): string {
-  const base = (hubUrl || PUBLIC_HUB).trim().replace(/\/+$/u, "");
+  const base = trimSlashes(hubUrl || PUBLIC_HUB);
   if (PROXY_TARGET && base && sameOrigin(base, PROXY_TARGET)) return "";
   return base;
 }
 
-/** Local-dev hub. Hosted pages use the env URL or the page origin. */
-const LOCAL_HUB = "http://127.0.0.1:8787";
-
 /** Remint window — keep the iframe src while more than this remains. */
 export const PIXEL_REFRESH_MS = 60_000;
-
-/**
- * Pair default: `NEXT_PUBLIC_HUB_URL` (Vercel → Fly), else the page origin
- * when hosted, else loopback for `next dev` / 127.0.0.1.
- */
-export function defaultHubUrl(
-  location?: { hostname: string; origin: string },
-  publicHub = PUBLIC_HUB,
-): string {
-  const configured = publicHub.trim().replace(/\/+$/u, "");
-  if (configured) return configured;
-  if (!location) return LOCAL_HUB;
-  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
-    return LOCAL_HUB;
-  }
-  return location.origin;
-}
 
 /** True while the stamped pixel grant still has enough time left. */
 export function pixelUrlFresh(vncUrl: string, now = Date.now(), minRemainingMs = PIXEL_REFRESH_MS): boolean {
@@ -92,20 +68,6 @@ export function pixelUrlFresh(vncUrl: string, now = Date.now(), minRemainingMs =
   }
 }
 
-/**
- * The hub hands back absolute `vnc_url`s, and they are used as-is.
- *
- * Do not route these through the dev proxy. noVNC opens an RFB websocket back
- * to whatever origin served the page, and a Next rewrite cannot carry a
- * WebSocket upgrade — proxied, the page would load and the socket would fail.
- * Pointing the iframe straight at the hub keeps page and socket on one origin.
- * It is a cross-origin iframe, which is fine: nothing here reads its document,
- * and the token is already in the URL the hub minted.
- */
-export function screenSrc(_hubUrl: string, vncUrl: string): string {
-  return vncUrl;
-}
-
 function sameOrigin(a: string, b: string): boolean {
   try {
     return new URL(a, window.location.origin).origin === new URL(b, window.location.origin).origin;
@@ -114,15 +76,12 @@ function sameOrigin(a: string, b: string): boolean {
   }
 }
 
-async function rpc<T>(hubUrl: string, method: string, body: unknown, token?: string): Promise<T> {
+async function rpc<T>(hubUrl: string, method: string, body: unknown, token: string): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${apiBase(hubUrl)}/computer.v1.Seat/${method}`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
-      },
+      headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
     });
   } catch {
@@ -135,10 +94,6 @@ async function rpc<T>(hubUrl: string, method: string, body: unknown, token?: str
     throw new SeatError(envelope?.message ?? `${method} failed (${res.status})`, envelope?.code);
   }
   return payload as T;
-}
-
-export async function pair(hubUrl: string, code: string): Promise<PairResult> {
-  return await rpc<PairResult>(hubUrl, "Pair", { code });
 }
 
 export type Seat = ReturnType<typeof createSeat>;

@@ -1,6 +1,3 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { rpc, startHub } from "./helper.ts";
 
@@ -114,33 +111,26 @@ describe("Connect HTTP", () => {
     await expect(rpc(h.url, "/computer.v1.Seat/Status", {}, h.agent)).rejects.toMatchObject({
       code: "UNAUTHENTICATED",
     });
-    const chat = await fetch(`${h.url}/chat`, {
+    const eve = await fetch(`${h.url}/eve/v1/session`, {
       method: "POST",
       headers: { authorization: `Bearer ${h.agent}`, "content-type": "application/json" },
-      body: JSON.stringify({ message: "hi" }),
+      body: "{}",
     });
-    expect(chat.status).toBe(401);
+    expect(eve.status).toBe(401);
   });
 
-  it("serves the control panel at / without a seat token", async () => {
-    // The panel is where you pair, so gating it behind the token pairing
-    // produces would lock the key inside. It ships no pixels of its own.
-    const dir = mkdtempSync(join(tmpdir(), "panel-"));
-    writeFileSync(join(dir, "index.html"), "<!doctype html><title>panel</title>");
-    writeFileSync(join(dir, "app.woff2"), "font");
-    const h = await startHub({ webDir: dir });
+  it("locks Pair after repeated bad setup codes", async () => {
+    const h = await startHub();
     opened.push(h);
-
-    const root = await fetch(`${h.url}/`);
-    expect(root.status).toBe(200);
-    expect(await root.text()).toContain("panel");
-
-    // A Next export ships fonts; the wrong content-type drops them silently.
-    const font = await fetch(`${h.url}/app.woff2`);
-    expect(font.headers.get("content-type")).toBe("font/woff2");
-
-    // The panel must not be able to shadow a gated path.
-    expect((await fetch(`${h.url}/vnc/index.html`)).status).toBe(401);
+    for (let i = 0; i < 10; i++) {
+      await expect(rpc(h.url, "/computer.v1.Seat/Pair", { code: "nope" })).rejects.toMatchObject({
+        status: 401,
+      });
+    }
+    // Even the right code is refused while the lockout holds.
+    await expect(rpc(h.url, "/computer.v1.Seat/Pair", { code: h.setup })).rejects.toMatchObject({
+      status: 401,
+    });
   });
 
   it("JSON RPC responses echo CORS so a cross-origin panel can read them", async () => {
@@ -212,8 +202,6 @@ describe("Connect HTTP", () => {
     opened.push(h);
     const naked = await fetch(`${h.url}/vnc/index.html`);
     expect(naked.status).toBe(401);
-    const debug = await fetch(`${h.url}/debug.html`);
-    expect(debug.status).toBe(401);
 
     const token = await h.pair();
     const ok = await fetch(`${h.url}/vnc/index.html?token=${token}`);
@@ -257,49 +245,6 @@ describe("Connect HTTP", () => {
       });
     });
     expect(allowed).not.toBe(401);
-  });
-
-  it("chat stream works with a seat token and can request takeover", async () => {
-    const h = await startHub();
-    opened.push(h);
-    const token = await h.pair();
-    const res = await fetch(`${h.url}/chat`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ message: "open computer" }),
-    });
-    expect(res.ok).toBe(true);
-    const text = await res.text();
-    expect(text).toContain("waiting");
-    expect(h.hub.bots.primary().seat.getState()).toBe("WAITING");
-  });
-
-  it("the chat stream carries occurrences, never raw model prose", async () => {
-    const h = await startHub();
-    opened.push(h);
-    const token = await h.pair();
-    const res = await fetch(`${h.url}/chat`, {
-      method: "POST",
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      body: JSON.stringify({ message: "what can you do" }),
-    });
-    const text = await res.text();
-    const events = text
-      .split("\n\n")
-      .filter((b) => b.startsWith("data: "))
-      .map((b) => JSON.parse(b.slice(6)) as { type: string; occurrence?: { kind: string; text?: string } });
-
-    // The old shape is gone: nothing reaches the phone as a raw delta.
-    expect(events.some((e) => e.type === "delta")).toBe(false);
-
-    // The human's own message is the first occurrence, then the reply.
-    const kinds = events.filter((e) => e.type === "occurrence").map((e) => e.occurrence!.kind);
-    expect(kinds[0]).toBe("human");
-    expect(kinds).toContain("text");
-
-    // And the log is the same one the voice keeps, so the thread persists.
-    const log = h.hub.bots.primary().voice.page().entries;
-    expect(log.map((o) => o.kind)).toEqual(kinds);
   });
 
   it("a secret reaches the clipboard over the wire and appears in no response", async () => {

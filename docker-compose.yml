@@ -20,10 +20,12 @@ services:
       - config:/home/box/.config
     ports:
       # x11vnc RFB (localhost on the box; published on the host loopback).
+      # Any local process can watch a screen: security is the hub's seat,
+      # not RFB, and the viewer is input-refused at the X server.
       - "127.0.0.1:5901-5908:5901-5908"
-      # noVNC: 6080 primary, 6081+ forks (Grok ports). Hub still proxies too.
-      - "127.0.0.1:6080-6087:6080-6087"
     shm_size: "1gb"
+    # 10s is too short for Chromium to release its profile lock on stop.
+    stop_grace_period: 30s
 
 volumes:
   workspace:

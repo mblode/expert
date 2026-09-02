@@ -24,8 +24,6 @@ export type PixelGrant = {
  */
 export class PixelRegistry {
   private readonly grants = new Map<string, PixelGrant>();
-  /** Live token for each display, so Status can reuse instead of minting every poll. */
-  private readonly byDisplay = new Map<number, string>();
   private readonly ttlMs: number;
   private readonly tokenDir: string | undefined;
 
@@ -34,27 +32,11 @@ export class PixelRegistry {
     this.tokenDir = opts.tokenDir;
   }
 
-  /**
-   * Return a still-valid grant for this display, or mint one.
-   * Status is polled every 2s; reminting each time rotated vnc_url and
-   * remounted the noVNC iframe.
-   */
-  reuse(display: number, now = Date.now()): PixelGrant {
-    this.sweep(now);
-    const existingToken = this.byDisplay.get(display);
-    if (existingToken) {
-      const grant = this.grants.get(existingToken);
-      if (grant && grant.expires > now) return grant;
-    }
-    return this.mint(display, now);
-  }
-
   mint(display: number, now = Date.now()): PixelGrant {
     this.sweep(now);
     const token = randomBytes(24).toString("base64url");
     const grant: PixelGrant = { token, display, expires: now + this.ttlMs };
     this.grants.set(token, grant);
-    this.byDisplay.set(display, token);
     this.writeForkFile(display, token);
     return grant;
   }
@@ -75,10 +57,7 @@ export class PixelRegistry {
     return best ?? this.mint(display, now);
   }
 
-  /**
-   * Valid pixel token, or undefined. Expired grants are dropped.
-   * A fork-port token file is also accepted (Grok 6081 + token file).
-   */
+  /** Valid pixel token, or undefined. Expired grants are dropped. */
   lookup(token: string | undefined, now = Date.now()): PixelGrant | undefined {
     if (!token) return undefined;
     const g = this.grants.get(token);
@@ -94,23 +73,14 @@ export class PixelRegistry {
 
   sweep(now = Date.now()): void {
     for (const [k, g] of this.grants) {
-      if (g.expires <= now) {
-        this.grants.delete(k);
-        if (this.byDisplay.get(g.display) === k) this.byDisplay.delete(g.display);
-      }
+      if (g.expires <= now) this.grants.delete(k);
     }
   }
 
-  /** Grok maps display N to noVNC 6080+(N-1). Primary :1 → 6080. */
-  static novncPort(display: number, base = 6080): number {
-    return base + display - 1;
-  }
-
-  /** x11vnc RFB: window N listens on 5900+N (primary :1 → 5901). */
-  static rfbPort(display: number, base = 5900): number {
-    return base + display;
-  }
-
+  /**
+   * Grok's fork ports (6081+) read a token file beside the port. Written for
+   * shape-compatibility with that layout; the hub itself checks `grants`.
+   */
   private writeForkFile(display: number, token: string): void {
     if (!this.tokenDir || display < 2) return;
     mkdirSync(this.tokenDir, { recursive: true, mode: 0o700 });

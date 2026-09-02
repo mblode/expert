@@ -45,7 +45,8 @@ const run = (cmd) => execSync(cmd, { cwd: root, stdio: "inherit" });
 run("npx buf lint");
 run("npx buf generate");
 
-const unstaged = execSync("git diff -- packages/proto/gen", { cwd: root, encoding: "utf8" });
+// Against HEAD, so staged-but-uncommitted drift is caught too.
+const unstaged = execSync("git diff HEAD -- packages/proto/gen", { cwd: root, encoding: "utf8" });
 const untracked = execSync("git ls-files --others --exclude-standard -- packages/proto/gen", {
   cwd: root,
   encoding: "utf8",

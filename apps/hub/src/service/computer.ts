@@ -1,12 +1,10 @@
 import { createHash } from "node:crypto";
 import {
-  ACTION_TYPES,
   ComputerError,
   DISPLAY,
   asPixelX,
   asPixelY,
   asPoint,
-  assertInBounds,
   inBounds,
   type Action,
   type ActionResult,
@@ -18,6 +16,7 @@ import {
 } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 import { PNG_MEDIA } from "../desk/types.ts";
+import { BoundedCache } from "./cache.ts";
 import { PolicyService, type PolicyVerdict } from "./policy.ts";
 import type { SeatService } from "./seat.ts";
 
@@ -30,16 +29,26 @@ export type ComputerOk = {
   pending_checks: PendingCheck[];
 };
 
-type Cached = { bodyHash: string; response: ComputerOk };
+type Cached = { bodyHash: string; response: Promise<ComputerOk> };
 
 const MAX_ACTIONS = 20;
 const WAIT_CAP_MS = 8000;
+const SCROLL_CAP = 20;
+const KEYS_CAP = 5;
+const TEXT_CAP = 4000;
+const DRAG_CAP = 32;
 
 export class ComputerService {
   private readonly desk: Desk;
   private readonly seat: SeatService;
   private readonly policy: PolicyService;
-  private readonly cache = new Map<string, Cached>();
+  /**
+   * request_id → the first run's promise. Stored before the batch starts so a
+   * retry that overlaps the original waits on it instead of running twice —
+   * that is the double-click `request_id` exists to prevent. Bounded, so a
+   * long-lived hub does not keep every screenshot it ever returned.
+   */
+  private readonly cache = new BoundedCache<Cached>();
   private checkSeq = 0;
 
   constructor(desk: Desk, seat: SeatService, policy: PolicyService = new PolicyService()) {
@@ -53,8 +62,12 @@ export class ComputerService {
       throw new ComputerError("VALIDATION", "request_id is required");
     }
     if (!Array.isArray(actions) || actions.length < 1 || actions.length > MAX_ACTIONS) {
-      throw new ComputerError("VALIDATION", "actions must have 1–20 items");
+      throw new ComputerError("VALIDATION", `actions must have 1–${MAX_ACTIONS} items`);
     }
+    // The whole batch is checked before any of it runs: a limit violation in
+    // action 3 must not leave actions 1–2 executed under an id that can never
+    // be retried.
+    actions.forEach((action, i) => validateAction(action, i));
 
     const bodyHash = hashBody(requestId, actions);
     const hit = this.cache.get(requestId);
@@ -65,16 +78,29 @@ export class ComputerService {
       return hit.response;
     }
 
+    const response = this.execute(actions);
+    this.cache.set(requestId, { bodyHash, response });
+    return response.catch((err) => {
+      // A batch that never ran (SEAT_HELD, DAEMON_DOWN) is not a result to replay.
+      this.cache.delete(requestId);
+      throw err;
+    });
+  }
+
+  private async execute(actions: Action[]): Promise<ComputerOk> {
     this.seat.requireAgent();
     await this.desk.ping();
 
     const results: ActionResult[] = [];
-    let skip: "prior_failed" | "after_takeover" | "after_denied" | null = null;
+    let skip: Extract<ActionResult, { kind: "skipped" }>["reason"] | null = null;
     let lastExecuted: Action | undefined;
     let takeover = false;
     const asked: PolicyVerdict[] = [];
 
     for (const action of actions) {
+      // A human may take the seat while a long batch is running. The person
+      // watching the machine wins; the rest of the batch is not run.
+      if (!skip && this.seat.getState() !== "AGENT") skip = "seat_taken";
       if (skip) {
         results.push({ kind: "skipped", reason: skip });
         continue;
@@ -90,17 +116,15 @@ export class ComputerService {
       }
       const started = Date.now();
       try {
-        const result = await this.execute(action);
-        const duration_ms = Date.now() - started;
-        results.push({ ...result, duration_ms });
+        const result = await this.perform(action);
+        results.push({ ...result, duration_ms: Date.now() - started });
         lastExecuted = action;
         if (action.type === "request_takeover") {
           takeover = true;
           skip = "after_takeover";
         }
       } catch (err) {
-        const duration_ms = Date.now() - started;
-        results.push({ kind: "error", duration_ms, ...toError(err) });
+        results.push({ kind: "error", duration_ms: Date.now() - started, ...toError(err) });
         lastExecuted = action;
         skip = "prior_failed";
       }
@@ -108,20 +132,15 @@ export class ComputerService {
 
     // `ask` denies now and explains why: the check rides alongside the denial
     // so the model stops and asks the human instead of retrying blind.
-    const pending_checks = takeover ? [] : [...this.askChecks(asked), ...await this.collectChecks()];
+    const pending_checks = takeover ? [] : [...this.askChecks(asked), ...(await this.collectChecks())];
 
-    const needsShot =
-      lastExecuted !== undefined &&
-      lastExecuted.type !== "screenshot" &&
-      lastExecuted.type !== "zoom" &&
-      results.some((r) => r.kind === "ok" || r.kind === "error");
+    // One screenshot after the batch unless the last executed action already
+    // carries an image. A batch that ran nothing (denied, seat taken) still
+    // gets one: the model needs to see the state it is being told to stop in.
+    const needsShot = lastExecuted?.type !== "screenshot" && lastExecuted?.type !== "zoom";
+    const screenshot_b64 = needsShot ? (await this.desk.screenshot()).toString("base64") : undefined;
 
-    let screenshot_b64: string | undefined;
-    if (needsShot) {
-      screenshot_b64 = (await this.desk.screenshot()).toString("base64");
-    }
-
-    const response: ComputerOk = {
+    return {
       results,
       screenshot_b64,
       display: DISPLAY,
@@ -129,87 +148,45 @@ export class ComputerService {
       seat: this.seat.getState(),
       pending_checks,
     };
-    this.cache.set(requestId, { bodyHash, response });
-    return response;
   }
 
-  private async execute(action: Action): Promise<Omit<Extract<ActionResult, { kind: "ok" }>, "duration_ms">> {
-    assertAction(action);
+  private async perform(action: Action): Promise<Omit<Extract<ActionResult, { kind: "ok" }>, "duration_ms">> {
     switch (action.type) {
       case "screenshot": {
         const buf = await this.desk.screenshot();
         return { kind: "ok", image_b64: buf.toString("base64"), media_type: PNG_MEDIA };
       }
-      case "click": {
-        assertInBounds(action.x, action.y);
+      case "click":
         await this.desk.click(action.x, action.y, action.button ?? "left");
         return { kind: "ok" };
-      }
-      case "double_click": {
-        assertInBounds(action.x, action.y);
+      case "double_click":
         await this.desk.doubleClick(action.x, action.y, action.button ?? "left");
         return { kind: "ok" };
-      }
-      case "scroll": {
-        assertInBounds(action.x, action.y);
-        if (!Number.isInteger(action.dx) || !Number.isInteger(action.dy)) {
-          throw new ComputerError("VALIDATION", "scroll dx/dy must be integers");
-        }
-        if (Math.abs(action.dx) > 20 || Math.abs(action.dy) > 20) {
-          throw new ComputerError("VALIDATION", "scroll dx/dy must be in -20..20");
-        }
+      case "scroll":
         await this.desk.scroll(action.x, action.y, action.dx, action.dy);
         return { kind: "ok" };
-      }
-      case "keypress": {
-        if (!Array.isArray(action.keys) || action.keys.length < 1 || action.keys.length > 5) {
-          throw new ComputerError("VALIDATION", "keypress keys must have 1–5 items");
-        }
+      case "keypress":
         await this.desk.keypress(action.keys);
         return { kind: "ok" };
-      }
-      case "type": {
-        if (typeof action.text !== "string" || action.text.length < 1 || action.text.length > 4000) {
-          throw new ComputerError("VALIDATION", "type text must be 1–4000 chars");
-        }
+      case "type":
         await this.desk.type(action.text);
         return { kind: "ok" };
-      }
-      case "move": {
-        assertInBounds(action.x, action.y);
+      case "move":
         await this.desk.move(action.x, action.y);
         return { kind: "ok" };
-      }
-      case "drag": {
-        if (!Array.isArray(action.path) || action.path.length < 2 || action.path.length > 32) {
-          throw new ComputerError("VALIDATION", "drag path must have 2–32 points");
-        }
-        for (const p of action.path) assertInBounds(p.x, p.y);
+      case "drag":
         await this.desk.drag(action.path);
         return { kind: "ok" };
-      }
-      case "wait": {
-        if (!Number.isInteger(action.ms) || action.ms < 1 || action.ms > WAIT_CAP_MS) {
-          throw new ComputerError("VALIDATION", "wait ms must be 1–8000");
-        }
+      case "wait":
         await sleep(action.ms);
         return { kind: "ok" };
-      }
       case "zoom": {
-        assertInBounds(action.x, action.y);
-        if (!Number.isInteger(action.w) || !Number.isInteger(action.h) || action.w < 1 || action.h < 1) {
-          throw new ComputerError("VALIDATION", "zoom w/h must be ≥ 1");
-        }
-        if (action.x + action.w > DISPLAY.width || action.y + action.h > DISPLAY.height) {
-          throw new ComputerError("OUT_OF_BOUNDS", "zoom rectangle exceeds display");
-        }
         const buf = await this.desk.zoom(action.x, action.y, action.w, action.h);
         return { kind: "ok", image_b64: buf.toString("base64"), media_type: PNG_MEDIA };
       }
-      case "request_takeover": {
+      case "request_takeover":
         this.seat.requestTakeover();
         return { kind: "ok" };
-      }
     }
   }
 
@@ -243,14 +220,68 @@ export class ComputerService {
   }
 }
 
-function assertAction(action: Action): void {
-  if (!action || !ACTION_TYPES.includes(action.type)) {
-    throw new ComputerError("VALIDATION", `unknown action ${JSON.stringify(action)}`);
-  }
-  if (action.type === "click" || action.type === "double_click" || action.type === "move") {
-    if (!inBounds(action.x, action.y)) {
-      // assertInBounds in execute; keep for completeness
+/**
+ * The limits from api/spec.json, enforced before anything runs. Coordinates
+ * outside the display are OUT_OF_BOUNDS; every other violation is VALIDATION.
+ */
+export function validateAction(action: Action, index: number): void {
+  const at = `actions[${index}]`;
+  const point = (x: number, y: number) => {
+    if (!inBounds(x, y)) {
+      throw new ComputerError("OUT_OF_BOUNDS", `${at}: ${x},${y} outside ${DISPLAY.width}x${DISPLAY.height}`);
     }
+  };
+  const int = (v: number, name: string, min: number, max: number) => {
+    if (!Number.isInteger(v) || v < min || v > max) {
+      throw new ComputerError("VALIDATION", `${at}.${name} must be an integer in ${min}..${max}`);
+    }
+  };
+  switch (action.type) {
+    case "screenshot":
+    case "request_takeover":
+      return;
+    case "click":
+    case "double_click":
+    case "move":
+      point(action.x, action.y);
+      return;
+    case "scroll":
+      point(action.x, action.y);
+      int(action.dx, "dx", -SCROLL_CAP, SCROLL_CAP);
+      int(action.dy, "dy", -SCROLL_CAP, SCROLL_CAP);
+      return;
+    case "keypress":
+      if (!Array.isArray(action.keys) || action.keys.length < 1 || action.keys.length > KEYS_CAP) {
+        throw new ComputerError("VALIDATION", `${at}.keys must have 1–${KEYS_CAP} items`);
+      }
+      if (action.keys.some((k) => typeof k !== "string" || k.length === 0)) {
+        throw new ComputerError("VALIDATION", `${at}.keys must be non-empty strings`);
+      }
+      return;
+    case "type":
+      if (typeof action.text !== "string" || action.text.length < 1 || action.text.length > TEXT_CAP) {
+        throw new ComputerError("VALIDATION", `${at}.text must be 1–${TEXT_CAP} chars`);
+      }
+      return;
+    case "drag":
+      if (!Array.isArray(action.path) || action.path.length < 2 || action.path.length > DRAG_CAP) {
+        throw new ComputerError("VALIDATION", `${at}.path must have 2–${DRAG_CAP} points`);
+      }
+      for (const p of action.path) point(p.x, p.y);
+      return;
+    case "wait":
+      int(action.ms, "ms", 1, WAIT_CAP_MS);
+      return;
+    case "zoom":
+      point(action.x, action.y);
+      int(action.w, "w", 1, DISPLAY.width);
+      int(action.h, "h", 1, DISPLAY.height);
+      if (action.x + action.w > DISPLAY.width || action.y + action.h > DISPLAY.height) {
+        throw new ComputerError("OUT_OF_BOUNDS", `${at}: zoom rectangle exceeds display`);
+      }
+      return;
+    default:
+      throw new ComputerError("VALIDATION", `${at}: unknown action type`);
   }
 }
 
@@ -272,6 +303,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+/** Wire JSON → typed actions. Shape only; limits are `validateAction`'s job. */
 export function parseActions(raw: unknown): Action[] {
   if (!Array.isArray(raw)) throw new ComputerError("VALIDATION", "actions must be an array");
   return raw.map((item, i) => parseAction(item, i));
@@ -290,13 +322,14 @@ function parseAction(raw: unknown, index: number): Action {
       return { type };
     case "click":
     case "double_click":
-    case "move":
       return {
         type,
         x: asPixelX(num(a.x, `${type}.x`)),
         y: asPixelY(num(a.y, `${type}.y`)),
-        ...(type !== "move" && a.button !== undefined ? { button: button(a.button) } : {}),
-      } as Action;
+        ...(a.button !== undefined ? { button: button(a.button) } : {}),
+      };
+    case "move":
+      return { type, x: asPixelX(num(a.x, "move.x")), y: asPixelY(num(a.y, "move.y")) };
     case "scroll":
       return {
         type: "scroll",

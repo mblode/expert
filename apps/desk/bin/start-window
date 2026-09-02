@@ -1,5 +1,5 @@
 #!/bin/bash
-# start-window N [owner-hash] [bot-id]
+# start-window N [owner-hash] [bot-id] [--force]
 #
 # Claim window index N (X display :N) for a Bot.
 # X.Org (Xvfb) 1280×800 + x11vnc on localhost RFB 5900+N (view-only).
@@ -33,7 +33,7 @@ ASSIGN="/workspace/.window-assignments.json"
 LOCK="/workspace/.window-assignments.lock"
 TOKEN_DIR="${COMPUTER_VNC_TOKEN_DIR:-/tmp/computer-vnc}"
 
-mkdir -p "$HOME/.vnc" /workspace "$TOKEN_DIR"
+mkdir -p /workspace "$TOKEN_DIR"
 touch "$ASSIGN"
 
 claim() {
@@ -41,15 +41,21 @@ claim() {
 import json, sys, time
 path, n, owner, bot_id, force = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5] == "1"
 try:
-    with open(sys.argv[1]) as f:
+    with open(path) as f:
         data = json.load(f)
 except (ValueError, FileNotFoundError):
     data = {}
-entry = data.get(n)
-if not force and entry and owner and entry.get("owner") and entry["owner"] != owner:
+entry = data.get(n) or {}
+if not force and owner and entry.get("owner") and entry["owner"] != owner:
     print(f"window {n} claimed by another owner", file=sys.stderr)
     sys.exit(9)
-data[n] = {"owner": owner, "bot_id": bot_id, "claimed_at": int(time.time())}
+# A caller without an owner (desk-up restoring a window) must not erase
+# the owner that is there; the hub re-asserts its own hash at boot.
+data[n] = {
+    "owner": owner or entry.get("owner", ""),
+    "bot_id": bot_id or entry.get("bot_id", ""),
+    "claimed_at": int(time.time()),
+}
 with open(path, "w") as f:
     json.dump(data, f, indent=2, sort_keys=True)
 PY
@@ -60,14 +66,16 @@ PY
 # holds the flock for its whole life, deadlocking every later call.
 ( exec 9>"$LOCK"; flock 9; claim ) || exit $?
 
+alive() { DISPLAY="$DISPLAY_NAME" xdpyinfo >/dev/null 2>&1; }
+
 # Already serving this display? Idempotent success — but only when the
 # server is really alive. A restart leaves the socket file behind, and
 # trusting it would leave the box with a dead desktop that looks up.
-if [[ -e "/tmp/.X11-unix/X$N" ]]; then
-  if DISPLAY="$DISPLAY_NAME" xdpyinfo >/dev/null 2>&1; then
-    echo "window $N up on $DISPLAY_NAME rfb $RFB_PORT novnc $NOVNC_PORT"
-    exit 0
-  fi
+if alive; then
+  echo "window $N up on $DISPLAY_NAME rfb $RFB_PORT novnc $NOVNC_PORT"
+  exit 0
+fi
+if [[ -e "/tmp/.X11-unix/X$N" || -e "/tmp/.X${N}-lock" ]]; then
   echo "window $N: clearing a stale socket from a previous run" >&2
   rm -f "/tmp/.X11-unix/X$N" "/tmp/.X${N}-lock"
 fi
@@ -81,11 +89,16 @@ Xvfb "$DISPLAY_NAME" \
   +extension XTEST \
   >"/tmp/xvfb-$N.log" 2>&1 &
 
-# Wait for the display before anything tries to draw on it.
+# Wait for the server to answer, not just for its socket to appear. A
+# script that reports "up" over a dead display is worse than one that fails.
 for _ in $(seq 1 50); do
-  [[ -e "/tmp/.X11-unix/X$N" ]] && break
+  alive && break
   sleep 0.1
 done
+if ! alive; then
+  echo "window $N: Xvfb did not come up on $DISPLAY_NAME (see /tmp/xvfb-$N.log)" >&2
+  exit 1
+fi
 
 # localhost RFB only. View-only: a viewer cannot inject input.
 x11vnc \
@@ -105,8 +118,7 @@ x11vnc \
 # token at the hub; the file lets a raw 6081+ listener match Grok's
 # "token file next to the port" shape.
 if (( N >= 2 )) && [[ ! -s "$TOKEN_DIR/$N" ]]; then
-  umask 077
-  openssl rand -hex 16 > "$TOKEN_DIR/$N"
+  ( umask 077; openssl rand -hex 16 > "$TOKEN_DIR/$N" )
 fi
 
 DISPLAY="$DISPLAY_NAME" openbox >"/tmp/openbox-$N.log" 2>&1 &

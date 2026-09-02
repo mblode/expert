@@ -13,8 +13,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ai-sdk/openai": "^4.0.53",
-    "ai": "^7.0.82",
     "eve": "^0.47.6",
     "zod": "4.5.4"
   },

@@ -36,7 +36,6 @@ export type Bot = {
   voice: VoiceService;
   computer: ComputerService;
   files: FileService;
-  chatBusy: boolean;
 };
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
@@ -86,7 +85,6 @@ export class BotRegistry {
       voice: new VoiceService(desk, undefined, state),
       computer: new ComputerService(desk, seat, this.policy),
       files: new FileService(desk, seat, this.policy),
-      chatBusy: false,
     };
     this.bots.push(bot);
     return bot;
