@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -9,7 +9,9 @@ import { eveChildEnv } from "../src/host/start-eves.ts";
 
 const temps: string[] = [];
 afterEach(() => {
-  while (temps.length) rmSync(temps.pop()!, { recursive: true, force: true });
+  while (temps.length) {
+    rmSync(temps.pop()!, { recursive: true, force: true });
+  }
 });
 
 function tempDir(): string {
@@ -32,24 +34,24 @@ describe("eve supervisor: N Eves from the roster", () => {
     botProject(botsRoot, "night");
     const launches = planEveLaunches(
       [
-        { id: "main", display: 1, token: "bot_main" },
-        { id: "night", display: 2, token: "bot_night" },
-        { id: "ghost", display: 3, token: "bot_ghost" },
+        { display: 1, id: "main", token: "bot_main" },
+        { display: 2, id: "night", token: "bot_night" },
+        { display: 3, id: "ghost", token: "bot_ghost" },
       ],
       { botsRoot },
     );
     expect(launches).toEqual([
-      { botId: "main", display: 1, port: 2000, cwd: join(botsRoot, "main"), token: "bot_main" },
-      { botId: "night", display: 2, port: 2001, cwd: join(botsRoot, "night"), token: "bot_night" },
+      { botId: "main", cwd: join(botsRoot, "main"), display: 1, port: 2000, token: "bot_main" },
+      { botId: "night", cwd: join(botsRoot, "night"), display: 2, port: 2001, token: "bot_night" },
     ]);
     expect(evePortForDisplay(1)).toBe(2000);
     expect(evePortForDisplay(2)).toBe(2001);
   });
 
   it("starts zero processes when the roster has no Eve dirs", () => {
-    expect(planEveLaunches([{ id: "main", display: 1, token: "t" }], { botsRoot: tempDir() })).toEqual(
-      [],
-    );
+    expect(
+      planEveLaunches([{ display: 1, id: "main", token: "t" }], { botsRoot: tempDir() }),
+    ).toEqual([]);
   });
 
   it("mints main on an empty roster and persists the token", () => {
@@ -65,13 +67,13 @@ describe("eve supervisor: N Eves from the roster", () => {
 
   it("does not mint over a roster row that already has a token", () => {
     const store = new FileBotStore(join(tempDir(), "bots.json"));
-    store.save([{ id: "main", display: 1, token: "bot_keep" }]);
-    expect(ensureRoster(store)).toEqual([{ id: "main", display: 1, token: "bot_keep" }]);
+    store.save([{ display: 1, id: "main", token: "bot_keep" }]);
+    expect(ensureRoster(store)).toEqual([{ display: 1, id: "main", token: "bot_keep" }]);
   });
 
   it("refuses a roster row with a missing token", () => {
     const store = new FileBotStore(join(tempDir(), "bots.json"));
-    store.save([{ id: "main", display: 1, token: "" }]);
+    store.save([{ display: 1, id: "main", token: "" }]);
     expect(() => ensureRoster(store)).toThrow(/no token/);
   });
 
@@ -81,19 +83,19 @@ describe("eve supervisor: N Eves from the roster", () => {
     const b = ensureEveSecret(path);
     expect(a.length).toBeGreaterThan(10);
     expect(b).toBe(a);
-    expect(readFileSync(path, "utf8").trim()).toBe(a);
+    expect(readFileSync(path, "utf-8").trim()).toBe(a);
   });
 
   it("honours COMPUTER_EVE_SECRET when already set", () => {
     const path = join(tempDir(), "eve-secret");
     expect(ensureEveSecret(path, "from-env")).toBe("from-env");
-    expect(readFileSync(path, "utf8").trim()).toBe("from-env");
+    expect(readFileSync(path, "utf-8").trim()).toBe("from-env");
   });
 
   it("gives each Eve its own bot token and the shared hub secret", () => {
     const env = eveChildEnv(
-      { botId: "main", display: 1, port: 2000, cwd: "/opt/eve/main", token: "bot_abc" },
-      { hubUrl: "http://127.0.0.1:8080", eveSecret: "secret", env: { PATH: "/bin" } },
+      { botId: "main", cwd: "/opt/eve/main", display: 1, port: 2000, token: "bot_abc" },
+      { env: { PATH: "/bin" }, eveSecret: "secret", hubUrl: "http://127.0.0.1:8080" },
     );
     expect(env.COMPUTER_BOT_TOKEN).toBe("bot_abc");
     expect(env.COMPUTER_URL).toBe("http://127.0.0.1:8080");
@@ -103,15 +105,21 @@ describe("eve supervisor: N Eves from the roster", () => {
   });
 
   it("guest entrypoint starts Eves from the roster then reads the secret file", () => {
-    const script = readFileSync(resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"), "utf8");
+    const script = readFileSync(
+      resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"),
+      "utf-8",
+    );
     expect(script).toContain("tsx src/host/boot-eves.ts");
     expect(script).toContain("/workspace/.computer/eve-secret");
     expect(script).toMatch(/desk-up[\s\S]*boot-eves[\s\S]*npm run start --workspace=apps\/hub/);
-    expect(script).not.toContain("boot-eves.ts\n)\"");
+    expect(script).not.toContain('boot-eves.ts\n)"');
   });
 
   it("guest entrypoint does not put secrets on the runuser argv", () => {
-    const script = readFileSync(resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"), "utf8");
+    const script = readFileSync(
+      resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"),
+      "utf-8",
+    );
     const commands = script
       .split("\n")
       .filter((line) => !/^\s*#/.test(line))
@@ -126,12 +134,16 @@ describe("eve supervisor: N Eves from the roster", () => {
 
   it("eve bot apps declare just-bash so eve start can init the guest sandbox", () => {
     const bots = resolve(import.meta.dirname, "../../../apps/eve/bots");
-    for (const id of ["main", "night"] as const) {
-      const pkg = JSON.parse(readFileSync(join(bots, id, "package.json"), "utf8")) as {
+    const ids = readdirSync(bots, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+    expect(ids).toContain("main");
+    for (const id of ids) {
+      const pkg = JSON.parse(readFileSync(join(bots, id, "package.json"), "utf-8")) as {
         dependencies?: Record<string, string>;
       };
       expect(pkg.dependencies?.["just-bash"], `${id} just-bash`).toMatch(/^\^?3\./);
-      const sandbox = readFileSync(join(bots, id, "agent/sandbox.ts"), "utf8");
+      const sandbox = readFileSync(join(bots, id, "agent/sandbox.ts"), "utf-8");
       expect(sandbox).toMatch(/backend:\s*justbash\s*\(/);
       expect(sandbox).not.toMatch(/backend:\s*docker\s*\(/);
       expect(sandbox).not.toMatch(/backend:\s*vercel\s*\(/);

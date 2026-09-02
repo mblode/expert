@@ -43,12 +43,7 @@
         "hibernated",
         "unknown"
       ],
-      "phase": [
-        "in_flight_cancelled",
-        "route_missing",
-        "attach",
-        "unknown"
-      ],
+      "phase": ["in_flight_cancelled", "route_missing", "attach", "unknown"],
       "retryable": "boolean"
     }
   },
@@ -58,11 +53,7 @@
     "description": "One shared box, one screen (window index = X display) per Bot. The agent token identifies the Bot and its screen; Seat calls take a `display` (default primary). Bots are provisioned at runtime via Seat.CreateBot \u2014 the hub allocates the next free screen and mints the token, returned exactly once. Each screen is 1280\u00d7800; the seat FSM is per screen. Bots are not security boundaries."
   },
   "seat": {
-    "states": [
-      "AGENT",
-      "WAITING",
-      "HUMAN"
-    ],
+    "states": ["AGENT", "WAITING", "HUMAN"],
     "transitions": [
       {
         "from": "AGENT",
@@ -92,14 +83,7 @@
   "services": {
     "Agent": {
       "audience": "model",
-      "rpcs": [
-        "Spec",
-        "SendMessage",
-        "Computer",
-        "Shell",
-        "ReadFile",
-        "WriteFile"
-      ]
+      "rpcs": ["Spec", "SendMessage", "Computer", "Shell", "ReadFile", "WriteFile"]
     },
     "Seat": {
       "audience": "iphone",
@@ -124,18 +108,12 @@
       "description": "Say something to the human. This is the ONLY thing they see \u2014 your other text is a private scratchpad, so a turn that ends without a send is silence. Reply with a short text send before you start work, and send again when the work is done: acknowledging is not delivering. A widget or secret_request ENDS the turn \u2014 stop and wait for the answer; a second send after one is rejected with CONFLICT.",
       "input": {
         "type": "object",
-        "required": [
-          "kind"
-        ],
+        "required": ["kind"],
         "additionalProperties": false,
         "properties": {
           "kind": {
             "type": "string",
-            "enum": [
-              "text",
-              "widget",
-              "secret_request"
-            ]
+            "enum": ["text", "widget", "secret_request"]
           },
           "text": {
             "type": "string",
@@ -177,10 +155,7 @@
       "description": "Use the desktop. Actions run in order on a 1280\u00d7800 display. Coordinates are pixels of the last full-display screenshot, origin top-left. A zoomed image does not change the coordinate space. On the first failing action the rest are skipped. If the seat is WAITING or HUMAN the call fails with SEAT_HELD.",
       "input": {
         "type": "object",
-        "required": [
-          "request_id",
-          "actions"
-        ],
+        "required": ["request_id", "actions"],
         "additionalProperties": false,
         "properties": {
           "request_id": {
@@ -204,10 +179,7 @@
       "description": "Run argv in /workspace. Not a login shell.",
       "input": {
         "type": "object",
-        "required": [
-          "request_id",
-          "argv"
-        ],
+        "required": ["request_id", "argv"],
         "additionalProperties": false,
         "properties": {
           "request_id": {
@@ -239,9 +211,7 @@
       "description": "Read a utf-8 file under /workspace.",
       "input": {
         "type": "object",
-        "required": [
-          "path"
-        ],
+        "required": ["path"],
         "additionalProperties": false,
         "properties": {
           "path": {
@@ -256,10 +226,7 @@
       "description": "Write a utf-8 file under /workspace. Creates parents.",
       "input": {
         "type": "object",
-        "required": [
-          "path",
-          "content"
-        ],
+        "required": ["path", "content"],
         "additionalProperties": false,
         "properties": {
           "path": {
@@ -276,10 +243,7 @@
   "$defs": {
     "point": {
       "type": "object",
-      "required": [
-        "x",
-        "y"
-      ],
+      "required": ["x", "y"],
       "additionalProperties": false,
       "properties": {
         "x": {
@@ -296,22 +260,14 @@
     },
     "button": {
       "type": "string",
-      "enum": [
-        "left",
-        "right",
-        "middle",
-        "back",
-        "forward"
-      ],
+      "enum": ["left", "right", "middle", "back", "forward"],
       "default": "left"
     },
     "action": {
       "oneOf": [
         {
           "type": "object",
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -321,11 +277,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "x",
-            "y"
-          ],
+          "required": ["type", "x", "y"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -348,11 +300,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "x",
-            "y"
-          ],
+          "required": ["type", "x", "y"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -375,13 +323,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "x",
-            "y",
-            "dx",
-            "dy"
-          ],
+          "required": ["type", "x", "y", "dx", "dy"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -411,10 +353,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "keys"
-          ],
+          "required": ["type", "keys"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -433,10 +372,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "text"
-          ],
+          "required": ["type", "text"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -451,11 +387,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "x",
-            "y"
-          ],
+          "required": ["type", "x", "y"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -475,10 +407,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "path"
-          ],
+          "required": ["type", "path"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -496,10 +425,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "ms"
-          ],
+          "required": ["type", "ms"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -514,13 +440,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "x",
-            "y",
-            "w",
-            "h"
-          ],
+          "required": ["type", "x", "y", "w", "h"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -550,9 +470,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -566,11 +484,7 @@
       "oneOf": [
         {
           "type": "object",
-          "required": [
-            "type",
-            "dx",
-            "dy"
-          ],
+          "required": ["type", "dx", "dy"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -599,9 +513,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type"
-          ],
+          "required": ["type"],
           "additionalProperties": false,
           "properties": {
             "type": {
@@ -620,11 +532,7 @@
         },
         {
           "type": "object",
-          "required": [
-            "type",
-            "dx",
-            "dy"
-          ],
+          "required": ["type", "dx", "dy"],
           "additionalProperties": false,
           "properties": {
             "type": {

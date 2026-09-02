@@ -980,7 +980,7 @@ export const MessageWidgetSchema: GenMessage<MessageWidget> = /*@__PURE__*/
 /**
  * Masked input on the seat. The value is delivered to the box clipboard
  * and never enters the transcript, the occurrence log, or the model's
- * context — the agent is told only that it was provided, and pastes.
+ * context: the agent is told only that it was provided, and pastes.
  *
  * @generated from message computer.v1.MessageSecretRequest
  */
@@ -1896,7 +1896,7 @@ export const Seat: GenService<{
   },
   /**
    * Provisioning: a paired seat is the box owner. The hub allocates the
-   * next free screen and mints the Bot's token — returned exactly once.
+   * next free screen and mints the Bot's token, returned exactly once.
    *
    * @generated from rpc computer.v1.Seat.CreateBot
    */

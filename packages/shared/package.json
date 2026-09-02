@@ -2,10 +2,10 @@
   "name": "@computer/shared",
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
-    "typecheck": "tsc --noEmit"
-  },
   "exports": {
     ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
   }
 }

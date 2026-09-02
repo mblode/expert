@@ -5,9 +5,8 @@
 
 export type PixelX = number & { readonly __brand: "PixelX" };
 export type PixelY = number & { readonly __brand: "PixelY" };
-export type RequestId = string & { readonly __brand: "RequestId" };
 
-export const DISPLAY = { width: 1280, height: 800, scale: 1 } as const;
+export const DISPLAY = { height: 800, scale: 1, width: 1280 } as const;
 export type Display = typeof DISPLAY;
 
 /** Window index = X display number. Primary is :1; forks are :2+. */
@@ -42,7 +41,7 @@ export type SeatState = "AGENT" | "WAITING" | "HUMAN";
  * hub→client is the opposite direction and grows: DENIED joined this union,
  * `denied` joined ActionResult, and `reason`/`phase` ride along on the error
  * envelope. A client that hard-fails on an unrecognised ErrorCode or
- * ActionResult kind breaks on the next hub release — degrade to the generic
+ * ActionResult kind breaks on the next hub release, degrade to the generic
  * case (treat it as an error, render the message) instead.
  */
 export type ErrorCode =
@@ -56,14 +55,14 @@ export type ErrorCode =
   | "DENIED";
 
 export const ERROR_HTTP_STATUS: Record<ErrorCode, number> = {
-  UNAUTHENTICATED: 401,
-  SEAT_HELD: 409,
+  CONFLICT: 409,
+  DAEMON_DOWN: 503,
+  DENIED: 403,
   OUT_OF_BOUNDS: 400,
   PATH_REJECTED: 400,
-  DAEMON_DOWN: 503,
+  SEAT_HELD: 409,
+  UNAUTHENTICATED: 401,
   VALIDATION: 400,
-  CONFLICT: 409,
-  DENIED: 403,
 };
 
 /**
@@ -85,21 +84,21 @@ export type UnavailableReason =
 
 export type UnavailablePhase = "in_flight_cancelled" | "route_missing" | "attach" | "unknown";
 
-export type Unavailable = {
+export interface Unavailable {
   reason: UnavailableReason;
   phase: UnavailablePhase;
   /** Client contract. False only when no amount of retrying will bind a route. */
   retryable: boolean;
-};
+}
 
 /** route_missing means there is nothing to attach to; everything else may come back. */
 export function unavailable(reason: UnavailableReason, phase: UnavailablePhase): Unavailable {
-  return { reason, phase, retryable: phase !== "route_missing" };
+  return { phase, reason, retryable: phase !== "route_missing" };
 }
 
-export type ApiError = {
+export interface ApiError {
   error: { code: ErrorCode; message: string } & Partial<Unavailable>;
-};
+}
 
 export class ComputerError extends Error {
   readonly code: ErrorCode;
@@ -123,7 +122,10 @@ export class ComputerError extends Error {
 }
 
 export type Button = "left" | "right" | "middle" | "back" | "forward";
-export type Point = { x: PixelX; y: PixelY };
+export interface Point {
+  x: PixelX;
+  y: PixelY;
+}
 
 export type Action =
   | { type: "screenshot" }
@@ -141,34 +143,39 @@ export type Action =
 /**
  * Three terminal states, not two: `denied` is the hub's own answer, not a
  * failure of the box. It means a policy rule refused the action before it
- * ran, so retrying the identical action is pointless — the model needs the
+ * ran, so retrying the identical action is pointless: the model needs the
  * human, or a different plan.
  */
 export type ActionResult =
   | { kind: "ok"; duration_ms: number; image_b64?: string; media_type?: string }
-  | ({ kind: "error"; duration_ms: number; code: ErrorCode; message: string } & Partial<Unavailable>)
+  | ({
+      kind: "error";
+      duration_ms: number;
+      code: ErrorCode;
+      message: string;
+    } & Partial<Unavailable>)
   | { kind: "denied"; rule: string; reason: string }
-  | { kind: "skipped"; reason: "prior_failed" | "after_takeover" | "after_denied" };
+  | { kind: "skipped"; reason: "prior_failed" | "after_takeover" | "after_denied" | "seat_taken" };
 
-export type PendingCheck = {
+export interface PendingCheck {
   id: string;
   code: "destructive" | "credential" | "exfil";
   message: string;
-};
+}
 
-export type ScreenStatus = {
+export interface ScreenStatus {
   bot_id: BotId;
   display: number;
   state: SeatState;
   vnc_url: string;
-};
+}
 
-export type BoxStatus = {
+export interface BoxStatus {
   state: SeatState;
   vnc_url: string;
   display: Display;
   screens: ScreenStatus[];
-};
+}
 
 export function asPixelX(n: number): PixelX {
   return n as PixelX;
@@ -176,10 +183,6 @@ export function asPixelX(n: number): PixelX {
 
 export function asPixelY(n: number): PixelY {
   return n as PixelY;
-}
-
-export function asRequestId(s: string): RequestId {
-  return s as RequestId;
 }
 
 export function asPoint(x: number, y: number): Point {
@@ -197,12 +200,6 @@ export function inBounds(x: number, y: number): boolean {
   );
 }
 
-export function assertInBounds(x: number, y: number): void {
-  if (!inBounds(x, y)) {
-    throw new ComputerError("OUT_OF_BOUNDS", `coordinate ${x},${y} outside ${DISPLAY.width}x${DISPLAY.height}`);
-  }
-}
-
 /** Absolute paths must start with /workspace. Relative paths resolve there. `..` after resolve is PATH_REJECTED. */
 export function resolveWorkspacePath(input: string): string {
   if (typeof input !== "string" || input.length === 0) {
@@ -214,15 +211,17 @@ export function resolveWorkspacePath(input: string): string {
   const joined = input.startsWith("/") ? input : `${WORKSPACE}/${input}`;
   const parts: string[] = [];
   for (const seg of joined.split("/")) {
-    if (seg === "" || seg === ".") continue;
+    if (seg === "" || seg === ".") {
+      continue;
+    }
     if (seg === "..") {
       parts.pop();
       continue;
     }
     parts.push(seg);
   }
-  const resolved = "/" + parts.join("/");
-  if (resolved !== WORKSPACE && !resolved.startsWith(WORKSPACE + "/")) {
+  const resolved = `/${parts.join("/")}`;
+  if (resolved !== WORKSPACE && !resolved.startsWith(`${WORKSPACE}/`)) {
     throw new ComputerError("PATH_REJECTED", `path escapes ${WORKSPACE}`);
   }
   return resolved;
@@ -230,7 +229,9 @@ export function resolveWorkspacePath(input: string): string {
 
 /** Seat JSON `display` param: default primary, VALIDATION outside 1..MAX_DISPLAYS. */
 export function parseDisplay(v: unknown): number {
-  if (v === undefined || v === null) return PRIMARY_DISPLAY;
+  if (v === undefined || v === null) {
+    return PRIMARY_DISPLAY;
+  }
   const n = Number(v);
   if (!Number.isInteger(n) || n < 1 || n > MAX_DISPLAYS) {
     throw new ComputerError("VALIDATION", `display must be 1..${MAX_DISPLAYS}`);

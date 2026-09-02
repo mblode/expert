@@ -39,7 +39,7 @@ describe("fly-machine", () => {
   it("wakes by POSTing /start and picks the only Machine when unset", async () => {
     const calls: { url: string; method: string }[] = [];
     const fetch = async (url: string, init?: { method?: string }) => {
-      calls.push({ url, method: init?.method ?? "GET" });
+      calls.push({ method: init?.method ?? "GET", url });
       if (url.endsWith("/machines")) {
         return {
           ok: true,
@@ -55,12 +55,12 @@ describe("fly-machine", () => {
     });
     expect(machine).toBe("m1");
     expect(calls[0]).toEqual({
-      url: "https://api.machines.dev/v1/apps/computer/machines",
       method: "GET",
+      url: "https://api.machines.dev/v1/apps/computer/machines",
     });
     expect(calls[1]).toEqual({
-      url: "https://api.machines.dev/v1/apps/computer/machines/m1/start",
       method: "POST",
+      url: "https://api.machines.dev/v1/apps/computer/machines/m1/start",
     });
   });
 

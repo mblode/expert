@@ -1,5 +1,6 @@
-# Debian, not Ubuntu: Ubuntu's `chromium-browser` is a snap stub that cannot
-# run in a container, and Debian ships a real chromium on amd64 and arm64.
+# The local desk: Debian, not Ubuntu: Ubuntu's `chromium-browser` is a snap
+# stub that cannot run in a container; Debian ships a real chromium on amd64
+# and arm64. The Fly guest (deploy/fly/Dockerfile) installs the same list.
 FROM debian:12-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -7,39 +8,19 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/home/box \
     LANG=C.UTF-8
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        chromium \
-        dbus-x11 \
-        fonts-dejavu-core \
-        fonts-liberation \
-        imagemagick \
-        openssl \
-        openbox \
-        procps \
-        python3 \
-        scrot \
-        x11vnc \
-        x11-utils \
-        x11-xserver-utils \
-        xclip \
-        xdotool \
-        xterm \
-        xvfb \
-    && rm -rf /var/lib/apt/lists/*
+# The package list is piped through grep; pipefail makes a bad list fail the build.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+COPY packages.txt /tmp/packages.txt
+RUN apt-get update \
+    && grep -v '^#' /tmp/packages.txt | xargs apt-get install -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* /tmp/packages.txt
 
 RUN useradd --create-home --uid 1000 --shell /bin/bash box \
-    && mkdir -p /workspace /home/box/.config/chromium /home/box/.vnc \
+    && mkdir -p /workspace /home/box/.config/chromium \
     && chown -R box:box /workspace /home/box
 
-COPY bin/desk-shot /usr/local/bin/desk-shot
-COPY bin/start-window /usr/local/bin/start-window
-COPY bin/stop-window /usr/local/bin/stop-window
-COPY bin/desk-up /usr/local/bin/desk-up
-COPY bin/entrypoint.sh /usr/local/bin/entrypoint.sh
-RUN chmod 755 /usr/local/bin/desk-shot \
-        /usr/local/bin/start-window /usr/local/bin/stop-window \
-        /usr/local/bin/desk-up /usr/local/bin/entrypoint.sh
+COPY --chmod=755 bin/ /usr/local/bin/
 
 USER box
 WORKDIR /workspace
@@ -50,4 +31,5 @@ EXPOSE 5901-5908 6080-6087
 # boundary here, so a skill written for a Bot needs no edit.
 VOLUME ["/workspace", "/home/box/.config"]
 
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
+# tini reaps the X server, x11vnc and Chromium children and forwards signals.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/entrypoint.sh"]

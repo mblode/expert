@@ -1,7 +1,7 @@
 export const faqs = [
   {
     answer:
-      "Open hello.expert and sign in with email (a one-time code). That is install for humans. The web server pairs with the computer for you — you never type a setup code.",
+      "Open hello.expert and sign in with email (a one-time code). That is install for humans. The web server pairs with the computer for you: you never type a setup code.",
     question: "How do I get on the desk?",
   },
   {

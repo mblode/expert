@@ -1,7 +1,8 @@
 "use client";
 
 import { OTPInput, OTPInputContext } from "input-otp";
-import { useContext, type ComponentProps } from "react";
+import { useContext } from "react";
+import type { ComponentProps } from "react";
 
 export function InputOTP({
   className = "",
@@ -17,7 +18,10 @@ export function InputOTP({
   );
 }
 
-export function InputOTPGroup({ className = "", ...props }: ComponentProps<"div">): React.ReactElement {
+export function InputOTPGroup({
+  className = "",
+  ...props
+}: ComponentProps<"div">): React.ReactElement {
   return <div className={`flex items-center ${className}`} {...props} />;
 }
 

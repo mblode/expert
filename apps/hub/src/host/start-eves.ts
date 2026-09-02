@@ -2,13 +2,15 @@
  * Start one `eve start` per roster Bot that has `apps/eve/bots/<id>`.
  * Bind loopback only. Tokens and the hub→Eve secret stay on the volume.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { mkdirSync, openSync } from "node:fs";
 import { dirname, resolve } from "node:path";
-import { planEveLaunches, type EveLaunch } from "./eve.ts";
+import { planEveLaunches } from "./eve.ts";
+import type { EveLaunch } from "./eve.ts";
 import type { BotConfig } from "../service/bots.ts";
 
-export type StartEvesOpts = {
+interface StartEvesOpts {
   roster: readonly BotConfig[];
   botsRoot: string;
   hubUrl: string;
@@ -16,7 +18,7 @@ export type StartEvesOpts = {
   logDir: string;
   basePort?: number;
   env?: NodeJS.ProcessEnv;
-};
+}
 
 export function eveChildEnv(
   launch: EveLaunch,
@@ -25,8 +27,8 @@ export function eveChildEnv(
   return {
     ...opts.env,
     COMPUTER_BOT_TOKEN: launch.token,
-    COMPUTER_URL: opts.hubUrl,
     COMPUTER_EVE_SECRET: opts.eveSecret,
+    COMPUTER_URL: opts.hubUrl,
     HOST: "127.0.0.1",
     PORT: String(launch.port),
   };
@@ -34,10 +36,10 @@ export function eveChildEnv(
 
 export function startEveProcesses(opts: StartEvesOpts): ChildProcess[] {
   const launches = planEveLaunches(opts.roster, {
-    botsRoot: opts.botsRoot,
     basePort: opts.basePort,
+    botsRoot: opts.botsRoot,
   });
-  mkdirSync(opts.logDir, { recursive: true, mode: 0o700 });
+  mkdirSync(opts.logDir, { mode: 0o700, recursive: true });
   const children: ChildProcess[] = [];
   for (const launch of launches) {
     const log = resolve(opts.logDir, `eve-${launch.botId}.log`);
@@ -48,12 +50,12 @@ export function startEveProcesses(opts: StartEvesOpts): ChildProcess[] {
       ["eve", "start", "--host", "127.0.0.1", "--port", String(launch.port)],
       {
         cwd: launch.cwd,
+        detached: true,
         env: eveChildEnv(launch, {
           hubUrl: opts.hubUrl,
           eveSecret: opts.eveSecret,
           env: opts.env ?? process.env,
         }),
-        detached: true,
         stdio: ["ignore", out, out],
       },
     );

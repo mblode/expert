@@ -4,8 +4,8 @@ import {
   PRIMARY_DISPLAY,
   asBotId,
   unavailable,
-  type BotId,
 } from "@computer/shared";
+import type { BotId } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 import { ComputerService } from "./computer.ts";
 import { FileService } from "./files.ts";
@@ -19,13 +19,13 @@ import { VoiceService } from "./voice.ts";
  * The agent token identifies the Bot; the Bot maps to its display hub-side.
  * Bots are not security boundaries: same box user, shared /workspace.
  */
-export type BotConfig = {
+export interface BotConfig {
   id: string;
   display: number;
   token: string;
-};
+}
 
-export type Bot = {
+export interface Bot {
   id: BotId;
   display: number;
   token: string;
@@ -36,8 +36,7 @@ export type Bot = {
   voice: VoiceService;
   computer: ComputerService;
   files: FileService;
-  chatBusy: boolean;
-};
+}
 
 const ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
@@ -50,15 +49,22 @@ export class BotRegistry {
     configs: BotConfig[] = [],
     private readonly policy: PolicyService = new PolicyService(),
   ) {
-    for (const c of configs) this.add(c);
+    for (const c of configs) {
+      this.add(c);
+    }
   }
 
   /** Validate and mount a Bot. Throws ComputerError so RPC callers get clean envelopes. */
   add(c: BotConfig): Bot {
     if (!ID_RE.test(c.id)) {
-      throw new ComputerError("VALIDATION", "bot id must be 1-32 chars of a-z 0-9 - (start alphanumeric)");
+      throw new ComputerError(
+        "VALIDATION",
+        "bot id must be 1-32 chars of a-z 0-9 - (start alphanumeric)",
+      );
     }
-    if (!c.token) throw new ComputerError("VALIDATION", `bot ${c.id}: token is required`);
+    if (!c.token) {
+      throw new ComputerError("VALIDATION", `bot ${c.id}: token is required`);
+    }
     if (!Number.isInteger(c.display) || c.display < 1 || c.display > MAX_DISPLAYS) {
       throw new ComputerError("VALIDATION", `bot ${c.id}: display must be 1..${MAX_DISPLAYS}`);
     }
@@ -86,7 +92,6 @@ export class BotRegistry {
       voice: new VoiceService(desk, undefined, state),
       computer: new ComputerService(desk, seat, this.policy),
       files: new FileService(desk, seat, this.policy),
-      chatBusy: false,
     };
     this.bots.push(bot);
     return bot;
@@ -94,7 +99,9 @@ export class BotRegistry {
 
   remove(id: string, opts: { allowPrimary?: boolean } = {}): Bot {
     const i = this.bots.findIndex((b) => b.id === id);
-    if (i < 0) throw new ComputerError("VALIDATION", `unknown bot ${id}`);
+    if (i === -1) {
+      throw new ComputerError("VALIDATION", `unknown bot ${id}`);
+    }
     if (!opts.allowPrimary && this.bots[i]!.display === PRIMARY_DISPLAY) {
       throw new ComputerError("VALIDATION", "the primary bot cannot be deleted");
     }
@@ -104,9 +111,14 @@ export class BotRegistry {
   /** Lowest free window index, or CONFLICT when all screens are in use. */
   allocateDisplay(): number {
     for (let d = 1; d <= MAX_DISPLAYS; d++) {
-      if (!this.bots.some((b) => b.display === d)) return d;
+      if (!this.bots.some((b) => b.display === d)) {
+        return d;
+      }
     }
-    throw new ComputerError("CONFLICT", `all ${MAX_DISPLAYS} screens are in use — delete a bot first`);
+    throw new ComputerError(
+      "CONFLICT",
+      `all ${MAX_DISPLAYS} screens are in use: delete a bot first`,
+    );
   }
 
   all(): readonly Bot[] {
@@ -114,7 +126,7 @@ export class BotRegistry {
   }
 
   configs(): BotConfig[] {
-    return this.bots.map((b) => ({ id: b.id as string, display: b.display, token: b.token }));
+    return this.bots.map((b) => ({ display: b.display, id: b.id as string, token: b.token }));
   }
 
   tokenEntries(): [token: string, botId: string][] {
@@ -123,7 +135,7 @@ export class BotRegistry {
 
   primary(): Bot {
     const bot = this.bots.find((b) => b.display === PRIMARY_DISPLAY) ?? this.bots[0];
-    // Nothing to attach to and nothing a retry can fix — the roster has to change.
+    // Nothing to attach to and nothing a retry can fix: the roster has to change.
     if (!bot) {
       throw new ComputerError(
         "DAEMON_DOWN",
@@ -136,13 +148,17 @@ export class BotRegistry {
 
   byId(id: string): Bot {
     const bot = this.bots.find((b) => b.id === id);
-    if (!bot) throw new ComputerError("VALIDATION", `unknown bot ${id}`);
+    if (!bot) {
+      throw new ComputerError("VALIDATION", `unknown bot ${id}`);
+    }
     return bot;
   }
 
   byDisplay(display: number): Bot {
     const bot = this.bots.find((b) => b.display === display);
-    if (!bot) throw new ComputerError("VALIDATION", `no bot on display ${display}`);
+    if (!bot) {
+      throw new ComputerError("VALIDATION", `no bot on display ${display}`);
+    }
     return bot;
   }
 

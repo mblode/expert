@@ -7,15 +7,15 @@ The protocol is [DESIGN.md](DESIGN.md). This file is the argument.
 
 Two sources, ranked, plus one we refuse.
 
-**Primary — first-party and Apache-2.0.**
+**Primary: first-party and Apache-2.0.**
 [`xai-org/grok-build`](https://github.com/xai-org/grok-build) publishes the
 computer-hub wire protocol under `crates/common/`: `xai-tool-protocol`,
 `xai-computer-hub-core`, `xai-computer-hub-sdk`,
 `xai-computer-hub-mcp-adapter`, `xai-message-delivery-core`. Same vendor,
 same licence as this repo, so it can be read and borrowed from rather than
-only described. It is a **different layer** from the desktop app — JSON-RPC
+only described. It is a **different layer** from the desktop app: JSON-RPC
 2.0 tool routing between harness, hub and tool server, not the in-VM exec
-plane — but `xai-tool-protocol::bot_relay` is squarely our layer, and its
+plane, but `xai-tool-protocol::bot_relay` is squarely our layer, and its
 `bot.*` verbs are the closest licensed statement of what a Bot is:
 
 - `bot.command`, `bot.vncDescriptor`, `bot.roster`, `bot.status`,
@@ -24,14 +24,14 @@ plane — but `xai-tool-protocol::bot_relay` is squarely our layer, and its
 - `agentId` is the routing key everywhere; `name` is metadata beside it.
   Matches our **agent token → Bot → screen**; the model still never names
   a display.
-- `bot.roster` and `bot.status` are documented **cold — never wakes the
+- `bot.roster` and `bot.status` are documented **cold, never wakes the
   box**. We have no hibernation, but the rule that a status read has no
   side effects is worth keeping.
 
-**Secondary — a description, unlicensed.**
+**Secondary, a description, unlicensed.**
 [b-nnett/grok-bot-0.18-reconstructed](https://github.com/b-nnett/grok-bot-0.18-reconstructed)
 is a readable reconstruction of the 0.18 macOS app. It is the best account
-of the desktop and exec planes and everything below still stands on it —
+of the desktop and exec planes and everything below still stands on it,
 but it ships **no LICENSE file**, so it is a source we read and paraphrase,
 never one we copy. The behaviour half of the contract (the voice, the wake
 table, the gates) comes from
@@ -42,7 +42,7 @@ for card types and on-disk layout.
 
 ## Sources we refuse
 
-- **`ChHsiching/grok-bot-0.18-original`** — a verbatim proprietary runtime
+- **`ChHsiching/grok-bot-0.18-original`**, a verbatim proprietary runtime
   archive, mechanically split into a per-module tree. Do not read, clone,
   or cite it. The clean-room claim and the Apache-2.0 licence both rest on
   this contract having been derived from descriptions; ingesting a copy of
@@ -54,10 +54,10 @@ for card types and on-disk layout.
 ## The product we are cloning
 
 Grok Bot (xAI branding; the client and cloud substrate are built by
-Anysphere/Cursor — bundle id `com.anysphere.sand`, DMG from
+Anysphere/Cursor: bundle id `com.anysphere.sand`, DMG from
 `downloads.cursor.com`, codename "sand") is one **persistent Linux
-environment per account**: an **anyrun pod — a Firecracker microVM
-booting a Docker-built image** — with full memory+disk snapshot
+environment per account**: an **anyrun pod, a Firecracker microVM
+booting a Docker-built image**: with full memory+disk snapshot
 hibernation to blob storage and wake-on-connect (`resume_*` params on
 the viewer URL). Not always-hot; persistence is hibernation. Bots
 share the machine and get a **screen**, not a box. Clients: macOS,
@@ -94,43 +94,43 @@ No iOS source in that repo. The phone chrome is the product we write.
 ## The behaviour contract
 
 Everything above is transport. This is the half that says what the agent is
-*obliged* to do, and until now it was missing from this file. Source:
+_obliged_ to do, and until now it was missing from this file. Source:
 `learn-grok-bot` PRODUCT.md / ARCHITECTURE.md, corroborated by `grokbot-sdk`.
 
 **The voice.** Plain model text is an inner monologue. The user sees only
 what the agent explicitly sends. Bubbles are `SendMessage` occurrences, not
-assistant prose. Delete that gate and the scratchpad leaks into the chat —
+assistant prose. Delete that gate and the scratchpad leaks into the chat,
 a different product. Card types and their turn behaviour:
 
-| Type | User sees | Ends the turn? |
-|---|---|---|
-| text | bubble, optional images | no — long work is several short bubbles |
-| widget | 1–6 real options | **yes. stop and wait** |
-| secret-request | masked input; value skips the transcript | **yes** |
-| attachment | file or standalone media | no |
+| Type           | User sees                                | Ends the turn?                         |
+| -------------- | ---------------------------------------- | -------------------------------------- |
+| text           | bubble, optional images                  | no: long work is several short bubbles |
+| widget         | 1–6 real options                         | **yes. stop and wait**                 |
+| secret-request | masked input; value skips the transcript | **yes**                                |
+| attachment     | file or standalone media                 | no                                     |
 
 `MAX_CHOICE_OPTIONS = 6`; styles `default | primary | danger`. Rules that
 have to be enforced, not merely prompted: **reply first** on any
 person-opened turn, **ack is not delivery**, deciding to send is not
-sending, and no plumbing words to the user — say "my computer", never
+sending, and no plumbing words to the user: say "my computer", never
 "box".
 
 **Wakes.** Same runner, different door. Who woke the agent changes whether
 silence is legal:
 
-| Wake | Cue | Person waiting? | May stay silent? |
-|---|---|---|---|
-| user text | — | yes | no |
-| just created | `[first run]` | yes | no |
-| channel inbound | `[inbound]` | on that channel | no |
-| schedule / file | `[routine]` | no | **yes** |
-| teammate | `SendToAgent` | depends | depends |
-| background finished | revival | usually no | yes |
+| Wake                | Cue           | Person waiting? | May stay silent? |
+| ------------------- | ------------- | --------------- | ---------------- |
+| user text           | :             | yes             | no               |
+| just created        | `[first run]` | yes             | no               |
+| channel inbound     | `[inbound]`   | on that channel | no               |
+| schedule / file     | `[routine]`   | no              | **yes**          |
+| teammate            | `SendToAgent` | depends         | depends          |
+| background finished | revival       | usually no      | yes              |
 
 The silent routine is the rule that stops cron spam. It is a property of
 the wake, not of the model's mood.
 
-**Gates.** Default is act; asking is earned — irreversible, unresolvable
+**Gates.** Default is act; asking is earned: irreversible, unresolvable
 ambiguity, or only the human knows. Question widget, secret-request,
 auto-review (`off` / `shadow` / `enforce`), and hand-back-the-desktop. After
 a block: adapt to a genuinely safer path, or escalate with the **same
@@ -142,7 +142,7 @@ signed-in box browser → box desktop GUI → hand back to the human. A broken
 connector is news, not something to silently replay in the browser.
 
 **Delivery operations.** `xai-message-delivery-core` models an inbound
-message as `Principal` (`Human | Agent | Runtime`) plus an `Operation` —
+message as `Principal` (`Human | Agent | Runtime`) plus an `Operation`,
 `Queue`, `Steer`, `Interject`, `InterruptAndSend`. Our `POST /chat` has one
 behaviour instead: a per-Bot mutex returning `409 CONFLICT "bot is busy"`.
 `Queue` alone would be strictly better; the phone should not get an error
@@ -155,18 +155,18 @@ The single most-asked question in the Cursor forum threads (indexed by
 "computer update" costs you. Staff answers there settle it, and the answer is
 narrower than users expect:
 
-| Path | Survives a computer update? |
-|---|---|
-| `/workspace` | yes |
-| browser profile | yes |
-| `~/.config` | yes |
-| `~/.local/state` | **no** |
-| `apt install`ed packages | **no** — the OS image is rebuilt |
-| background processes | no — the box sleeps when idle |
+| Path                     | Survives a computer update?     |
+| ------------------------ | ------------------------------- |
+| `/workspace`             | yes                             |
+| browser profile          | yes                             |
+| `~/.config`              | yes                             |
+| `~/.local/state`         | **no**                          |
+| `apt install`ed packages | **no**: the OS image is rebuilt |
+| background processes     | no: the box sleeps when idle    |
 
 `~/.local/state` is the one that draws the threads: it is where WhatsApp Web
 and Signal keep a linked device, so users re-scan the QR after every update
-and read it as a bug. It is not — it is the boundary.
+and read it as a bug. It is not: it is the boundary.
 
 The staff remedy for packages is a **list in a file** that the agent
 reinstalls after an update, not a persisted package store. We copy the
@@ -176,15 +176,15 @@ narrower one, because a skill written against ours would then break on
 theirs.
 
 **"Nix package persistence" stays on `plan.md`'s cut list.** apt packages
-dying on an image rebuild is not a defect we inherited by accident — it is
+dying on an image rebuild is not a defect we inherited by accident: it is
 the behaviour Grok has. Baking a Nix store to keep them would make this box
-*more* durable than the thing we are cloning, which breaks the contract in
+_more_ durable than the thing we are cloning, which breaks the contract in
 the direction nobody notices until a skill relies on it. The fix is
 documentation (README's "What survives"), not a volume.
 
 Two volumes carry this: `workspace:/workspace` and `config:/home/box/.config`.
 `~/.config` is one volume rather than a parent plus a nested
-`config/chromium` one — Docker mounts parent before child and both do
+`config/chromium` one: Docker mounts parent before child and both do
 persist, verified, but the nested form leaves a permanently empty
 `chromium/` in the parent, so anyone inspecting or backing up the parent
 volume silently misses the profile. One volume also covers windows 2–8,
@@ -202,10 +202,11 @@ Read off `xai-tool-protocol`. Each is a deliberate difference, not an
 oversight, and each has a cost.
 
 - **VNC descriptors expire.** `bot.vncDescriptor` returns
-  `{ vncUrl, expiresHint }` — a port-token expiry the client refreshes
+  `{ vncUrl, expiresHint }`, a port-token expiry the client refreshes
   before, with `null` reserved for the legacy never-expiring form. Ours
-  mints one permanent seat token, stamps it into the URL query string, and
-  never rotates it. A leaked `vnc_url` is leaked for the life of the box.
+  stamps a 15-minute pixel token bound to one display into `vnc_url` and
+  reuses it across close `Status` polls; the durable seat token still opens
+  `/vnc` for old pair sessions. `expires` rides in the URL as the hint.
 - **Status enums degrade, they do not throw.** `BotRunState`
   (`absent | hibernated | running | unknown`) has a hand-written
   `Deserialize` whose whole job is that an unknown wire string becomes
@@ -214,11 +215,11 @@ oversight, and each has a cost.
   `WorkspaceGonePhase` use `#[serde(other)]` for the same reason.
   `apps/ios/Computer/Models/ComputerV1.swift` decodes `SeatState` and
   `ErrorCode` as plain Swift `String` enums, which **throw** on an unknown
-  value — so adding a state server-side breaks every phone already
+  value, so adding a state server-side breaks every phone already
   installed. Strictness is right for model → hub, where a typo should be a
   loud `VALIDATION`; it is wrong for hub → phone.
 - **There is a taxonomy for "can't reach your computer".**
-  `workspace_unavailable` carries `{ reason, phase, retryable }` —
+  `workspace_unavailable` carries `{ reason, phase, retryable }`,
   `reason` one of idle-timeout / disconnect / shutdown / not-bound /
   instance-gone / hibernated, `phase` one of in-flight-cancelled /
   route-missing / attach. We have one `DAEMON_DOWN` and an iOS client that
@@ -233,35 +234,36 @@ oversight, and each has a cost.
 
 ## Three ChatGPT machines (do not collapse them)
 
-1. **Cloud Operator** — virtual browser + terminal. Phone watches and
+1. **Cloud Operator**: virtual browser + terminal. Phone watches and
    can take over a login. No local apps, no `/workspace`.
-2. **Computer Use plugin** — drives *your* Mac/Windows. Lid closed =
+2. **Computer Use plugin**: drives _your_ Mac/Windows. Lid closed =
    dead (except macOS locked-use). Opposite of Grok.
-3. **@Chrome / @Browser** — a browser, not a desktop.
+3. **@Chrome / @Browser**, a browser, not a desktop.
 
 Model API: screenshot in, `actions[]` out. Shell is a separate tool.
 We take the action-list idea. We do not take "drive the user's laptop."
 
 ## Adjacent products we are not
 
-| Product | What it is | Why not the target |
-|---|---|---|
-| Superlogical | Durable **terminal** + iOS later | No desktop computer-use |
-| Poke | iMessage/WhatsApp assistant | Computer use = tunnel to *your* awake machine |
-| Town | Townie + wiki; Mac app uses Accessibility | Same sleep problem |
-| OpenClaw | Always-on gateway + Tailscale + iOS **node** | Camera/location, not a Codex/Grok desktop |
-| Hermes + cua-driver | Best OSS **driver** | Telegram; needs Xvfb/XFCE; GTK vs TigerVNC `XSendEvent` hole → **uinput** |
-| Case / GhostDesk / Figaro | Closest OSS desktops | Wrap ≠ own the seat/API |
-| OpenMausBot / SuperAgents | Tiny Grok-product clones | 1-star surfaces, not a protocol |
+| Product                   | What it is                                   | Why not the target                                                        |
+| ------------------------- | -------------------------------------------- | ------------------------------------------------------------------------- |
+| Superlogical              | Durable **terminal** + iOS later             | No desktop computer-use                                                   |
+| Poke                      | iMessage/WhatsApp assistant                  | Computer use = tunnel to _your_ awake machine                             |
+| Town                      | Townie + wiki; Mac app uses Accessibility    | Same sleep problem                                                        |
+| OpenClaw                  | Always-on gateway + Tailscale + iOS **node** | Camera/location, not a Codex/Grok desktop                                 |
+| Hermes + cua-driver       | Best OSS **driver**                          | Telegram; needs Xvfb/XFCE; GTK vs TigerVNC `XSendEvent` hole → **uinput** |
+| Case / GhostDesk / Figaro | Closest OSS desktops                         | Wrap ≠ own the seat/API                                                   |
+| OpenMausBot / SuperAgents | Tiny Grok-product clones                     | 1-star surfaces, not a protocol                                           |
 
 Vercel / Cloudflare Workers / Railway cannot host a desktop.
 Cheap analogue: Hetzner + Tailscale (post June-2026 prices: CX33
-4 vCPU/8 GB €8.49/mo, CX43 €15.99/mo) — always-hot, documented as
+4 vCPU/8 GB €8.49/mo, CX43 €15.99/mo), always-hot, documented as
 an alternate in deploy/cloud-init.yaml. Per-second sandboxes (E2B,
 Daytona, Modal, Morph) are ~10× for an always-on pet machine; Fly.io
 suspend/resume is the only cheap off-the-shelf imitation of Grok's
 hibernation, and that path is checked in as fly.toml (one Machine,
-desk+hub guest, volumes for /workspace and ~/.config).
+desk+hub guest, one volume for /workspace). Suspend is not wired yet:
+the Machine stays running until someone runs `npm run machine -- suspend`.
 
 ## Hosted computer-use APIs
 
@@ -287,7 +289,7 @@ results for the rest as skipped.
 with duration.
 
 **Leave:** 17 named tools. We have 11 members of one union. No
-browser-specific verbs (`navigate`, `form_input`) — Chromium is an app.
+browser-specific verbs (`navigate`, `form_input`), Chromium is an app.
 
 ### Gemini
 
@@ -317,7 +319,7 @@ AGENT ──request_takeover──► WAITING ──I'm done──► AGENT
 
 `SEAT_HELD` is a first-class error, not a retry loop. Clipboard is
 on the seat, not the model (injection). Pointer on the phone is
-**deltas**, not screenshot coordinates — the human is looking at
+**deltas**, not screenshot coordinates: the human is looking at
 the stream. The iOS keyboard is `Seat.Type`, also not a model tool.
 
 ## Coordinate invariant (the one that matters)
@@ -331,22 +333,22 @@ other sentence. Do not write it.
 
 ## What ships vs what waits
 
-| In v1 | Later |
-|---|---|
-| One box, many Bots, one screen per Bot (max 8) | Bot roster UI, Firecracker snapshot/hibernation |
-| VNC view-only + native chrome | WebRTC |
-| XTEST (`xdotool`) | Anything using `XSendEvent`; uinput, which no virtual X server reads |
-| UTF-8 clipboard | Images |
-| `pending_checks` + takeover | Model-side acknowledge RPC |
-| Hetzner + Tailscale Serve | Public bind, Nix bake |
+| In v1                                          | Later                                                                |
+| ---------------------------------------------- | -------------------------------------------------------------------- |
+| One box, many Bots, one screen per Bot (max 8) | Bot roster UI, Firecracker snapshot/hibernation                      |
+| VNC view-only + native chrome                  | WebRTC                                                               |
+| XTEST (`xdotool`)                              | Anything using `XSendEvent`; uinput, which no virtual X server reads |
+| UTF-8 clipboard                                | Images                                                               |
+| `pending_checks` + takeover                    | Model-side acknowledge RPC                                           |
+| Hetzner + Tailscale Serve                      | Public bind, Nix bake                                                |
 
 ## Sources
 
 - OpenAI computer use: https://developers.openai.com/api/docs/guides/tools-computer-use
 - Anthropic computer use (GA toolset, zoom, batch skip)
-- Gemini Computer Use (normalized coords — negative example)
+- Gemini Computer Use (normalized coords: negative example)
 - Computer-hub wire protocol (first-party, Apache-2.0):
-  https://github.com/xai-org/grok-build — `crates/common/xai-tool-protocol`,
+  https://github.com/xai-org/grok-build: `crates/common/xai-tool-protocol`,
   `xai-computer-hub-core`, `xai-message-delivery-core`
 - 0.18 reconstruction (secondary, no licence):
   https://github.com/b-nnett/grok-bot-0.18-reconstructed

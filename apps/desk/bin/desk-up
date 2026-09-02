@@ -4,13 +4,14 @@
 set -euo pipefail
 
 export HOME="${HOME:-/home/box}"
-mkdir -p "$HOME/.vnc" /workspace "$HOME/.config/chromium"
+mkdir -p /workspace "$HOME/.config/chromium"
 
-# Security is the hub, not RFB: every window runs -SecurityTypes None with
-# RFB input refused, and compose publishes the ports on loopback only.
+# Security is the hub, not RFB: every window runs x11vnc -viewonly with no
+# password on localhost, and compose publishes the ports on loopback only.
 
-# Primary window :1 on rfb 5901.
-/usr/local/bin/start-window 1 "${COMPUTER_WINDOW_OWNER:-}" "${COMPUTER_PRIMARY_BOT:-main}"
+# Primary window :1 on rfb 5901. No owner is passed: the claim file keeps
+# whatever owner it had, and the hub re-asserts its own hash at boot.
+/usr/local/bin/start-window 1 "" "${COMPUTER_PRIMARY_BOT:-main}"
 
 # Restore the forks this box had before the restart. The roster lives on the
 # workspace volume, so recreating the container does not cost a Bot its

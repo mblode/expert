@@ -2,8 +2,8 @@
   "name": "@computer/eve",
   "version": "0.0.0",
   "private": true,
-  "type": "module",
   "description": "Shared Eve tools, hub RPC, and loopback auth. Per-bot agents live in bots/<id>.",
+  "type": "module",
   "exports": {
     "./lib/auth": "./lib/auth.ts",
     "./lib/hub": "./lib/hub.ts"

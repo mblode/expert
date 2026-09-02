@@ -27,7 +27,6 @@ const deskMode = process.env.COMPUTER_DESK ?? "fake";
 const rosterPath = resolve(process.env.COMPUTER_DATA ?? "data/bots.json");
 const dataDir = dirname(rosterPath);
 const eveSecret = ensureEveSecret(join(dataDir, "eve-secret"), process.env.COMPUTER_EVE_SECRET);
-process.env.COMPUTER_EVE_SECRET = eveSecret;
 
 const windows =
   deskMode === "docker"
@@ -43,17 +42,14 @@ const hub = createHub({
   store: new FileBotStore(rosterPath),
   seatStore: new FileSeatTokenStore(join(dataDir, "seats.json")),
   pixels: new PixelRegistry({
-    ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
     tokenDir: process.env.COMPUTER_VNC_TOKEN_DIR ?? join(dataDir, "vnc-tokens"),
+    ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
   }),
   policy: loadPolicy(join(dataDir, "policy.json")),
   vncUrl,
   vncHost: process.env.COMPUTER_VNC_HOST ?? "127.0.0.1",
   // RFB port for window N is base + N (primary :1 → 5901).
   vncBasePort: Number(process.env.COMPUTER_VNC_PORT ?? 5900),
-  apiKey: process.env.OPENAI_API_KEY,
-  llmBaseUrl: process.env.OPENAI_BASE_URL,
-  llmModel: process.env.OPENAI_MODEL,
   eveSecret,
 });
 
@@ -69,3 +65,9 @@ hub.server.listen(port, bind, () => {
       .join(" ")}`,
   );
 });
+
+const shutdown = (): void => {
+  void hub.close().then(() => process.exit(0));
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);

@@ -5,112 +5,113 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ConnectError } from "./components/connect-error";
 import { ChatPane } from "./components/chat-pane";
 import { DesktopPane } from "./components/desktop-pane";
-import { LoginForm } from "./components/login-form";
 import { authClient } from "./lib/auth-client";
-import { createSeat } from "./lib/seat";
+import { siteConfig } from "./lib/config";
+import { createSeat, SeatError } from "./lib/seat";
 import type { BoxStatus } from "./lib/seat";
-import { clearSeat } from "./lib/storage";
+import { clearSessions } from "./lib/storage";
 
 const POLL_MS = 2000;
 
-export function App({
-  appleEnabled = false,
-  googleEnabled = false,
-}: {
-  appleEnabled?: boolean;
-  googleEnabled?: boolean;
-}): React.ReactElement {
+function signOut(): void {
+  clearSessions();
+  void authClient.signOut({ fetchOptions: { onSuccess: () => window.location.assign("/") } });
+}
+
+/** The server page already required a session; this only reads the seat off it. */
+export function App(): React.ReactElement {
   const { data: session, isPending } = authClient.useSession();
+  const [recovered, setRecovered] = useState<{ hubUrl: string; seatToken: string } | null>(null);
 
-  if (isPending) return <div className="h-full bg-ink" />;
+  const seat =
+    recovered ??
+    (session?.seatToken ? { hubUrl: session.hubUrl, seatToken: session.seatToken } : null);
 
-  if (!session) {
-    return (
-      <div className="flex h-full items-center justify-center p-6">
-        <div className="w-full max-w-sm space-y-5">
-          <div>
-            <h1 className="text-xl font-semibold">Computer</h1>
-            <p className="mt-1 text-sm text-mute">
-              Sign in to watch the screen and talk to Eve. The box connects automatically.
-            </p>
-          </div>
-          <LoginForm appleEnabled={appleEnabled} googleEnabled={googleEnabled} />
-        </div>
-      </div>
-    );
+  if (isPending && !seat) {
+    return <div className="h-full bg-ink" />;
   }
 
-  if (session.seatError || !session.seatToken) {
+  if (!seat) {
     return (
       <ConnectError
-        message={session.seatError ?? "Signed in, but no seat token was issued for the computer."}
-        onRetry={() => {
-          void fetch("/api/computer/reconnect", { method: "POST" }).then(() => {
-            void authClient.getSession();
-          });
+        message={session?.seatError ?? "Signed in, but no seat token was issued for the computer."}
+        onRetry={async () => {
+          const next = await reconnect();
+          if (next) {
+            setRecovered(next);
+          }
         }}
-        onSignOut={() => {
-          void authClient.signOut();
-        }}
+        onSignOut={signOut}
       />
     );
   }
 
   return (
     <Workspace
-      hubUrl={session.hubUrl}
-      key={session.seatToken}
-      onSignOut={() => {
-        clearSeat();
-        void authClient.signOut();
-      }}
-      seatToken={session.seatToken}
+      hubUrl={seat.hubUrl}
+      key={seat.seatToken}
+      onRecovered={setRecovered}
+      onSignOut={signOut}
+      seatToken={seat.seatToken}
     />
   );
 }
 
+/** Ask the web server to Pair again; it holds the setup code, the browser never does. */
+async function reconnect(): Promise<{ hubUrl: string; seatToken: string } | null> {
+  const res = await fetch("/api/computer/reconnect", { method: "POST" });
+  if (!res.ok) {
+    return null;
+  }
+  const body = (await res.json().catch(() => null)) as {
+    hubUrl?: string;
+    seatToken?: string;
+  } | null;
+  return body?.hubUrl && body.seatToken ? { hubUrl: body.hubUrl, seatToken: body.seatToken } : null;
+}
+
 function Workspace({
   hubUrl,
+  onRecovered,
   onSignOut,
   seatToken,
 }: {
   hubUrl: string;
+  onRecovered: (seat: { hubUrl: string; seatToken: string }) => void;
   onSignOut: () => void;
   seatToken: string;
 }): React.ReactElement {
   const seat = useMemo(() => createSeat(hubUrl, seatToken), [hubUrl, seatToken]);
-  const [status, setStatus] = useState<BoxStatus | undefined>(undefined);
+  const [status, setStatus] = useState<BoxStatus | undefined>();
   const [display, setDisplay] = useState(1);
   const [offline, setOffline] = useState<string | null>(null);
 
   const recoverSeat = useCallback(async () => {
-    const res = await fetch("/api/computer/reconnect", { method: "POST" });
-    if (!res.ok) {
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      setOffline(body?.error ?? "The computer rejected the seat token.");
-      return false;
+    const next = await reconnect();
+    if (!next) {
+      setOffline("The computer rejected the seat token and could not issue a new one.");
+      return;
     }
-    await authClient.getSession();
-    return true;
-  }, []);
+    onRecovered(next);
+  }, [onRecovered]);
 
   useEffect(() => {
     let live = true;
     const tick = async () => {
       try {
         const next = await seat.status(display);
-        if (!live) return;
-        setStatus(next);
-        setOffline(null);
-      } catch (cause) {
-        if (!live) return;
-        const message = cause instanceof Error ? cause.message : "hub unreachable";
-        if (/UNAUTHENTICATED|seat token/i.test(message)) {
-          const recovered = await recoverSeat();
-          if (!recovered && live) setOffline(message);
+        if (!live) {
           return;
         }
-        setOffline(message);
+        setStatus(next);
+        setOffline(null);
+      } catch (error) {
+        if (!live) return;
+        if (error instanceof SeatError && error.code === "UNAUTHENTICATED") {
+          await recoverSeat();
+          return;
+        }
+        setOffline(error instanceof Error ? error.message : "hub unreachable");
       }
     };
     void tick();
@@ -126,9 +127,8 @@ function Workspace({
   return (
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex items-center gap-3 border-b border-edge px-3 py-2">
-        <h1 className="text-sm font-semibold">Expert</h1>
-        <span className="truncate text-xs text-mute">{hubUrl}</span>
-        {offline && <span className="text-xs text-red-300">{offline}</span>}
+        <h1 className="text-sm font-semibold">{siteConfig.name}</h1>
+        {offline && <output className="truncate text-xs text-red-300">{offline}</output>}
         <button
           className="ml-auto rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
           onClick={onSignOut}

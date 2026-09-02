@@ -5,27 +5,19 @@ import type { AuthRegistry } from "./auth.ts";
 import { tokenFromRequest } from "./auth.ts";
 import { writeJson } from "./router.ts";
 import type { BotRegistry } from "../service/bots.ts";
-import {
-  EVE_BOT_HEADER,
-  EVE_HUB_SECRET_HEADER,
-  eveUrlForDisplay,
-  pickEveBotId,
-} from "../host/eve.ts";
+import { EVE_HUB_SECRET_HEADER, pickEveBotId } from "../host/eve.ts";
 
 const PREFIX = "/eve/v1/";
 
-export type EveProxyDeps = {
+export interface EveProxyDeps {
   auth: AuthRegistry;
   bots: BotRegistry;
-  /**
-   * Per-bot Eve URLs. Missing id → derive from that Bot's display
-   * (`127.0.0.1:2000+(display-1)`). Empty string means this Bot has no Eve.
-   */
-  eveUrls?: Record<string, string>;
+  /** Where this Bot's Eve listens. Empty string means it has no Eve. */
+  eveUrl: (botId: string, display: number) => string;
   /** Shared secret the Eve channel expects on loopback (`eve start`). */
   eveSecret?: string;
   cors: Record<string, string>;
-};
+}
 
 export function isEvePath(pathname: string): boolean {
   return pathname.startsWith(PREFIX);
@@ -55,8 +47,7 @@ export async function handleEveProxy(
     return;
   }
 
-  const mapped = deps.eveUrls?.[bot.id];
-  const base = (mapped !== undefined ? mapped : eveUrlForDisplay(bot.display)).replace(/\/$/, "");
+  const base = deps.eveUrl(bot.id, bot.display).replace(/\/$/, "");
   if (!base) {
     daemonDown(res, bot.id);
     return;
@@ -69,27 +60,33 @@ export async function handleEveProxy(
 
   const abort = new AbortController();
   res.on("close", () => {
-    if (!res.writableEnded) abort.abort();
+    if (!res.writableEnded) {
+      abort.abort();
+    }
   });
 
   let upstream: Response;
   try {
     upstream = await fetch(target, {
-      method: req.method ?? "GET",
-      headers: forwardHeaders(req, deps.eveSecret),
       body: await requestBody(req),
-      signal: abort.signal,
+      headers: forwardHeaders(req, deps.eveSecret),
+      method: req.method ?? "GET",
       redirect: "manual",
+      signal: abort.signal,
     });
   } catch {
-    if (!res.headersSent) daemonDown(res, bot.id);
+    if (!res.headersSent) {
+      daemonDown(res, bot.id);
+    }
     return;
   }
 
   const eveHeaders: Record<string, string> = {};
-  upstream.headers.forEach((value, name) => {
-    if (name.toLowerCase().startsWith("x-eve-")) eveHeaders[name] = value;
-  });
+  for (const [name, value] of upstream.headers) {
+    if (name.toLowerCase().startsWith("x-eve-")) {
+      eveHeaders[name] = value;
+    }
+  }
   res.writeHead(upstream.status, {
     "content-type": upstream.headers.get("content-type") ?? "application/octet-stream",
     "cache-control": "no-store",
@@ -113,7 +110,7 @@ function daemonDown(res: ServerResponse, botId?: string): void {
   writeJson(res, 503, {
     error: {
       code: "DAEMON_DOWN",
-      message: `the agent is not running${who} — the guest starts it with eve start`,
+      message: `the agent is not running${who}: the guest starts it with eve start`,
     },
   });
 }
@@ -124,17 +121,23 @@ function forwardHeaders(req: IncomingMessage, eveSecret?: string): Record<string
   for (const name of ["content-type", "accept"]) {
     const v = req.headers[name];
     const first = Array.isArray(v) ? v[0] : v;
-    if (first) out[name] = first;
+    if (first) {
+      out[name] = first;
+    }
   }
-  if (eveSecret) out[EVE_HUB_SECRET_HEADER] = eveSecret;
+  if (eveSecret) {
+    out[EVE_HUB_SECRET_HEADER] = eveSecret;
+  }
   return out;
 }
 
 async function requestBody(req: IncomingMessage): Promise<Uint8Array<ArrayBuffer> | undefined> {
-  if (req.method === "GET" || req.method === "HEAD") return undefined;
+  if (req.method === "GET" || req.method === "HEAD") {
+    return undefined;
+  }
   const chunks: Buffer[] = [];
-  for await (const c of req) chunks.push(c as Buffer);
+  for await (const c of req) {
+    chunks.push(c as Buffer);
+  }
   return chunks.length ? new Uint8Array(Buffer.concat(chunks)) : undefined;
 }
-
-export { EVE_BOT_HEADER, EVE_HUB_SECRET_HEADER };

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "ignoreBinaries": ["tsx", "tsc"],
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/*.mjs"],
+      "ignoreDependencies": ["@bufbuild/protoc-gen-es"]
+    },
+    "apps/hub": {
+      "entry": ["src/host/boot-eves.ts", "src/host/machine-cli.ts", "test/**/*.test.ts"],
+      "ignoreDependencies": ["@novnc/novnc"]
+    },
+    "apps/web": {
+      "ignoreDependencies": ["postcss"]
+    },
+    "apps/eve": {
+      "entry": ["lib/**/*.ts"]
+    },
+    "apps/eve/bots/main": {
+      "entry": ["agent/**/*.ts"]
+    }
+  },
+  "ignoreExportsUsedInFile": true
+}

@@ -7,39 +7,40 @@ import { CtaSection } from "../shared/cta-section";
 import { Footer } from "../shared/footer";
 import { InstallDialog } from "../shared/install-dialog";
 import { Navbar } from "../shared/navbar";
-import { HeroHeadline } from "./hero-headline";
 import { Reveal } from "./reveal";
 
 const howItWorks = [
   {
+    body: "That is install for humans. Email a one-time code. The web server attaches you to the computer. You never type a setup code.",
     step: "01",
     title: "Sign in at hello.expert",
-    body: "That is install for humans. Email a one-time code. The web server attaches you to the computer. You never type a setup code.",
   },
   {
+    body: `Paste \`${siteConfig.installCommand}\` into Claude, Codex, OpenCode, or Cursor. One skill from this domain.`,
     step: "02",
     title: "Add the agent skill",
-    body: `Paste \`${siteConfig.installCommand}\` into Claude, Codex, OpenCode, or Cursor. One skill from this domain.`,
   },
   {
+    body: "Watch the desk. When you or the agent needs the box, a signed-in session can drive it through Seat RPCs. The skill cannot move the pointer without that session.",
     step: "03",
     title: "Take the seat",
-    body: "Watch the desk. When you or the agent needs the box, a signed-in session can drive it through Seat RPCs. The skill cannot move the pointer without that session.",
   },
 ];
 
 const who = [
   {
-    role: "For you",
     description: "A standing Linux box you can watch and take over. Sign in. That is the product.",
+    role: "For you",
   },
   {
+    description:
+      "One skill from hello.expert. After you are signed in, it uses the hub, never an invented pairing code, never a guessed setup code.",
     role: "For your agent",
-    description: "One skill from hello.expert. After you are signed in, it uses the hub — never an invented pairing code, never a guessed setup code.",
   },
   {
+    description:
+      "/workspace and ~/.config persist. The desk sleeps after idle and wakes when you use it. Status does not wake the guest.",
     role: "For the work",
-    description: "/workspace and ~/.config persist. The desk sleeps after idle and wakes when you use it. Status does not wake the guest.",
   },
 ];
 
@@ -61,10 +62,12 @@ export function MarketingHome(): React.ReactElement {
               className="hero-glow pointer-events-none absolute inset-x-0 top-0 h-full rounded-b-[2rem]"
             />
             <div className="relative mx-auto max-w-2xl px-4 text-center sm:px-6">
-              <HeroHeadline />
+              <h1 className="text-balance font-display text-5xl font-light tracking-tight sm:text-6xl sm:tracking-[-0.03em]">
+                The Linux computer your AI agent uses.
+              </h1>
               <Reveal delay={0.35}>
                 <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-lg text-muted-foreground">
-                  A standing Linux computer your agents drive. Sign in at hello.expert — that is
+                  A standing Linux computer your agents drive. Sign in at hello.expert, that is
                   install. Then add the skill so your agent can take the seat.
                 </p>
               </Reveal>
@@ -86,13 +89,8 @@ export function MarketingHome(): React.ReactElement {
                   >
                     Sign in
                   </a>
-                  <InstallDialog>
-                    <button
-                      className="text-sm text-muted-foreground transition-colors hover:text-foreground"
-                      type="button"
-                    >
-                      Add the skill
-                    </button>
+                  <InstallDialog className="text-sm text-muted-foreground transition-colors hover:text-foreground">
+                    Add the skill
                   </InstallDialog>
                 </div>
               </Reveal>
@@ -108,15 +106,15 @@ export function MarketingHome(): React.ReactElement {
               </Reveal>
               <ol className="mt-10 grid gap-8 sm:grid-cols-3">
                 {howItWorks.map((item, index) => (
-                  <Reveal delay={0.1 * (index + 1)} key={item.step}>
-                    <li>
+                  <li key={item.step}>
+                    <Reveal delay={0.1 * (index + 1)}>
                       <span className="font-mono text-[0.625rem] text-growth-green/70 sm:text-xs">
                         {item.step}
                       </span>
                       <h3 className="mt-1 text-lg font-semibold">{item.title}</h3>
                       <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
-                    </li>
-                  </Reveal>
+                    </Reveal>
+                  </li>
                 ))}
               </ol>
             </div>
@@ -125,16 +123,20 @@ export function MarketingHome(): React.ReactElement {
           <section className="py-12 sm:py-16" id="who">
             <div className="mx-auto max-w-4xl px-4 sm:px-6">
               <Reveal>
-                <h2 className="font-display text-2xl font-light tracking-tight">Who it&apos;s for</h2>
+                <h2 className="font-display text-2xl font-light tracking-tight">
+                  Who it&apos;s for
+                </h2>
               </Reveal>
               <ul className="mt-10 grid gap-6 sm:grid-cols-3">
                 {who.map((item, index) => (
-                  <Reveal delay={0.1 * (index + 1)} key={item.role}>
-                    <li className="rounded-2xl border border-white/[0.08] p-6">
-                      <h3 className="font-display text-xl font-light tracking-tight">{item.role}</h3>
+                  <li className="rounded-2xl border border-white/[0.08] p-6" key={item.role}>
+                    <Reveal delay={0.1 * (index + 1)}>
+                      <h3 className="font-display text-xl font-light tracking-tight">
+                        {item.role}
+                      </h3>
                       <p className="mt-3 text-pretty text-sm text-white/70">{item.description}</p>
-                    </li>
-                  </Reveal>
+                    </Reveal>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -143,7 +145,9 @@ export function MarketingHome(): React.ReactElement {
           <section className="py-12 sm:py-16" id="faq">
             <div className="mx-auto max-w-4xl px-4 sm:px-6">
               <Reveal>
-                <h2 className="text-balance font-display text-2xl font-light tracking-tight">FAQ</h2>
+                <h2 className="text-balance font-display text-2xl font-light tracking-tight">
+                  FAQ
+                </h2>
               </Reveal>
               <Reveal className="mt-10" delay={0.1}>
                 <div className="divide-y divide-white/10">

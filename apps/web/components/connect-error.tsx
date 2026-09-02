@@ -1,5 +1,7 @@
 "use client";
 
+import { siteConfig } from "@/lib/config";
+
 export function ConnectError({
   message,
   onRetry,
@@ -13,10 +15,15 @@ export function ConnectError({
     <div className="flex h-full items-center justify-center p-6">
       <div className="w-full max-w-sm space-y-5">
         <div>
-          <h1 className="text-xl font-semibold">Computer</h1>
-          <p className="mt-1 text-sm text-mute">Signed in, but the web server could not attach to the box.</p>
+          <h1 className="text-xl font-semibold">{siteConfig.name}</h1>
+          <p className="mt-1 text-sm text-mute">
+            Signed in, but the web server could not attach to the box.
+          </p>
         </div>
-        <p className="rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-200" role="alert">
+        <p
+          className="rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-200"
+          role="alert"
+        >
           {message}
         </p>
         <button

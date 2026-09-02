@@ -4,7 +4,7 @@ import { ComputerError } from "@computer/shared";
 
 /**
  * Claims and releases window indexes (X displays) on the box.
- * Owner identity on the box is a sha256 of the bot token — the raw
+ * Owner identity on the box is a sha256 of the bot token: the raw
  * bearer never lands on the shared filesystem.
  */
 export interface WindowManager {
@@ -22,9 +22,16 @@ export class DockerWindowManager implements WindowManager {
     private readonly user = "box",
   ) {}
 
-  async startWindow(display: number, ownerToken: string, botId: string, force = false): Promise<void> {
+  async startWindow(
+    display: number,
+    ownerToken: string,
+    botId: string,
+    force = false,
+  ): Promise<void> {
     const argv = ["/usr/local/bin/start-window", String(display), ownerHash(ownerToken), botId];
-    if (force) argv.push("--force");
+    if (force) {
+      argv.push("--force");
+    }
     const r = await this.exec(argv);
     if (r.exit === 9) {
       throw new ComputerError("CONFLICT", `window ${display} claimed by another owner`);
@@ -49,13 +56,20 @@ export class DockerWindowManager implements WindowManager {
 }
 
 /**
- * Hub and desk share a process namespace — the Fly Machine / cloud guest.
+ * Hub and desk share a process namespace: the Fly Machine / cloud guest.
  * Same scripts as DockerWindowManager; no `docker exec`.
  */
 export class LocalWindowManager implements WindowManager {
-  async startWindow(display: number, ownerToken: string, botId: string, force = false): Promise<void> {
+  async startWindow(
+    display: number,
+    ownerToken: string,
+    botId: string,
+    force = false,
+  ): Promise<void> {
     const argv = ["/usr/local/bin/start-window", String(display), ownerHash(ownerToken), botId];
-    if (force) argv.push("--force");
+    if (force) {
+      argv.push("--force");
+    }
     const r = await spawnWindow(argv, { local: true });
     if (r.exit === 9) {
       throw new ComputerError("CONFLICT", `window ${display} claimed by another owner`);
@@ -80,8 +94,8 @@ function spawnWindow(
   return new Promise((resolve, reject) => {
     const child = opts.local
       ? spawn(argv[0]!, argv.slice(1), {
-          stdio: ["ignore", "ignore", "pipe"],
           env: { ...process.env, HOME: process.env.HOME ?? "/home/box" },
+          stdio: ["ignore", "ignore", "pipe"],
         })
       : spawn("docker", ["exec", "-u", opts.docker!.user, opts.docker!.container, ...argv], {
           stdio: ["ignore", "ignore", "pipe"],
@@ -109,8 +123,15 @@ export class NoopWindowManager implements WindowManager {
   forced: number[] = [];
   failNext = false;
 
-  async startWindow(display: number, _ownerToken?: string, _botId?: string, force = false): Promise<void> {
-    if (force) this.forced.push(display);
+  async startWindow(
+    display: number,
+    _ownerToken?: string,
+    _botId?: string,
+    force = false,
+  ): Promise<void> {
+    if (force) {
+      this.forced.push(display);
+    }
     if (this.failNext) {
       this.failNext = false;
       throw new ComputerError("DAEMON_DOWN", `start-window ${display} failed`);

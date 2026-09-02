@@ -19,7 +19,7 @@ const COMPONENTS: StreamdownProps["components"] = {
 /**
  * Assistant markdown. Streamdown, because half-arrived text is the normal case
  * here: an unterminated fence or a dangling `**` renders cleanly as it streams.
- * Memoized — the reducer rebuilds the message array on every stream event.
+ * Memoized: the reducer rebuilds the message array on every stream event.
  */
 export const Markdown = memo(
   ({ text }: { text: string }): React.ReactElement => (

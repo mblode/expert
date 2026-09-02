@@ -23,7 +23,6 @@ const emilioLight = localFont({
 const siteTitle = `${siteConfig.name} | The Linux computer your AI agent uses`;
 
 export const metadata: Metadata = {
-  alternates: { canonical: "/" },
   description: siteConfig.description,
   metadataBase: new URL(siteConfig.url),
   openGraph: {
@@ -39,9 +38,7 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html className={`${glide.variable} ${emilioLight.variable} h-full`} lang="en">
       <body className="h-full">

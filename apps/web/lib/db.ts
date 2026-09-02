@@ -10,7 +10,11 @@ const url = process.env.TURSO_DATABASE_URL;
 // libSQL rejects an empty URL, so build/dev fall back to an in-memory database.
 // At production runtime a missing URL is a misconfiguration: fail loudly rather
 // than silently persist to an ephemeral database.
-if (!url && process.env.NODE_ENV === "production" && process.env.NEXT_PHASE !== "phase-production-build") {
+if (
+  !url &&
+  process.env.NODE_ENV === "production" &&
+  process.env.NEXT_PHASE !== "phase-production-build"
+) {
   throw new Error("TURSO_DATABASE_URL must be set in production");
 }
 

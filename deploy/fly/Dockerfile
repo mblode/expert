@@ -1,7 +1,7 @@
-# Cloud computer guest: desk (X.Org/Xvfb + x11vnc + Chromium) + Eve + hub.
-# Keep the apt list in sync with apps/desk/Dockerfile.
-# Build context is the repo root (`fly.toml` [build] dockerfile).
-# Eve is a child of this guest (loopback), not a Vercel app.
+# Cloud computer guest: desk (X.Org/Xvfb + x11vnc + Chromium) + Eve + hub in
+# one Fly Machine. Build context is the repo root (`fly.toml` [build]).
+# The apt list is apps/desk/packages.txt, shared with the local desk image.
+# The product web (apps/web) is deployed on Vercel and is not built here.
 
 FROM node:24-bookworm-slim AS node
 
@@ -18,69 +18,55 @@ ENV DEBIAN_FRONTEND=noninteractive \
     COMPUTER_DATA=/workspace/.computer/bots.json \
     COMPUTER_EVE_BOTS=/opt/computer/apps/eve/bots
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates \
-        chromium \
-        dbus-x11 \
-        fonts-dejavu-core \
-        fonts-liberation \
-        imagemagick \
-        openssl \
-        openbox \
-        procps \
-        python3 \
-        scrot \
-        x11vnc \
-        x11-utils \
-        x11-xserver-utils \
-        xclip \
-        xdotool \
-        xterm \
-        xvfb \
-    && rm -rf /var/lib/apt/lists/*
+# The package list is piped through grep; pipefail makes a bad list fail the build.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-COPY --from=node /usr/local /usr/local
+COPY apps/desk/packages.txt /tmp/packages.txt
+RUN apt-get update \
+    && grep -v '^#' /tmp/packages.txt | xargs apt-get install -y --no-install-recommends \
+    && rm -rf /var/lib/apt/lists/* /tmp/packages.txt
+
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+    && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
 RUN useradd --create-home --uid 1000 --shell /bin/bash box \
-    && mkdir -p /workspace /home/box/.config/chromium /home/box/.vnc /opt/computer \
+    && mkdir -p /workspace /home/box/.config/chromium /opt/computer \
     && chown -R box:box /workspace /home/box /opt/computer
 
-COPY apps/desk/bin/desk-shot /usr/local/bin/desk-shot
-COPY apps/desk/bin/start-window /usr/local/bin/start-window
-COPY apps/desk/bin/stop-window /usr/local/bin/stop-window
-COPY apps/desk/bin/desk-up /usr/local/bin/desk-up
-COPY deploy/fly/guest-entrypoint.sh /usr/local/bin/guest-entrypoint.sh
-COPY deploy/fly/edge-entrypoint.sh /usr/local/bin/edge-entrypoint.sh
-RUN chmod 755 /usr/local/bin/desk-shot \
-        /usr/local/bin/start-window /usr/local/bin/stop-window \
-        /usr/local/bin/desk-up /usr/local/bin/guest-entrypoint.sh \
-        /usr/local/bin/edge-entrypoint.sh
+COPY --chmod=755 apps/desk/bin/desk-shot apps/desk/bin/desk-up apps/desk/bin/start-window apps/desk/bin/stop-window /usr/local/bin/
+COPY --chmod=755 deploy/fly/guest-entrypoint.sh /usr/local/bin/guest-entrypoint.sh
 
+# Install and build as `box`, the user that runs everything, so the tree is
+# owned correctly from the start instead of `chown -R` doubling the layer.
+USER box
 WORKDIR /opt/computer
-COPY package.json package-lock.json ./
-COPY apps/hub/package.json apps/hub/
-COPY apps/web/package.json apps/web/
-COPY apps/eve/package.json apps/eve/
-COPY apps/eve/bots/main/package.json apps/eve/bots/main/
-COPY apps/eve/bots/night/package.json apps/eve/bots/night/
-COPY packages/shared/package.json packages/shared/
-COPY packages/proto/package.json packages/proto/
-RUN npm ci
+COPY --chown=box:box package.json package-lock.json ./
+COPY --chown=box:box apps/hub/package.json apps/hub/
+COPY --chown=box:box apps/web/package.json apps/web/
+COPY --chown=box:box apps/eve/package.json apps/eve/
+COPY --chown=box:box apps/eve/bots/main/package.json apps/eve/bots/main/
+COPY --chown=box:box packages/shared/package.json packages/shared/
+COPY --chown=box:box packages/proto/package.json packages/proto/
+# LEFTHOOK=0: no git hooks in an image, so `prepare` is a no-op here.
+ENV LEFTHOOK=0
+RUN npm ci --no-audit --no-fund
 
-COPY apps/hub apps/hub
-COPY apps/web apps/web
-COPY apps/eve apps/eve
-COPY packages packages
-# Server Next build (Vercel is the product front door). `out/` is no longer
-# produced; the hub serves pixels/RPCs without a static panel.
+COPY --chown=box:box apps/hub apps/hub
+COPY --chown=box:box apps/eve apps/eve
+COPY --chown=box:box packages packages
+COPY --chown=box:box api api
 # `eve build` here so guest start only runs `eve start`.
-RUN npm run build --workspace=@computer/web \
-    && npm run build --workspace=@computer/eve-main \
-    && npm run build --workspace=@computer/eve-night \
-    && chown -R box:box /opt/computer
+RUN npm run build --workspace=@computer/eve-main
 
+# PID 1 is tini as root on purpose: the entrypoint fixes volume ownership and
+# then drops every process to `box` with runuser.
+# hadolint ignore=DL3002
+USER root
 # Fly mounts `computer_workspace` at /workspace (roster, tokens, Eve secret).
 VOLUME ["/workspace"]
-EXPOSE 8080 6080-6087
+EXPOSE 8080
 
-ENTRYPOINT ["/usr/local/bin/guest-entrypoint.sh"]
+# tini reaps the X server, Chromium and Eve children and forwards SIGTERM.
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/guest-entrypoint.sh"]

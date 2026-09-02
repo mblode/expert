@@ -9,62 +9,62 @@ app = "mblode-computer"
 primary_region = "syd"
 
 [build]
-  dockerfile = "deploy/fly/Dockerfile"
+dockerfile = "deploy/fly/Dockerfile"
 
 [processes]
-  computer = "/usr/local/bin/guest-entrypoint.sh"
+computer = "/usr/local/bin/guest-entrypoint.sh"
 
 [env]
-  COMPUTER_CLOUD = "fly"
-  COMPUTER_BIND = "0.0.0.0"
-  COMPUTER_PORT = "8080"
-  COMPUTER_URL = "http://127.0.0.1:8080"
-  HOME = "/home/box"
-  # 20 minutes. Not Sprites' 30s — a desktop cannot hibernate that fast.
-  COMPUTER_IDLE_SUSPEND_SEC = "1200"
-  COMPUTER_VNC_TTL_SEC = "900"
-  COMPUTER_NOVNC_BASE = "6080"
-  COMPUTER_VNC_TOKEN_DIR = "/tmp/computer-vnc"
-  COMPUTER_DESK = "local"
-  COMPUTER_DATA = "/workspace/.computer/bots.json"
-  COMPUTER_VNC_HOST = "127.0.0.1"
-  COMPUTER_VNC_PORT = "5900"
-  COMPUTER_EVE_BOTS = "/opt/computer/apps/eve/bots"
+COMPUTER_CLOUD = "fly"
+COMPUTER_BIND = "0.0.0.0"
+COMPUTER_PORT = "8080"
+COMPUTER_URL = "http://127.0.0.1:8080"
+HOME = "/home/box"
+# 20 minutes. Not Sprites' 30s — a desktop cannot hibernate that fast.
+COMPUTER_IDLE_SUSPEND_SEC = "1200"
+COMPUTER_VNC_TTL_SEC = "900"
+COMPUTER_NOVNC_BASE = "6080"
+COMPUTER_VNC_TOKEN_DIR = "/tmp/computer-vnc"
+COMPUTER_DESK = "local"
+COMPUTER_DATA = "/workspace/.computer/bots.json"
+COMPUTER_VNC_HOST = "127.0.0.1"
+COMPUTER_VNC_PORT = "5900"
+COMPUTER_EVE_BOTS = "/opt/computer/apps/eve/bots"
 
 [http_service]
-  processes = ["computer"]
-  internal_port = 8080
-  force_https = true
-  auto_stop_machines = "off"
-  auto_start_machines = true
-  min_machines_running = 1
+processes = ["computer"]
+internal_port = 8080
+force_https = true
+auto_stop_machines = "off"
+auto_start_machines = true
+min_machines_running = 1
 
-  [http_service.concurrency]
-    type = "requests"
-    soft_limit = 20
-    hard_limit = 40
+[http_service.concurrency]
+type = "requests"
+soft_limit = 20
+hard_limit = 40
 
-  [[http_service.checks]]
-    grace_period = "40s"
-    interval = "30s"
-    method = "GET"
-    path = "/healthz"
-    timeout = "5s"
+[[http_service.checks]]
+grace_period = "40s"
+interval = "30s"
+method = "GET"
+path = "/healthz"
+timeout = "5s"
 
 # One volume: /workspace (desk files, .computer roster/tokens, Eve secret).
 [[mounts]]
-  source = "computer_workspace"
-  destination = "/workspace"
-  processes = ["computer"]
+source = "computer_workspace"
+destination = "/workspace"
+processes = ["computer"]
 
 # Guest: start at 4 shared vCPU / 4 GB. Grok measured 8 vCPU / 16 GB / 128 GB.
 #   fly scale vm shared-cpu-8x --memory 16384 --process-group computer
 #   fly volumes extend computer_workspace --size 128
 [[vm]]
-  processes = ["computer"]
-  cpu_kind = "shared"
-  cpus = 4
-  memory = "4gb"
+processes = ["computer"]
+cpu_kind = "shared"
+cpus = 4
+memory = "4gb"
 
 [deploy]
-  strategy = "immediate"
+strategy = "immediate"

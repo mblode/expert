@@ -1,0 +1,19 @@
+# apt packages for the desk. One source for both images: apps/desk/Dockerfile
+# (local compose) and deploy/fly/Dockerfile (cloud guest) read this file.
+ca-certificates
+chromium
+dbus-x11
+fonts-dejavu-core
+fonts-liberation
+imagemagick
+openbox
+openssl
+procps
+python3
+tini
+x11-utils
+x11-xserver-utils
+x11vnc
+xclip
+xdotool
+xvfb

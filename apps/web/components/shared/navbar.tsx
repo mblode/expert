@@ -12,7 +12,9 @@ export function Navbar(): React.ReactElement {
   useEffect(() => {
     let ticking = false;
     const handleScroll = () => {
-      if (ticking) return;
+      if (ticking) {
+        return;
+      }
       ticking = true;
       requestAnimationFrame(() => {
         setIsScrolled(window.scrollY > 50);

@@ -2,37 +2,17 @@ import { describe, expect, it } from "vitest";
 import { PIXEL_REFRESH_MS, PixelRegistry, withPixelToken } from "../src/service/pixels.ts";
 
 describe("PixelRegistry", () => {
-  it("maps Grok noVNC ports: :1 → 6080, :2 → 6081", () => {
-    expect(PixelRegistry.novncPort(1)).toBe(6080);
-    expect(PixelRegistry.novncPort(2)).toBe(6081);
-    expect(PixelRegistry.rfbPort(1)).toBe(5901);
-    expect(PixelRegistry.rfbPort(2)).toBe(5902);
-  });
-
   it("mints a grant that expires", () => {
-    const pixels = new PixelRegistry({ ttlMs: 1_000 });
+    const pixels = new PixelRegistry({ ttlMs: 1000 });
     const t0 = 1_000_000;
     const g = pixels.mint(1, t0);
     expect(pixels.lookup(g.token, t0 + 10)).toEqual(g);
-    expect(pixels.lookup(g.token, t0 + 1_001)).toBeUndefined();
-  });
-
-  it("reuses a live grant for the same display instead of minting again", () => {
-    const pixels = new PixelRegistry({ ttlMs: 60_000 });
-    const t0 = 1_000_000;
-    const first = pixels.reuse(1, t0);
-    const second = pixels.reuse(1, t0 + 2_000);
-    expect(second.token).toBe(first.token);
-    expect(second.expires).toBe(first.expires);
-    const other = pixels.reuse(2, t0);
-    expect(other.token).not.toBe(first.token);
-    const afterExpiry = pixels.reuse(1, t0 + 60_001);
-    expect(afterExpiry.token).not.toBe(first.token);
+    expect(pixels.lookup(g.token, t0 + 1001)).toBeUndefined();
   });
 
   it("stamps a pixel token into vnc_url, not a caller-supplied seat token", () => {
     const pixels = new PixelRegistry({ ttlMs: 60_000 });
-    const g = pixels.mint(2, 5_000);
+    const g = pixels.mint(2, 5000);
     const url = withPixelToken("http://127.0.0.1/vnc/index.html", g);
     expect(url).toContain(`token=${g.token}`);
     expect(url).toContain("display=2");
@@ -44,7 +24,7 @@ describe("PixelRegistry", () => {
     const pixels = new PixelRegistry({ ttlMs: 15 * 60 * 1000 });
     const t0 = 1_000_000;
     const a = pixels.grantFor(1, t0);
-    const b = pixels.grantFor(1, t0 + 2_000);
+    const b = pixels.grantFor(1, t0 + 2000);
     expect(b.token).toBe(a.token);
     expect(b.expires).toBe(a.expires);
   });

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { ACTION_TYPES, ComputerError, type Action, type ActionType } from "@computer/shared";
+import { ACTION_TYPES, ComputerError } from "@computer/shared";
+import type { Action, ActionType } from "@computer/shared";
 
 /**
  * The approval gate, in the hub.
@@ -17,14 +18,14 @@ import { ACTION_TYPES, ComputerError, type Action, type ActionType } from "@comp
  * command and owns the logic there.
  *
  * FAIL CLOSED. A check that times out, crashes, prints garbage, or does not
- * exist DENIES — the inverse of a hook system that treats a broken hook as
+ * exist DENIES: the inverse of a hook system that treats a broken hook as
  * consent. A rule that would rather be skipped than block says `fail_open`
  * out loud.
  */
 
-export type PolicyDecision = "allow" | "ask" | "deny";
+type PolicyDecision = "allow" | "ask" | "deny";
 
-export type PolicyRule = {
+export interface PolicyRule {
   /** Names the rule in the denial the model and human see. */
   id: string;
   /** Which tool this rule guards. */
@@ -38,7 +39,7 @@ export type PolicyRule = {
   /**
    * Ask a command instead. It gets the request as JSON on stdin and must
    * print {"decision":"allow"|"ask"|"deny","reason"?:string} on stdout.
-   * Anything else — non-zero exit, unparseable output, timeout, ENOENT —
+   * Anything else: non-zero exit, unparseable output, timeout, ENOENT,
    * is a denial unless fail_open.
    */
   check?: string[];
@@ -46,15 +47,19 @@ export type PolicyRule = {
   fail_open?: boolean;
   /** What to tell the human. Defaults to the rule id. */
   reason?: string;
-};
+}
 
-export type PolicyVerdict = { decision: PolicyDecision; rule: string; reason: string };
+export interface PolicyVerdict {
+  decision: PolicyDecision;
+  rule: string;
+  reason: string;
+}
 
 export type PolicyRequest =
   | { tool: "computer"; action: Action }
   | { tool: "shell"; argv: string[]; cwd: string };
 
-const ALLOWED: PolicyVerdict = { decision: "allow", rule: "", reason: "" };
+const ALLOWED: PolicyVerdict = { decision: "allow", reason: "", rule: "" };
 const CHECK_TIMEOUT_MS = 5000;
 
 export class PolicyService {
@@ -75,10 +80,16 @@ export class PolicyService {
   async evaluate(req: PolicyRequest): Promise<PolicyVerdict> {
     let asked: PolicyVerdict | undefined;
     for (const rule of this.rules) {
-      if (!matches(rule, req)) continue;
+      if (!matches(rule, req)) {
+        continue;
+      }
       const verdict = await this.decide(rule, req);
-      if (verdict.decision === "deny") return verdict;
-      if (verdict.decision === "ask" && !asked) asked = verdict;
+      if (verdict.decision === "deny") {
+        return verdict;
+      }
+      if (verdict.decision === "ask" && !asked) {
+        asked = verdict;
+      }
     }
     return asked ?? ALLOWED;
   }
@@ -86,13 +97,15 @@ export class PolicyService {
   private async decide(rule: PolicyRule, req: PolicyRequest): Promise<PolicyVerdict> {
     const reason = rule.reason ?? rule.id;
     if (!rule.check) {
-      return { decision: rule.decision ?? "deny", rule: rule.id, reason };
+      return { decision: rule.decision ?? "deny", reason, rule: rule.id };
     }
     const out = await runCheck(rule.check, req, this.checkTimeoutMs);
     if (out.decision) {
-      return { decision: out.decision, rule: rule.id, reason: out.reason ?? reason };
+      return { decision: out.decision, reason: out.reason ?? reason, rule: rule.id };
     }
-    if (rule.fail_open) return ALLOWED;
+    if (rule.fail_open) {
+      return ALLOWED;
+    }
     return {
       decision: "deny",
       rule: rule.id,
@@ -109,26 +122,32 @@ export class PolicyService {
 export function loadPolicy(path: string): PolicyService {
   let raw: string;
   try {
-    raw = readFileSync(path, "utf8");
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return new PolicyService();
-    throw new Error(`policy ${path} could not be read (${(err as Error).message})`);
+    raw = readFileSync(path, "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new PolicyService();
+    throw new Error(`policy ${path} could not be read (${(error as Error).message})`, {
+      cause: error,
+    });
   }
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch (err) {
-    throw new Error(`policy ${path} is not valid JSON (${(err as Error).message})`);
+  } catch (error) {
+    throw new Error(`policy ${path} is not valid JSON (${(error as Error).message})`, {
+      cause: error,
+    });
   }
   if (!Array.isArray(parsed)) {
-    throw new Error(`policy ${path} must be a JSON array of rules`);
+    throw new TypeError(`policy ${path} must be a JSON array of rules`);
   }
   return new PolicyService(parsed as PolicyRule[]);
 }
 
 function validateRule(rule: PolicyRule, i: number): PolicyRule {
   const at = `policy rule ${rule?.id ?? `#${i}`}`;
-  if (!rule || typeof rule.id !== "string" || !rule.id) throw new Error(`${at}: id is required`);
+  if (!rule || typeof rule.id !== "string" || !rule.id) {
+    throw new Error(`${at}: id is required`);
+  }
   if (rule.tool !== "computer" && rule.tool !== "shell") {
     throw new Error(`${at}: tool must be computer or shell`);
   }
@@ -146,25 +165,39 @@ function validateRule(rule: PolicyRule, i: number): PolicyRule {
     throw new Error(`${at}: unknown action ${rule.action}`);
   }
   if (rule.argv !== undefined) {
-    try {
-      new RegExp(rule.argv);
-    } catch (err) {
-      throw new Error(`${at}: argv is not a valid regex (${(err as Error).message})`);
-    }
+    argvPattern(at, rule.argv);
   }
   return rule;
 }
 
+function argvPattern(at: string, argv: string): RegExp {
+  try {
+    return new RegExp(argv);
+  } catch (error) {
+    throw new Error(`${at}: argv is not a valid regex (${(error as Error).message})`, {
+      cause: error,
+    });
+  }
+}
+
 function matches(rule: PolicyRule, req: PolicyRequest): boolean {
-  if (rule.tool !== req.tool) return false;
-  if (req.tool === "computer") return !rule.action || rule.action === req.action.type;
+  if (rule.tool !== req.tool) {
+    return false;
+  }
+  if (req.tool === "computer") {
+    return !rule.action || rule.action === req.action.type;
+  }
   return !rule.argv || new RegExp(rule.argv).test(req.argv.join(" "));
 }
 
-type CheckOutput = { decision?: PolicyDecision; reason?: string; error?: string };
+interface CheckOutput {
+  decision?: PolicyDecision;
+  reason?: string;
+  error?: string;
+}
 
 /**
- * Run one check command on the host — not in the desk container, which is the
+ * Run one check command on the host, not in the desk container, which is the
  * thing being gated. Every failure path returns `error` and no decision, so
  * the caller denies.
  */
@@ -173,14 +206,16 @@ function runCheck(argv: string[], req: PolicyRequest, timeoutMs: number): Promis
     let child;
     try {
       child = spawn(argv[0]!, argv.slice(1), { stdio: ["pipe", "pipe", "pipe"] });
-    } catch (err) {
-      resolve({ error: (err as Error).message });
+    } catch (error) {
+      resolve({ error: (error as Error).message });
       return;
     }
     const out: Buffer[] = [];
     let settled = false;
     const done = (result: CheckOutput) => {
-      if (settled) return;
+      if (settled) {
+        return;
+      }
       settled = true;
       clearTimeout(timer);
       resolve(result);
@@ -203,7 +238,7 @@ function runCheck(argv: string[], req: PolicyRequest, timeoutMs: number): Promis
       }
       let parsed: unknown;
       try {
-        parsed = JSON.parse(Buffer.concat(out).toString("utf8"));
+        parsed = JSON.parse(Buffer.concat(out).toString("utf-8"));
       } catch {
         done({ error: "output was not JSON" });
         return;
@@ -223,7 +258,7 @@ export function deniedError(v: PolicyVerdict): ComputerError {
   return new ComputerError(
     "DENIED",
     v.decision === "ask"
-      ? `${v.rule}: this needs the human to approve it — ask them, do not retry (${v.reason})`
+      ? `${v.rule}: this needs the human to approve it, ask them, do not retry (${v.reason})`
       : `${v.rule}: ${v.reason}`,
   );
 }

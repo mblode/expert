@@ -1,6 +1,6 @@
 #!/bin/bash
-# stop-window N — release window index N: kill its Xvfb + x11vnc and
-# clear its entry in /workspace/.window-assignments.json.
+# stop-window N — release window index N: stop its Chromium, x11vnc and
+# Xvfb, and clear its entry in /workspace/.window-assignments.json.
 set -euo pipefail
 
 N="${1:?usage: stop-window N}"
@@ -14,15 +14,27 @@ ASSIGN="/workspace/.window-assignments.json"
 LOCK="/workspace/.window-assignments.lock"
 TOKEN_DIR="${COMPUTER_VNC_TOKEN_DIR:-/tmp/computer-vnc}"
 
-# Kill this window's X server and its view-only x11vnc; openbox and
-# chromium exit with their display.
-pkill -f "Xvfb :$N " >/dev/null 2>&1 || true
+# Chromium first, and gently: it does not reliably exit when its X server
+# goes away, and a survivor keeps the profile's SingletonLock so the next
+# window on this profile defers to a zombie. Then the viewer, then the server.
+PROFILE="$HOME/.config/chromium"
+if (( N != 1 )); then PROFILE="$HOME/.config/chromium-$N"; fi
+pkill -TERM -f -- "--user-data-dir=$PROFILE " >/dev/null 2>&1 || true
+for _ in $(seq 1 20); do
+  pgrep -f -- "--user-data-dir=$PROFILE " >/dev/null 2>&1 || break
+  sleep 0.1
+done
+pkill -KILL -f -- "--user-data-dir=$PROFILE " >/dev/null 2>&1 || true
 pkill -f "x11vnc -display :$N " >/dev/null 2>&1 || true
+# openbox exits with its X server.
+pkill -f "Xvfb :$N " >/dev/null 2>&1 || true
 rm -f "/tmp/.X11-unix/X$N" "/tmp/.X$N-lock" "$TOKEN_DIR/$N" >/dev/null 2>&1 || true
 
-exec 9>"$LOCK"
-flock 9
-python3 - "$ASSIGN" "$N" <<'PY'
+# Same subshell discipline as start-window: nothing may inherit the lock fd.
+(
+  exec 9>"$LOCK"
+  flock 9
+  python3 - "$ASSIGN" "$N" <<'PY'
 import json, sys
 path, n = sys.argv[1], sys.argv[2]
 try:
@@ -34,5 +46,6 @@ data.pop(n, None)
 with open(path, "w") as f:
     json.dump(data, f, indent=2, sort_keys=True)
 PY
+)
 
 echo "window $N stopped"

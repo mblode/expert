@@ -16,11 +16,11 @@ const hubUrl = process.env.COMPUTER_URL ?? `http://127.0.0.1:${hubPort}`;
 const botsRoot = resolve(process.env.COMPUTER_EVE_BOTS ?? join(repoRoot, "apps/eve/bots"));
 
 startEveProcesses({
-  roster,
   botsRoot,
-  hubUrl,
   eveSecret,
+  hubUrl,
   logDir: join(dataDir, "eve-logs"),
+  roster,
 });
-// Secret stays on the volume (`eve-secret`). Do not print it — the
+// Secret stays on the volume (`eve-secret`). Do not print it: the
 // guest entrypoint reads the file so start logs cannot pollute the env.

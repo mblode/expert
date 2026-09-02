@@ -9,14 +9,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^2.10.0",
     "@computer/proto": "*",
     "@computer/shared": "*",
     "@novnc/novnc": "^1.6.0",
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "@types/node": "^22.16.5",
+    "@types/node": "24.x",
     "@types/ws": "^8.18.1",
     "tsx": "^4.20.3",
     "typescript": "^5.8.3",

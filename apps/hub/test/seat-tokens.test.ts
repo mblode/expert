@@ -9,7 +9,9 @@ import { rpc, startHub } from "./helper.ts";
 describe("paired seats survive a restart", () => {
   const dirs: string[] = [];
   afterEach(() => {
-    while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
+    while (dirs.length) {
+      rmSync(dirs.pop()!, { recursive: true, force: true });
+    }
   });
 
   const tempDir = (): string => {
@@ -57,8 +59,9 @@ describe("paired seats survive a restart", () => {
     const dir = join(tempDir(), "data");
     const path = join(dir, "seats.json");
     new FileSeatTokenStore(path).save(["tok"]);
-    expect(statSync(path).mode & 0o777).toBe(0o600);
-    expect(statSync(dir).mode & 0o777).toBe(0o700);
+    const perms = (p: string) => statSync(p).mode.toString(8).slice(-3);
+    expect(perms(path)).toBe("600");
+    expect(perms(dir)).toBe("700");
   });
 
   it("round-trips, and only a missing file reads as unpaired", () => {
@@ -83,12 +86,12 @@ describe("paired seats survive a restart", () => {
 
   it("mints through the store, so a token is on disk before it is handed out", () => {
     const seats = new MemorySeatTokenStore();
-    const auth = new AuthRegistry({ setupCode: "s", agentTokens: () => [], seats });
+    const auth = new AuthRegistry({ agentTokens: () => [], seats, setupCode: "s" });
     const token = auth.pair("s");
     expect(seats.load()).toContain(token);
     // A second registry over the same store starts already knowing it.
     expect(
-      new AuthRegistry({ setupCode: "s", agentTokens: () => [], seats }).hasSeatToken(token),
+      new AuthRegistry({ agentTokens: () => [], seats, setupCode: "s" }).hasSeatToken(token),
     ).toBe(true);
   });
 });

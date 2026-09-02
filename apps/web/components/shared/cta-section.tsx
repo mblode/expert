@@ -17,7 +17,10 @@ export function CtaSection(): React.ReactElement {
         </Link>
       </div>
       <div className="relative mt-4 flex justify-center">
-        <Link className="text-sm text-white/70 transition-colors hover:text-white" href={siteConfig.links.login}>
+        <Link
+          className="text-sm text-white/70 transition-colors hover:text-white"
+          href={siteConfig.links.login}
+        >
           Sign in
         </Link>
       </div>

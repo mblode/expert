@@ -22,22 +22,30 @@ describe("the voice", () => {
 
   it("text does not end the turn, so long work can be several bubbles", async () => {
     const { v } = voice();
-    expect((await v.send({ kind: "text", text: "on it" })).turn_ended).toBe(false);
-    expect((await v.send({ kind: "text", text: "done" })).turn_ended).toBe(false);
+    const first = await v.send({ kind: "text", text: "on it" });
+    const second = await v.send({ kind: "text", text: "done" });
+    expect(first.turn_ended).toBe(false);
+    expect(second.turn_ended).toBe(false);
     expect(v.page().entries.map((o) => o.kind)).toEqual(["text", "text"]);
   });
 
   it("a widget ends the turn and a second send is rejected", async () => {
     const { v } = voice();
-    const r = await v.send({ kind: "widget", prompt: "Which?", options: ["a", "b"] });
+    const r = await v.send({ kind: "widget", options: ["a", "b"], prompt: "Which?" });
     expect(r.turn_ended).toBe(true);
-    await expect(v.send({ kind: "text", text: "and another thing" })).rejects.toThrow(ComputerError);
+    await expect(v.send({ kind: "text", text: "and another thing" })).rejects.toThrow(
+      ComputerError,
+    );
     await expect(v.send({ kind: "text", text: "and another thing" })).rejects.toThrow(/turn ended/);
   });
 
   it("answering the widget re-opens the turn and records the choice", async () => {
     const { v } = voice();
-    const { occurrence_id } = await v.send({ kind: "widget", prompt: "Which?", options: ["a", "b"] });
+    const { occurrence_id } = await v.send({
+      kind: "widget",
+      options: ["a", "b"],
+      prompt: "Which?",
+    });
     v.answerWidget(occurrence_id, "b");
     const w = v.page().entries.find((o) => o.id === occurrence_id);
     expect(w?.kind === "widget" && w.answer).toBe("b");
@@ -46,23 +54,23 @@ describe("the voice", () => {
 
   it("rejects a widget answer that was never offered", async () => {
     const { v } = voice();
-    const { occurrence_id } = await v.send({ kind: "widget", prompt: "Which?", options: ["a"] });
+    const { occurrence_id } = await v.send({ kind: "widget", options: ["a"], prompt: "Which?" });
     expect(() => v.answerWidget(occurrence_id, "z")).toThrow(/one of the offered options/);
   });
 
   it("enforces 1..6 widget options", async () => {
     const { v } = voice();
-    await expect(v.send({ kind: "widget", prompt: "p", options: [] })).rejects.toThrow(/1\.\.6/);
+    await expect(v.send({ kind: "widget", options: [], prompt: "p" })).rejects.toThrow(/1\.\.6/);
     const seven = ["1", "2", "3", "4", "5", "6", "7"];
-    await expect(v.send({ kind: "widget", prompt: "p", options: seven })).rejects.toThrow(/1\.\.6/);
+    await expect(v.send({ kind: "widget", options: seven, prompt: "p" })).rejects.toThrow(/1\.\.6/);
   });
 
   it("a secret goes to the clipboard and nowhere the model can read it", async () => {
     const { desk, v } = voice();
     const { occurrence_id, turn_ended } = await v.send({
       kind: "secret_request",
-      prompt: "GitHub is asking for your 2FA code",
       label: "2FA code",
+      prompt: "GitHub is asking for your 2FA code",
     });
     expect(turn_ended).toBe(true);
     expect(v.secretPending()).toBe(true);
@@ -79,12 +87,28 @@ describe("the voice", () => {
     expect(s?.kind === "secret_request" && s.provided).toBe(true);
   });
 
+  it("a delivered secret request cannot be replayed", async () => {
+    const { desk, v } = voice();
+    const { occurrence_id } = await v.send({
+      kind: "secret_request",
+      label: "2FA code",
+      prompt: "GitHub is asking for your 2FA code",
+    });
+    await v.provideSecret(occurrence_id, "424242");
+    // The clipboard is not rewritten and the turn is not re-opened twice.
+    await expect(v.provideSecret(occurrence_id, "999999")).rejects.toMatchObject({
+      code: "CONFLICT",
+    });
+    expect(desk.clipboard).toBe("424242");
+    expect(v.page().entries.filter((o) => o.kind === "human")).toHaveLength(1);
+  });
+
   it("the secret leaves the clipboard once the paste window closes", async () => {
     const { desk, v } = voice(0);
     const { occurrence_id } = await v.send({
       kind: "secret_request",
-      prompt: "GitHub is asking for your 2FA code",
       label: "2FA code",
+      prompt: "GitHub is asking for your 2FA code",
     });
     await v.provideSecret(occurrence_id, "424242");
     // There to be pasted...
@@ -99,8 +123,8 @@ describe("the voice", () => {
     const { desk, v } = voice(0);
     const { occurrence_id } = await v.send({
       kind: "secret_request",
-      prompt: "GitHub is asking for your 2FA code",
       label: "2FA code",
+      prompt: "GitHub is asking for your 2FA code",
     });
     await v.provideSecret(occurrence_id, "424242");
     // The agent pasted, then copied something of its own. That copy is not
@@ -112,7 +136,9 @@ describe("the voice", () => {
 
   it("pages with a cursor rather than replaying the whole log", async () => {
     const { v } = voice();
-    for (let i = 0; i < 5; i++) await v.send({ kind: "text", text: `m${i}` });
+    for (let i = 0; i < 5; i++) {
+      await v.send({ kind: "text", text: `m${i}` });
+    }
     const first = v.page(undefined, 2);
     expect(first.entries).toHaveLength(2);
     expect(first.next_cursor).toBe("2");
@@ -125,11 +151,13 @@ describe("the voice", () => {
 
   it("parses the wire body and rejects an unknown kind", () => {
     expect(parseSendBody({ kind: "text", text: "hi" })).toEqual({
+      images: undefined,
       kind: "text",
       text: "hi",
-      images: undefined,
     });
-    expect(() => parseSendBody({ kind: "shout", text: "hi" })).toThrow(/text, widget or secret_request/);
+    expect(() => parseSendBody({ kind: "shout", text: "hi" })).toThrow(
+      /text, widget or secret_request/,
+    );
     expect(() => parseSendBody("hi")).toThrow(/must be an object/);
   });
 });

@@ -37,12 +37,12 @@ If Status returns `UNAUTHENTICATED`, the web app reconnects (`POST /api/computer
 
 ## Persistence (tell the user the truth)
 
-| Path | Survives rebuild / `fly deploy` |
-|---|---|
-| `/workspace` | yes |
-| `~/.config` | yes |
-| hub roster (`/workspace/.computer`) | yes |
-| `apt` packages, `~/.local/state` | no |
+| Path                                | Survives rebuild / `fly deploy` |
+| ----------------------------------- | ------------------------------- |
+| `/workspace`                        | yes                             |
+| `~/.config`                         | yes                             |
+| hub roster (`/workspace/.computer`) | yes                             |
+| `apt` packages, `~/.local/state`    | no                              |
 
 Status and `GET /roster` do not wake a sleeping guest.
 
