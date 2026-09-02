@@ -11,36 +11,34 @@ import { Reveal } from "./reveal";
 
 const howItWorks = [
   {
-    body: "That is install for humans. Email a one-time code. The web server attaches you to the computer. You never type a setup code.",
+    body: "Email a code. That is the whole install.",
     step: "01",
-    title: "Sign in at hello.expert",
+    title: "Sign in",
   },
   {
-    body: `Paste \`${siteConfig.installCommand}\` into Claude, Codex, OpenCode, or Cursor. One skill from this domain.`,
+    body: "Eve works on the computer. You watch.",
     step: "02",
-    title: "Add the agent skill",
+    title: "Talk to Eve",
   },
   {
-    body: "Watch the desk. When you or the agent needs the box, a signed-in session can drive it through Seat RPCs. The skill cannot move the pointer without that session.",
+    body: "Web, desktop, or iPhone. Same desk.",
     step: "03",
-    title: "Take the seat",
+    title: "Use it anywhere",
   },
 ];
 
 const who = [
   {
-    description: "A standing Linux box you can watch and take over. Sign in. That is the product.",
-    role: "For you",
+    description: "The Vercel agent. Already on the computer, ready to work.",
+    role: "Eve",
   },
   {
-    description:
-      "One skill from hello.expert. After you are signed in, it uses the hub, never an invented pairing code, never a guessed setup code.",
-    role: "For your agent",
+    description: "A real screen you can see and take over.",
+    role: "The computer",
   },
   {
-    description:
-      "/workspace and ~/.config persist. The desk sleeps after idle and wakes when you use it. Status does not wake the guest.",
-    role: "For the work",
+    description: "Web, desktop, and iOS. Sign in once.",
+    role: "Every device",
   },
 ];
 
@@ -63,12 +61,11 @@ export function MarketingHome(): React.ReactElement {
             />
             <div className="relative mx-auto max-w-2xl px-4 text-center sm:px-6">
               <h1 className="text-balance font-display text-5xl font-light tracking-tight sm:text-6xl sm:tracking-[-0.03em]">
-                The Linux computer your AI agent uses.
+                Eve and a computer.
               </h1>
               <Reveal delay={0.35}>
                 <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-lg text-muted-foreground">
-                  A standing Linux computer your agents drive. Sign in at hello.expert, that is
-                  install. Then add the skill so your agent can take the seat.
+                  Vercel Eve, on a computer you can see. Same computer on the web, desktop, and iOS.
                 </p>
               </Reveal>
               <Reveal delay={0.5}>
