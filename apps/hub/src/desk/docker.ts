@@ -475,14 +475,27 @@ class Sink {
  * nothing else.
  */
 function localEnv(display: number): NodeJS.ProcessEnv {
-  const home = process.env.HOME ?? "/home/box";
   return {
+    ...boxLogin(),
     DISPLAY: `:${display}`,
-    HOME: home,
     LANG: process.env.LANG ?? "C.UTF-8",
-    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
     TERM: "dumb",
-    USER: process.env.USER ?? "box",
+  };
+}
+
+/**
+ * The login a desk child sees. Under the uid split the hub's own HOME is its
+ * 0700 state dir and its USER is `hub`; handing those to a child that runs
+ * as box would point every tool that touches `~` at a directory it cannot
+ * write. So the login follows `COMPUTER_RUN_AS`, and only falls back to the
+ * hub's when there is no split (`npm run up`, tests).
+ */
+export function boxLogin(): { HOME: string; PATH: string; USER: string } {
+  const user = process.env.COMPUTER_RUN_AS;
+  return {
+    HOME: user ? `/home/${user}` : (process.env.HOME ?? "/home/box"),
+    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+    USER: user ?? process.env.USER ?? "box",
   };
 }
 

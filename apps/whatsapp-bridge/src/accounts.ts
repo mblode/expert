@@ -67,13 +67,21 @@ export interface AccountsFile {
   accounts: AccountRecord[];
 }
 
+/**
+ * The link contract's states, the ones the hub's `WhatsAppStatus` and the
+ * Channels page know. Never a raw Baileys connection state (`close`,
+ * `connecting`): the page has no branch for those and rendered nothing while
+ * a linked number was reconnecting.
+ */
+export type LinkStatus = "unlinked" | "linking" | "open" | "closed";
+
 /** What GET /accounts returns: everything but the secret. */
 export interface AccountSummary {
   acct: string;
   bot: string;
   phone: string | null;
   channel_id: string;
-  status: string;
+  status: LinkStatus;
   display_name?: string;
 }
 

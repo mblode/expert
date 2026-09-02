@@ -67,7 +67,7 @@ const fakeAccount = (acct: string, overrides: Partial<FakeAccount> = {}): FakeAc
     health: { acct, attempts: 0, failingSince: null, lastCloseCode: null, whatsapp: "connecting" },
     link: { acct, age_ms: 1200, pairing_code: null, phone: null, qr: QR, status: "linking" },
     sends,
-    summary: { acct, bot: acct, channel_id: `whatsapp-${acct}`, phone: null, status: "connecting" },
+    summary: { acct, bot: acct, channel_id: `whatsapp-${acct}`, phone: null, status: "linking" },
     ...overrides,
   };
 };
@@ -223,7 +223,7 @@ test("GET /accounts lists summaries and never the channel secret", async () => {
   assert.equal(raw.includes("secret"), false);
   assert.deepEqual(JSON.parse(raw), {
     accounts: [
-      { acct: "main", bot: "main", channel_id: "whatsapp-main", phone: null, status: "connecting" },
+      { acct: "main", bot: "main", channel_id: "whatsapp-main", phone: null, status: "linking" },
     ],
   });
 });

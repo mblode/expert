@@ -32,7 +32,7 @@ import type {
 import type { Logger } from "pino";
 
 import { authDir } from "./accounts.ts";
-import type { AccountConfig, AccountRecord, AccountSummary } from "./accounts.ts";
+import type { AccountConfig, AccountRecord, AccountSummary, LinkStatus } from "./accounts.ts";
 import { createCacheStore, createSentStore } from "./baileys-cache.ts";
 import { boundedMap, boundedSet } from "./bounded-set.ts";
 import {
@@ -118,7 +118,7 @@ export interface AccountHealth {
 /** Pairing state for GET /accounts/:acct/link. */
 export interface LinkState {
   acct: string;
-  status: "unlinked" | "linking" | "open" | "closed";
+  status: LinkStatus;
   /** Raw Baileys QR string, held only while linking without a phone. */
   qr: string | null;
   /** The 8-character code from requestPairingCode, held only while linking with a phone. */
@@ -2062,7 +2062,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     bot: record.bot,
     channel_id: record.channel_id,
     phone: record.phone,
-    status: health().whatsapp,
+    status: linkState().status,
     ...(displayName ? { display_name: displayName } : {}),
   });
 
