@@ -39,7 +39,7 @@ export interface ConnectionView {
 
 export interface ConnectionFailure {
   error: string;
-  status: 400 | 404 | 409;
+  status: 400 | 404 | 409 | 502;
 }
 
 export function isAuthKind(value: string): value is AuthKind {

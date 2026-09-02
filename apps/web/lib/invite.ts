@@ -51,9 +51,19 @@ export function hashInviteSender(sender: string): string {
   return sha256Hex(sender);
 }
 
+/**
+ * Eve's client sends `{ kind: "desk" | "plugin" }`. Operators still send
+ * `purpose`. Singular `plugin` is the public name; the path stays `/plugins`.
+ */
+export function resolveInvitePurpose(input: { kind?: string; purpose?: string }): string {
+  const raw = (input.purpose ?? input.kind ?? "").trim();
+  return raw === "plugin" ? "plugins" : raw;
+}
+
 export function planInvite(
   input: {
     computerId?: string;
+    kind?: string;
     purpose?: string;
     sender?: string;
     ttlMinutes?: number;
@@ -61,7 +71,7 @@ export function planInvite(
   env: EnvMap,
   now: number,
 ): InviteDraft | RedeemFailure {
-  const purpose = (input.purpose ?? "").trim();
+  const purpose = resolveInvitePurpose(input);
   if (!isInvitePurpose(purpose)) {
     return { error: "Say whether this link is for the desk or for plugins.", status: 400 };
   }

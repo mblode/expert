@@ -67,6 +67,25 @@ describe("planInvite", () => {
     });
   });
 
+  it("accepts Eve's kind field and maps plugin to the plugins path purpose", () => {
+    const desk = planInvite({ kind: "desk" }, env(), now);
+    expect(desk).not.toHaveProperty("error");
+    if ("error" in desk) {
+      return;
+    }
+    expect(desk.purpose).toBe("desk");
+
+    const plugin = planInvite({ kind: "plugin" }, env(), now);
+    expect(plugin).not.toHaveProperty("error");
+    if ("error" in plugin) {
+      return;
+    }
+    expect(plugin.purpose).toBe("plugins");
+
+    expect(planInvite({ kind: "widgets" }, env(), now)).toMatchObject({ status: 400 });
+    expect(planInvite({ purpose: "plugin" }, env(), now)).not.toHaveProperty("error");
+  });
+
   it("rejects a TTL of days and stores a hashed sender, not the raw one", () => {
     expect(planInvite({ purpose: "desk", ttlMinutes: 0 }, env(), now)).toMatchObject({
       status: 400,

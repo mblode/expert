@@ -11,7 +11,7 @@ import {
   isInvitePurpose,
   planInvite,
 } from "./invite";
-import type { InvitePurpose, InviteRecord, RedeemFailure, SeatGrant } from "./invite";
+import type { InviteDraft, InvitePurpose, InviteRecord, RedeemFailure, SeatGrant } from "./invite";
 import { inviteOrigin, invitePath } from "./invite-origin";
 
 export interface MintedInvite {
@@ -61,9 +61,23 @@ async function byTokenHash(tokenHash: string): Promise<InviteRecord | undefined>
   }
 }
 
+export function mintedInviteFromDraft(
+  planned: InviteDraft,
+  request: Request | undefined,
+  env: EnvMap = process.env,
+): MintedInvite {
+  return {
+    computerId: planned.computerId,
+    expiresAt: new Date(planned.expiresAt).toISOString(),
+    purpose: planned.purpose,
+    url: `${inviteOrigin(request, env)}${invitePath(planned.purpose, planned.token)}`,
+  };
+}
+
 export async function mintStoredInvite(
   input: {
     computerId?: string;
+    kind?: string;
     purpose?: string;
     sender?: string;
     ttlMinutes?: number;
@@ -90,12 +104,7 @@ export async function mintStoredInvite(
   } catch {
     return { error: "Could not save the invite.", status: 502 };
   }
-  return {
-    computerId: planned.computerId,
-    expiresAt: new Date(planned.expiresAt).toISOString(),
-    purpose: planned.purpose,
-    url: `${inviteOrigin(request)}${invitePath(planned.purpose, planned.token)}`,
-  };
+  return mintedInviteFromDraft(planned, request, env);
 }
 
 /** Validate the link and name the computer. Does not Pair: plugins are files. */

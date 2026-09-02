@@ -1,12 +1,13 @@
 import { siteConfig, trimSlashes } from "./config";
+import type { EnvMap } from "./computers";
 
 /** Public origin for an invite URL. Never includes the token. */
-export function inviteOrigin(request?: Request): string {
-  const configured = process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_SITE_URL;
+export function inviteOrigin(request?: Request, env: EnvMap = process.env): string {
+  const configured = env.BETTER_AUTH_URL ?? env.NEXT_PUBLIC_SITE_URL;
   if (configured) {
     return trimSlashes(configured);
   }
-  if (process.env.VERCEL_ENV === "production") {
+  if (env.VERCEL_ENV === "production") {
     return trimSlashes(siteConfig.url);
   }
   const forwarded = request?.headers.get("x-forwarded-host");

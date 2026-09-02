@@ -43,4 +43,16 @@ describe("installConnection", () => {
     expect(result.plugin.hasCredential).toBe(false);
     expect(result.plugin.path).toContain("/workspace/eve/bots/agent/connections/");
   });
+
+  it("fails the install when the guest write returns false", async () => {
+    const result = await installConnection({
+      authKind: "oauth",
+      url: "https://mcp.linear.app/mcp",
+      write: async () => false,
+    });
+    expect(result).toEqual({
+      error: "Could not write the plugin onto the computer.",
+      status: 502,
+    });
+  });
 });

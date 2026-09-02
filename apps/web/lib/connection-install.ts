@@ -7,10 +7,9 @@ export interface InstallResult {
 }
 
 /**
- * Author the Eve connection file and try to write it onto the guest
- * overlay. The guest write is still a stub: hello.expert has a seat
- * token, not an agent token, and Agent.WriteFile is the model's door.
- * The POST still returns the file-shaped view with no credential.
+ * Author the Eve connection file and write it onto the guest overlay.
+ * The write is Pair + CreateBot + Agent.WriteFile + DeleteBot: hello.expert
+ * holds a seat token, and WriteFile is the model's door.
  */
 export async function installConnection(input: {
   authKind?: string;
@@ -27,6 +26,9 @@ export async function installConnection(input: {
   let installed = false;
   if (input.write) {
     installed = await input.write(planned.guestPath, planned.source);
+    if (!installed) {
+      return { error: "Could not write the plugin onto the computer.", status: 502 };
+    }
   }
   return {
     installed,
