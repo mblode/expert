@@ -1,5 +1,5 @@
 ---
-description: How to drive this hub's screen with the computer tool: coordinates, batching, zoom, takeover, and error semantics. Load before any screen work.
+description: "How to drive this hub's screen with the computer tool: coordinates, batching, zoom, takeover, and error semantics. Load before any screen work."
 ---
 
 # Using my computer's screen
