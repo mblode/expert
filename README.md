@@ -10,7 +10,7 @@ Sign in, watch the screen, take over when the agent gets stuck, hand it back.
 
 ## Demo
 
-Sign in at [hello.expert](https://hello.expert) to watch the desk and talk to the agent. One deployment fronts one computer, and every account that signs in shares it.
+Sign in at [hello.expert](https://hello.expert) to watch the desk and talk to the agent. One Fly Machine per tenant: Matt's personal computer stays `mblode-computer`; VCMC is a second computer (`vcmc-computer`). Vibey is not on Matt's desk.
 
 ## Install
 
@@ -50,27 +50,38 @@ npm run bot -- rm night    # frees the screen
 
 ## Deploy
 
-The cloud path is one Fly Machine in `syd` running the desk, one agent process per Bot, and the hub, from [fly.toml](fly.toml):
+The cloud path is one Fly Machine per tenant in `syd` running the desk, one agent process per Bot, and the hub. Matt's guest is [fly.toml](fly.toml). A second tenant is a second app and volume, same guest image, from [fly.vcmc.toml](fly.vcmc.toml). Do not `fly deploy` without `-c` when you mean VCMC: that command targets `mblode-computer`.
 
 ```bash
-fly launch --copy-config --no-deploy          # change `app`; names are global
-fly volumes create computer_workspace --size 20 --region syd
+# Matt (existing)
 fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)"
 fly secrets set AI_GATEWAY_API_KEY="…"
 fly deploy
+
+# VCMC (separate app, volume, setup code)
+fly launch --copy-config --no-deploy -c fly.vcmc.toml
+fly volumes create vcmc_workspace --size 20 --region syd -c fly.vcmc.toml
+fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)" -c fly.vcmc.toml
+fly secrets set AI_GATEWAY_API_KEY="…" -c fly.vcmc.toml
+fly deploy -c fly.vcmc.toml
 ```
 
-The product web is `apps/web` on Vercel with Root Directory `apps/web`. Required variables:
+A later Eve tree that is not `apps/eve/bots/main` (the VCMC agent lives in its own repo) goes on that tenant's volume at `/workspace/eve/bots`. The guest prefers that overlay when it looks like an Eve project.
 
-| Variable                                 | Notes                                                                          |
-| ---------------------------------------- | ------------------------------------------------------------------------------ |
-| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it              |
-| `BETTER_AUTH_URL`                        | `https://hello.expert`                                                         |
-| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up, and every sign-up owns the computer |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                         |
-| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                                 |
-| `COMPUTER_SETUP_CODE`                    | Same secret as the Fly hub; server-only                                        |
-| `NEXT_PUBLIC_HUB_URL`                    | `https://mblode-computer.fly.dev`                                              |
+The product web is `apps/web` on Vercel with Root Directory `apps/web`. It is the control plane: a signed-in user is bound to a computer. Required variables:
+
+| Variable                                 | Notes                                                                       |
+| ---------------------------------------- | --------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it           |
+| `BETTER_AUTH_URL`                        | `https://hello.expert`                                                      |
+| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                   |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                      |
+| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                              |
+| `COMPUTER_SETUP_CODE`                    | Matt's Fly hub secret; server-only                                          |
+| `COMPUTER_SETUP_CODE_VCMC`               | VCMC's Fly hub secret; server-only. Not Matt's code                         |
+| `NEXT_PUBLIC_HUB_URL`                    | Fallback hub (`https://mblode-computer.fly.dev`) when a session has no bind |
+| `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers. Unset: every signed-in user                       |
+| `COMPUTER_BINDINGS`                      | Optional `email:matt,email:vcmc` default bind                               |
 
 Push the schema once with `cd apps/web && npx drizzle-kit push`. An always-on VPS is the alternative: [deploy/cloud-init.yaml](deploy/cloud-init.yaml).
 

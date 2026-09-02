@@ -1,6 +1,7 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 
+import { computer } from "../db/computer";
 import { computerSeat } from "../db/computer-seat";
 import * as schema from "../db/schema";
 
@@ -26,6 +27,7 @@ const client = createClient({
 export const db = drizzle(client, {
   schema: {
     ...schema,
+    computer,
     computerSeat,
   },
 });

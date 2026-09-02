@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "./components/ui/button";
+import { NativeSelect, NativeSelectOption } from "./components/ui/native-select";
 import { ConnectError } from "./components/connect-error";
 import { ChatPane } from "./components/chat-pane";
 import { DesktopPane } from "./components/desktop-pane";
@@ -18,6 +19,12 @@ import { createSeat, SeatError } from "./lib/seat";
 import type { BoxStatus } from "./lib/seat";
 import { clearSessions } from "./lib/storage";
 
+interface BoundSeat {
+  computerId: string;
+  hubUrl: string;
+  seatToken: string;
+}
+
 const POLL_MS = 2000;
 
 function signOut(): void {
@@ -29,7 +36,7 @@ function signOut(): void {
 /** The server page already required a session; this only reads the seat off it. */
 export function App(): React.ReactElement {
   const { data: session, isPending } = authClient.useSession();
-  const [recovered, setRecovered] = useState<{ hubUrl: string; seatToken: string } | null>(null);
+  const [recovered, setRecovered] = useState<BoundSeat | null>(null);
 
   useEffect(() => {
     if (!session?.user?.id) {
@@ -40,7 +47,13 @@ export function App(): React.ReactElement {
 
   const seat =
     recovered ??
-    (session?.seatToken ? { hubUrl: session.hubUrl, seatToken: session.seatToken } : null);
+    (session?.seatToken
+      ? {
+          computerId: session.computerId,
+          hubUrl: session.hubUrl,
+          seatToken: session.seatToken,
+        }
+      : null);
 
   if (isPending && !seat) {
     return <div className="h-full bg-ink" />;
@@ -63,6 +76,8 @@ export function App(): React.ReactElement {
 
   return (
     <Workspace
+      computerId={seat.computerId}
+      computers={session?.computers ?? []}
       connectEvent={recovered ? "computer_reconnected" : "computer_connected"}
       hubUrl={seat.hubUrl}
       key={seat.seatToken}
@@ -73,8 +88,23 @@ export function App(): React.ReactElement {
   );
 }
 
+function readSeat(body: unknown): BoundSeat | null {
+  if (!body || typeof body !== "object") {
+    return null;
+  }
+  const { computerId, hubUrl, seatToken } = body as {
+    computerId?: string;
+    hubUrl?: string;
+    seatToken?: string;
+  };
+  if (!hubUrl || !seatToken) {
+    return null;
+  }
+  return { computerId: computerId ?? "", hubUrl, seatToken };
+}
+
 /** Ask the web server to Pair again; it holds the setup code, the browser never does. */
-async function reconnect(): Promise<{ hubUrl: string; seatToken: string } | null> {
+async function reconnect(): Promise<BoundSeat | null> {
   const res = await fetch("/api/computer/reconnect", {
     headers: posthogForwardHeaders(),
     method: "POST",
@@ -82,23 +112,35 @@ async function reconnect(): Promise<{ hubUrl: string; seatToken: string } | null
   if (!res.ok) {
     return null;
   }
-  const body = (await res.json().catch(() => null)) as {
-    hubUrl?: string;
-    seatToken?: string;
-  } | null;
-  return body?.hubUrl && body.seatToken ? { hubUrl: body.hubUrl, seatToken: body.seatToken } : null;
+  return readSeat(await res.json().catch(() => null));
+}
+
+async function selectComputer(computerId: string): Promise<BoundSeat | null> {
+  const res = await fetch("/api/computer/select", {
+    body: JSON.stringify({ computerId }),
+    headers: { "content-type": "application/json", ...posthogForwardHeaders() },
+    method: "POST",
+  });
+  if (!res.ok) {
+    return null;
+  }
+  return readSeat(await res.json().catch(() => null));
 }
 
 function Workspace({
+  computerId,
+  computers,
   connectEvent,
   hubUrl,
   onRecovered,
   onSignOut,
   seatToken,
 }: {
+  computerId: string;
+  computers: { id: string; label: string }[];
   connectEvent: "computer_connected" | "computer_reconnected";
   hubUrl: string;
-  onRecovered: (seat: { hubUrl: string; seatToken: string }) => void;
+  onRecovered: (seat: BoundSeat) => void;
   onSignOut: () => void;
   seatToken: string;
 }): React.ReactElement {
@@ -108,8 +150,8 @@ function Workspace({
   const [offline, setOffline] = useState<string | null>(null);
 
   useEffect(() => {
-    captureEvent(connectEvent);
-  }, [connectEvent]);
+    captureEvent(connectEvent, { computer_id: computerId });
+  }, [computerId, connectEvent]);
 
   const recoverSeat = useCallback(async () => {
     const next = await reconnect();
@@ -119,6 +161,19 @@ function Workspace({
     }
     onRecovered(next);
   }, [onRecovered]);
+
+  const switchComputer = useCallback(
+    async (nextId: string) => {
+      if (nextId === computerId) {
+        return;
+      }
+      const next = await selectComputer(nextId);
+      if (next) {
+        onRecovered(next);
+      }
+    },
+    [computerId, onRecovered],
+  );
 
   useEffect(() => {
     let live = true;
@@ -153,6 +208,24 @@ function Workspace({
     <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
       <header className="flex items-center gap-3 border-b border-edge px-3 py-2">
         <h1 className="text-sm font-semibold">{siteConfig.name}</h1>
+        {computers.length > 1 && (
+          <div className="w-36">
+            <NativeSelect
+              aria-label="Computer"
+              onChange={(event) => {
+                void switchComputer(event.target.value);
+              }}
+              size="sm"
+              value={computerId}
+            >
+              {computers.map((item) => (
+                <NativeSelectOption key={item.id} value={item.id}>
+                  {item.label}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </div>
+        )}
         {offline && <output className="truncate text-xs text-red-300">{offline}</output>}
         <Button className="ml-auto" onClick={onSignOut} size="xs" type="button" variant="outline">
           Sign out

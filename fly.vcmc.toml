@@ -1,12 +1,15 @@
-# Matt's cloud computer — one Fly Machine in syd. Eve, desk, and hub share it.
-# Eve is a child of this guest (loopback), not a Vercel app and not a
-# second Fly process group.
+# VCMC tenant guest. Same image as fly.toml (desk + hub + Eve runner).
+# Deploy only with this file so `fly deploy` from the repo root still
+# targets Matt's app and cannot mutate mblode-computer:
+#   fly volumes create vcmc_workspace --size 20 --region syd -c fly.vcmc.toml
+#   fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)" -c fly.vcmc.toml
+#   fly deploy -c fly.vcmc.toml
 #
-# A second tenant is a second app: see fly.vcmc.toml. `fly deploy` without
-# `-c` targets this file only and must not be pointed at vcmc-computer.
-# One computer Machine. Volumes do not replicate; do not scale the guest out.
+# Pairing code is this Machine's secret, not Matt's. Volume is this app's.
+# A later Eve tree (vcmc-agent) goes on the volume at /workspace/eve/bots
+# (standalone Eve app or bots/main). Do not copy that source into this repo.
 
-app = "mblode-computer"
+app = "vcmc-computer"
 primary_region = "syd"
 
 [build]
@@ -21,7 +24,6 @@ COMPUTER_BIND = "0.0.0.0"
 COMPUTER_PORT = "8080"
 COMPUTER_URL = "http://127.0.0.1:8080"
 HOME = "/home/box"
-# 20 minutes. Not Sprites' 30s — a desktop cannot hibernate that fast.
 COMPUTER_IDLE_SUSPEND_SEC = "1200"
 COMPUTER_VNC_TTL_SEC = "900"
 COMPUTER_NOVNC_BASE = "6080"
@@ -30,6 +32,7 @@ COMPUTER_DESK = "local"
 COMPUTER_DATA = "/workspace/.computer/bots.json"
 COMPUTER_VNC_HOST = "127.0.0.1"
 COMPUTER_VNC_PORT = "5900"
+# Image default until /workspace/eve/bots is populated; then the overlay wins.
 COMPUTER_EVE_BOTS = "/opt/computer/apps/eve/bots"
 
 [http_service]
@@ -52,15 +55,11 @@ method = "GET"
 path = "/healthz"
 timeout = "5s"
 
-# One volume: /workspace (desk files, .computer roster/tokens, Eve secret).
 [[mounts]]
-source = "computer_workspace"
+source = "vcmc_workspace"
 destination = "/workspace"
 processes = ["computer"]
 
-# Guest: start at 4 shared vCPU / 4 GB. Grok measured 8 vCPU / 16 GB / 128 GB.
-#   fly scale vm shared-cpu-8x --memory 16384 --process-group computer
-#   fly volumes extend computer_workspace --size 128
 [[vm]]
 processes = ["computer"]
 cpu_kind = "shared"

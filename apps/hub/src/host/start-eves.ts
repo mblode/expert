@@ -1,6 +1,7 @@
 /**
- * Start one `eve start` per roster Bot that has `apps/eve/bots/<id>`.
- * Bind loopback only. Tokens and the hub→Eve secret stay on the volume.
+ * Start one `eve start` per roster Bot that has an Eve project under
+ * COMPUTER_EVE_BOTS (or a volume overlay). Bind loopback only. Tokens
+ * and the hub→Eve secret stay on the volume.
  */
 import { spawn } from "node:child_process";
 import type { ChildProcess } from "node:child_process";

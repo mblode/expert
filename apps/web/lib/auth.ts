@@ -49,10 +49,10 @@ if (!secret && isProductionRuntime) {
 }
 
 /**
- * Who may sign in. Every signed-in user is paired with the one computer this
- * deployment fronts and becomes its owner, so an open sign-up would hand the
- * machine to anyone with an email address. Comma-separated; unset means open,
- * which is only right for a private deployment.
+ * Who may sign in. A signed-in user is bound to a computer (hub + seat).
+ * Open sign-up still hands a machine to anyone with an email address.
+ * Comma-separated; unset means open, which is only right for a private
+ * deployment.
  */
 const allowedEmails = new Set(
   (process.env.AUTH_ALLOWED_EMAILS ?? "")
@@ -64,7 +64,7 @@ const isAllowed = (email: string): boolean =>
   allowedEmails.size === 0 || allowedEmails.has(email.toLowerCase());
 if (allowedEmails.size === 0 && isProductionRuntime) {
   console.warn(
-    "[auth] AUTH_ALLOWED_EMAILS is unset: anyone who can receive email can sign in and own the computer",
+    "[auth] AUTH_ALLOWED_EMAILS is unset: anyone who can receive email can sign in and take a seat",
   );
 }
 
@@ -118,10 +118,12 @@ export const auth = betterAuth({
       },
       storeOTP: "hashed",
     }),
-    // Seat token on the session so a signed-in user is already attached to the box.
+    // Seat token on the session so a signed-in user is already attached to a box.
     customSession(async ({ user, session }) => {
-      const seat = await getOrCreateComputerSeat(user.id);
+      const seat = await getOrCreateComputerSeat(user.id, user.email);
       return {
+        computerId: seat.computerId,
+        computers: seat.computers,
         hubUrl: seat.hubUrl,
         seatError: seat.seatError,
         seatToken: seat.seatToken,

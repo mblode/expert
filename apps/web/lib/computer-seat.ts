@@ -1,73 +1,120 @@
 import { eq } from "drizzle-orm";
 
+import { computer } from "../db/computer";
 import { computerSeat } from "../db/computer-seat";
-import { DEFAULT_HUB_URL, trimSlashes } from "./config";
+import type { ComputerChoice, ComputerRecord } from "./computers";
+import {
+  accessibleComputers,
+  choicesOf,
+  computersFromEnv,
+  defaultComputerId,
+  pairComputer,
+} from "./computers";
 import { db } from "./db";
 
 export interface ComputerSeat {
+  computerId: string;
+  computers: ComputerChoice[];
   hubUrl: string;
   seatToken?: string;
   seatError?: string;
 }
 
-function hubUrl(): string {
-  return trimSlashes(
-    process.env.COMPUTER_HUB_URL ?? process.env.NEXT_PUBLIC_HUB_URL ?? DEFAULT_HUB_URL,
-  );
+function catalog(email: string): ComputerRecord[] {
+  return accessibleComputers(email, process.env);
 }
 
-async function pairWithHub(hub: string): Promise<{ token: string } | { error: string }> {
-  const code = process.env.COMPUTER_SETUP_CODE;
-  if (!code) {
-    return {
-      error: "The web server is missing COMPUTER_SETUP_CODE, so it cannot attach to the computer.",
-    };
-  }
-  try {
-    const res = await fetch(`${hub}/computer.v1.Seat/Pair`, {
-      body: JSON.stringify({ code }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal: AbortSignal.timeout(15_000),
-    });
-    const payload: unknown = await res.json().catch(() => null);
-    if (!res.ok) {
-      const envelope = (payload as { error?: { message?: string } } | null)?.error;
-      return { error: envelope?.message ?? `Could not pair with the computer (${res.status}).` };
-    }
-    const token = (payload as { token?: unknown } | null)?.token;
-    if (typeof token !== "string" || !token) {
-      return { error: "The computer accepted pairing but did not return a seat token." };
-    }
-    return { token };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not reach the computer.";
-    return { error: `Could not reach the computer at ${hub}: ${message}` };
+function viewFor(
+  email: string,
+  target: ComputerRecord,
+  extra: Partial<ComputerSeat> = {},
+): ComputerSeat {
+  return {
+    computerId: target.id,
+    computers: choicesOf(catalog(email)),
+    hubUrl: target.hubUrl,
+    ...extra,
+  };
+}
+
+async function ensureComputers(): Promise<void> {
+  for (const row of computersFromEnv(process.env)) {
+    await db
+      .insert(computer)
+      .values({
+        hubUrl: row.hubUrl,
+        id: row.id,
+        label: row.label,
+        setupCodeEnv: row.setupCodeEnv,
+      })
+      .onConflictDoUpdate({
+        set: { hubUrl: row.hubUrl, label: row.label, setupCodeEnv: row.setupCodeEnv },
+        target: computer.id,
+      });
   }
 }
 
-/** Pair, then remember the token for this user. A failed write still returns the token for this request. */
-async function pairAndPersist(userId: string, hub: string): Promise<ComputerSeat> {
-  const paired = await pairWithHub(hub);
+/** Pair, then remember the token for this user on this computer. */
+async function pairAndPersist(
+  userId: string,
+  email: string,
+  target: ComputerRecord,
+): Promise<ComputerSeat> {
+  const paired = await pairComputer(target, process.env);
   if ("error" in paired) {
-    return { hubUrl: hub, seatError: paired.error };
+    return viewFor(email, target, { seatError: paired.error });
   }
   try {
+    await ensureComputers();
     await db
       .insert(computerSeat)
-      .values({ hubUrl: hub, seatToken: paired.token, updatedAt: new Date(), userId })
+      .values({
+        computerId: target.id,
+        hubUrl: target.hubUrl,
+        seatToken: paired.token,
+        updatedAt: new Date(),
+        userId,
+      })
       .onConflictDoUpdate({
-        set: { hubUrl: hub, seatToken: paired.token, updatedAt: new Date() },
+        set: {
+          computerId: target.id,
+          hubUrl: target.hubUrl,
+          seatToken: paired.token,
+          updatedAt: new Date(),
+        },
         target: computerSeat.userId,
       });
   } catch {
     // The next getSession will Pair again; the token is still good now.
   }
-  return { hubUrl: hub, seatToken: paired.token };
+  return viewFor(email, target, { seatToken: paired.token });
 }
 
-export async function getOrCreateComputerSeat(userId: string): Promise<ComputerSeat> {
-  const hub = hubUrl();
+function pickBound(email: string, storedId: string | undefined): ComputerRecord | undefined {
+  const allowed = catalog(email);
+  if (storedId) {
+    const kept = allowed.find((row) => row.id === storedId);
+    if (kept) {
+      return kept;
+    }
+  }
+  const fallbackId = defaultComputerId(email, process.env);
+  return allowed.find((row) => row.id === fallbackId) ?? allowed[0];
+}
+
+function noneConfigured(email: string): ComputerSeat {
+  return {
+    computerId: "",
+    computers: choicesOf(catalog(email)),
+    hubUrl: "",
+    seatError: "No computer is configured for this account.",
+  };
+}
+
+export async function getOrCreateComputerSeat(
+  userId: string,
+  email: string,
+): Promise<ComputerSeat> {
   try {
     const [row] = await db
       .select()
@@ -75,15 +122,56 @@ export async function getOrCreateComputerSeat(userId: string): Promise<ComputerS
       .where(eq(computerSeat.userId, userId))
       .limit(1);
     if (row?.seatToken) {
-      return { seatToken: row.seatToken, hubUrl: row.hubUrl || hub };
+      const bound = pickBound(email, row.computerId);
+      if (bound && bound.id === row.computerId) {
+        return viewFor(email, bound, {
+          hubUrl: row.hubUrl || bound.hubUrl,
+          seatToken: row.seatToken,
+        });
+      }
+      if (bound) {
+        return pairAndPersist(userId, email, bound);
+      }
     }
   } catch {
     // Table may not exist yet on a fresh Turso: Pair still works.
   }
-  return pairAndPersist(userId, hub);
+  const bound = pickBound(email, undefined);
+  return bound ? pairAndPersist(userId, email, bound) : noneConfigured(email);
 }
 
-/** The hub forgot this token (a wiped seats.json): pair again and replace it. */
-export function refreshComputerSeat(userId: string): Promise<ComputerSeat> {
-  return pairAndPersist(userId, hubUrl());
+/** The hub forgot this token (a wiped seats.json): pair the bound computer again. */
+export async function refreshComputerSeat(userId: string, email: string): Promise<ComputerSeat> {
+  let storedId: string | undefined;
+  try {
+    const [row] = await db
+      .select()
+      .from(computerSeat)
+      .where(eq(computerSeat.userId, userId))
+      .limit(1);
+    storedId = row?.computerId;
+  } catch {
+    // Pair the default binding.
+  }
+  const bound = pickBound(email, storedId);
+  return bound ? pairAndPersist(userId, email, bound) : noneConfigured(email);
+}
+
+/** Bind this session to a computer the account may open, then Pair that hub. */
+export async function bindComputerSeat(
+  userId: string,
+  email: string,
+  computerId: string,
+): Promise<ComputerSeat> {
+  const target = catalog(email).find((row) => row.id === computerId);
+  if (!target) {
+    const fallback = pickBound(email, undefined);
+    if (!fallback) {
+      return noneConfigured(email);
+    }
+    return viewFor(email, fallback, {
+      seatError: "That computer is not available for this account.",
+    });
+  }
+  return pairAndPersist(userId, email, target);
 }

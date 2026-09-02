@@ -4,6 +4,7 @@
  */
 import { dirname, join, resolve } from "node:path";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
+import { resolveEveBotsRoot } from "./eve.ts";
 import { startEveProcesses } from "./start-eves.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
@@ -13,7 +14,11 @@ const eveSecret = ensureEveSecret(join(dataDir, "eve-secret"), process.env.COMPU
 const roster = ensureRosterAt(rosterPath);
 const hubPort = process.env.COMPUTER_PORT ?? "8080";
 const hubUrl = process.env.COMPUTER_URL ?? `http://127.0.0.1:${hubPort}`;
-const botsRoot = resolve(process.env.COMPUTER_EVE_BOTS ?? join(repoRoot, "apps/eve/bots"));
+const imageBots = join(repoRoot, "apps/eve/bots");
+const botsRoot = resolveEveBotsRoot({
+  envBots: process.env.COMPUTER_EVE_BOTS,
+  imageBots,
+});
 
 startEveProcesses({
   botsRoot,
