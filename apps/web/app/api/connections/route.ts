@@ -15,12 +15,12 @@ export async function GET(request: Request): Promise<Response> {
 }
 
 export async function POST(request: Request): Promise<Response> {
-  const token = inviteTokenFromRequest(request);
+  const body: unknown = await request.json().catch(() => null);
+  const token = inviteTokenFromRequest(request, body);
   const loaded = await loadStoredInvite(token, "plugins");
   if ("error" in loaded) {
     return Response.json({ error: loaded.error }, { status: loaded.status });
   }
-  const body: unknown = await request.json().catch(() => null);
   const input =
     body && typeof body === "object"
       ? (body as {

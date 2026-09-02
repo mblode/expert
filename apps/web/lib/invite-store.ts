@@ -2,7 +2,6 @@ import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { invite } from "../db/invite";
-import { ensureComputerCatalog } from "./computer-seat";
 import type { EnvMap } from "./computers";
 import { db } from "./db";
 import {
@@ -79,7 +78,6 @@ export async function mintStoredInvite(
   }
   try {
     await ensureInviteTable();
-    await ensureComputerCatalog();
     await db.insert(invite).values({
       computerId: planned.computerId,
       createdAt: new Date(now),

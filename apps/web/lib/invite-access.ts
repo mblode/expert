@@ -3,8 +3,15 @@ import { isComputerOperator } from "./computers";
 /** Header the invite pages send. The token is never logged here. */
 export const INVITE_HEADER = "x-computer-invite";
 
-export function inviteTokenFromRequest(request: Request): string {
-  return request.headers.get(INVITE_HEADER)?.trim() ?? "";
+export function inviteTokenFromRequest(request: Request, body?: unknown): string {
+  const header = request.headers.get(INVITE_HEADER)?.trim();
+  if (header) {
+    return header;
+  }
+  if (body && typeof body === "object" && "invite" in body && typeof body.invite === "string") {
+    return body.invite.trim();
+  }
+  return "";
 }
 
 export function canMintInvite(request: Request, email: string | undefined): boolean {

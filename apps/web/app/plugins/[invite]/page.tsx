@@ -22,7 +22,13 @@ export default async function PluginsInvitePage({
     return (
       <InviteNotice
         message={loaded.error}
-        title={loaded.status === 410 ? "Link expired" : "Link not valid"}
+        title={
+          loaded.status === 410
+            ? "Link expired"
+            : loaded.status === 502
+              ? "Computer unavailable"
+              : "Link not valid"
+        }
       />
     );
   }

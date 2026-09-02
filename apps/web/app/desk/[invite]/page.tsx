@@ -15,7 +15,13 @@ export default async function DeskInvitePage({
     return (
       <InviteNotice
         message={granted.error}
-        title={granted.status === 410 ? "Link expired" : "Link not valid"}
+        title={
+          granted.status === 410
+            ? "Link expired"
+            : granted.status === 502
+              ? "Computer unavailable"
+              : "Link not valid"
+        }
       />
     );
   }

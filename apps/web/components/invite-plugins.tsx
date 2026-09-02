@@ -40,6 +40,7 @@ export function InvitePlugins({
         body: JSON.stringify({
           authKind,
           ...(authKind === "static" && key ? { credential: key } : {}),
+          invite: inviteToken,
           name,
           url,
         }),
