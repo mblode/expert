@@ -2,7 +2,7 @@ import { defineSchedule } from "eve/schedules";
 
 /**
  * Daily check on this guest. Markdown (task) mode: the model decides
- * whether to speak. Scheduled runs skip the shell approval gate.
+ * whether to speak.
  *
  * Cron is UTC. 20:00 UTC is morning in Australia/Melbourne, which is
  * where this box is meant to live.
