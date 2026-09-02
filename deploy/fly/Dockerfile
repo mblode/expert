@@ -36,10 +36,12 @@ RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
 # under /workspace. `hub` is the hub and the WhatsApp bridge: it owns the
 # roster, seat tokens, channel secrets and Baileys credentials under
 # /workspace/.computer, which box (and so the model's shell) cannot read.
-# The root init (apps/hub/src/host/init.ts) runs desk commands as box on the
-# hub's behalf over a socket only hub may open.
+# The hub runs desk commands (xdotool, screenshots, the model's shell) as
+# box through sudo; that one line is the whole bridge between the two.
 RUN useradd --create-home --uid 1000 --shell /bin/bash box \
     && useradd --create-home --uid 1001 --shell /usr/sbin/nologin hub \
+    && echo "hub ALL=(box) NOPASSWD: ALL" > /etc/sudoers.d/hub \
+    && chmod 440 /etc/sudoers.d/hub \
     && mkdir -p /workspace /home/box/.config/chromium /opt/computer /run/computer \
     && chown -R box:box /workspace /home/box /opt/computer
 
@@ -78,8 +80,7 @@ COPY --chown=box:box api api
 RUN npm run build --workspace=@computer/eve-main
 
 # PID 1 is tini as root on purpose: the entrypoint execs the root init, which
-# fixes volume ownership, holds the executor socket, and supervises every
-# other process as box or hub.
+# fixes volume ownership and supervises every other process as box or hub.
 # hadolint ignore=DL3002
 USER root
 # Fly mounts `computer_workspace` at /workspace (roster, tokens, Eve secret).

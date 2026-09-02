@@ -40,7 +40,7 @@ force_https = true
 # Suspend (not stop): faster wake; CPU/RAM bill $0 while suspended.
 # 2 GB is Fly's max for machine suspend.
 # A linked WhatsApp number needs the socket up, so linking one on this
-# tenant means `auto_stop_machines = "off"` and `min_machines_running = 1`:
+# tenant means auto_stop_machines off and min_machines_running 1:
 # suspend-to-zero is gone for that tenant, and that is the price of the
 # socket living here rather than on a second host. Blode keeps suspending
 # until a number is linked.

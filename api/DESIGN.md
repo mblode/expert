@@ -374,8 +374,8 @@ Two users. `box` is the desk and the model: X, Chromium, Eve, the model's
 and the WhatsApp bridge: it owns `/workspace/.computer` (roster, seat
 tokens, channel secrets, the Eve secret, Baileys credentials) at 0700.
 Under one uid there is no boundary, so the hub is not `box`; when it needs
-the desk it asks the root init over a socket only `hub` may open, and the
-init spawns the command as `box`. Bots are still not security boundaries
+the desk it runs the command through `sudo -u box`, the one sudoers line
+in the image. Bots are still not security boundaries
 from each other: same `box`, shared `/workspace`.
 
 ## Version

@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { execViaSocket } from "./executor.ts";
 import { dirname } from "node:path";
 import { ComputerError, asPoint, clampCursor, unavailable } from "@computer/shared";
 import type { Button, Point, Unavailable } from "@computer/shared";
@@ -367,35 +366,31 @@ export class DockerDesk implements Desk {
       maxOutput?: number;
     },
   ): Promise<ExecResult> {
-    // With the hub running as its own user, `local` cannot spawn as box
-    // itself: the root init's executor does, over a socket only the hub can
-    // open. The environment is still the login's worth and nothing else.
-    const socket = process.env.COMPUTER_EXEC_SOCKET;
-    if (this.transport === "local" && socket) {
-      return execThroughSocket(socket, argv, this.display, opts);
-    }
-    const cmd = this.transport === "local" ? argv[0]! : "docker";
-    const spawnArgv =
-      this.transport === "local"
-        ? argv.slice(1)
-        : [
-            "exec",
-            "-i",
-            "-u",
-            this.user,
-            // Always: this driver *is* one window, and a command that forgets its
-            // DISPLAY silently targets :1, which made every fork Bot screenshot
-            // screen 1 while acting on its own.
-            "-e",
-            `DISPLAY=:${this.display}`,
-            ...(opts.cwd ? ["-w", opts.cwd] : []),
-            this.container,
-            ...argv,
-          ];
+    // The hub is not `box` on the guest (AUDIT P0 #2), so a local command
+    // goes through `sudo -u box`: one sudoers line, and the child gets a
+    // login's worth of environment and nothing of the hub's.
+    const local = this.transport === "local" ? asBox(argv, localEnv(this.display)) : undefined;
+    const cmd = local ? local[0]! : "docker";
+    const spawnArgv = local
+      ? local.slice(1)
+      : [
+          "exec",
+          "-i",
+          "-u",
+          this.user,
+          // Always: this driver *is* one window, and a command that forgets its
+          // DISPLAY silently targets :1, which made every fork Bot screenshot
+          // screen 1 while acting on its own.
+          "-e",
+          `DISPLAY=:${this.display}`,
+          ...(opts.cwd ? ["-w", opts.cwd] : []),
+          this.container,
+          ...argv,
+        ];
     return new Promise((resolve, reject) => {
       const child = spawn(cmd, spawnArgv, {
-        cwd: this.transport === "local" ? opts.cwd : undefined,
-        env: this.transport === "local" ? localEnv(this.display) : process.env,
+        cwd: local ? opts.cwd : undefined,
+        env: local ? localEnv(this.display) : process.env,
         stdio: ["pipe", "pipe", "pipe"],
       });
       const stdout = new Sink(opts.maxOutput);
@@ -405,7 +400,9 @@ export class DockerDesk implements Desk {
       child.stdin.on("error", () => {});
       child.stdin.end(opts.stdin);
       const t = setTimeout(() => {
-        child.kill("SIGKILL");
+        // sudo relays SIGTERM to its command; SIGKILL would orphan it as box.
+        child.kill("SIGTERM");
+        setTimeout(() => child.kill("SIGKILL"), 2000).unref();
         reject(deskDown(`desk exec timed out: ${argv[0]}`));
       }, opts.timeoutMs);
       child.on("error", (err) => {
@@ -433,40 +430,6 @@ interface ExecResult {
   stderr: Buffer;
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
-}
-
-async function execThroughSocket(
-  socket: string,
-  argv: string[],
-  display: number,
-  opts: { timeoutMs: number; cwd?: string; stdin?: string; maxOutput?: number },
-): Promise<ExecResult> {
-  let r;
-  try {
-    r = await execViaSocket(socket, {
-      argv,
-      cwd: opts.cwd,
-      env: localEnv(display) as Record<string, string>,
-      maxOutput: opts.maxOutput,
-      stdin: opts.stdin,
-      timeoutMs: opts.timeoutMs,
-    });
-  } catch (error) {
-    throw deskDown(`executor: ${(error as Error).message}`);
-  }
-  if (r.timedOut) {
-    throw deskDown(`desk exec timed out: ${argv[0]}`);
-  }
-  if (r.error) {
-    throw deskDown(r.error);
-  }
-  return {
-    exit: r.exit,
-    stderr: r.stderr,
-    stderrTruncated: r.stderrTruncated,
-    stdout: r.stdout,
-    stdoutTruncated: r.stdoutTruncated,
-  };
 }
 
 /** What `shell` returns per stream. Anything past it is dropped as it arrives, not buffered. */
@@ -521,6 +484,23 @@ function localEnv(display: number): NodeJS.ProcessEnv {
     TERM: "dumb",
     USER: process.env.USER ?? "box",
   };
+}
+
+/**
+ * `COMPUTER_RUN_AS=box` (set by the guest init for the hub) turns a local
+ * argv into `sudo -n -u box -- env -i K=V... argv`. `env -i` because sudo
+ * would otherwise hand the child sudo's own idea of the environment; the
+ * hub's is never in reach. Unset (`npm run up`, tests) the argv runs as is.
+ */
+export function asBox(argv: string[], env: NodeJS.ProcessEnv): string[] {
+  const user = process.env.COMPUTER_RUN_AS;
+  if (!user) {
+    return argv;
+  }
+  const pairs = Object.entries(env)
+    .filter((kv): kv is [string, string] => typeof kv[1] === "string")
+    .map(([k, v]) => `${k}=${v}`);
+  return ["sudo", "-n", "-u", user, "--", "env", "-i", ...pairs, ...argv];
 }
 
 /** `cat`/`bash` said no. A missing file is the model's mistake; a dead box is not. */

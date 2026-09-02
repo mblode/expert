@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { execViaSocket } from "./executor.ts";
+import { asBox } from "./docker.ts";
 import { createHash } from "node:crypto";
 import { ComputerError } from "@computer/shared";
 
@@ -88,31 +88,20 @@ export class LocalWindowManager implements WindowManager {
   }
 }
 
-async function spawnWindow(
+function spawnWindow(
   argv: string[],
   opts: { docker?: { container: string; user: string }; local?: boolean },
 ): Promise<{ exit: number; stderr: string }> {
-  // Same seam as the desk driver: a hub that is not box asks the root
-  // executor to start the window as box.
-  const socket = process.env.COMPUTER_EXEC_SOCKET;
-  if (opts.local && socket) {
-    const r = await execViaSocket(socket, {
-      argv,
-      env: {
-        HOME: process.env.HOME ?? "/home/box",
-        PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
-      },
-      timeoutMs: 60_000,
-    });
-    if (r.error) {
-      throw new ComputerError("DAEMON_DOWN", r.error);
-    }
-    return { exit: r.exit, stderr: r.stderr.toString() };
-  }
   return new Promise((resolve, reject) => {
-    const child = opts.local
-      ? spawn(argv[0]!, argv.slice(1), {
-          env: { ...process.env, HOME: process.env.HOME ?? "/home/box" },
+    const boxEnv = {
+      HOME: "/home/box",
+      PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+      USER: "box",
+    };
+    const local = opts.local ? asBox(argv, boxEnv) : undefined;
+    const child = local
+      ? spawn(local[0]!, local.slice(1), {
+          env: process.env.COMPUTER_RUN_AS ? boxEnv : { ...process.env, ...boxEnv },
           stdio: ["ignore", "ignore", "pipe"],
         })
       : spawn("docker", ["exec", "-u", opts.docker!.user, opts.docker!.container, ...argv], {

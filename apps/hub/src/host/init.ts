@@ -5,11 +5,11 @@
  *
  *   desk-up (box, once) → Eve per Bot (box) → the WhatsApp bridge (hub) → the hub (hub)
  *
- * and the executor socket the hub uses to run desk commands as box. The hub
- * is no longer `box` (AUDIT P0 #2): what the model's `shell` can read is what
- * box can read, and the roster, seat tokens, channel secrets and Baileys
- * credentials are now hub-owned at 0700. Everything under /workspace that the
- * Bot works in is still box's.
+ * The hub is no longer `box` (AUDIT P0 #2): what the model's `shell` can read
+ * is what box can read, and the roster, seat tokens, channel secrets and
+ * Baileys credentials are now hub-owned at 0700. The hub runs desk commands
+ * as box through `sudo -u box` (one sudoers line in the image). Everything
+ * under /workspace that the Bot works in is still box's.
  *
  * Env comes from the Fly config and secrets. Nothing secret goes on argv.
  */
@@ -27,7 +27,6 @@ import {
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { userInfo } from "node:os";
-import { startExecutorServer } from "../desk/executor.ts";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
 import { planEveLaunches, resolveEveBotsRoot } from "./eve.ts";
 import { Supervisor } from "./supervisor.ts";
@@ -42,7 +41,6 @@ const rosterPath = resolve(env.COMPUTER_DATA ?? "/workspace/.computer/bots.json"
 const dataDir = dirname(rosterPath);
 const runDir = env.COMPUTER_RUN_DIR ?? "/run/computer";
 const statusFile = env.COMPUTER_STATUS_FILE ?? join(runDir, "status.json");
-const execSocket = env.COMPUTER_EXEC_SOCKET ?? join(runDir, "exec.sock");
 const logDir = env.COMPUTER_LOG_DIR ?? join(dataDir, "logs");
 const bridgePort = env.COMPUTER_BRIDGE_PORT ?? "2100";
 const bridgeDir = join(repoRoot, "apps/whatsapp-bridge");
@@ -168,14 +166,7 @@ if (botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS) {
   }
 }
 
-// 5. Children. The executor first, so the hub can reach the desk the moment it starts.
-const executor = startExecutorServer({
-  clientGid: hub.gid,
-  clientUid: hub.uid,
-  gid: box.gid,
-  socketPath: execSocket,
-  uid: box.uid,
-});
+// 5. Children.
 mkdirSync(logDir, { mode: 0o700, recursive: true });
 own(logDir, hub, 0o700);
 
@@ -271,7 +262,7 @@ sup.start({
     {
       COMPUTER_BRIDGE_URL: `http://127.0.0.1:${bridgePort}`,
       COMPUTER_EVE_SECRET: eveSecret,
-      COMPUTER_EXEC_SOCKET: execSocket,
+      COMPUTER_RUN_AS: box.name,
       COMPUTER_SETUP_CODE: setupCode,
       COMPUTER_STATUS_FILE: statusFile,
       USER: hub.name,
@@ -295,10 +286,7 @@ console.log(
 );
 
 const shutdown = (): void => {
-  void sup.stopAll().then(() => {
-    executor.close();
-    process.exit(0);
-  });
+  void sup.stopAll().then(() => process.exit(0));
 };
 process.on("SIGTERM", shutdown);
 process.on("SIGINT", shutdown);

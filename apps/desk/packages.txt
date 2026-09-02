@@ -10,6 +10,7 @@ openbox
 openssl
 procps
 python3
+sudo
 tini
 x11-utils
 x11-xserver-utils

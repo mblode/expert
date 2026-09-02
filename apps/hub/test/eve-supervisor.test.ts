@@ -179,6 +179,8 @@ describe("eve supervisor: N Eves from the roster", () => {
       "utf-8",
     );
     expect(dockerfile).toContain("useradd --create-home --uid 1001 --shell /usr/sbin/nologin hub");
+    expect(dockerfile).toContain('"hub ALL=(box) NOPASSWD: ALL"');
+    expect(init).toContain("COMPUTER_RUN_AS: box.name");
   });
 
   it("guest entrypoint does not put secrets on any argv", () => {

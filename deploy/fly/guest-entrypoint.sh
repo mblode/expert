@@ -1,7 +1,6 @@
 #!/bin/bash
 # The Fly Machine's init (under tini): a thin shell around the root init in
-# apps/hub/src/host/init.ts, which fixes the volume, holds the executor
-# socket, and supervises desk → Eve (one per roster bot) → bridge → hub as
+# apps/hub/src/host/init.ts, which fixes the volume and supervises desk → Eve (one per roster bot) → bridge → hub as
 # box or hub. Secrets come from the platform env; none go on argv.
 set -euo pipefail
 
