@@ -50,8 +50,19 @@ service Seat {
   rpc ProvideSecret     // answer a secret_request: value → clipboard only
   rpc CreateBot         // provision: next free screen + minted token
   rpc DeleteBot
+  rpc Revoke            // end a seat: the caller's own, or (owner) any
+  rpc WhatsAppAccounts  // the numbers linked to this computer (owner)
+  rpc WhatsAppLink      // link by pairing code or QR, poll, unlink (owner)
+  rpc WhatsAppGroups    // groups the number is in, with enabled flags (owner)
+  rpc WhatsAppJoinGroup // accept an invite link (owner)
+  rpc WhatsAppConfig    // read or write the account's channel settings (owner)
 }
 ```
+
+`POST /channels/<id>/<path>` is the third door, beside the seat and the
+agent token: a channel secret. It is how the WhatsApp bridge on this
+computer, and later a webhook or Slack, reaches a Bot's Eve (see
+**Channels**).
 
 `GET /spec` is the HTTP view of `Agent.Spec`. An agent that can fetch
 JSON does not need the proto. `GET /roster` (seat) lists Bots and their
@@ -126,6 +137,20 @@ cannot require permission.
 `I'm done` is `SetPresence({ present: false })`. It is not a model
 tool. After it, the next `computer` call runs.
 
+### Owner and guest seats
+
+A seat token has a `kind`. `Pair` mints an **owner** seat: any display,
+every Seat RPC, no expiry, the box owner. An **owner** may `Revoke` any
+seat; `Revoke {}` with no token ends the caller's own, which is what
+sign-out does. A **guest** seat comes from an invite the Bot handed out in
+a chat (a WhatsApp member taking the mouse): bound to one display, limited
+to `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardSet`,
+`ProvideSecret` and `Revoke`, expiring within fifteen minutes. A guest's
+`Status` lists only its screen, an absent `display` resolves to that
+screen, any other display is `UNAUTHENTICATED`, and `/eve/v1` (the thread)
+and `/roster` refuse it. Guests are the reason seats carry scope at all:
+before them every token in `seats.json` was a permanent owner.
+
 `request_takeover` is a `computer` action. It moves `AGENT → WAITING`
 and returns a screenshot. Further `computer` calls return `SEAT_HELD`
 until the human releases.
@@ -155,6 +180,34 @@ box at `/workspace/.bots/<id>/transcript.jsonl`.
 
 There is no Seat RPC to answer a `widget` yet: a client re-opens the turn
 by sending a new message through its harness. That is a known gap.
+
+## Channels
+
+A Bot is reached by its owner through the seat, by the model through its
+agent token, and by everything else through a **channel**: a record
+`{ id, kind, bot, secret, paths? }` in the hub's `channels.json` with its
+own secret, minted once and rotated or removed on its own. The ingress
+maps `POST /channels/<id>/<rest>` with header `x-channel-secret` onto that
+Bot's Eve at `/eve/v1/<kind>/<rest>`, adding the hub's loopback secret;
+`paths` narrows which Eve routes the door may reach. There is no lockout
+on this door, unlike `Pair`: it is public and its ids are guessable, so a
+lockout would let a stranger block the real bridge; the 256-bit secret and
+a constant-time compare are the defence. Bodies are capped at 12 MiB (two
+bridge images as data URLs). A seat token is not a channel secret and a
+channel secret opens nothing else.
+
+The WhatsApp bridge is a hub-supervised process on the same Machine, one
+Baileys socket per linked number. Linking is an owner's job on
+hello.expert through the `WhatsApp*` Seat RPCs: `WhatsAppLink { acct,
+action: "start", phone? }` creates the account's channel record
+(`whatsapp-<acct>`, kind `whatsapp`, path `/eve/v1/whatsapp/message`), tells
+the bridge about it, and returns a pairing code (with `phone`) or a raw QR
+string (without) to render; `action: "status"` polls; `action: "unlink"`
+logs the device out and removes the channel record with it. `WhatsAppConfig`
+holds which groups the number serves (`group_policy: "all" | "listed"`,
+`allowed_groups`), how it is triggered, who may DM it, and the image cap.
+The bridge's own credentials live under the hub's user, which the model's
+`shell` cannot read.
 
 ## Computer
 
@@ -316,6 +369,17 @@ the box owner, so provisioning lives on the seat, never on the model.
 The VNC stream is view-only at the X server. The client never sends
 RFB pointer events. Input is `Seat.Pointer`/`Seat.Type` so the hub can
 enforce the seat. A pixel token opens only the display it was minted for.
+
+## Trust on the box
+
+Two users. `box` is the desk and the model: X, Chromium, Eve, the model's
+`shell`, everything the Bot works on under `/workspace`. `hub` is the hub
+and the WhatsApp bridge: it owns `/workspace/.computer` (roster, seat
+tokens, channel secrets, the Eve secret, Baileys credentials) at 0700.
+Under one uid there is no boundary, so the hub is not `box`; when it needs
+the desk it runs the command through `sudo -u box`, the one sudoers line
+in the image. Bots are still not security boundaries
+from each other: same `box`, shared `/workspace`.
 
 ## Version
 

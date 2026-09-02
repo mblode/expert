@@ -1,6 +1,6 @@
 # Computer
 
-A persistent Linux computer that agents drive and a human can take the seat of. npm workspaces monorepo: `apps/hub` (TypeScript hub), `apps/web` (Next.js 16 on Vercel), `apps/eve` (eve.dev agent, runs beside the hub), `apps/desk` (Debian guest image), `packages/shared` and `packages/proto`.
+A persistent Linux computer that agents drive and a human can take the seat of. npm workspaces monorepo: `apps/hub` (TypeScript hub), `apps/web` (Next.js 16 on Vercel), `apps/eve` (eve.dev agent, runs beside the hub), `apps/whatsapp-bridge` (Baileys WhatsApp socket, runs beside the hub), `apps/desk` (Debian guest image), `packages/shared` and `packages/proto`.
 
 ## Commands
 
@@ -12,6 +12,7 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 - `npm run proto:check` after editing `api/computer.proto`: it must be byte-identical to `packages/proto/computer.proto`, then `npm run proto:gen` and commit `packages/proto/gen`
 - `npm run up`: local box (needs a Docker daemon; falls back to a fake desk). `npm run web`: Next dev on :3000 against the local hub on :8787
 - `npm run bot -- new|ls|rm <id>`: provision Bots against a running hub
+- `npm test --workspace=apps/eve`: the shared Eve lib (channel, format-reply); `npm test --workspace=apps/whatsapp-bridge`: the bridge (`node --test`)
 
 ## Contract
 
@@ -26,7 +27,11 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 - Human input is never RFB: x11vnc runs `-viewonly`, and every pointer/keystroke goes through `Seat.Pointer`/`Seat.Type` so the seat FSM can refuse it.
 - `apps/eve` files import each other with `.ts` extensions (`allowImportingTsExtensions`); `eve build` bundles them. The bot dir `apps/eve/bots/main` re-exports from `../../lib`.
 - hello.expert is the control plane: a signed-in user is bound to one computer (hub URL + seat). Blode is `mblode-computer`; Vibey is `vcmc-computer`. Do not put Vibey's Eve on Blode. Set `AUTH_ALLOWED_EMAILS` on any deployment that is not private.
-- On the Fly guest, `/workspace/.computer` (roster, seat tokens, Eve secret) is readable by anything running as `box`, the model included. Do not write new secrets there; `COMPUTER_SETUP_CODE` must be a Fly secret.
+- On the Fly guest the hub runs as user `hub`, not `box`: `/workspace/.computer` (roster, seat tokens, channel secrets, Eve secret, Baileys credentials) is hub-owned at 0700 and the model's `shell` cannot read it. Desk commands run as `box` through `sudo -u box` (`asBox` in `apps/hub/src/desk/docker.ts`, enabled by `COMPUTER_RUN_AS=box`, one line in `/etc/sudoers.d/hub`). `COMPUTER_SETUP_CODE` must be a Fly secret; init refuses to mint one on a cloud deployment.
+- The guest's PID 1 is `apps/hub/src/host/init.ts` (root, via `guest-entrypoint.sh`): it supervises desk-up, one `eve start` per roster Bot, the WhatsApp bridge and the hub with restart backoff and health probes, and mirrors their state to `/run/computer/status.json`, which `GET /healthz` reports. `boot-eves.ts` and `start-eves.ts` remain for `npm run up` only.
+- Seat tokens carry a `kind`: `owner` from `Pair`, `guest` from an invite (one display, a method allowlist, expiry). `Seat.Revoke {}` ends the caller's seat; sign-out calls it. The Eve proxy and `/roster` are owner-only.
+- A channel (`apps/hub/src/service/channels.ts`, `channels.json`) is the third door: `POST /channels/<id>/<path>` with `x-channel-secret` forwards to the Bot's Eve at `/eve/v1/<kind>/<path>`. The WhatsApp bridge uses it on loopback. Never accept a seat token there.
+- `data/policy.json` missing means the shipped defaults (`ask` on package installs, `rm -rf`, `curl | sh`, and git/npm/eve under `/workspace/eve`), not an open box; write `[]` to opt out.
 - `prepare` runs `lefthook install` only inside a git checkout. Vercel builds from a snapshot with no `.git`, and lefthook exits 1 there, which fails the whole install; keep the guard.
 - `apps/web` typecheck reads `.next/types`; a route you deleted can leave a stale reference until `rm -rf apps/web/.next && npx next build`.
 - `apps/hub/test/eve-channel-auth.test.ts` is excluded from the hub tsconfig because it imports `apps/eve`; vitest still runs it.
@@ -48,5 +53,6 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 
 - Audit and open findings: `docs/AUDIT.md`
 - Grok Bot research, gap analysis, roadmap: `docs/GROK-BOT.md`
+- WhatsApp parity plan (Vibey as one tenant, phases and todos): `docs/WHATSAPP-PARITY.md`
 - Design rationale and sources: `api/RESEARCH.md`; historical plan: `docs/history/`
 - Eve project layout and adding a bot: `apps/eve/README.md`

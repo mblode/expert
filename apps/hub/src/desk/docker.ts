@@ -366,28 +366,31 @@ export class DockerDesk implements Desk {
       maxOutput?: number;
     },
   ): Promise<ExecResult> {
-    const cmd = this.transport === "local" ? argv[0]! : "docker";
-    const spawnArgv =
-      this.transport === "local"
-        ? argv.slice(1)
-        : [
-            "exec",
-            "-i",
-            "-u",
-            this.user,
-            // Always: this driver *is* one window, and a command that forgets its
-            // DISPLAY silently targets :1, which made every fork Bot screenshot
-            // screen 1 while acting on its own.
-            "-e",
-            `DISPLAY=:${this.display}`,
-            ...(opts.cwd ? ["-w", opts.cwd] : []),
-            this.container,
-            ...argv,
-          ];
+    // The hub is not `box` on the guest (AUDIT P0 #2), so a local command
+    // goes through `sudo -u box`: one sudoers line, and the child gets a
+    // login's worth of environment and nothing of the hub's.
+    const local = this.transport === "local" ? asBox(argv, localEnv(this.display)) : undefined;
+    const cmd = local ? local[0]! : "docker";
+    const spawnArgv = local
+      ? local.slice(1)
+      : [
+          "exec",
+          "-i",
+          "-u",
+          this.user,
+          // Always: this driver *is* one window, and a command that forgets its
+          // DISPLAY silently targets :1, which made every fork Bot screenshot
+          // screen 1 while acting on its own.
+          "-e",
+          `DISPLAY=:${this.display}`,
+          ...(opts.cwd ? ["-w", opts.cwd] : []),
+          this.container,
+          ...argv,
+        ];
     return new Promise((resolve, reject) => {
       const child = spawn(cmd, spawnArgv, {
-        cwd: this.transport === "local" ? opts.cwd : undefined,
-        env: this.transport === "local" ? localEnv(this.display) : process.env,
+        cwd: local ? opts.cwd : undefined,
+        env: local ? localEnv(this.display) : process.env,
         stdio: ["pipe", "pipe", "pipe"],
       });
       const stdout = new Sink(opts.maxOutput);
@@ -397,7 +400,9 @@ export class DockerDesk implements Desk {
       child.stdin.on("error", () => {});
       child.stdin.end(opts.stdin);
       const t = setTimeout(() => {
-        child.kill("SIGKILL");
+        // sudo relays SIGTERM to its command; SIGKILL would orphan it as box.
+        child.kill("SIGTERM");
+        setTimeout(() => child.kill("SIGKILL"), 2000).unref();
         reject(deskDown(`desk exec timed out: ${argv[0]}`));
       }, opts.timeoutMs);
       child.on("error", (err) => {
@@ -470,15 +475,45 @@ class Sink {
  * nothing else.
  */
 function localEnv(display: number): NodeJS.ProcessEnv {
-  const home = process.env.HOME ?? "/home/box";
   return {
+    ...boxLogin(),
     DISPLAY: `:${display}`,
-    HOME: home,
     LANG: process.env.LANG ?? "C.UTF-8",
-    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
     TERM: "dumb",
-    USER: process.env.USER ?? "box",
   };
+}
+
+/**
+ * The login a desk child sees. Under the uid split the hub's own HOME is its
+ * 0700 state dir and its USER is `hub`; handing those to a child that runs
+ * as box would point every tool that touches `~` at a directory it cannot
+ * write. So the login follows `COMPUTER_RUN_AS`, and only falls back to the
+ * hub's when there is no split (`npm run up`, tests).
+ */
+export function boxLogin(): { HOME: string; PATH: string; USER: string } {
+  const user = process.env.COMPUTER_RUN_AS;
+  return {
+    HOME: user ? `/home/${user}` : (process.env.HOME ?? "/home/box"),
+    PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+    USER: user ?? process.env.USER ?? "box",
+  };
+}
+
+/**
+ * `COMPUTER_RUN_AS=box` (set by the guest init for the hub) turns a local
+ * argv into `sudo -n -u box -- env -i K=V... argv`. `env -i` because sudo
+ * would otherwise hand the child sudo's own idea of the environment; the
+ * hub's is never in reach. Unset (`npm run up`, tests) the argv runs as is.
+ */
+export function asBox(argv: string[], env: NodeJS.ProcessEnv): string[] {
+  const user = process.env.COMPUTER_RUN_AS;
+  if (!user) {
+    return argv;
+  }
+  const pairs = Object.entries(env)
+    .filter((kv): kv is [string, string] => typeof kv[1] === "string")
+    .map(([k, v]) => `${k}=${v}`);
+  return ["sudo", "-n", "-u", user, "--", "env", "-i", ...pairs, ...argv];
 }
 
 /** `cat`/`bash` said no. A missing file is the model's mistake; a dead box is not. */

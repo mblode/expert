@@ -35,6 +35,7 @@ const USAGE = [
   "  npm run bot -- ls [--json] list Bots",
   "  npm run bot -- rm <id>     delete a Bot",
   "  npm run bot -- token <id>  reprint a Bot's token from the local roster",
+  "  npm run bot -- channel add|ls|rotate|rm <id> [kind] [bot]  channel doors (channels.json)",
 ].join("\n");
 
 try {
@@ -209,8 +210,89 @@ async function bot(argv) {
       console.log(entry.token);
       break;
     }
+    case "channel": {
+      channel(argv.slice(1), env);
+      break;
+    }
     default: {
-      throw new Error("usage: npm run bot -- new|ls|rm|token [id]");
+      throw new Error("usage: npm run bot -- new|ls|rm|token|channel [id]");
+    }
+  }
+}
+
+/**
+ * Channel doors, straight in the hub's channels.json (same record shape as
+ * apps/hub/src/service/channels.ts). The secret prints once on add or
+ * rotate and never again: a bridge or webhook is configured with it there
+ * and then, and a lost one is rotated, not recovered.
+ */
+function channel(argv, env) {
+  const [sub, id, kind, botId] = argv;
+  const path = resolve(root, env.COMPUTER_DATA ?? "data/bots.json").replace(
+    /bots\.json$/,
+    "channels.json",
+  );
+  const load = () => (existsSync(path) ? JSON.parse(readFileSync(path, "utf-8")) : []);
+  const save = (records) =>
+    writeFileSync(path, `${JSON.stringify(records, null, 2)}\n`, { mode: 0o600 });
+  const mint = () => randomBytes(32).toString("base64url");
+  switch (sub) {
+    case "ls": {
+      for (const r of load()) {
+        console.log(`${r.id}\t${r.kind}\tbot ${r.bot}\t${(r.paths ?? []).join(",") || "any path"}`);
+      }
+      break;
+    }
+    case "add": {
+      if (!id || !kind) {
+        throw new Error("usage: npm run bot -- channel add <id> <kind> [bot]");
+      }
+      const records = load();
+      if (records.some((r) => r.id === id)) {
+        throw new Error(`channel ${id} exists; use rotate`);
+      }
+      const record = {
+        bot: botId ?? "main",
+        created_at: new Date().toISOString(),
+        id,
+        kind,
+        paths: kind === "whatsapp" ? ["/eve/v1/whatsapp/message"] : undefined,
+        secret: mint(),
+      };
+      save([...records, record]);
+      console.log(`channel ${id} (${kind}) → bot ${record.bot}`);
+      console.log("");
+      console.log(`  secret: ${record.secret}`);
+      console.log("");
+      console.log(
+        `POST /channels/${id}/<path> with header x-channel-secret. Shown once; rotate to replace.`,
+      );
+      break;
+    }
+    case "rotate": {
+      if (!id) {
+        throw new Error("usage: npm run bot -- channel rotate <id>");
+      }
+      const records = load();
+      const record = records.find((r) => r.id === id);
+      if (!record) {
+        throw new Error(`no channel ${id}`);
+      }
+      record.secret = mint();
+      save(records);
+      console.log(`  secret: ${record.secret}`);
+      break;
+    }
+    case "rm": {
+      if (!id) {
+        throw new Error("usage: npm run bot -- channel rm <id>");
+      }
+      save(load().filter((r) => r.id !== id));
+      console.log(`channel ${id} removed`);
+      break;
+    }
+    default: {
+      throw new Error("usage: npm run bot -- channel add|ls|rotate|rm [id] [kind] [bot]");
     }
   }
 }

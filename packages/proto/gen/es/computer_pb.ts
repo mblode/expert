@@ -10,7 +10,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file computer.proto.
  */
 export const file_computer: GenFile = /*@__PURE__*/
-  fileDesc("Cg5jb21wdXRlci5wcm90bxILY29tcHV0ZXIudjEiNwoHRGlzcGxheRINCgV3aWR0aBgBIAEoBRIOCgZoZWlnaHQYAiABKAUSDQoFc2NhbGUYAyABKAUiHQoFUG9pbnQSCQoBeBgBIAEoBRIJCgF5GAIgASgFIhQKBUltYWdlEgsKA3BuZxgBIAEoDCJwCgVFcnJvchIkCgRjb2RlGAEgASgOMhYuY29tcHV0ZXIudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAiABKAkSDgoGcmVhc29uGAMgASgJEg0KBXBoYXNlGAQgASgJEhEKCXJldHJ5YWJsZRgFIAEoCCI5CgxQZW5kaW5nQ2hlY2sSCgoCaWQYASABKAkSDAoEY29kZRgCIAEoCRIPCgdtZXNzYWdlGAMgASgJIg0KC1NwZWNSZXF1ZXN0InQKDFNwZWNSZXNwb25zZRIKCgJpZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgJEiUKB2Rpc3BsYXkYAyABKAsyFC5jb21wdXRlci52MS5EaXNwbGF5EhEKCXdvcmtzcGFjZRgEIAEoCRINCgV0b29scxgFIAMoCSJLCg9Db21wdXRlclJlcXVlc3QSEgoKcmVxdWVzdF9pZBgBIAEoCRIkCgdhY3Rpb25zGAIgAygLMhMuY29tcHV0ZXIudjEuQWN0aW9uItEDCgZBY3Rpb24SLQoKc2NyZWVuc2hvdBgBIAEoCzIXLmNvbXB1dGVyLnYxLlNjcmVlbnNob3RIABIjCgVjbGljaxgCIAEoCzISLmNvbXB1dGVyLnYxLkNsaWNrSAASMAoMZG91YmxlX2NsaWNrGAMgASgLMhguY29tcHV0ZXIudjEuRG91YmxlQ2xpY2tIABIlCgZzY3JvbGwYBCABKAsyEy5jb21wdXRlci52MS5TY3JvbGxIABIpCghrZXlwcmVzcxgFIAEoCzIVLmNvbXB1dGVyLnYxLktleXByZXNzSAASIQoEdHlwZRgGIAEoCzIRLmNvbXB1dGVyLnYxLlR5cGVIABIhCgRtb3ZlGAcgASgLMhEuY29tcHV0ZXIudjEuTW92ZUgAEiEKBGRyYWcYCCABKAsyES5jb21wdXRlci52MS5EcmFnSAASIQoEd2FpdBgJIAEoCzIRLmNvbXB1dGVyLnYxLldhaXRIABIhCgR6b29tGAogASgLMhEuY29tcHV0ZXIudjEuWm9vbUgAEjgKEHJlcXVlc3RfdGFrZW92ZXIYCyABKAsyHC5jb21wdXRlci52MS5SZXF1ZXN0VGFrZW92ZXJIAEIGCgRib2R5IgwKClNjcmVlbnNob3QiQgoFQ2xpY2sSCQoBeBgBIAEoBRIJCgF5GAIgASgFEiMKBmJ1dHRvbhgDIAEoDjITLmNvbXB1dGVyLnYxLkJ1dHRvbiJICgtEb3VibGVDbGljaxIJCgF4GAEgASgFEgkKAXkYAiABKAUSIwoGYnV0dG9uGAMgASgOMhMuY29tcHV0ZXIudjEuQnV0dG9uIjYKBlNjcm9sbBIJCgF4GAEgASgFEgkKAXkYAiABKAUSCgoCZHgYAyABKAUSCgoCZHkYBCABKAUiGAoIS2V5cHJlc3MSDAoEa2V5cxgBIAMoCSIUCgRUeXBlEgwKBHRleHQYASABKAkiHAoETW92ZRIJCgF4GAEgASgFEgkKAXkYAiABKAUiKAoERHJhZxIgCgRwYXRoGAEgAygLMhIuY29tcHV0ZXIudjEuUG9pbnQiEgoEV2FpdBIKCgJtcxgBIAEoBSIyCgRab29tEgkKAXgYASABKAUSCQoBeRgCIAEoBRIJCgF3GAMgASgFEgkKAWgYBCABKAUiEQoPUmVxdWVzdFRha2VvdmVyIq4CChBDb21wdXRlclJlc3BvbnNlEioKB3Jlc3VsdHMYASADKAsyGS5jb21wdXRlci52MS5BY3Rpb25SZXN1bHQSKwoKc2NyZWVuc2hvdBgCIAEoCzISLmNvbXB1dGVyLnYxLkltYWdlSACIAQESJQoHZGlzcGxheRgDIAEoCzIULmNvbXB1dGVyLnYxLkRpc3BsYXkSJwoGY3Vyc29yGAQgASgLMhIuY29tcHV0ZXIudjEuUG9pbnRIAYgBARIkCgRzZWF0GAUgASgOMhYuY29tcHV0ZXIudjEuU2VhdFN0YXRlEjEKDnBlbmRpbmdfY2hlY2tzGAYgAygLMhkuY29tcHV0ZXIudjEuUGVuZGluZ0NoZWNrQg0KC19zY3JlZW5zaG90QgkKB19jdXJzb3IiwgEKDEFjdGlvblJlc3VsdBIjCgJvaxgBIAEoCzIVLmNvbXB1dGVyLnYxLkFjdGlvbk9rSAASKQoFZXJyb3IYAiABKAsyGC5jb21wdXRlci52MS5BY3Rpb25FcnJvckgAEi0KB3NraXBwZWQYAyABKAsyGi5jb21wdXRlci52MS5BY3Rpb25Ta2lwcGVkSAASKwoGZGVuaWVkGAQgASgLMhkuY29tcHV0ZXIudjEuQWN0aW9uRGVuaWVkSABCBgoEYm9keSJRCghBY3Rpb25PaxITCgtkdXJhdGlvbl9tcxgBIAEoBRImCgVpbWFnZRgCIAEoCzISLmNvbXB1dGVyLnYxLkltYWdlSACIAQFCCAoGX2ltYWdlIosBCgtBY3Rpb25FcnJvchITCgtkdXJhdGlvbl9tcxgBIAEoBRIkCgRjb2RlGAIgASgOMhYuY29tcHV0ZXIudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAyABKAkSDgoGcmVhc29uGAQgASgJEg0KBXBoYXNlGAUgASgJEhEKCXJldHJ5YWJsZRgGIAEoCCIsCgxBY3Rpb25EZW5pZWQSDAoEcnVsZRgBIAEoCRIOCgZyZWFzb24YAiABKAkiHwoNQWN0aW9uU2tpcHBlZBIOCgZyZWFzb24YASABKAkiXwoMU2hlbGxSZXF1ZXN0EhIKCnJlcXVlc3RfaWQYASABKAkSDAoEYXJndhgCIAMoCRIQCgNjd2QYAyABKAlIAIgBARITCgt0aW1lb3V0X3NlYxgEIAEoBUIGCgRfY3dkInEKDVNoZWxsUmVzcG9uc2USDAoEZXhpdBgBIAEoBRIOCgZzdGRvdXQYAiABKAkSDgoGc3RkZXJyGAMgASgJEhgKEHN0ZG91dF90cnVuY2F0ZWQYBCABKAgSGAoQc3RkZXJyX3RydW5jYXRlZBgFIAEoCCIfCg9SZWFkRmlsZVJlcXVlc3QSDAoEcGF0aBgBIAEoCSIjChBSZWFkRmlsZVJlc3BvbnNlEg8KB2NvbnRlbnQYASABKAkiMQoQV3JpdGVGaWxlUmVxdWVzdBIMCgRwYXRoGAEgASgJEg8KB2NvbnRlbnQYAiABKAkiIgoRV3JpdGVGaWxlUmVzcG9uc2USDQoFYnl0ZXMYASABKAUisQEKElNlbmRNZXNzYWdlUmVxdWVzdBIoCgR0ZXh0GAEgASgLMhguY29tcHV0ZXIudjEuTWVzc2FnZVRleHRIABIsCgZ3aWRnZXQYAiABKAsyGi5jb21wdXRlci52MS5NZXNzYWdlV2lkZ2V0SAASOwoOc2VjcmV0X3JlcXVlc3QYAyABKAsyIS5jb21wdXRlci52MS5NZXNzYWdlU2VjcmV0UmVxdWVzdEgAQgYKBGJvZHkiPwoLTWVzc2FnZVRleHQSDAoEdGV4dBgBIAEoCRIiCgZpbWFnZXMYAiADKAsyEi5jb21wdXRlci52MS5JbWFnZSIwCg1NZXNzYWdlV2lkZ2V0Eg4KBnByb21wdBgBIAEoCRIPCgdvcHRpb25zGAIgAygJIjUKFE1lc3NhZ2VTZWNyZXRSZXF1ZXN0Eg4KBnByb21wdBgBIAEoCRINCgVsYWJlbBgCIAEoCSJAChNTZW5kTWVzc2FnZVJlc3BvbnNlEhUKDW9jY3VycmVuY2VfaWQYASABKAkSEgoKdHVybl9lbmRlZBgCIAEoCCIbCgtQYWlyUmVxdWVzdBIMCgRjb2RlGAEgASgJIlYKDFBhaXJSZXNwb25zZRINCgV0b2tlbhgBIAEoCRIPCgd2bmNfdXJsGAIgASgJEiYKBnN0YXR1cxgDIAEoCzIWLmNvbXB1dGVyLnYxLkJveFN0YXR1cyIgCg1TdGF0dXNSZXF1ZXN0Eg8KB2Rpc3BsYXkYASABKAUiZwoMU2NyZWVuU3RhdHVzEg4KBmJvdF9pZBgBIAEoCRIPCgdkaXNwbGF5GAIgASgFEiUKBXN0YXRlGAMgASgOMhYuY29tcHV0ZXIudjEuU2VhdFN0YXRlEg8KB3ZuY191cmwYBCABKAkilgEKCUJveFN0YXR1cxIlCgVzdGF0ZRgBIAEoDjIWLmNvbXB1dGVyLnYxLlNlYXRTdGF0ZRIPCgd2bmNfdXJsGAIgASgJEiUKB2Rpc3BsYXkYAyABKAsyFC5jb21wdXRlci52MS5EaXNwbGF5EioKB3NjcmVlbnMYBCADKAsyGS5jb21wdXRlci52MS5TY3JlZW5TdGF0dXMiNgoSU2V0UHJlc2VuY2VSZXF1ZXN0Eg8KB3ByZXNlbnQYASABKAgSDwoHZGlzcGxheRgCIAEoBSKtAQoOUG9pbnRlclJlcXVlc3QSKAoEbW92ZRgBIAEoCzIYLmNvbXB1dGVyLnYxLlBvaW50ZXJNb3ZlSAASKgoFY2xpY2sYAiABKAsyGS5jb21wdXRlci52MS5Qb2ludGVyQ2xpY2tIABIsCgZzY3JvbGwYBCABKAsyGi5jb21wdXRlci52MS5Qb2ludGVyU2Nyb2xsSAASDwoHZGlzcGxheRgDIAEoBUIGCgRib2R5IjMKC1BvaW50ZXJNb3ZlEgoKAmR4GAEgASgFEgoKAmR5GAIgASgFEgwKBGdyYWIYAyABKAgiJwoNUG9pbnRlclNjcm9sbBIKCgJkeBgBIAEoBRIKCgJkeRgCIAEoBSIzCgxQb2ludGVyQ2xpY2sSIwoGYnV0dG9uGAEgASgOMhMuY29tcHV0ZXIudjEuQnV0dG9uIlsKD1BvaW50ZXJSZXNwb25zZRIiCgZjdXJzb3IYASABKAsyEi5jb21wdXRlci52MS5Qb2ludBIkCgRzZWF0GAIgASgOMhYuY29tcHV0ZXIudjEuU2VhdFN0YXRlIjAKD1NlYXRUeXBlUmVxdWVzdBIMCgR0ZXh0GAEgASgJEg8KB2Rpc3BsYXkYAiABKAUiJgoTQ2xpcGJvYXJkR2V0UmVxdWVzdBIPCgdkaXNwbGF5GAEgASgFIjQKE0NsaXBib2FyZFNldFJlcXVlc3QSDAoEdGV4dBgBIAEoCRIPCgdkaXNwbGF5GAIgASgFIhkKCUNsaXBib2FyZBIMCgR0ZXh0GAEgASgJIkQKEk9jY3VycmVuY2VzUmVxdWVzdBIOCgZjdXJzb3IYASABKAkSDQoFbGltaXQYAiABKAUSDwoHZGlzcGxheRgDIAEoBSKfAQoKT2NjdXJyZW5jZRIKCgJpZBgBIAEoCRILCgNzZXEYAiABKAUSCgoCYXQYAyABKAMSDAoEa2luZBgEIAEoCRIMCgR0ZXh0GAUgASgJEg4KBnByb21wdBgGIAEoCRIPCgdvcHRpb25zGAcgAygJEg4KBmFuc3dlchgIIAEoCRINCgVsYWJlbBgJIAEoCRIQCghwcm92aWRlZBgKIAEoCCJUChNPY2N1cnJlbmNlc1Jlc3BvbnNlEigKB2VudHJpZXMYASADKAsyFy5jb21wdXRlci52MS5PY2N1cnJlbmNlEhMKC25leHRfY3Vyc29yGAIgASgJIk0KFFByb3ZpZGVTZWNyZXRSZXF1ZXN0EhUKDW9jY3VycmVuY2VfaWQYASABKAkSDQoFdmFsdWUYAiABKAkSDwoHZGlzcGxheRgDIAEoBSIpChVQcm92aWRlU2VjcmV0UmVzcG9uc2USEAoIcHJvdmlkZWQYASABKAgiHgoQQ3JlYXRlQm90UmVxdWVzdBIKCgJpZBgBIAEoCSI8Cg5Cb3RDcmVkZW50aWFscxIKCgJpZBgBIAEoCRIPCgdkaXNwbGF5GAIgASgFEg0KBXRva2VuGAMgASgJIh4KEERlbGV0ZUJvdFJlcXVlc3QSCgoCaWQYASABKAkqawoJU2VhdFN0YXRlEhoKFlNFQVRfU1RBVEVfVU5TUEVDSUZJRUQQABIUChBTRUFUX1NUQVRFX0FHRU5UEAESFgoSU0VBVF9TVEFURV9XQUlUSU5HEAISFAoQU0VBVF9TVEFURV9IVU1BThADKoQCCglFcnJvckNvZGUSGgoWRVJST1JfQ09ERV9VTlNQRUNJRklFRBAAEh4KGkVSUk9SX0NPREVfVU5BVVRIRU5USUNBVEVEEAESGAoURVJST1JfQ09ERV9TRUFUX0hFTEQQAhIcChhFUlJPUl9DT0RFX09VVF9PRl9CT1VORFMQAxIcChhFUlJPUl9DT0RFX1BBVEhfUkVKRUNURUQQBBIaChZFUlJPUl9DT0RFX0RBRU1PTl9ET1dOEAUSGQoVRVJST1JfQ09ERV9WQUxJREFUSU9OEAYSFwoTRVJST1JfQ09ERV9DT05GTElDVBAHEhUKEUVSUk9SX0NPREVfREVOSUVEEAgqewoGQnV0dG9uEhYKEkJVVFRPTl9VTlNQRUNJRklFRBAAEg8KC0JVVFRPTl9MRUZUEAESEAoMQlVUVE9OX1JJR0hUEAISEQoNQlVUVE9OX01JRERMRRADEg8KC0JVVFRPTl9CQUNLEAQSEgoOQlVUVE9OX0ZPUldBUkQQBTK0AwoFQWdlbnQSOwoEU3BlYxIYLmNvbXB1dGVyLnYxLlNwZWNSZXF1ZXN0GhkuY29tcHV0ZXIudjEuU3BlY1Jlc3BvbnNlElAKC1NlbmRNZXNzYWdlEh8uY29tcHV0ZXIudjEuU2VuZE1lc3NhZ2VSZXF1ZXN0GiAuY29tcHV0ZXIudjEuU2VuZE1lc3NhZ2VSZXNwb25zZRJHCghDb21wdXRlchIcLmNvbXB1dGVyLnYxLkNvbXB1dGVyUmVxdWVzdBodLmNvbXB1dGVyLnYxLkNvbXB1dGVyUmVzcG9uc2USPgoFU2hlbGwSGS5jb21wdXRlci52MS5TaGVsbFJlcXVlc3QaGi5jb21wdXRlci52MS5TaGVsbFJlc3BvbnNlEkcKCFJlYWRGaWxlEhwuY29tcHV0ZXIudjEuUmVhZEZpbGVSZXF1ZXN0Gh0uY29tcHV0ZXIudjEuUmVhZEZpbGVSZXNwb25zZRJKCglXcml0ZUZpbGUSHS5jb21wdXRlci52MS5Xcml0ZUZpbGVSZXF1ZXN0Gh4uY29tcHV0ZXIudjEuV3JpdGVGaWxlUmVzcG9uc2UyngYKBFNlYXQSOwoEUGFpchIYLmNvbXB1dGVyLnYxLlBhaXJSZXF1ZXN0GhkuY29tcHV0ZXIudjEuUGFpclJlc3BvbnNlEjwKBlN0YXR1cxIaLmNvbXB1dGVyLnYxLlN0YXR1c1JlcXVlc3QaFi5jb21wdXRlci52MS5Cb3hTdGF0dXMSRgoLU2V0UHJlc2VuY2USHy5jb21wdXRlci52MS5TZXRQcmVzZW5jZVJlcXVlc3QaFi5jb21wdXRlci52MS5Cb3hTdGF0dXMSRAoHUG9pbnRlchIbLmNvbXB1dGVyLnYxLlBvaW50ZXJSZXF1ZXN0GhwuY29tcHV0ZXIudjEuUG9pbnRlclJlc3BvbnNlEkIKBFR5cGUSHC5jb21wdXRlci52MS5TZWF0VHlwZVJlcXVlc3QaHC5jb21wdXRlci52MS5Qb2ludGVyUmVzcG9uc2USSAoMQ2xpcGJvYXJkR2V0EiAuY29tcHV0ZXIudjEuQ2xpcGJvYXJkR2V0UmVxdWVzdBoWLmNvbXB1dGVyLnYxLkNsaXBib2FyZBJICgxDbGlwYm9hcmRTZXQSIC5jb21wdXRlci52MS5DbGlwYm9hcmRTZXRSZXF1ZXN0GhYuY29tcHV0ZXIudjEuQ2xpcGJvYXJkElAKC09jY3VycmVuY2VzEh8uY29tcHV0ZXIudjEuT2NjdXJyZW5jZXNSZXF1ZXN0GiAuY29tcHV0ZXIudjEuT2NjdXJyZW5jZXNSZXNwb25zZRJWCg1Qcm92aWRlU2VjcmV0EiEuY29tcHV0ZXIudjEuUHJvdmlkZVNlY3JldFJlcXVlc3QaIi5jb21wdXRlci52MS5Qcm92aWRlU2VjcmV0UmVzcG9uc2USRwoJQ3JlYXRlQm90Eh0uY29tcHV0ZXIudjEuQ3JlYXRlQm90UmVxdWVzdBobLmNvbXB1dGVyLnYxLkJvdENyZWRlbnRpYWxzEkIKCURlbGV0ZUJvdBIdLmNvbXB1dGVyLnYxLkRlbGV0ZUJvdFJlcXVlc3QaFi5jb21wdXRlci52MS5Cb3hTdGF0dXNiBnByb3RvMw");
+  fileDesc("Cg5jb21wdXRlci5wcm90bxILY29tcHV0ZXIudjEiNwoHRGlzcGxheRINCgV3aWR0aBgBIAEoBRIOCgZoZWlnaHQYAiABKAUSDQoFc2NhbGUYAyABKAUiHQoFUG9pbnQSCQoBeBgBIAEoBRIJCgF5GAIgASgFIhQKBUltYWdlEgsKA3BuZxgBIAEoDCJwCgVFcnJvchIkCgRjb2RlGAEgASgOMhYuY29tcHV0ZXIudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAiABKAkSDgoGcmVhc29uGAMgASgJEg0KBXBoYXNlGAQgASgJEhEKCXJldHJ5YWJsZRgFIAEoCCI5CgxQZW5kaW5nQ2hlY2sSCgoCaWQYASABKAkSDAoEY29kZRgCIAEoCRIPCgdtZXNzYWdlGAMgASgJIg0KC1NwZWNSZXF1ZXN0InQKDFNwZWNSZXNwb25zZRIKCgJpZBgBIAEoCRIPCgd2ZXJzaW9uGAIgASgJEiUKB2Rpc3BsYXkYAyABKAsyFC5jb21wdXRlci52MS5EaXNwbGF5EhEKCXdvcmtzcGFjZRgEIAEoCRINCgV0b29scxgFIAMoCSJLCg9Db21wdXRlclJlcXVlc3QSEgoKcmVxdWVzdF9pZBgBIAEoCRIkCgdhY3Rpb25zGAIgAygLMhMuY29tcHV0ZXIudjEuQWN0aW9uItEDCgZBY3Rpb24SLQoKc2NyZWVuc2hvdBgBIAEoCzIXLmNvbXB1dGVyLnYxLlNjcmVlbnNob3RIABIjCgVjbGljaxgCIAEoCzISLmNvbXB1dGVyLnYxLkNsaWNrSAASMAoMZG91YmxlX2NsaWNrGAMgASgLMhguY29tcHV0ZXIudjEuRG91YmxlQ2xpY2tIABIlCgZzY3JvbGwYBCABKAsyEy5jb21wdXRlci52MS5TY3JvbGxIABIpCghrZXlwcmVzcxgFIAEoCzIVLmNvbXB1dGVyLnYxLktleXByZXNzSAASIQoEdHlwZRgGIAEoCzIRLmNvbXB1dGVyLnYxLlR5cGVIABIhCgRtb3ZlGAcgASgLMhEuY29tcHV0ZXIudjEuTW92ZUgAEiEKBGRyYWcYCCABKAsyES5jb21wdXRlci52MS5EcmFnSAASIQoEd2FpdBgJIAEoCzIRLmNvbXB1dGVyLnYxLldhaXRIABIhCgR6b29tGAogASgLMhEuY29tcHV0ZXIudjEuWm9vbUgAEjgKEHJlcXVlc3RfdGFrZW92ZXIYCyABKAsyHC5jb21wdXRlci52MS5SZXF1ZXN0VGFrZW92ZXJIAEIGCgRib2R5IgwKClNjcmVlbnNob3QiQgoFQ2xpY2sSCQoBeBgBIAEoBRIJCgF5GAIgASgFEiMKBmJ1dHRvbhgDIAEoDjITLmNvbXB1dGVyLnYxLkJ1dHRvbiJICgtEb3VibGVDbGljaxIJCgF4GAEgASgFEgkKAXkYAiABKAUSIwoGYnV0dG9uGAMgASgOMhMuY29tcHV0ZXIudjEuQnV0dG9uIjYKBlNjcm9sbBIJCgF4GAEgASgFEgkKAXkYAiABKAUSCgoCZHgYAyABKAUSCgoCZHkYBCABKAUiGAoIS2V5cHJlc3MSDAoEa2V5cxgBIAMoCSIUCgRUeXBlEgwKBHRleHQYASABKAkiHAoETW92ZRIJCgF4GAEgASgFEgkKAXkYAiABKAUiKAoERHJhZxIgCgRwYXRoGAEgAygLMhIuY29tcHV0ZXIudjEuUG9pbnQiEgoEV2FpdBIKCgJtcxgBIAEoBSIyCgRab29tEgkKAXgYASABKAUSCQoBeRgCIAEoBRIJCgF3GAMgASgFEgkKAWgYBCABKAUiEQoPUmVxdWVzdFRha2VvdmVyIq4CChBDb21wdXRlclJlc3BvbnNlEioKB3Jlc3VsdHMYASADKAsyGS5jb21wdXRlci52MS5BY3Rpb25SZXN1bHQSKwoKc2NyZWVuc2hvdBgCIAEoCzISLmNvbXB1dGVyLnYxLkltYWdlSACIAQESJQoHZGlzcGxheRgDIAEoCzIULmNvbXB1dGVyLnYxLkRpc3BsYXkSJwoGY3Vyc29yGAQgASgLMhIuY29tcHV0ZXIudjEuUG9pbnRIAYgBARIkCgRzZWF0GAUgASgOMhYuY29tcHV0ZXIudjEuU2VhdFN0YXRlEjEKDnBlbmRpbmdfY2hlY2tzGAYgAygLMhkuY29tcHV0ZXIudjEuUGVuZGluZ0NoZWNrQg0KC19zY3JlZW5zaG90QgkKB19jdXJzb3IiwgEKDEFjdGlvblJlc3VsdBIjCgJvaxgBIAEoCzIVLmNvbXB1dGVyLnYxLkFjdGlvbk9rSAASKQoFZXJyb3IYAiABKAsyGC5jb21wdXRlci52MS5BY3Rpb25FcnJvckgAEi0KB3NraXBwZWQYAyABKAsyGi5jb21wdXRlci52MS5BY3Rpb25Ta2lwcGVkSAASKwoGZGVuaWVkGAQgASgLMhkuY29tcHV0ZXIudjEuQWN0aW9uRGVuaWVkSABCBgoEYm9keSJRCghBY3Rpb25PaxITCgtkdXJhdGlvbl9tcxgBIAEoBRImCgVpbWFnZRgCIAEoCzISLmNvbXB1dGVyLnYxLkltYWdlSACIAQFCCAoGX2ltYWdlIosBCgtBY3Rpb25FcnJvchITCgtkdXJhdGlvbl9tcxgBIAEoBRIkCgRjb2RlGAIgASgOMhYuY29tcHV0ZXIudjEuRXJyb3JDb2RlEg8KB21lc3NhZ2UYAyABKAkSDgoGcmVhc29uGAQgASgJEg0KBXBoYXNlGAUgASgJEhEKCXJldHJ5YWJsZRgGIAEoCCIsCgxBY3Rpb25EZW5pZWQSDAoEcnVsZRgBIAEoCRIOCgZyZWFzb24YAiABKAkiHwoNQWN0aW9uU2tpcHBlZBIOCgZyZWFzb24YASABKAkiXwoMU2hlbGxSZXF1ZXN0EhIKCnJlcXVlc3RfaWQYASABKAkSDAoEYXJndhgCIAMoCRIQCgNjd2QYAyABKAlIAIgBARITCgt0aW1lb3V0X3NlYxgEIAEoBUIGCgRfY3dkInEKDVNoZWxsUmVzcG9uc2USDAoEZXhpdBgBIAEoBRIOCgZzdGRvdXQYAiABKAkSDgoGc3RkZXJyGAMgASgJEhgKEHN0ZG91dF90cnVuY2F0ZWQYBCABKAgSGAoQc3RkZXJyX3RydW5jYXRlZBgFIAEoCCIfCg9SZWFkRmlsZVJlcXVlc3QSDAoEcGF0aBgBIAEoCSIjChBSZWFkRmlsZVJlc3BvbnNlEg8KB2NvbnRlbnQYASABKAkiMQoQV3JpdGVGaWxlUmVxdWVzdBIMCgRwYXRoGAEgASgJEg8KB2NvbnRlbnQYAiABKAkiIgoRV3JpdGVGaWxlUmVzcG9uc2USDQoFYnl0ZXMYASABKAUisQEKElNlbmRNZXNzYWdlUmVxdWVzdBIoCgR0ZXh0GAEgASgLMhguY29tcHV0ZXIudjEuTWVzc2FnZVRleHRIABIsCgZ3aWRnZXQYAiABKAsyGi5jb21wdXRlci52MS5NZXNzYWdlV2lkZ2V0SAASOwoOc2VjcmV0X3JlcXVlc3QYAyABKAsyIS5jb21wdXRlci52MS5NZXNzYWdlU2VjcmV0UmVxdWVzdEgAQgYKBGJvZHkiPwoLTWVzc2FnZVRleHQSDAoEdGV4dBgBIAEoCRIiCgZpbWFnZXMYAiADKAsyEi5jb21wdXRlci52MS5JbWFnZSIwCg1NZXNzYWdlV2lkZ2V0Eg4KBnByb21wdBgBIAEoCRIPCgdvcHRpb25zGAIgAygJIjUKFE1lc3NhZ2VTZWNyZXRSZXF1ZXN0Eg4KBnByb21wdBgBIAEoCRINCgVsYWJlbBgCIAEoCSJAChNTZW5kTWVzc2FnZVJlc3BvbnNlEhUKDW9jY3VycmVuY2VfaWQYASABKAkSEgoKdHVybl9lbmRlZBgCIAEoCCIbCgtQYWlyUmVxdWVzdBIMCgRjb2RlGAEgASgJIlYKDFBhaXJSZXNwb25zZRINCgV0b2tlbhgBIAEoCRIPCgd2bmNfdXJsGAIgASgJEiYKBnN0YXR1cxgDIAEoCzIWLmNvbXB1dGVyLnYxLkJveFN0YXR1cyIgCg1TdGF0dXNSZXF1ZXN0Eg8KB2Rpc3BsYXkYASABKAUiZwoMU2NyZWVuU3RhdHVzEg4KBmJvdF9pZBgBIAEoCRIPCgdkaXNwbGF5GAIgASgFEiUKBXN0YXRlGAMgASgOMhYuY29tcHV0ZXIudjEuU2VhdFN0YXRlEg8KB3ZuY191cmwYBCABKAkilgEKCUJveFN0YXR1cxIlCgVzdGF0ZRgBIAEoDjIWLmNvbXB1dGVyLnYxLlNlYXRTdGF0ZRIPCgd2bmNfdXJsGAIgASgJEiUKB2Rpc3BsYXkYAyABKAsyFC5jb21wdXRlci52MS5EaXNwbGF5EioKB3NjcmVlbnMYBCADKAsyGS5jb21wdXRlci52MS5TY3JlZW5TdGF0dXMiNgoSU2V0UHJlc2VuY2VSZXF1ZXN0Eg8KB3ByZXNlbnQYASABKAgSDwoHZGlzcGxheRgCIAEoBSKtAQoOUG9pbnRlclJlcXVlc3QSKAoEbW92ZRgBIAEoCzIYLmNvbXB1dGVyLnYxLlBvaW50ZXJNb3ZlSAASKgoFY2xpY2sYAiABKAsyGS5jb21wdXRlci52MS5Qb2ludGVyQ2xpY2tIABIsCgZzY3JvbGwYBCABKAsyGi5jb21wdXRlci52MS5Qb2ludGVyU2Nyb2xsSAASDwoHZGlzcGxheRgDIAEoBUIGCgRib2R5IjMKC1BvaW50ZXJNb3ZlEgoKAmR4GAEgASgFEgoKAmR5GAIgASgFEgwKBGdyYWIYAyABKAgiJwoNUG9pbnRlclNjcm9sbBIKCgJkeBgBIAEoBRIKCgJkeRgCIAEoBSIzCgxQb2ludGVyQ2xpY2sSIwoGYnV0dG9uGAEgASgOMhMuY29tcHV0ZXIudjEuQnV0dG9uIlsKD1BvaW50ZXJSZXNwb25zZRIiCgZjdXJzb3IYASABKAsyEi5jb21wdXRlci52MS5Qb2ludBIkCgRzZWF0GAIgASgOMhYuY29tcHV0ZXIudjEuU2VhdFN0YXRlIjAKD1NlYXRUeXBlUmVxdWVzdBIMCgR0ZXh0GAEgASgJEg8KB2Rpc3BsYXkYAiABKAUiJgoTQ2xpcGJvYXJkR2V0UmVxdWVzdBIPCgdkaXNwbGF5GAEgASgFIjQKE0NsaXBib2FyZFNldFJlcXVlc3QSDAoEdGV4dBgBIAEoCRIPCgdkaXNwbGF5GAIgASgFIhkKCUNsaXBib2FyZBIMCgR0ZXh0GAEgASgJIkQKEk9jY3VycmVuY2VzUmVxdWVzdBIOCgZjdXJzb3IYASABKAkSDQoFbGltaXQYAiABKAUSDwoHZGlzcGxheRgDIAEoBSKfAQoKT2NjdXJyZW5jZRIKCgJpZBgBIAEoCRILCgNzZXEYAiABKAUSCgoCYXQYAyABKAMSDAoEa2luZBgEIAEoCRIMCgR0ZXh0GAUgASgJEg4KBnByb21wdBgGIAEoCRIPCgdvcHRpb25zGAcgAygJEg4KBmFuc3dlchgIIAEoCRINCgVsYWJlbBgJIAEoCRIQCghwcm92aWRlZBgKIAEoCCJUChNPY2N1cnJlbmNlc1Jlc3BvbnNlEigKB2VudHJpZXMYASADKAsyFy5jb21wdXRlci52MS5PY2N1cnJlbmNlEhMKC25leHRfY3Vyc29yGAIgASgJIk0KFFByb3ZpZGVTZWNyZXRSZXF1ZXN0EhUKDW9jY3VycmVuY2VfaWQYASABKAkSDQoFdmFsdWUYAiABKAkSDwoHZGlzcGxheRgDIAEoBSIpChVQcm92aWRlU2VjcmV0UmVzcG9uc2USEAoIcHJvdmlkZWQYASABKAgiHgoQQ3JlYXRlQm90UmVxdWVzdBIKCgJpZBgBIAEoCSI8Cg5Cb3RDcmVkZW50aWFscxIKCgJpZBgBIAEoCRIPCgdkaXNwbGF5GAIgASgFEg0KBXRva2VuGAMgASgJIh4KEERlbGV0ZUJvdFJlcXVlc3QSCgoCaWQYASABKAkiHgoNUmV2b2tlUmVxdWVzdBINCgV0b2tlbhgBIAEoCSIhCg5SZXZva2VSZXNwb25zZRIPCgdyZXZva2VkGAEgASgIIhkKF1doYXRzQXBwQWNjb3VudHNSZXF1ZXN0Il8KD1doYXRzQXBwQWNjb3VudBIMCgRhY2N0GAEgASgJEgsKA2JvdBgCIAEoCRISCgpjaGFubmVsX2lkGAMgASgJEg0KBXBob25lGAQgASgJEg4KBnN0YXR1cxgFIAEoCSJKChhXaGF0c0FwcEFjY291bnRzUmVzcG9uc2USLgoIYWNjb3VudHMYASADKAsyHC5jb21wdXRlci52MS5XaGF0c0FwcEFjY291bnQiTwoTV2hhdHNBcHBMaW5rUmVxdWVzdBIMCgRhY2N0GAEgASgJEg4KBmFjdGlvbhgCIAEoCRINCgVwaG9uZRgDIAEoCRILCgNib3QYBCABKAkicgoRV2hhdHNBcHBMaW5rU3RhdGUSDAoEYWNjdBgBIAEoCRIOCgZzdGF0dXMYAiABKAkSCgoCcXIYAyABKAkSFAoMcGFpcmluZ19jb2RlGAQgASgJEg4KBmFnZV9tcxgFIAEoBRINCgVwaG9uZRgGIAEoCSIlChVXaGF0c0FwcEdyb3Vwc1JlcXVlc3QSDAoEYWNjdBgBIAEoCSJMCg1XaGF0c0FwcEdyb3VwEgsKA2ppZBgBIAEoCRIPCgdzdWJqZWN0GAIgASgJEgwKBHNpemUYAyABKAUSDwoHZW5hYmxlZBgEIAEoCCJEChZXaGF0c0FwcEdyb3Vwc1Jlc3BvbnNlEioKBmdyb3VwcxgBIAMoCzIaLmNvbXB1dGVyLnYxLldoYXRzQXBwR3JvdXAiOAoYV2hhdHNBcHBKb2luR3JvdXBSZXF1ZXN0EgwKBGFjY3QYASABKAkSDgoGaW52aXRlGAIgASgJIigKGVdoYXRzQXBwSm9pbkdyb3VwUmVzcG9uc2USCwoDamlkGAEgASgJIpgCChVXaGF0c0FwcEFjY291bnRDb25maWcSFgoOYWxsb3dlZF9ncm91cHMYASADKAkSFAoMdHJpZ2dlcl9tb2RlGAIgASgJEhYKDnRyaWdnZXJfcHJlZml4GAMgASgJEhEKCWRtX3BvbGljeRgEIAEoCRIUCgxkbV9hbGxvd2xpc3QYBSADKAkSGwoTaW1hZ2Vfc2VuZHNfcGVyX2RheRgGIAEoBRIWCg52aXNpb25fZW5hYmxlZBgHIAEoCBIWCg5tYWludGFpbmVyX2ppZBgIIAEoCRISCgpvd25lcl9qaWRzGAkgAygJEh0KFWRpZ2VzdF9yZWNpcGllbnRfamlkcxgKIAMoCRIQCghib3RfbmFtZRgLIAEoCSJZChVXaGF0c0FwcENvbmZpZ1JlcXVlc3QSDAoEYWNjdBgBIAEoCRIyCgZjb25maWcYAiABKAsyIi5jb21wdXRlci52MS5XaGF0c0FwcEFjY291bnRDb25maWciTAoWV2hhdHNBcHBDb25maWdSZXNwb25zZRIyCgZjb25maWcYASABKAsyIi5jb21wdXRlci52MS5XaGF0c0FwcEFjY291bnRDb25maWcqawoJU2VhdFN0YXRlEhoKFlNFQVRfU1RBVEVfVU5TUEVDSUZJRUQQABIUChBTRUFUX1NUQVRFX0FHRU5UEAESFgoSU0VBVF9TVEFURV9XQUlUSU5HEAISFAoQU0VBVF9TVEFURV9IVU1BThADKoQCCglFcnJvckNvZGUSGgoWRVJST1JfQ09ERV9VTlNQRUNJRklFRBAAEh4KGkVSUk9SX0NPREVfVU5BVVRIRU5USUNBVEVEEAESGAoURVJST1JfQ09ERV9TRUFUX0hFTEQQAhIcChhFUlJPUl9DT0RFX09VVF9PRl9CT1VORFMQAxIcChhFUlJPUl9DT0RFX1BBVEhfUkVKRUNURUQQBBIaChZFUlJPUl9DT0RFX0RBRU1PTl9ET1dOEAUSGQoVRVJST1JfQ09ERV9WQUxJREFUSU9OEAYSFwoTRVJST1JfQ09ERV9DT05GTElDVBAHEhUKEUVSUk9SX0NPREVfREVOSUVEEAgqewoGQnV0dG9uEhYKEkJVVFRPTl9VTlNQRUNJRklFRBAAEg8KC0JVVFRPTl9MRUZUEAESEAoMQlVUVE9OX1JJR0hUEAISEQoNQlVUVE9OX01JRERMRRADEg8KC0JVVFRPTl9CQUNLEAQSEgoOQlVUVE9OX0ZPUldBUkQQBTK0AwoFQWdlbnQSOwoEU3BlYxIYLmNvbXB1dGVyLnYxLlNwZWNSZXF1ZXN0GhkuY29tcHV0ZXIudjEuU3BlY1Jlc3BvbnNlElAKC1NlbmRNZXNzYWdlEh8uY29tcHV0ZXIudjEuU2VuZE1lc3NhZ2VSZXF1ZXN0GiAuY29tcHV0ZXIudjEuU2VuZE1lc3NhZ2VSZXNwb25zZRJHCghDb21wdXRlchIcLmNvbXB1dGVyLnYxLkNvbXB1dGVyUmVxdWVzdBodLmNvbXB1dGVyLnYxLkNvbXB1dGVyUmVzcG9uc2USPgoFU2hlbGwSGS5jb21wdXRlci52MS5TaGVsbFJlcXVlc3QaGi5jb21wdXRlci52MS5TaGVsbFJlc3BvbnNlEkcKCFJlYWRGaWxlEhwuY29tcHV0ZXIudjEuUmVhZEZpbGVSZXF1ZXN0Gh0uY29tcHV0ZXIudjEuUmVhZEZpbGVSZXNwb25zZRJKCglXcml0ZUZpbGUSHS5jb21wdXRlci52MS5Xcml0ZUZpbGVSZXF1ZXN0Gh4uY29tcHV0ZXIudjEuV3JpdGVGaWxlUmVzcG9uc2UyrgoKBFNlYXQSOwoEUGFpchIYLmNvbXB1dGVyLnYxLlBhaXJSZXF1ZXN0GhkuY29tcHV0ZXIudjEuUGFpclJlc3BvbnNlEjwKBlN0YXR1cxIaLmNvbXB1dGVyLnYxLlN0YXR1c1JlcXVlc3QaFi5jb21wdXRlci52MS5Cb3hTdGF0dXMSRgoLU2V0UHJlc2VuY2USHy5jb21wdXRlci52MS5TZXRQcmVzZW5jZVJlcXVlc3QaFi5jb21wdXRlci52MS5Cb3hTdGF0dXMSRAoHUG9pbnRlchIbLmNvbXB1dGVyLnYxLlBvaW50ZXJSZXF1ZXN0GhwuY29tcHV0ZXIudjEuUG9pbnRlclJlc3BvbnNlEkIKBFR5cGUSHC5jb21wdXRlci52MS5TZWF0VHlwZVJlcXVlc3QaHC5jb21wdXRlci52MS5Qb2ludGVyUmVzcG9uc2USSAoMQ2xpcGJvYXJkR2V0EiAuY29tcHV0ZXIudjEuQ2xpcGJvYXJkR2V0UmVxdWVzdBoWLmNvbXB1dGVyLnYxLkNsaXBib2FyZBJICgxDbGlwYm9hcmRTZXQSIC5jb21wdXRlci52MS5DbGlwYm9hcmRTZXRSZXF1ZXN0GhYuY29tcHV0ZXIudjEuQ2xpcGJvYXJkElAKC09jY3VycmVuY2VzEh8uY29tcHV0ZXIudjEuT2NjdXJyZW5jZXNSZXF1ZXN0GiAuY29tcHV0ZXIudjEuT2NjdXJyZW5jZXNSZXNwb25zZRJWCg1Qcm92aWRlU2VjcmV0EiEuY29tcHV0ZXIudjEuUHJvdmlkZVNlY3JldFJlcXVlc3QaIi5jb21wdXRlci52MS5Qcm92aWRlU2VjcmV0UmVzcG9uc2USRwoJQ3JlYXRlQm90Eh0uY29tcHV0ZXIudjEuQ3JlYXRlQm90UmVxdWVzdBobLmNvbXB1dGVyLnYxLkJvdENyZWRlbnRpYWxzEkIKCURlbGV0ZUJvdBIdLmNvbXB1dGVyLnYxLkRlbGV0ZUJvdFJlcXVlc3QaFi5jb21wdXRlci52MS5Cb3hTdGF0dXMSQQoGUmV2b2tlEhouY29tcHV0ZXIudjEuUmV2b2tlUmVxdWVzdBobLmNvbXB1dGVyLnYxLlJldm9rZVJlc3BvbnNlEl8KEFdoYXRzQXBwQWNjb3VudHMSJC5jb21wdXRlci52MS5XaGF0c0FwcEFjY291bnRzUmVxdWVzdBolLmNvbXB1dGVyLnYxLldoYXRzQXBwQWNjb3VudHNSZXNwb25zZRJQCgxXaGF0c0FwcExpbmsSIC5jb21wdXRlci52MS5XaGF0c0FwcExpbmtSZXF1ZXN0Gh4uY29tcHV0ZXIudjEuV2hhdHNBcHBMaW5rU3RhdGUSWQoOV2hhdHNBcHBHcm91cHMSIi5jb21wdXRlci52MS5XaGF0c0FwcEdyb3Vwc1JlcXVlc3QaIy5jb21wdXRlci52MS5XaGF0c0FwcEdyb3Vwc1Jlc3BvbnNlEmIKEVdoYXRzQXBwSm9pbkdyb3VwEiUuY29tcHV0ZXIudjEuV2hhdHNBcHBKb2luR3JvdXBSZXF1ZXN0GiYuY29tcHV0ZXIudjEuV2hhdHNBcHBKb2luR3JvdXBSZXNwb25zZRJZCg5XaGF0c0FwcENvbmZpZxIiLmNvbXB1dGVyLnYxLldoYXRzQXBwQ29uZmlnUmVxdWVzdBojLmNvbXB1dGVyLnYxLldoYXRzQXBwQ29uZmlnUmVzcG9uc2ViBnByb3RvMw");
 
 /**
  * @generated from message computer.v1.Display
@@ -1624,6 +1624,428 @@ export const DeleteBotRequestSchema: GenMessage<DeleteBotRequest> = /*@__PURE__*
   messageDesc(file_computer, 59);
 
 /**
+ * @generated from message computer.v1.RevokeRequest
+ */
+export type RevokeRequest = Message<"computer.v1.RevokeRequest"> & {
+  /**
+   * absent = the caller's own seat
+   *
+   * @generated from field: string token = 1;
+   */
+  token: string;
+};
+
+/**
+ * Describes the message computer.v1.RevokeRequest.
+ * Use `create(RevokeRequestSchema)` to create a new message.
+ */
+export const RevokeRequestSchema: GenMessage<RevokeRequest> = /*@__PURE__*/
+  messageDesc(file_computer, 60);
+
+/**
+ * @generated from message computer.v1.RevokeResponse
+ */
+export type RevokeResponse = Message<"computer.v1.RevokeResponse"> & {
+  /**
+   * @generated from field: bool revoked = 1;
+   */
+  revoked: boolean;
+};
+
+/**
+ * Describes the message computer.v1.RevokeResponse.
+ * Use `create(RevokeResponseSchema)` to create a new message.
+ */
+export const RevokeResponseSchema: GenMessage<RevokeResponse> = /*@__PURE__*/
+  messageDesc(file_computer, 61);
+
+/**
+ * @generated from message computer.v1.WhatsAppAccountsRequest
+ */
+export type WhatsAppAccountsRequest = Message<"computer.v1.WhatsAppAccountsRequest"> & {
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppAccountsRequest.
+ * Use `create(WhatsAppAccountsRequestSchema)` to create a new message.
+ */
+export const WhatsAppAccountsRequestSchema: GenMessage<WhatsAppAccountsRequest> = /*@__PURE__*/
+  messageDesc(file_computer, 62);
+
+/**
+ * @generated from message computer.v1.WhatsAppAccount
+ */
+export type WhatsAppAccount = Message<"computer.v1.WhatsAppAccount"> & {
+  /**
+   * account id on this computer, e.g. "main"
+   *
+   * @generated from field: string acct = 1;
+   */
+  acct: string;
+
+  /**
+   * the Bot this number speaks for
+   *
+   * @generated from field: string bot = 2;
+   */
+  bot: string;
+
+  /**
+   * hub ingress id the bridge posts to
+   *
+   * @generated from field: string channel_id = 3;
+   */
+  channelId: string;
+
+  /**
+   * digits, no plus; empty until linked
+   *
+   * @generated from field: string phone = 4;
+   */
+  phone: string;
+
+  /**
+   * unlinked | linking | open | closed
+   *
+   * @generated from field: string status = 5;
+   */
+  status: string;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppAccount.
+ * Use `create(WhatsAppAccountSchema)` to create a new message.
+ */
+export const WhatsAppAccountSchema: GenMessage<WhatsAppAccount> = /*@__PURE__*/
+  messageDesc(file_computer, 63);
+
+/**
+ * @generated from message computer.v1.WhatsAppAccountsResponse
+ */
+export type WhatsAppAccountsResponse = Message<"computer.v1.WhatsAppAccountsResponse"> & {
+  /**
+   * @generated from field: repeated computer.v1.WhatsAppAccount accounts = 1;
+   */
+  accounts: WhatsAppAccount[];
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppAccountsResponse.
+ * Use `create(WhatsAppAccountsResponseSchema)` to create a new message.
+ */
+export const WhatsAppAccountsResponseSchema: GenMessage<WhatsAppAccountsResponse> = /*@__PURE__*/
+  messageDesc(file_computer, 64);
+
+/**
+ * @generated from message computer.v1.WhatsAppLinkRequest
+ */
+export type WhatsAppLinkRequest = Message<"computer.v1.WhatsAppLinkRequest"> & {
+  /**
+   * @generated from field: string acct = 1;
+   */
+  acct: string;
+
+  /**
+   * start | status | unlink
+   *
+   * @generated from field: string action = 2;
+   */
+  action: string;
+
+  /**
+   * start: request a pairing code for this number
+   *
+   * @generated from field: string phone = 3;
+   */
+  phone: string;
+
+  /**
+   * start on a new account: which Bot, default main
+   *
+   * @generated from field: string bot = 4;
+   */
+  bot: string;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppLinkRequest.
+ * Use `create(WhatsAppLinkRequestSchema)` to create a new message.
+ */
+export const WhatsAppLinkRequestSchema: GenMessage<WhatsAppLinkRequest> = /*@__PURE__*/
+  messageDesc(file_computer, 65);
+
+/**
+ * @generated from message computer.v1.WhatsAppLinkState
+ */
+export type WhatsAppLinkState = Message<"computer.v1.WhatsAppLinkState"> & {
+  /**
+   * @generated from field: string acct = 1;
+   */
+  acct: string;
+
+  /**
+   * unlinked | linking | open | closed
+   *
+   * @generated from field: string status = 2;
+   */
+  status: string;
+
+  /**
+   * raw QR string while linking without a phone
+   *
+   * @generated from field: string qr = 3;
+   */
+  qr: string;
+
+  /**
+   * 8 characters while linking with a phone
+   *
+   * @generated from field: string pairing_code = 4;
+   */
+  pairingCode: string;
+
+  /**
+   * how old the qr or code is; WhatsApp rotates a QR every 20-60 s
+   *
+   * @generated from field: int32 age_ms = 5;
+   */
+  ageMs: number;
+
+  /**
+   * @generated from field: string phone = 6;
+   */
+  phone: string;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppLinkState.
+ * Use `create(WhatsAppLinkStateSchema)` to create a new message.
+ */
+export const WhatsAppLinkStateSchema: GenMessage<WhatsAppLinkState> = /*@__PURE__*/
+  messageDesc(file_computer, 66);
+
+/**
+ * @generated from message computer.v1.WhatsAppGroupsRequest
+ */
+export type WhatsAppGroupsRequest = Message<"computer.v1.WhatsAppGroupsRequest"> & {
+  /**
+   * @generated from field: string acct = 1;
+   */
+  acct: string;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppGroupsRequest.
+ * Use `create(WhatsAppGroupsRequestSchema)` to create a new message.
+ */
+export const WhatsAppGroupsRequestSchema: GenMessage<WhatsAppGroupsRequest> = /*@__PURE__*/
+  messageDesc(file_computer, 67);
+
+/**
+ * @generated from message computer.v1.WhatsAppGroup
+ */
+export type WhatsAppGroup = Message<"computer.v1.WhatsAppGroup"> & {
+  /**
+   * @generated from field: string jid = 1;
+   */
+  jid: string;
+
+  /**
+   * @generated from field: string subject = 2;
+   */
+  subject: string;
+
+  /**
+   * @generated from field: int32 size = 3;
+   */
+  size: number;
+
+  /**
+   * in allowed_groups (an empty allowlist enables all)
+   *
+   * @generated from field: bool enabled = 4;
+   */
+  enabled: boolean;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppGroup.
+ * Use `create(WhatsAppGroupSchema)` to create a new message.
+ */
+export const WhatsAppGroupSchema: GenMessage<WhatsAppGroup> = /*@__PURE__*/
+  messageDesc(file_computer, 68);
+
+/**
+ * @generated from message computer.v1.WhatsAppGroupsResponse
+ */
+export type WhatsAppGroupsResponse = Message<"computer.v1.WhatsAppGroupsResponse"> & {
+  /**
+   * @generated from field: repeated computer.v1.WhatsAppGroup groups = 1;
+   */
+  groups: WhatsAppGroup[];
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppGroupsResponse.
+ * Use `create(WhatsAppGroupsResponseSchema)` to create a new message.
+ */
+export const WhatsAppGroupsResponseSchema: GenMessage<WhatsAppGroupsResponse> = /*@__PURE__*/
+  messageDesc(file_computer, 69);
+
+/**
+ * @generated from message computer.v1.WhatsAppJoinGroupRequest
+ */
+export type WhatsAppJoinGroupRequest = Message<"computer.v1.WhatsAppJoinGroupRequest"> & {
+  /**
+   * @generated from field: string acct = 1;
+   */
+  acct: string;
+
+  /**
+   * chat.whatsapp.com link or bare code
+   *
+   * @generated from field: string invite = 2;
+   */
+  invite: string;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppJoinGroupRequest.
+ * Use `create(WhatsAppJoinGroupRequestSchema)` to create a new message.
+ */
+export const WhatsAppJoinGroupRequestSchema: GenMessage<WhatsAppJoinGroupRequest> = /*@__PURE__*/
+  messageDesc(file_computer, 70);
+
+/**
+ * @generated from message computer.v1.WhatsAppJoinGroupResponse
+ */
+export type WhatsAppJoinGroupResponse = Message<"computer.v1.WhatsAppJoinGroupResponse"> & {
+  /**
+   * @generated from field: string jid = 1;
+   */
+  jid: string;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppJoinGroupResponse.
+ * Use `create(WhatsAppJoinGroupResponseSchema)` to create a new message.
+ */
+export const WhatsAppJoinGroupResponseSchema: GenMessage<WhatsAppJoinGroupResponse> = /*@__PURE__*/
+  messageDesc(file_computer, 71);
+
+/**
+ * @generated from message computer.v1.WhatsAppAccountConfig
+ */
+export type WhatsAppAccountConfig = Message<"computer.v1.WhatsAppAccountConfig"> & {
+  /**
+   * @generated from field: repeated string allowed_groups = 1;
+   */
+  allowedGroups: string[];
+
+  /**
+   * mention | prefix | all
+   *
+   * @generated from field: string trigger_mode = 2;
+   */
+  triggerMode: string;
+
+  /**
+   * @generated from field: string trigger_prefix = 3;
+   */
+  triggerPrefix: string;
+
+  /**
+   * members | allowlist | anyone
+   *
+   * @generated from field: string dm_policy = 4;
+   */
+  dmPolicy: string;
+
+  /**
+   * @generated from field: repeated string dm_allowlist = 5;
+   */
+  dmAllowlist: string[];
+
+  /**
+   * @generated from field: int32 image_sends_per_day = 6;
+   */
+  imageSendsPerDay: number;
+
+  /**
+   * @generated from field: bool vision_enabled = 7;
+   */
+  visionEnabled: boolean;
+
+  /**
+   * @generated from field: string maintainer_jid = 8;
+   */
+  maintainerJid: string;
+
+  /**
+   * @generated from field: repeated string owner_jids = 9;
+   */
+  ownerJids: string[];
+
+  /**
+   * @generated from field: repeated string digest_recipient_jids = 10;
+   */
+  digestRecipientJids: string[];
+
+  /**
+   * @generated from field: string bot_name = 11;
+   */
+  botName: string;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppAccountConfig.
+ * Use `create(WhatsAppAccountConfigSchema)` to create a new message.
+ */
+export const WhatsAppAccountConfigSchema: GenMessage<WhatsAppAccountConfig> = /*@__PURE__*/
+  messageDesc(file_computer, 72);
+
+/**
+ * @generated from message computer.v1.WhatsAppConfigRequest
+ */
+export type WhatsAppConfigRequest = Message<"computer.v1.WhatsAppConfigRequest"> & {
+  /**
+   * @generated from field: string acct = 1;
+   */
+  acct: string;
+
+  /**
+   * absent = read
+   *
+   * @generated from field: computer.v1.WhatsAppAccountConfig config = 2;
+   */
+  config?: WhatsAppAccountConfig | undefined;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppConfigRequest.
+ * Use `create(WhatsAppConfigRequestSchema)` to create a new message.
+ */
+export const WhatsAppConfigRequestSchema: GenMessage<WhatsAppConfigRequest> = /*@__PURE__*/
+  messageDesc(file_computer, 73);
+
+/**
+ * @generated from message computer.v1.WhatsAppConfigResponse
+ */
+export type WhatsAppConfigResponse = Message<"computer.v1.WhatsAppConfigResponse"> & {
+  /**
+   * @generated from field: computer.v1.WhatsAppAccountConfig config = 1;
+   */
+  config?: WhatsAppAccountConfig | undefined;
+};
+
+/**
+ * Describes the message computer.v1.WhatsAppConfigResponse.
+ * Use `create(WhatsAppConfigResponseSchema)` to create a new message.
+ */
+export const WhatsAppConfigResponseSchema: GenMessage<WhatsAppConfigResponse> = /*@__PURE__*/
+  messageDesc(file_computer, 74);
+
+/**
  * @generated from enum computer.v1.SeatState
  */
 export enum SeatState {
@@ -1912,6 +2334,61 @@ export const Seat: GenService<{
     methodKind: "unary";
     input: typeof DeleteBotRequestSchema;
     output: typeof BoxStatusSchema;
+  },
+  /**
+   * Drop a seat token: the caller's own (sign-out) or, from an owner seat,
+   * any other. Guest seats from invites expire on their own; this is early.
+   *
+   * @generated from rpc computer.v1.Seat.Revoke
+   */
+  revoke: {
+    methodKind: "unary";
+    input: typeof RevokeRequestSchema;
+    output: typeof RevokeResponseSchema;
+  },
+  /**
+   * WhatsApp is a channel of a Bot: a number linked from hello.expert by
+   * pairing code or QR, a socket on this computer, groups the owner ticks.
+   * Owner seat only. The hub proxies these to the bridge process it runs.
+   *
+   * @generated from rpc computer.v1.Seat.WhatsAppAccounts
+   */
+  whatsAppAccounts: {
+    methodKind: "unary";
+    input: typeof WhatsAppAccountsRequestSchema;
+    output: typeof WhatsAppAccountsResponseSchema;
+  },
+  /**
+   * @generated from rpc computer.v1.Seat.WhatsAppLink
+   */
+  whatsAppLink: {
+    methodKind: "unary";
+    input: typeof WhatsAppLinkRequestSchema;
+    output: typeof WhatsAppLinkStateSchema;
+  },
+  /**
+   * @generated from rpc computer.v1.Seat.WhatsAppGroups
+   */
+  whatsAppGroups: {
+    methodKind: "unary";
+    input: typeof WhatsAppGroupsRequestSchema;
+    output: typeof WhatsAppGroupsResponseSchema;
+  },
+  /**
+   * @generated from rpc computer.v1.Seat.WhatsAppJoinGroup
+   */
+  whatsAppJoinGroup: {
+    methodKind: "unary";
+    input: typeof WhatsAppJoinGroupRequestSchema;
+    output: typeof WhatsAppJoinGroupResponseSchema;
+  },
+  /**
+   * @generated from rpc computer.v1.Seat.WhatsAppConfig
+   */
+  whatsAppConfig: {
+    methodKind: "unary";
+    input: typeof WhatsAppConfigRequestSchema;
+    output: typeof WhatsAppConfigResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_computer, 1);

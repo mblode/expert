@@ -10,6 +10,8 @@ import {
 import { allowedBind, refuseBindMessage } from "./host/bind.ts";
 import { loadPolicy } from "./service/policy.ts";
 import { FileBotStore, FileSeatTokenStore } from "./service/provision.ts";
+import { FileChannelStore } from "./service/channels.ts";
+import { BridgeClient, DEFAULT_BRIDGE_URL } from "./service/whatsapp.ts";
 import { PixelRegistry } from "./service/pixels.ts";
 
 const bind = process.env.COMPUTER_BIND ?? "127.0.0.1";
@@ -27,6 +29,13 @@ const deskMode = process.env.COMPUTER_DESK ?? "fake";
 const rosterPath = resolve(process.env.COMPUTER_DATA ?? "data/bots.json");
 const dataDir = dirname(rosterPath);
 const eveSecret = ensureEveSecret(join(dataDir, "eve-secret"), process.env.COMPUTER_EVE_SECRET);
+// The bridge's admin secret lives beside the roster and is handed to the
+// bridge child by the supervisor; the hub reads the same file. Same shape as
+// the Eve secret, and for the same reason: never on argv, never in a log.
+const bridgeSecret = ensureEveSecret(
+  join(dataDir, "whatsapp", "bridge-secret"),
+  process.env.WHATSAPP_BRIDGE_SECRET,
+);
 
 const windows =
   deskMode === "docker"
@@ -46,6 +55,12 @@ const hub = createHub({
     ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
   }),
   policy: loadPolicy(join(dataDir, "policy.json")),
+  channelStore: new FileChannelStore(join(dataDir, "channels.json")),
+  bridge: new BridgeClient({
+    secret: bridgeSecret,
+    url: process.env.COMPUTER_BRIDGE_URL ?? DEFAULT_BRIDGE_URL,
+  }),
+  statusFile: process.env.COMPUTER_STATUS_FILE,
   vncUrl,
   vncHost: process.env.COMPUTER_VNC_HOST ?? "127.0.0.1",
   // RFB port for window N is base + N (primary :1 → 5901).

@@ -116,15 +116,60 @@ export class PolicyService {
 }
 
 /**
- * Load `data/policy.json`. A missing file means no rules; a malformed one
- * throws, because a policy the hub cannot read is not a policy it may ignore.
+ * The rules a box runs with when nobody wrote a policy. None of these deny:
+ * a shipped deny would surprise an owner who never saw the file. Each one
+ * asks, which the model already handles by stopping and telling the human,
+ * and the routine that runs unattended at night gets no further than that.
+ *
+ * `git` and `npm` under /workspace/eve are the self-rebuild path (Phase 3):
+ * a Bot editing its own code is exactly the thing an owner approves once.
+ */
+export function defaultPolicyRules(): PolicyRule[] {
+  return [
+    {
+      argv: String.raw`^(sudo\s+)?(apt|apt-get|dpkg|pip3?|pipx)\s`,
+      decision: "ask",
+      id: "packages",
+      reason: "installing or removing packages needs a person",
+      tool: "shell",
+    },
+    {
+      argv: String.raw`^(sudo\s+)?rm\s+(-[a-zA-Z]*r[a-zA-Z]*f|-[a-zA-Z]*f[a-zA-Z]*r)\b`,
+      decision: "ask",
+      id: "rm-rf",
+      reason: "a recursive forced delete needs a person",
+      tool: "shell",
+    },
+    {
+      argv: String.raw`\b(curl|wget)\b.*\|\s*(ba|z|da)?sh\b`,
+      decision: "ask",
+      id: "curl-pipe-sh",
+      reason: "piping a download into a shell needs a person",
+      tool: "shell",
+    },
+    {
+      argv: String.raw`^(git|npm|npx|node)\s.*(/workspace/eve|\beve\s+(build|start))`,
+      decision: "ask",
+      id: "self-rebuild",
+      reason: "changing or rebuilding the agent's own code needs a person",
+      tool: "shell",
+    },
+  ];
+}
+
+/**
+ * Load `data/policy.json`. A missing file means the shipped defaults; a
+ * malformed one throws, because a policy the hub cannot read is not a policy
+ * it may ignore. An owner who wants no rules writes `[]`.
  */
 export function loadPolicy(path: string): PolicyService {
   let raw: string;
   try {
     raw = readFileSync(path, "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return new PolicyService();
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return new PolicyService(defaultPolicyRules());
+    }
     throw new Error(`policy ${path} could not be read (${(error as Error).message})`, {
       cause: error,
     });

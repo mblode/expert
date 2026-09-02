@@ -35,6 +35,17 @@ service Seat {
   // next free screen and mints the Bot's token, returned exactly once.
   rpc CreateBot(CreateBotRequest) returns (BotCredentials);
   rpc DeleteBot(DeleteBotRequest) returns (BoxStatus);
+  // Drop a seat token: the caller's own (sign-out) or, from an owner seat,
+  // any other. Guest seats from invites expire on their own; this is early.
+  rpc Revoke(RevokeRequest) returns (RevokeResponse);
+  // WhatsApp is a channel of a Bot: a number linked from hello.expert by
+  // pairing code or QR, a socket on this computer, groups the owner ticks.
+  // Owner seat only. The hub proxies these to the bridge process it runs.
+  rpc WhatsAppAccounts(WhatsAppAccountsRequest) returns (WhatsAppAccountsResponse);
+  rpc WhatsAppLink(WhatsAppLinkRequest) returns (WhatsAppLinkState);
+  rpc WhatsAppGroups(WhatsAppGroupsRequest) returns (WhatsAppGroupsResponse);
+  rpc WhatsAppJoinGroup(WhatsAppJoinGroupRequest) returns (WhatsAppJoinGroupResponse);
+  rpc WhatsAppConfig(WhatsAppConfigRequest) returns (WhatsAppConfigResponse);
 }
 
 // --- shared ---
@@ -429,4 +440,91 @@ message BotCredentials {
 
 message DeleteBotRequest {
   string id = 1;
+}
+
+message RevokeRequest {
+  string token = 1; // absent = the caller's own seat
+}
+
+message RevokeResponse {
+  bool revoked = 1;
+}
+
+// --- WhatsApp channel (owner seat) ---
+
+message WhatsAppAccountsRequest {}
+
+message WhatsAppAccount {
+  string acct = 1;          // account id on this computer, e.g. "main"
+  string bot = 2;           // the Bot this number speaks for
+  string channel_id = 3;    // hub ingress id the bridge posts to
+  string phone = 4;         // digits, no plus; empty until linked
+  string status = 5;        // unlinked | linking | open | closed
+}
+
+message WhatsAppAccountsResponse {
+  repeated WhatsAppAccount accounts = 1;
+}
+
+message WhatsAppLinkRequest {
+  string acct = 1;
+  string action = 2;        // start | status | unlink
+  string phone = 3;         // start: request a pairing code for this number
+  string bot = 4;           // start on a new account: which Bot, default main
+}
+
+message WhatsAppLinkState {
+  string acct = 1;
+  string status = 2;        // unlinked | linking | open | closed
+  string qr = 3;            // raw QR string while linking without a phone
+  string pairing_code = 4;  // 8 characters while linking with a phone
+  int32 age_ms = 5;         // how old the qr or code is; WhatsApp rotates a QR every 20-60 s
+  string phone = 6;
+}
+
+message WhatsAppGroupsRequest {
+  string acct = 1;
+}
+
+message WhatsAppGroup {
+  string jid = 1;
+  string subject = 2;
+  int32 size = 3;
+  bool enabled = 4;         // in allowed_groups (an empty allowlist enables all)
+}
+
+message WhatsAppGroupsResponse {
+  repeated WhatsAppGroup groups = 1;
+}
+
+message WhatsAppJoinGroupRequest {
+  string acct = 1;
+  string invite = 2;        // chat.whatsapp.com link or bare code
+}
+
+message WhatsAppJoinGroupResponse {
+  string jid = 1;
+}
+
+message WhatsAppAccountConfig {
+  repeated string allowed_groups = 1;
+  string trigger_mode = 2;  // mention | prefix | all
+  string trigger_prefix = 3;
+  string dm_policy = 4;     // members | allowlist | anyone
+  repeated string dm_allowlist = 5;
+  int32 image_sends_per_day = 6;
+  bool vision_enabled = 7;
+  string maintainer_jid = 8;
+  repeated string owner_jids = 9;
+  repeated string digest_recipient_jids = 10;
+  string bot_name = 11;
+}
+
+message WhatsAppConfigRequest {
+  string acct = 1;
+  WhatsAppAccountConfig config = 2; // absent = read
+}
+
+message WhatsAppConfigResponse {
+  WhatsAppAccountConfig config = 1;
 }

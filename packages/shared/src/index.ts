@@ -34,6 +34,26 @@ export type OccurrenceKind = (typeof OCCURRENCE_KINDS)[number];
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
 /**
+ * Who holds a seat token. An `owner` paired with the setup code (hello.expert
+ * sign-in, the phone) and may do anything a seat can. A `guest` came from an
+ * invite the Bot handed out in a chat: bound to one display, limited to the
+ * methods below, and expiring, so a WhatsApp member can take the mouse for a
+ * few minutes without becoming the box owner.
+ */
+export type SeatKind = "owner" | "guest";
+
+/** What a guest seat may call unless the invite narrows it further. Never provisioning, the thread, or clipboard read. */
+export const SEAT_GUEST_METHODS = [
+  "/computer.v1.Seat/Status",
+  "/computer.v1.Seat/SetPresence",
+  "/computer.v1.Seat/Pointer",
+  "/computer.v1.Seat/Type",
+  "/computer.v1.Seat/ClipboardSet",
+  "/computer.v1.Seat/ProvideSecret",
+  "/computer.v1.Seat/Revoke",
+] as const;
+
+/**
  * Closed on the way in, additive on the way out.
  *
  * model→hub stays strict: an unknown action type or send kind is VALIDATION,

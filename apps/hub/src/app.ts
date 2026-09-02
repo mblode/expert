@@ -8,6 +8,11 @@ import { ConnectRouter, corsHeaders, writeError, writeJson } from "./handler/rou
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
 import { handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
+import { handleChannelIngress, isChannelPath } from "./handler/channels.ts";
+import { registerWhatsApp } from "./handler/whatsapp.ts";
+import { ChannelRegistry } from "./service/channels.ts";
+import type { ChannelStore } from "./service/channels.ts";
+import type { BridgeClient } from "./service/whatsapp.ts";
 import { eveUrlForDisplay } from "./host/eve.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
@@ -18,6 +23,7 @@ import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
 import type { PixelRegistry } from "./service/pixels.ts";
 import { attachVncProxy } from "./vnc-proxy.ts";
+import { readHealth } from "./service/health.ts";
 
 export interface HubOptions {
   setupCode: string;
@@ -44,6 +50,12 @@ export interface HubOptions {
   eveUrls?: Record<string, string>;
   /** Shared secret injected on hub→Eve loopback requests (`eve start`). */
   eveSecret?: string;
+  /** Persists channel doors (the WhatsApp bridge, webhooks). Memory in tests. */
+  channelStore?: ChannelStore;
+  /** The WhatsApp bridge this hub supervises. Absent = the RPCs answer DAEMON_DOWN. */
+  bridge?: BridgeClient;
+  /** The supervisor's status file (init writes it). Absent = /healthz reports the hub alone. */
+  statusFile?: string;
 }
 
 export interface Hub {
@@ -52,6 +64,7 @@ export interface Hub {
   auth: AuthRegistry;
   bots: BotRegistry;
   provision: ProvisionService;
+  channels: ChannelRegistry;
   router: ConnectRouter;
   /** Mounts the stored roster (or provisions "main") and claims windows. */
   start: () => Promise<void>;
@@ -68,12 +81,18 @@ export function createHub(opts: HubOptions): Hub {
     setupCode: opts.setupCode,
   });
   const router = new ConnectRouter(auth);
+  const channels = new ChannelRegistry(opts.channelStore);
 
   registerAgent(router, bots);
   registerSeat(router, { auth, bots, provision, vncUrl: opts.vncUrl });
+  registerWhatsApp(router, { bots, bridge: opts.bridge, channels });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
-  router.extra("GET", "/healthz", "public", async () => ({ ok: true }));
+  // Honest health: the supervisor's view of desk, Eve and bridge beside the
+  // hub's own. Always 200 while the hub answers, so a crash-looping Eve does
+  // not make the platform restart the whole Machine; `ok` and `children`
+  // carry the detail for the owner page and for a person reading it.
+  router.extra("GET", "/healthz", "public", async () => readHealth(opts.statusFile));
   // bot.roster equivalent: ids and screens, never tokens. Cold on the edge.
   router.extra("GET", "/roster", "seat", async () => ({
     bots: bots.all().map((b) => ({ display: b.display, id: b.id, state: b.seat.getState() })),
@@ -110,6 +129,17 @@ export function createHub(opts: HubOptions): Hub {
       // clients: Eve's own protocol, gated by the seat token.
       if (isEvePath(url.pathname)) {
         await handleEveProxy(req, res, { auth, bots, cors: corsHeaders(), eveSecret, eveUrl });
+        return;
+      }
+      // The other door: a channel secret, not a seat. Same Eve, same hub secret.
+      if (isChannelPath(url.pathname)) {
+        await handleChannelIngress(req, res, {
+          bots,
+          channels,
+          cors: corsHeaders(),
+          eveSecret,
+          eveUrl,
+        });
         return;
       }
       const handled = await router.handle(req, res);
@@ -153,6 +183,7 @@ export function createHub(opts: HubOptions): Hub {
   return {
     auth,
     bots,
+    channels,
     close: () =>
       new Promise((resolveClose) => {
         wss.close();

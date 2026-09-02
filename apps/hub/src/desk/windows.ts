@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { asBox, boxLogin } from "./docker.ts";
 import { createHash } from "node:crypto";
 import { ComputerError } from "@computer/shared";
 
@@ -92,9 +93,11 @@ function spawnWindow(
   opts: { docker?: { container: string; user: string }; local?: boolean },
 ): Promise<{ exit: number; stderr: string }> {
   return new Promise((resolve, reject) => {
-    const child = opts.local
-      ? spawn(argv[0]!, argv.slice(1), {
-          env: { ...process.env, HOME: process.env.HOME ?? "/home/box" },
+    const boxEnv = boxLogin();
+    const local = opts.local ? asBox(argv, boxEnv) : undefined;
+    const child = local
+      ? spawn(local[0]!, local.slice(1), {
+          env: process.env.COMPUTER_RUN_AS ? boxEnv : { ...process.env, ...boxEnv },
           stdio: ["ignore", "ignore", "pipe"],
         })
       : spawn("docker", ["exec", "-u", opts.docker!.user, opts.docker!.container, ...argv], {

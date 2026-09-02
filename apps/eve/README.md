@@ -38,6 +38,54 @@ when that path looks like an Eve app.
 Do not invent a setup code or pretend the agent holds a seat token.
 Production is `eve start`, not `eve dev` / `EVE_DEV=1`.
 
+## Enable WhatsApp on a Bot
+
+WhatsApp is a channel of the computer, not a second agent. A Baileys bridge
+(the hub supervises it on loopback, `docs/WHATSAPP-PARITY.md` Section 3)
+logs into a linked number and POSTs each message to the Bot's Eve; the
+reply goes back in the same response and the bridge posts it to the chat.
+
+1. Re-export the shared channel from the bot:
+
+   ```ts
+   // apps/eve/bots/<id>/agent/channels/whatsapp.ts
+   export { default } from "../../../../lib/channels/whatsapp.ts";
+   ```
+
+   The file stem is the channel id, and its presence is what enables the
+   route `POST /eve/v1/whatsapp/message`. `bots/main` has it.
+
+2. Re-export `lib/tools/expert_invite.ts` too, so the Bot has something to
+   hand a chat user who wants the mouse (it answers `available: false` until
+   the invite RPC lands in Phase 2).
+
+The route accepts either of two headers, checked in constant time:
+
+| Header                  | Secret                   | Path                                                                       |
+| ----------------------- | ------------------------ | -------------------------------------------------------------------------- |
+| `x-computer-eve-secret` | `COMPUTER_EVE_SECRET`    | Production. The hub's `/channels/whatsapp/message` ingress on loopback     |
+| `x-bridge-secret`       | `WHATSAPP_BRIDGE_SECRET` | Direct. A bridge with no hub in front, the eve TUI, or the Vercel fallback |
+
+`COMPUTER_EVE_SECRET` is the hub-to-Eve secret this process already holds
+for the `/eve/v1` proxy; the bridge never sees it. In production the bridge
+authenticates to the hub with its own channel secret and the hub forwards
+here with `x-computer-eve-secret`. Set `WHATSAPP_BRIDGE_SECRET` only when
+something posts to Eve directly; leave it unset and that door stays shut.
+With neither set the route answers 503.
+
+The wire shape is bridge protocol v1 (`lib/channels/bridge-protocol.ts`):
+`token` (the chat JID), `message`, optional `sender`, `senderPhone`,
+`senderName`, `surface` (`dm` or `group`), `context[]`, `media[]` and
+`acct`. Every `context` block is fenced as `<untrusted_context>` before
+the model sees it, at most two images are attached, and each message runs
+in a fresh session (`<jid>#<uuid>`) so the reply is never a prior turn's.
+Replies pass through `lib/format-reply.ts` on the way out: single `*` bold,
+no headings or em dashes, configured secrets and credential query params
+redacted.
+
+Tests: `npm test --workspace=apps/eve` (vitest over `lib/**/*.test.ts`;
+nothing boots eve).
+
 ## Auth
 
 `hubLoopbackAuth()` accepts `x-computer-eve-secret` from the hub. The hub

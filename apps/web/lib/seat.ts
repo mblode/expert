@@ -32,6 +32,57 @@ export interface BoxStatus {
 
 export type Button = "left" | "right" | "middle" | "back" | "forward";
 
+/**
+ * WhatsApp as a channel. The hub mediates every call to the bridge process
+ * on the computer; the browser never talks to the bridge itself. `acct` names
+ * a linked number (one today, `main`), `bot` the Bot it belongs to.
+ */
+export type WhatsAppStatus = "unlinked" | "linking" | "open" | "closed";
+
+export interface WhatsAppAccount {
+  acct: string;
+  bot: string;
+  phone: string | null;
+  status: WhatsAppStatus;
+}
+
+/**
+ * What `WhatsAppLink` returns for `start`, `status` and `unlink`. While
+ * `linking`, one of `qr` (the raw string, rotated every 20 to 60 s) or
+ * `pairing_code` (eight characters, when `start` carried a phone) is set.
+ */
+export interface WhatsAppLinkState {
+  acct: string;
+  status: WhatsAppStatus;
+  qr: string | null;
+  pairing_code: string | null;
+  age_ms: number | null;
+  phone: string | null;
+}
+
+export interface WhatsAppGroup {
+  jid: string;
+  subject: string;
+  size: number;
+  enabled: boolean;
+}
+
+export interface WhatsAppConfig {
+  /** "all" serves every group the number is in; "listed" serves only `allowed_groups`. */
+  group_policy?: "all" | "listed";
+  allowed_groups: string[];
+  trigger_mode: "mention" | "prefix" | "all";
+  trigger_prefix?: string;
+  dm_policy: "members" | "allowlist" | "anyone";
+  dm_allowlist?: string[];
+  image_sends_per_day?: number;
+  vision_enabled?: boolean;
+  maintainer_jid?: string;
+  owner_jids?: string[];
+  digest_recipient_jids?: string[];
+  bot_name?: string;
+}
+
 export class SeatError extends Error {
   readonly code: string;
 
@@ -135,5 +186,26 @@ export function createSeat(hubUrl: string, token: string) {
     token,
     /** Pasted, not synthesized per-key: the hub types via clipboard + ctrl-v. */
     type: (text: string, display?: number) => call<unknown>("Type", { text, display }),
+    /** Sign-out: end this seat on the hub. No argument revokes the caller's own token. */
+    revoke: () => call<{ revoked: boolean }>("Revoke", {}),
+    whatsappAccounts: () => call<{ accounts: WhatsAppAccount[] }>("WhatsAppAccounts", {}),
+    /** Get when `config` is absent, set when present; either way the stored config comes back. */
+    whatsappConfig: (acct: string) => call<{ config: WhatsAppConfig }>("WhatsAppConfig", { acct }),
+    whatsappGroups: (acct: string) => call<{ groups: WhatsAppGroup[] }>("WhatsAppGroups", { acct }),
+    /** `invite` is the code from a `chat.whatsapp.com` link. */
+    whatsappJoinGroup: (acct: string, invite: string) =>
+      call<{ jid: string }>("WhatsAppJoinGroup", { acct, invite }),
+    /**
+     * `start` with a phone (digits only, no plus) asks for a pairing code;
+     * without one it yields a QR. `start` on an account that does not exist
+     * creates it against `bot` (default `main`). `unlink` logs the device out.
+     */
+    whatsappLink: (
+      acct: string,
+      action: "start" | "status" | "unlink",
+      extra: { phone?: string; bot?: string } = {},
+    ) => call<WhatsAppLinkState>("WhatsAppLink", { acct, action, ...extra }),
+    whatsappSetConfig: (acct: string, config: WhatsAppConfig) =>
+      call<{ config: WhatsAppConfig }>("WhatsAppConfig", { acct, config }),
   };
 }

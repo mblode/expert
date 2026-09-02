@@ -1,0 +1,303 @@
+/**
+ * The Fly guest's init: root under tini, the only process on the box that
+ * changes uid. It owns the volume fixups, the secrets, the roster, and the
+ * supervisor that runs everything else as the right user:
+ *
+ *   desk-up (box, once) → Eve per Bot (box) → the WhatsApp bridge (hub) → the hub (hub)
+ *
+ * The hub is no longer `box` (AUDIT P0 #2): what the model's `shell` can read
+ * is what box can read, and the roster, seat tokens, channel secrets and
+ * Baileys credentials are now hub-owned at 0700. The hub runs desk commands
+ * as box through `sudo -u box` (one sudoers line in the image). Everything
+ * under /workspace that the Bot works in is still box's.
+ *
+ * Env comes from the Fly config and secrets. Nothing secret goes on argv.
+ */
+import { spawnSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import {
+  chownSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { userInfo } from "node:os";
+import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
+import { planEveLaunches, resolveEveBotsRoot } from "./eve.ts";
+import { Supervisor } from "./supervisor.ts";
+
+const repoRoot = resolve(import.meta.dirname, "../../..");
+const { env } = process;
+
+const cloud = env.COMPUTER_CLOUD ?? "";
+const hubPort = env.COMPUTER_PORT ?? "8080";
+const hubUrl = env.COMPUTER_URL ?? `http://127.0.0.1:${hubPort}`;
+const rosterPath = resolve(env.COMPUTER_DATA ?? "/workspace/.computer/bots.json");
+const dataDir = dirname(rosterPath);
+const runDir = env.COMPUTER_RUN_DIR ?? "/run/computer";
+const statusFile = env.COMPUTER_STATUS_FILE ?? join(runDir, "status.json");
+const logDir = env.COMPUTER_LOG_DIR ?? join(dataDir, "logs");
+const bridgePort = env.COMPUTER_BRIDGE_PORT ?? "2100";
+const bridgeDir = join(repoRoot, "apps/whatsapp-bridge");
+const workspace = "/workspace";
+
+const box = ids(env.COMPUTER_BOX_USER ?? "box");
+const hub = ids(env.COMPUTER_HUB_USER ?? "hub");
+const isRoot = process.getuid?.() === 0;
+
+/** `id -u`/`id -g` for a user; falls back to the current user off the guest (tests, `npm run up`). */
+function ids(name: string): { uid: number; gid: number; name: string } {
+  const uid = spawnSync("id", ["-u", name], { encoding: "utf-8" });
+  const gid = spawnSync("id", ["-g", name], { encoding: "utf-8" });
+  if (uid.status === 0 && gid.status === 0) {
+    return { gid: Number(gid.stdout.trim()), name, uid: Number(uid.stdout.trim()) };
+  }
+  const me = userInfo();
+  return { gid: me.gid, name: me.username, uid: me.uid };
+}
+
+function own(path: string, who: { uid: number; gid: number }, mode?: number): void {
+  if (!isRoot) {
+    return;
+  }
+  chownSync(path, who.uid, who.gid);
+  if (mode !== undefined) {
+    spawnSync("chmod", [mode.toString(8), path]);
+  }
+}
+
+// 1. The volume mounts root-owned. Only its top level and the hub's own
+//    state dir are fixed up: a recursive chown over a large workspace on
+//    every boot would outlast the health-check grace period.
+mkdirSync(dataDir, { mode: 0o700, recursive: true });
+own(workspace, box, 0o755);
+own(dataDir, hub, 0o700);
+for (const sub of ["whatsapp", "logs", "vnc-tokens"]) {
+  const p = join(dataDir, sub);
+  mkdirSync(p, { mode: 0o700, recursive: true });
+  own(p, hub, 0o700);
+}
+const bridgeData = join(workspace, "whatsapp");
+mkdirSync(bridgeData, { mode: 0o755, recursive: true });
+own(bridgeData, hub, 0o755);
+if (existsSync("/home/box")) {
+  spawnSync("chown", ["-R", `${box.uid}:${box.gid}`, "/home/box"]);
+}
+
+// 2. The pairing code. On a cloud it must be a platform secret: a code on
+//    the volume was readable by the model until the uid split, and even now
+//    it is a permanent owner credential nobody rotates. Off the cloud, mint
+//    one so `npm run up` still pairs.
+let setupCode = env.COMPUTER_SETUP_CODE ?? "";
+if (!setupCode) {
+  const codePath = join(dataDir, "setup-code");
+  if (cloud && env.COMPUTER_ALLOW_MINTED_SETUP_CODE !== "1") {
+    console.error(
+      "computer init: COMPUTER_SETUP_CODE is not set. Set it as a platform secret (fly secrets set COMPUTER_SETUP_CODE=...) and redeploy. Refusing to mint one onto the volume.",
+    );
+    process.exit(1);
+  }
+  if (existsSync(codePath)) {
+    setupCode = readFileSync(codePath, "utf-8").trim();
+  } else {
+    setupCode = randomBytes(16).toString("hex");
+    writeFileSync(codePath, `${setupCode}\n`, { mode: 0o600 });
+    own(codePath, hub);
+    console.warn("computer init: minted a setup code onto the volume (not a cloud deployment)");
+  }
+}
+
+// 3. Secrets and the roster, hub-owned. Written here as root, then handed over.
+const eveSecret = ensureEveSecret(join(dataDir, "eve-secret"), env.COMPUTER_EVE_SECRET);
+const bridgeSecret = ensureEveSecret(
+  join(dataDir, "whatsapp", "bridge-secret"),
+  env.WHATSAPP_BRIDGE_SECRET,
+);
+const roster = ensureRosterAt(rosterPath);
+for (const f of [
+  "eve-secret",
+  "bots.json",
+  "seats.json",
+  "channels.json",
+  "policy.json",
+  "whatsapp/bridge-secret",
+]) {
+  const p = join(dataDir, f);
+  if (existsSync(p)) {
+    own(p, hub, 0o600);
+  }
+}
+
+// 4. Eve state on the volume. `eve start` keeps durable runs under
+//    `<project>/.eve/.workflow-data`; for the image Bots that is the image,
+//    which a redeploy replaces. Point it at the volume so a parked turn
+//    survives a deploy. The overlay under /workspace is already there.
+const imageBots = join(repoRoot, "apps/eve/bots");
+const botsRoot = resolveEveBotsRoot({ envBots: env.COMPUTER_EVE_BOTS, imageBots });
+if (botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS) {
+  for (const id of safeReaddir(botsRoot)) {
+    const project = join(botsRoot, id);
+    if (!existsSync(join(project, "package.json"))) {
+      continue;
+    }
+    const target = join(workspace, ".bots", id, "eve-state", "workflow-data");
+    const link = join(project, ".eve", ".workflow-data");
+    mkdirSync(target, { recursive: true });
+    own(join(workspace, ".bots"), box, 0o755);
+    own(join(workspace, ".bots", id), box, 0o755);
+    own(join(workspace, ".bots", id, "eve-state"), box, 0o755);
+    own(target, box, 0o755);
+    mkdirSync(dirname(link), { recursive: true });
+    own(dirname(link), box);
+    try {
+      if (!lstatSync(link).isSymbolicLink()) {
+        // A real directory from an earlier boot: leave it, say so, move on.
+        console.warn(`computer init: ${link} is a directory, not linking it to the volume`);
+        continue;
+      }
+    } catch {
+      symlinkSync(target, link);
+    }
+  }
+}
+
+// 5. Children.
+mkdirSync(logDir, { mode: 0o700, recursive: true });
+own(logDir, hub, 0o700);
+
+const sup = new Supervisor({
+  onEvent: (line) => console.log(`computer ${line}`),
+  statusFile,
+});
+
+/**
+ * The login's worth for box children, plus the model keys Eve needs. Never the
+ * setup code or the bridge secret: Eve shares uid box with the model's `shell`,
+ * so anything in its environ is the model's too. WhatsApp reaches Eve through
+ * the hub's channel door with the Eve secret; a Bot that needs to call the
+ * bridge back gets a per-account credential in Phase 4, not the admin secret.
+ */
+const DENY = new Set(["COMPUTER_SETUP_CODE", "WHATSAPP_BRIDGE_SECRET", "FLY_API_TOKEN"]);
+function childEnv(extra: NodeJS.ProcessEnv, home: string): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {};
+  for (const [k, v] of Object.entries(env)) {
+    if (!DENY.has(k) && v !== undefined) {
+      out[k] = v;
+    }
+  }
+  return { ...out, HOME: home, ...extra };
+}
+
+sup.start({
+  args: [],
+  cmd: "/usr/local/bin/desk-up",
+  env: childEnv({ USER: box.name }, "/home/box"),
+  gid: box.gid,
+  id: "desk",
+  log: join(logDir, "desk.log"),
+  oneShot: true,
+  uid: box.uid,
+});
+
+const eves = planEveLaunches(roster, { botsRoot });
+for (const launch of eves) {
+  sup.start({
+    args: ["eve", "start", "--host", "127.0.0.1", "--port", String(launch.port)],
+    cmd: "npx",
+    cwd: launch.cwd,
+    env: childEnv(
+      {
+        COMPUTER_BOT_TOKEN: launch.token,
+        COMPUTER_EVE_SECRET: eveSecret,
+        COMPUTER_URL: hubUrl,
+        HOST: "127.0.0.1",
+        PORT: String(launch.port),
+        USER: box.name,
+      },
+      "/home/box",
+    ),
+    gid: box.gid,
+    healthUrl: `http://127.0.0.1:${launch.port}/eve/v1/health`,
+    id: `eve-${launch.botId}`,
+    log: join(logDir, `eve-${launch.botId}.log`),
+    uid: box.uid,
+  });
+}
+if (eves.length === 0) {
+  console.warn(`computer init: no Eve project under ${botsRoot}; chat will report DAEMON_DOWN`);
+}
+
+if (env.COMPUTER_WHATSAPP !== "off" && existsSync(join(bridgeDir, "package.json"))) {
+  sup.start({
+    args: ["run", "start", "--workspace=apps/whatsapp-bridge"],
+    cmd: "npm",
+    cwd: repoRoot,
+    env: childEnv(
+      {
+        COMPUTER_URL: hubUrl,
+        HOST: "127.0.0.1",
+        PORT: bridgePort,
+        USER: hub.name,
+        WHATSAPP_BRIDGE_SECRET: bridgeSecret,
+        WHATSAPP_DATA_DIR: bridgeData,
+        WHATSAPP_STATE_DIR: join(dataDir, "whatsapp"),
+      },
+      join(dataDir, "home"),
+    ),
+    gid: hub.gid,
+    healthUrl: `http://127.0.0.1:${bridgePort}/health`,
+    id: "whatsapp-bridge",
+    log: join(logDir, "whatsapp-bridge.log"),
+    uid: hub.uid,
+  });
+}
+
+sup.start({
+  args: ["run", "start", "--workspace=apps/hub"],
+  cmd: "npm",
+  cwd: repoRoot,
+  env: childEnv(
+    {
+      COMPUTER_BRIDGE_URL: `http://127.0.0.1:${bridgePort}`,
+      COMPUTER_EVE_SECRET: eveSecret,
+      COMPUTER_RUN_AS: box.name,
+      COMPUTER_SETUP_CODE: setupCode,
+      COMPUTER_STATUS_FILE: statusFile,
+      USER: hub.name,
+      WHATSAPP_BRIDGE_SECRET: bridgeSecret,
+    },
+    join(dataDir, "home"),
+  ),
+  gid: hub.gid,
+  // /spec is public and answers only once the hub is listening; /healthz
+  // would read this supervisor's own status, which is circular.
+  healthUrl: `http://127.0.0.1:${hubPort}/spec`,
+  id: "hub",
+  log: join(logDir, "hub.log"),
+  uid: hub.uid,
+});
+mkdirSync(join(dataDir, "home"), { mode: 0o700, recursive: true });
+own(join(dataDir, "home"), hub, 0o700);
+
+console.log(
+  `computer init: desk, ${eves.length} eve, bridge and hub under supervision; status at ${statusFile}`,
+);
+
+const shutdown = (): void => {
+  void sup.stopAll().then(() => process.exit(0));
+};
+process.on("SIGTERM", shutdown);
+process.on("SIGINT", shutdown);
+
+function safeReaddir(dir: string): string[] {
+  try {
+    return readdirSync(dir);
+  } catch {
+    return [];
+  }
+}
