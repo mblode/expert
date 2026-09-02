@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/config";
 
 export function CtaSection(): React.ReactElement {
@@ -9,12 +10,9 @@ export function CtaSection(): React.ReactElement {
         Your agent. Your computer. Anywhere.
       </h2>
       <div className="relative mt-8 flex justify-center">
-        <Link
-          className="inline-flex h-12 items-center rounded-full bg-primary px-8 text-base font-medium text-primary-foreground"
-          href={siteConfig.links.login}
-        >
+        <Button render={<Link href={siteConfig.links.login} />} size="lg">
           Get started
-        </Link>
+        </Button>
       </div>
       <div className="relative mt-4 flex justify-center">
         <Link

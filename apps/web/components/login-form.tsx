@@ -3,9 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldSeparator,
+} from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { authClient } from "@/lib/auth-client";
-
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -127,143 +136,143 @@ export function LoginForm({
     }
   };
 
-  const fieldClass =
-    "w-full rounded-lg border border-edge bg-panel px-3 py-2 text-sm outline-none focus:border-accent";
-  const primaryClass =
-    "w-full rounded-lg bg-accent px-3 py-2 text-sm font-medium text-ink disabled:opacity-50";
-  const ghostClass =
-    "w-full rounded-lg border border-edge px-3 py-2 text-sm hover:border-accent disabled:opacity-50";
+  const errorAlert = error ? (
+    <Alert variant="destructive">
+      <AlertDescription>{error}</AlertDescription>
+    </Alert>
+  ) : null;
 
   const socialButtons =
     googleEnabled || appleEnabled ? (
-      <div className="space-y-2">
+      <>
         {googleEnabled && (
-          <button
-            className={ghostClass}
+          <Button
+            className="w-full"
             disabled={pending}
             onClick={() => void social("google")}
+            size="input"
             type="button"
+            variant="outline"
           >
             Continue with Google
-          </button>
+          </Button>
         )}
         {appleEnabled && (
-          <button
-            className={ghostClass}
+          <Button
+            className="w-full"
             disabled={pending}
             onClick={() => void social("apple")}
+            size="input"
             type="button"
+            variant="outline"
           >
             Continue with Apple
-          </button>
+          </Button>
         )}
-        <p className="text-center text-xs text-mute">or</p>
-      </div>
+        <FieldSeparator>or</FieldSeparator>
+      </>
     ) : null;
 
   if (step === "otp") {
     return (
       <form
-        className="space-y-5"
+        className="flex flex-col gap-5"
         onSubmit={(event) => {
           event.preventDefault();
           void submitOtp(otp);
         }}
       >
-        <div className="space-y-1.5">
-          <label
-            className="block text-center text-xs font-medium uppercase tracking-wide text-mute"
-            htmlFor="login-otp"
-          >
-            One-time code
-          </label>
-          <InputOTP
-            autoComplete="one-time-code"
-            autoFocus
-            containerClassName="justify-center"
-            disabled={pending}
-            id="login-otp"
-            maxLength={OTP_LENGTH}
-            onChange={setOtp}
-            onComplete={(code) => void submitOtp(code)}
-            value={otp}
-          >
-            <InputOTPGroup>
-              {Array.from({ length: OTP_LENGTH }, (_, index) => (
-                <InputOTPSlot index={index} key={index} />
-              ))}
-            </InputOTPGroup>
-          </InputOTP>
-          <p className="text-center text-xs text-mute">
-            We sent a code to {email}.{" "}
-            <button
-              className="font-medium text-white underline-offset-2 hover:underline disabled:no-underline disabled:opacity-60"
-              disabled={pending || cooldown > 0}
-              onClick={() => void resendOtp()}
-              type="button"
+        <FieldGroup className="gap-5">
+          <Field>
+            <FieldLabel className="w-full justify-center" htmlFor="login-otp">
+              One-time code
+            </FieldLabel>
+            <InputOTP
+              autoComplete="one-time-code"
+              autoFocus
+              containerClassName="justify-center"
+              disabled={pending}
+              id="login-otp"
+              maxLength={OTP_LENGTH}
+              onChange={setOtp}
+              onComplete={(code) => void submitOtp(code)}
+              value={otp}
             >
-              {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
-            </button>
-          </p>
-        </div>
-        {error && (
-          <p
-            className="rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-200"
-            role="alert"
+              <InputOTPGroup>
+                {Array.from({ length: OTP_LENGTH }, (_, index) => (
+                  <InputOTPSlot index={index} key={index} />
+                ))}
+              </InputOTPGroup>
+            </InputOTP>
+            <FieldDescription className="text-center">
+              We sent a code to {email}.{" "}
+              <Button
+                className="h-auto px-0 text-xs"
+                disabled={pending || cooldown > 0}
+                onClick={() => void resendOtp()}
+                type="button"
+                variant="link"
+              >
+                {cooldown > 0 ? `Resend in ${cooldown}s` : "Resend code"}
+              </Button>
+            </FieldDescription>
+          </Field>
+          {errorAlert}
+          <Button
+            className="w-full"
+            disabled={otp.length !== OTP_LENGTH}
+            loading={pending}
+            size="input"
+            type="submit"
           >
-            {error}
-          </p>
-        )}
-        <button
-          className={primaryClass}
-          disabled={pending || otp.length !== OTP_LENGTH}
-          type="submit"
-        >
-          {pending ? "Verifying…" : "Verify and sign in"}
-        </button>
-        <button
-          className={ghostClass}
-          onClick={() => {
-            setStep("email");
-            setOtp("");
-            setError(null);
-            setCooldown(0);
-          }}
-          type="button"
-        >
-          Use a different email
-        </button>
+            Verify and sign in
+          </Button>
+          <Button
+            className="w-full"
+            onClick={() => {
+              setStep("email");
+              setOtp("");
+              setError(null);
+              setCooldown(0);
+            }}
+            size="input"
+            type="button"
+            variant="outline"
+          >
+            Use a different email
+          </Button>
+        </FieldGroup>
       </form>
     );
   }
 
   return (
-    <form className="space-y-5" onSubmit={(event) => void requestOtp(event)}>
-      {socialButtons}
-      <label className="block space-y-1.5">
-        <span className="text-xs font-medium uppercase tracking-wide text-mute">Email</span>
-        <input
-          autoComplete="email"
-          className={fieldClass}
-          id="login-email"
-          onChange={(event) => setEmail(event.target.value)}
-          placeholder="name@domain.com"
-          required
-          type="email"
-          value={email}
-        />
-      </label>
-      {error && (
-        <p
-          className="rounded-lg border border-red-900/60 bg-red-950/50 px-3 py-2 text-sm text-red-200"
-          role="alert"
+    <form className="flex flex-col gap-5" onSubmit={(event) => void requestOtp(event)}>
+      <FieldGroup className="gap-5">
+        {socialButtons}
+        <Field>
+          <FieldLabel htmlFor="login-email">Email</FieldLabel>
+          <Input
+            autoComplete="email"
+            id="login-email"
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="name@domain.com"
+            required
+            type="email"
+            value={email}
+          />
+        </Field>
+        {errorAlert}
+        <Button
+          className="w-full"
+          disabled={!email.trim()}
+          loading={pending}
+          size="input"
+          type="submit"
         >
-          {error}
-        </p>
-      )}
-      <button className={primaryClass} disabled={pending || !email.trim()} type="submit">
-        {pending ? "Sending…" : "Send me a one-time password"}
-      </button>
+          Send me a one-time password
+        </Button>
+      </FieldGroup>
     </form>
   );
 }

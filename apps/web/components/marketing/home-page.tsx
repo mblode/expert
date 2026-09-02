@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { Button } from "@/components/ui/button";
 import { faqs } from "@/lib/content";
 import { siteConfig } from "@/lib/config";
 
@@ -70,12 +71,9 @@ export function MarketingHome(): React.ReactElement {
               </Reveal>
               <Reveal delay={0.5}>
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-                  <Link
-                    className="inline-flex h-12 items-center rounded-full bg-primary px-8 text-base font-medium text-primary-foreground"
-                    href={siteConfig.links.login}
-                  >
+                  <Button render={<Link href={siteConfig.links.login} />} size="lg">
                     Get started
-                  </Link>
+                  </Button>
                 </div>
               </Reveal>
               <Reveal delay={0.6}>

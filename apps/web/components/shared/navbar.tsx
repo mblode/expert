@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { Button } from "@/components/ui/button";
 import { siteConfig } from "@/lib/config";
-import { cn } from "@/lib/cn";
+import { cn } from "@/lib/utils";
 
 export function Navbar(): React.ReactElement {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -48,12 +49,9 @@ export function Navbar(): React.ReactElement {
           >
             Sign in
           </Link>
-          <Link
-            className="inline-flex h-8 items-center rounded-full bg-primary px-3 text-sm font-medium text-primary-foreground"
-            href={siteConfig.links.login}
-          >
+          <Button render={<Link href={siteConfig.links.login} />} size="xs">
             Get started
-          </Link>
+          </Button>
         </div>
       </nav>
     </header>

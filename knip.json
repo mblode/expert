@@ -20,5 +20,8 @@
       "entry": ["agent/**/*.ts"]
     }
   },
-  "ignoreExportsUsedInFile": true
+  "ignoreExportsUsedInFile": true,
+  "ignoreIssues": {
+    "apps/web/components/ui/**": ["exports", "types", "nsExports", "nsTypes"]
+  }
 }

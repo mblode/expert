@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { Button } from "@/components/ui/button";
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { BoxStatus, Screen, Seat, SeatState } from "../lib/seat";
 import { pixelUrlFresh } from "../lib/seat";
 import { useSeatInput } from "../lib/use-seat-input";
@@ -76,19 +78,21 @@ export function DesktopPane({
     <section className="flex min-h-0 min-w-0 flex-col">
       <header className="flex flex-wrap items-center gap-2 border-b border-edge px-3 py-2">
         {status && status.screens.length > 1 ? (
-          <select
-            aria-label="Screen"
-            className="rounded-md border border-edge bg-panel px-2 py-1 text-xs outline-none focus:border-accent"
-            onChange={(event) => onDisplayChange(Number(event.target.value))}
-            value={display}
-          >
-            {status.screens.map((candidate) => (
-              <option key={candidate.display} value={candidate.display}>
-                {candidate.bot_id} · screen {candidate.display}
-                {candidate.state === "WAITING" ? " · needs you" : ""}
-              </option>
-            ))}
-          </select>
+          <div className="w-fit min-w-40">
+            <NativeSelect
+              aria-label="Screen"
+              onChange={(event) => onDisplayChange(Number(event.target.value))}
+              size="sm"
+              value={display}
+            >
+              {status.screens.map((candidate) => (
+                <NativeSelectOption key={candidate.display} value={candidate.display}>
+                  {candidate.bot_id} · screen {candidate.display}
+                  {candidate.state === "WAITING" ? " · needs you" : ""}
+                </NativeSelectOption>
+              ))}
+            </NativeSelect>
+          </div>
         ) : (
           <span className="text-xs text-mute">{screen?.bot_id ?? "box"}</span>
         )}
@@ -102,45 +106,43 @@ export function DesktopPane({
           {/* Only offered while the seat is yours: the hub refuses typing
               otherwise, so the bar would be a field that eats what you write. */}
           {controllable && (
-            <button
+            <Button
               aria-expanded={showKeyboard}
-              className="rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
               onClick={() => setShowKeyboard((open) => !open)}
+              size="xs"
               type="button"
+              variant="outline"
             >
               Keyboard
-            </button>
+            </Button>
           )}
-          <button
+          <Button
             aria-expanded={showClipboard}
-            className="rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
             onClick={() => setShowClipboard((open) => !open)}
+            size="xs"
             type="button"
+            variant="outline"
           >
             Clipboard
-          </button>
+          </Button>
           {controllable ? (
-            <button
-              className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-ink disabled:opacity-50"
-              disabled={busy}
-              onClick={() => void presence(false)}
-              type="button"
-            >
+            <Button disabled={busy} onClick={() => void presence(false)} size="xs" type="button">
               I&apos;m done
-            </button>
+            </Button>
           ) : (
             // Without this the pane is silently dead: you move the mouse over
             // someone else's desktop and nothing happens, with no way to ask
             // for it. Waiting to be offered the seat is not how a person
             // takes over a machine that is going wrong.
-            <button
-              className="rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent disabled:opacity-50"
+            <Button
               disabled={busy}
               onClick={() => void presence(true)}
+              size="xs"
               type="button"
+              variant="outline"
             >
               Take the seat
-            </button>
+            </Button>
           )}
         </div>
       </header>
@@ -151,14 +153,15 @@ export function DesktopPane({
           role="alert"
         >
           <span className="font-medium text-amber-200">Eve needs you: take the seat</span>
-          <button
-            className="rounded-md bg-amber-400 px-2.5 py-1 text-xs font-medium text-ink disabled:opacity-50"
+          <Button
             disabled={busy}
             onClick={() => void presence(true)}
+            size="xs"
             type="button"
+            variant="warning"
           >
             Take the seat
-          </button>
+          </Button>
         </div>
       )}
 
@@ -168,13 +171,14 @@ export function DesktopPane({
           <span className="text-amber-200">
             {elsewhereWaiting.bot_id} needs you on screen {elsewhereWaiting.display}
           </span>
-          <button
-            className="rounded-md border border-amber-500/60 px-2.5 py-1 text-xs hover:border-amber-300"
+          <Button
             onClick={() => onDisplayChange(elsewhereWaiting.display)}
+            size="xs"
             type="button"
+            variant="outline"
           >
             Switch
-          </button>
+          </Button>
         </div>
       )}
 
@@ -217,7 +221,7 @@ export function DesktopPane({
                 // long-press selection callout from eating a held click.
                 className={`absolute inset-0 touch-pinch-zoom select-none rounded-lg outline-none ${
                   controllable
-                    ? "cursor-none focus-visible:ring-2 focus-visible:ring-accent"
+                    ? "cursor-none focus-visible:ring-2 focus-visible:ring-ring"
                     : "pointer-events-none"
                 }`}
                 role="application"

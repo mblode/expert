@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { Button } from "./components/ui/button";
 import { ConnectError } from "./components/connect-error";
 import { ChatPane } from "./components/chat-pane";
 import { DesktopPane } from "./components/desktop-pane";
@@ -129,13 +130,9 @@ function Workspace({
       <header className="flex items-center gap-3 border-b border-edge px-3 py-2">
         <h1 className="text-sm font-semibold">{siteConfig.name}</h1>
         {offline && <output className="truncate text-xs text-red-300">{offline}</output>}
-        <button
-          className="ml-auto rounded-md border border-edge px-2.5 py-1 text-xs hover:border-accent"
-          onClick={onSignOut}
-          type="button"
-        >
+        <Button className="ml-auto" onClick={onSignOut} size="xs" type="button" variant="outline">
           Sign out
-        </button>
+        </Button>
       </header>
 
       <main className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_420px] lg:grid-rows-1">

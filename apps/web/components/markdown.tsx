@@ -3,9 +3,8 @@ import { Streamdown } from "streamdown";
 import type { StreamdownProps } from "streamdown";
 
 /**
- * Shiki ships its own themed code chrome and switches on a `.dark` class this
- * app does not have, so code renders as plain token-styled elements instead
- * (see `.prose-chat` in index.css).
+ * Shiki ships its own themed code chrome. Streamdown still renders through
+ * `.prose-chat` so fences stay consistent with the rest of the transcript.
  */
 const COMPONENTS: StreamdownProps["components"] = {
   code: ({ children, className, ...props }) => (
