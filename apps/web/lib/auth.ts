@@ -6,6 +6,7 @@ import { getOrCreateComputerSeat } from "./computer-seat";
 import { isProductionRuntime, siteConfig, trimSlashes } from "./config";
 import { db } from "./db";
 import { sendOtpEmail } from "./email";
+import { captureServerEvent } from "./posthog-server";
 import { appleSocialConfig, googleSocialConfig } from "./social-providers";
 
 const isProduction = process.env.VERCEL_ENV === "production";
@@ -83,6 +84,17 @@ export const auth = betterAuth({
   baseURL,
   database: drizzleAdapter(db, { provider: "sqlite" }),
   databaseHooks: {
+    session: {
+      create: {
+        after: async (session) => {
+          await captureServerEvent({
+            distinctId: session.userId,
+            event: "login_completed",
+            properties: { source: "server" },
+          });
+        },
+      },
+    },
     user: {
       create: {
         before: async (user) => {

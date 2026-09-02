@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect } from "react";
+
 import { Button } from "@/components/ui/button";
+import { captureClientException } from "@/lib/posthog-client";
 
 export default function ErrorPage({
   error,
@@ -9,6 +12,9 @@ export default function ErrorPage({
   error: Error & { digest?: string };
   reset: () => void;
 }): React.ReactElement {
+  useEffect(() => {
+    captureClientException(error);
+  }, [error]);
   return (
     <div className="flex h-full items-center justify-center p-6">
       <div className="w-full max-w-sm space-y-5">

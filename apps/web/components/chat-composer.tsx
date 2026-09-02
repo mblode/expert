@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { captureEvent } from "@/lib/posthog-client";
 
 /**
  * Enter sends, shift-Enter breaks a line. While a turn is in flight the send
@@ -26,6 +27,7 @@ export function ChatComposer({
       return;
     }
     setText("");
+    captureEvent("chat_message_sent", { length: message.length });
     onSend(message);
   };
 
