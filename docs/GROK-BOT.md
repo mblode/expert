@@ -76,9 +76,21 @@ The substrate already matches the shape that matters: one shared Linux box, one 
 | Multi-agent DMs and group chats                               | Bots share `/workspace`; nothing else                                             | All of it                                                                                          |
 | Memory                                                        | `memory/profile.md` read into the prompt                                          | Inspection/edit UI                                                                                 |
 | Files and results as cards, attachments in the composer       | Bare links; no upload                                                             | Cards, upload, preview                                                                             |
-| Mobile                                                        | iOS app (pairing); web layout stacks                                              | Web mobile layout, notifications when `WAITING`                                                    |
+| Mobile                                                        | The Expert iOS app (chat, task cards, desk view, skills sheet); web layout stacks | Web mobile layout, notifications when `WAITING`                                                    |
 | Audit                                                         | Transcript on disk                                                                | Action log view                                                                                    |
 | Sleep / wake-on-connect                                       | Machine stays running                                                             | Fly suspend on idle + wake on request (an edge proxy that can carry WebSockets)                    |
+
+### Reference: the Expert iOS client
+
+The iOS app is the closest thing to a target for the web client, so the surfaces it already has are the ones the roadmap below should reproduce rather than reinvent. Screenshots are in [reference/](reference/).
+
+**Chat with task cards** ([ios-chat-task-card.png](reference/ios-chat-task-card.png)). One conversation with the bot, day separators, a "New" divider at the first unread bubble, and a card for each task the bot ran: title, status pill (Done), the branch and PR number, the file and line delta, and View PR / Open in Cursor actions. The bot's own progress arrives as short bubbles ("Merged PR 13. Fly is building the image..."), which is the `send_message` voice in [DESIGN.md](../api/DESIGN.md), not the model's scratchpad. A screen icon in the header opens the desk. The composer is one field ("Ask Expert") with an attach button and dictation.
+
+**Skill and connector sheet** ([ios-skill-sheet.png](reference/ios-skill-sheet.png), [ios-skill-installed.png](reference/ios-skill-installed.png)). A catalogue entry is an icon, a name, its source host, and one sentence. It lists what it includes (here one connector and five skills, each with its name and the "Use when..." trigger from the skill's frontmatter) with a View source link to the repository. The primary action toggles between Add and Added, and the overflow menu holds Uninstall.
+
+**Accounts on a connector** ([ios-skill-add-account.png](reference/ios-skill-add-account.png)). A connector can hold several accounts, each labelled by the user ("work or personal") and marked Connected once its OAuth flow completes. Add Another Account opens an inline label field with Authorize and Cancel. This is the per-account, shared-across-bots model Phase 5 needs, and it is the shape the hub's single `COMPUTER_MCP_URL` has to grow into.
+
+What the web client takes from this: the chat is the centre and the desk is a drawer (Phase 2); task cards are a message part with a PR link and a delta, built from the transcript (Phase 7's action log is the same data); the skills catalogue reads the Eve project and the connector registry, and accounts are stored per user, not per bot (Phase 5).
 
 ## 3. Roadmap for the web clone
 
