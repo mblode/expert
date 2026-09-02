@@ -14,6 +14,8 @@ export COMPUTER_VNC_HOST="${COMPUTER_VNC_HOST:-127.0.0.1}"
 export COMPUTER_VNC_PORT="${COMPUTER_VNC_PORT:-5900}"
 export COMPUTER_VNC_TOKEN_DIR="${COMPUTER_VNC_TOKEN_DIR:-/tmp/computer-vnc}"
 export COMPUTER_URL="${COMPUTER_URL:-http://127.0.0.1:8080}"
+# Image default. boot-eves prefers /workspace/eve/bots when that tree
+# has an Eve project (tenant overlay, including a standalone agent/).
 export COMPUTER_EVE_BOTS="${COMPUTER_EVE_BOTS:-/opt/computer/apps/eve/bots}"
 
 # The volume mounts root-owned. Only its top level and the hub's own state dir

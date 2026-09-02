@@ -1,8 +1,9 @@
-# Cloud computer — one Fly Machine in syd. Eve, desk, and hub share it.
+# Matt's cloud computer — one Fly Machine in syd. Eve, desk, and hub share it.
 # Eve is a child of this guest (loopback), not a Vercel app and not a
 # second Fly process group.
 #
-# App name is global — change `app` (or let `fly launch --copy-config` set it).
+# A second tenant is a second app: see fly.vcmc.toml. `fly deploy` without
+# `-c` targets this file only and must not be pointed at vcmc-computer.
 # One computer Machine. Volumes do not replicate; do not scale the guest out.
 
 app = "mblode-computer"

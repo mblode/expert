@@ -10,7 +10,7 @@ export const siteConfig = {
   url: "https://hello.expert",
 };
 
-/** The Fly computer this deployment attaches to. `NEXT_PUBLIC_HUB_URL` overrides it. */
+/** Matt's Fly computer. Fallback when a session has no bound hub yet. */
 export const DEFAULT_HUB_URL = "https://mblode-computer.fly.dev";
 
 /**

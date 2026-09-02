@@ -11,6 +11,7 @@
       "ignoreDependencies": ["@novnc/novnc"]
     },
     "apps/web": {
+      "entry": ["lib/**/*.test.ts"],
       "ignoreDependencies": ["postcss"]
     },
     "apps/eve": {

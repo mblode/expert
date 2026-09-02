@@ -25,7 +25,7 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 - A `computer` batch is validated whole before anything runs; a limit violation is a 400 for the request. Do not move per-action limits back into the execution loop, or a partially-run batch becomes unretryable under its `request_id`.
 - Human input is never RFB: x11vnc runs `-viewonly`, and every pointer/keystroke goes through `Seat.Pointer`/`Seat.Type` so the seat FSM can refuse it.
 - `apps/eve` files import each other with `.ts` extensions (`allowImportingTsExtensions`); `eve build` bundles them. The bot dir `apps/eve/bots/main` re-exports from `../../lib`.
-- Every signed-in hello.expert user shares the one computer this deployment fronts and becomes its owner. Set `AUTH_ALLOWED_EMAILS` on any deployment that is not private.
+- hello.expert is the control plane: a signed-in user is bound to one computer (hub URL + seat). Matt's box is `mblode-computer`; VCMC is `vcmc-computer`. Do not put VCMC's Eve on Matt's guest. Set `AUTH_ALLOWED_EMAILS` on any deployment that is not private.
 - On the Fly guest, `/workspace/.computer` (roster, seat tokens, Eve secret) is readable by anything running as `box`, the model included. Do not write new secrets there; `COMPUTER_SETUP_CODE` must be a Fly secret.
 - `prepare` runs `lefthook install` only inside a git checkout. Vercel builds from a snapshot with no `.git`, and lefthook exits 1 there, which fails the whole install; keep the guard.
 - `apps/web` typecheck reads `.next/types`; a route you deleted can leave a stale reference until `rm -rf apps/web/.next && npx next build`.

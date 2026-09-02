@@ -4,7 +4,12 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { FileBotStore } from "../src/service/provision.ts";
 import { ensureEveSecret, ensureRoster, ensureRosterAt } from "../src/host/ensure-roster.ts";
-import { evePortForDisplay, planEveLaunches } from "../src/host/eve.ts";
+import {
+  DEFAULT_EVE_OVERLAY,
+  evePortForDisplay,
+  planEveLaunches,
+  resolveEveBotsRoot,
+} from "../src/host/eve.ts";
 import { eveChildEnv } from "../src/host/start-eves.ts";
 
 const temps: string[] = [];
@@ -46,6 +51,56 @@ describe("eve supervisor: N Eves from the roster", () => {
     ]);
     expect(evePortForDisplay(1)).toBe(2000);
     expect(evePortForDisplay(2)).toBe(2001);
+  });
+
+  it("launches roster main from a standalone Eve project at botsRoot", () => {
+    const root = tempDir();
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "vcmc-agent" }));
+    mkdirSync(join(root, "agent"));
+    const launches = planEveLaunches([{ display: 1, id: "main", token: "bot_main" }], {
+      botsRoot: root,
+    });
+    expect(launches).toEqual([
+      { botId: "main", cwd: root, display: 1, port: 2000, token: "bot_main" },
+    ]);
+  });
+
+  it("prefers a populated volume overlay over COMPUTER_EVE_BOTS", () => {
+    const overlay = "/workspace/eve/bots";
+    const exists = (path: string) => path === join(overlay, "main", "package.json");
+    expect(
+      resolveEveBotsRoot({
+        envBots: "/opt/computer/apps/eve/bots",
+        exists,
+        imageBots: "/opt/computer/apps/eve/bots",
+        overlay,
+      }),
+    ).toBe(overlay);
+  });
+
+  it("uses a standalone overlay (vcmc-agent layout) when present", () => {
+    const overlay = "/workspace/eve/bots";
+    const exists = (path: string) =>
+      path === join(overlay, "package.json") || path === join(overlay, "agent");
+    expect(
+      resolveEveBotsRoot({
+        envBots: "/opt/computer/apps/eve/bots",
+        exists,
+        imageBots: "/opt/computer/apps/eve/bots",
+        overlay,
+      }),
+    ).toBe(overlay);
+  });
+
+  it("falls back to COMPUTER_EVE_BOTS when the overlay is empty", () => {
+    expect(
+      resolveEveBotsRoot({
+        envBots: "/opt/computer/apps/eve/bots",
+        exists: () => false,
+        imageBots: "/opt/image/bots",
+        overlay: DEFAULT_EVE_OVERLAY,
+      }),
+    ).toBe("/opt/computer/apps/eve/bots");
   });
 
   it("starts zero processes when the roster has no Eve dirs", () => {
@@ -130,6 +185,30 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(commands).not.toContain('AI_GATEWAY_API_KEY="${AI_GATEWAY_API_KEY');
     expect(commands).not.toContain('COMPUTER_EVE_SECRET="$COMPUTER_EVE_SECRET"');
     expect(commands).not.toContain('COMPUTER_SETUP_CODE="$COMPUTER_SETUP_CODE"');
+  });
+
+  it("vcmc Fly config is a separate app and volume from Matt's guest", () => {
+    const matt = readFileSync(resolve(import.meta.dirname, "../../../fly.toml"), "utf-8");
+    const vcmc = readFileSync(resolve(import.meta.dirname, "../../../fly.vcmc.toml"), "utf-8");
+    expect(matt).toMatch(/^app = "mblode-computer"$/m);
+    expect(vcmc).toMatch(/^app = "vcmc-computer"$/m);
+    expect(vcmc).not.toMatch(/app = "mblode-computer"/);
+    expect(vcmc).toContain('source = "vcmc_workspace"');
+    expect(vcmc).not.toContain('source = "computer_workspace"');
+    expect(vcmc).toContain('primary_region = "syd"');
+    expect(vcmc).toContain('dockerfile = "deploy/fly/Dockerfile"');
+    expect(vcmc).toContain("/workspace/eve/bots");
+    expect(vcmc).not.toMatch(/volumes create/);
+    expect(vcmc).not.toMatch(/--size 20/);
+    expect(vcmc).toMatch(/auto_stop_machines = "suspend"/);
+    expect(vcmc).toMatch(/min_machines_running = 0/);
+    expect(vcmc).toMatch(/auto_start_machines = true/);
+    expect(vcmc).toMatch(/cpus = 2/);
+    expect(vcmc).toMatch(/memory = "2gb"/);
+    expect(vcmc).not.toMatch(/cpus = 4/);
+    expect(vcmc).not.toMatch(/memory = "4gb"/);
+    expect(matt).toMatch(/auto_stop_machines = "off"/);
+    expect(matt).toMatch(/min_machines_running = 1/);
   });
 
   it("eve bot apps declare just-bash so eve start can init the guest sandbox", () => {

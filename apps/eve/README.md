@@ -27,7 +27,13 @@ screen. Port is `2000 + (display - 1)`.
 3. Mint a token: `npm run bot -- new <id>` (or restore one on the volume).
 4. On Fly, add an `eve build` line for it in `deploy/fly/Dockerfile` and
    deploy. The supervisor starts `eve start --host 127.0.0.1 --port …` only
-   if `<id>` is on the roster and `bots/<id>/package.json` exists.
+   if `<id>` is on the roster and a project exists.
+
+A tenant that is not this tree (for example VCMC's Eve app, which stays in
+its own repo) is not copied here. Point `COMPUTER_EVE_BOTS` at it, or put
+it on the guest volume at `/workspace/eve/bots` (either `bots/main` or a
+standalone Eve project with `package.json` + `agent/`). The overlay wins
+when that path looks like an Eve app.
 
 Do not invent a setup code or pretend the agent holds a seat token.
 Production is `eve start`, not `eve dev` / `EVE_DEV=1`.

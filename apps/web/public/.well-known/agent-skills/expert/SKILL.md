@@ -12,8 +12,8 @@ Humans install by signing in there. That is install. Agents install this skill.
 ## What this is
 
 - Product site: `https://hello.expert` (Vercel).
-- Computer: Fly hub `https://mblode-computer.fly.dev` (desk + Seat RPCs + pixels).
-- After the user signs in, the web server Pairs with the hub using a **server-only** setup code and puts a seat token on the session.
+- Computer: the hub on the signed-in session (`hubUrl`). Matt's box is `https://mblode-computer.fly.dev`; VCMC is a separate guest.
+- After the user signs in, the web server Pairs with **that** hub using a **server-only** setup code and puts a seat token on the session.
 - You drive the box with **Seat RPCs**, never RFB input.
 
 ## Rules
@@ -21,7 +21,7 @@ Humans install by signing in there. That is install. Agents install this skill.
 1. **Never invent a setup code.** Do not ask the user for `COMPUTER_SETUP_CODE`. Do not guess one. Do not call `Seat.Pair` as the human product path.
 2. **Never guess a pairing token.** Do not invent a seat token. Do not skip sign-in at hello.expert, or call Seat.Pair as the human path.
 3. **The skill cannot drive the box without a signed-in session.** If the user is not signed in at hello.expert, tell them to open that URL and sign in. Then retry. Do not pretend you have a seat token.
-4. Prefer the hub the session already knows (`NEXT_PUBLIC_HUB_URL` / `https://mblode-computer.fly.dev`).
+4. Prefer the hub the session already knows (`hubUrl`). Do not fall back to a single global hub if the session is bound to another computer.
 
 ## How to use the computer
 
