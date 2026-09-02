@@ -25,7 +25,7 @@
     "hub": "npm run start --workspace=apps/hub",
     "eve": "npm run dev --workspace=@computer/eve-main",
     "web": "npm run dev --workspace=@computer/web",
-    "prepare": "[ ! -d .git ] || lefthook install"
+    "prepare": "[ ! -d .git ] || [ -n \"$VERCEL\" ] || lefthook install"
   },
   "dependencies": {
     "qrcode-terminal": "^0.12.0"
