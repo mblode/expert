@@ -8,7 +8,9 @@ set -euo pipefail
 
 stop() {
   for n in $(seq 8 -1 1); do
-    [[ -e "/tmp/.X11-unix/X$n" ]] && /usr/local/bin/stop-window "$n" || true
+    if [[ -e "/tmp/.X11-unix/X$n" ]]; then
+      /usr/local/bin/stop-window "$n" || true
+    fi
   done
   exit 0
 }

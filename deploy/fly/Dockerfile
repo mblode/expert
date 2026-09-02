@@ -18,6 +18,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     COMPUTER_DATA=/workspace/.computer/bots.json \
     COMPUTER_EVE_BOTS=/opt/computer/apps/eve/bots
 
+# The package list is piped through grep; pipefail makes a bad list fail the build.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 COPY apps/desk/packages.txt /tmp/packages.txt
 RUN apt-get update \
     && grep -v '^#' /tmp/packages.txt | xargs apt-get install -y --no-install-recommends \
@@ -57,6 +60,9 @@ COPY --chown=box:box api api
 # `eve build` here so guest start only runs `eve start`.
 RUN npm run build --workspace=@computer/eve-main
 
+# PID 1 is tini as root on purpose: the entrypoint fixes volume ownership and
+# then drops every process to `box` with runuser.
+# hadolint ignore=DL3002
 USER root
 # Fly mounts `computer_workspace` at /workspace (roster, tokens, Eve secret).
 VOLUME ["/workspace"]

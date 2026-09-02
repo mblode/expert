@@ -8,6 +8,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     HOME=/home/box \
     LANG=C.UTF-8
 
+# The package list is piped through grep; pipefail makes a bad list fail the build.
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
 COPY packages.txt /tmp/packages.txt
 RUN apt-get update \
     && grep -v '^#' /tmp/packages.txt | xargs apt-get install -y --no-install-recommends \

@@ -27,6 +27,7 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 - `apps/eve` files import each other with `.ts` extensions (`allowImportingTsExtensions`); `eve build` bundles them. The bot dir `apps/eve/bots/main` re-exports from `../../lib`.
 - Every signed-in hello.expert user shares the one computer this deployment fronts and becomes its owner. Set `AUTH_ALLOWED_EMAILS` on any deployment that is not private.
 - On the Fly guest, `/workspace/.computer` (roster, seat tokens, Eve secret) is readable by anything running as `box`, the model included. Do not write new secrets there; `COMPUTER_SETUP_CODE` must be a Fly secret.
+- `prepare` runs `lefthook install` only inside a git checkout. Vercel builds from a snapshot with no `.git`, and lefthook exits 1 there, which fails the whole install; keep the guard.
 - `apps/web` typecheck reads `.next/types`; a route you deleted can leave a stale reference until `rm -rf apps/web/.next && npx next build`.
 - `apps/hub/test/eve-channel-auth.test.ts` is excluded from the hub tsconfig because it imports `apps/eve`; vitest still runs it.
 - No Docker daemon in Claude Code on the web and similar sandboxes: `npm run up` uses the fake desk, and the desk image smoke test only runs in CI.
