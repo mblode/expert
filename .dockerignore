@@ -8,6 +8,9 @@ data
 **/out
 **/.eve
 apps/ios
+# Product web is Vercel-only. The guest image is Eve + hub + desk; do not
+# ship the Next tree. The Dockerfile drops apps/web from workspaces before
+# npm ci, so this exclude is enough (no stub, no COPY of package.json).
 apps/web
 docs
 **/*.log

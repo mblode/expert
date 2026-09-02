@@ -1,7 +1,8 @@
 # Cloud computer guest: desk (X.Org/Xvfb + x11vnc + Chromium) + Eve + hub in
 # one Fly Machine. Build context is the repo root (`fly.toml` [build]).
 # The apt list is apps/desk/packages.txt, shared with the local desk image.
-# The product web (apps/web) is deployed on Vercel and is not built here.
+# The product web (apps/web) is Vercel-only: .dockerignore excludes it, and
+# the npm ci step drops that workspace so the guest never needs the Next tree.
 
 FROM node:24-bookworm-slim AS node
 
@@ -44,14 +45,21 @@ USER box
 WORKDIR /opt/computer
 COPY --chown=box:box package.json package-lock.json ./
 COPY --chown=box:box apps/hub/package.json apps/hub/
-COPY --chown=box:box apps/web/package.json apps/web/
 COPY --chown=box:box apps/eve/package.json apps/eve/
 COPY --chown=box:box apps/eve/bots/main/package.json apps/eve/bots/main/
 COPY --chown=box:box packages/shared/package.json packages/shared/
 COPY --chown=box:box packages/proto/package.json packages/proto/
 # LEFTHOOK=0: no git hooks in an image, so `prepare` is a no-op here.
 ENV LEFTHOOK=0
-RUN npm ci --no-audit --no-fund
+# Product web is Vercel-only and excluded by .dockerignore. Root workspaces
+# still lists apps/web; drop it so npm ci does not need that package.json
+# or pull Next. Do not COPY the Next tree into the guest.
+RUN node --input-type=module -e '\
+const { readFileSync, writeFileSync } = await import("node:fs");\
+const pkg = JSON.parse(readFileSync("package.json", "utf8"));\
+pkg.workspaces = pkg.workspaces.filter((w) => w !== "apps/web");\
+writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");\
+' && npm ci --no-audit --no-fund
 
 COPY --chown=box:box apps/hub apps/hub
 COPY --chown=box:box apps/eve apps/eve
