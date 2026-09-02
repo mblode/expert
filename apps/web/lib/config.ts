@@ -1,6 +1,5 @@
 export const siteConfig = {
-  description:
-    "The Linux computer your AI agent uses. A standing Linux computer your agents drive and you can take over.",
+  description: "Vercel Eve and a computer. On the web, desktop, and your phone.",
   installCommand: "npx skills add https://hello.expert",
   links: {
     author: "https://blode.co",
