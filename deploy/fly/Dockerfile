@@ -32,8 +32,15 @@ COPY --from=node /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
 
+# Two users. `box` is the desk and the model: X, Chromium, Eve, everything
+# under /workspace. `hub` is the hub and the WhatsApp bridge: it owns the
+# roster, seat tokens, channel secrets and Baileys credentials under
+# /workspace/.computer, which box (and so the model's shell) cannot read.
+# The root init (apps/hub/src/host/init.ts) runs desk commands as box on the
+# hub's behalf over a socket only hub may open.
 RUN useradd --create-home --uid 1000 --shell /bin/bash box \
-    && mkdir -p /workspace /home/box/.config/chromium /opt/computer \
+    && useradd --create-home --uid 1001 --shell /usr/sbin/nologin hub \
+    && mkdir -p /workspace /home/box/.config/chromium /opt/computer /run/computer \
     && chown -R box:box /workspace /home/box /opt/computer
 
 COPY --chmod=755 apps/desk/bin/desk-shot apps/desk/bin/desk-up apps/desk/bin/start-window apps/desk/bin/stop-window /usr/local/bin/
@@ -47,6 +54,7 @@ COPY --chown=box:box package.json package-lock.json ./
 COPY --chown=box:box apps/hub/package.json apps/hub/
 COPY --chown=box:box apps/eve/package.json apps/eve/
 COPY --chown=box:box apps/eve/bots/main/package.json apps/eve/bots/main/
+COPY --chown=box:box apps/whatsapp-bridge/package.json apps/whatsapp-bridge/
 COPY --chown=box:box packages/shared/package.json packages/shared/
 COPY --chown=box:box packages/proto/package.json packages/proto/
 # LEFTHOOK=0: no git hooks in an image, so `prepare` is a no-op here.
@@ -63,13 +71,15 @@ writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");\
 
 COPY --chown=box:box apps/hub apps/hub
 COPY --chown=box:box apps/eve apps/eve
+COPY --chown=box:box apps/whatsapp-bridge apps/whatsapp-bridge
 COPY --chown=box:box packages packages
 COPY --chown=box:box api api
 # `eve build` here so guest start only runs `eve start`.
 RUN npm run build --workspace=@computer/eve-main
 
-# PID 1 is tini as root on purpose: the entrypoint fixes volume ownership and
-# then drops every process to `box` with runuser.
+# PID 1 is tini as root on purpose: the entrypoint execs the root init, which
+# fixes volume ownership, holds the executor socket, and supervises every
+# other process as box or hub.
 # hadolint ignore=DL3002
 USER root
 # Fly mounts `computer_workspace` at /workspace (roster, tokens, Eve secret).

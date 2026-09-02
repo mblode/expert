@@ -2,10 +2,10 @@ import { SeatMethods } from "@computer/proto";
 import { ComputerError, DISPLAY, PRIMARY_DISPLAY, parseDisplay } from "@computer/shared";
 import type { BoxStatus, Button } from "@computer/shared";
 import type { Bot, BotRegistry } from "../service/bots.ts";
-import type { ProvisionService } from "../service/provision.ts";
+import type { ProvisionService, SeatRecord } from "../service/provision.ts";
 import type { AuthRegistry } from "./auth.ts";
 import { withPixelToken } from "../service/pixels.ts";
-import type { ConnectRouter } from "./router.ts";
+import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
 
 /** Same cap as the model's `type` action. */
@@ -32,11 +32,17 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     return withPixelToken(deps.vncUrl, grant);
   };
 
-  const status = (display: number = PRIMARY_DISPLAY): BoxStatus => {
+  // A guest sees only its own screen: the screen list carries pixel grants,
+  // and a grant for another display would be a way around the display bind.
+  const status = (display: number = PRIMARY_DISPLAY, seat?: SeatRecord): BoxStatus => {
     const bot = deps.bots.byDisplay(display);
+    const visible =
+      seat?.kind === "guest"
+        ? deps.bots.all().filter((b) => b.display === display)
+        : deps.bots.all();
     return {
       display: DISPLAY,
-      screens: deps.bots.all().map((b) => ({
+      screens: visible.map((b) => ({
         bot_id: b.id,
         display: b.display,
         state: b.seat.getState(),
@@ -47,7 +53,28 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     };
   };
 
-  const botFor = (o: Record<string, unknown>): Bot => deps.bots.byDisplay(parseDisplay(o.display));
+  /**
+   * The display a call is about. A guest seat was minted for one screen and
+   * an absent `display` resolves to that screen, not the primary, so a phone
+   * that omits the field still lands where its invite pointed; naming any
+   * other screen is refused before the desk is touched.
+   */
+  const displayFor = (o: Record<string, unknown>, seat: SeatRecord | undefined): number => {
+    if (seat?.kind === "guest" && seat.display !== undefined) {
+      if (o.display === undefined) {
+        return seat.display;
+      }
+      const asked = parseDisplay(o.display);
+      if (asked !== seat.display) {
+        throw new ComputerError("UNAUTHENTICATED", `this seat is for screen ${seat.display}`);
+      }
+      return asked;
+    }
+    return parseDisplay(o.display);
+  };
+
+  const botFor = (o: Record<string, unknown>, ctx: RpcContext): Bot =>
+    deps.bots.byDisplay(displayFor(o, ctx.seat));
 
   router.rpc(SeatMethods.Pair, "pair", async ({ body }) => {
     const o = requireObject(body);
@@ -57,7 +84,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
 
   router.rpc(SeatMethods.Status, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    return status(parseDisplay(o.display));
+    return status(displayFor(o, ctx.seat), ctx.seat);
   });
 
   router.rpc(SeatMethods.SetPresence, "seat", async (ctx) => {
@@ -65,9 +92,22 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     if (typeof o.present !== "boolean") {
       throw new ComputerError("VALIDATION", "present must be boolean");
     }
-    const display = parseDisplay(o.display);
+    const display = displayFor(o, ctx.seat);
     deps.bots.byDisplay(display).seat.setPresence(o.present);
-    return status(display);
+    return status(display, ctx.seat);
+  });
+
+  // Sign-out, or an owner pulling a guest's invite early. Revoking the
+  // caller's own token needs no argument; naming another token is an
+  // owner's call, since a guest must not be able to unpair the phone.
+  router.rpc(SeatMethods.Revoke, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    const own = ctx.bearer ?? "";
+    const target = typeof o.token === "string" && o.token ? o.token : own;
+    if (target !== own && ctx.seat?.kind !== "owner") {
+      throw new ComputerError("UNAUTHENTICATED", "only an owner seat may revoke another seat");
+    }
+    return { revoked: deps.auth.revoke(target) };
   });
 
   // The trackpad. `move` is a delta (the human is looking at the stream, not
@@ -75,7 +115,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   // wheel notches at the current pointer. Shape is api/spec.json `$defs.pointer`.
   router.rpc(SeatMethods.Pointer, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    const bot = botFor(o);
+    const bot = botFor(o, ctx);
     bot.seat.requireHumanContact();
     await bot.desk.ping();
     switch (o.type) {
@@ -104,7 +144,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
 
   router.rpc(SeatMethods.Type, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    const bot = botFor(o);
+    const bot = botFor(o, ctx);
     bot.seat.requireHumanContact();
     await bot.desk.ping();
     if (typeof o.text !== "string" || o.text.length < 1 || o.text.length > MAX_TYPE_CHARS) {
@@ -116,7 +156,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
 
   router.rpc(SeatMethods.ClipboardGet, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    const bot = botFor(o);
+    const bot = botFor(o, ctx);
     bot.seat.requireHumanContact();
     await bot.desk.ping();
     return { text: await bot.desk.clipboardGet() };
@@ -124,7 +164,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
 
   router.rpc(SeatMethods.ClipboardSet, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    const bot = botFor(o);
+    const bot = botFor(o, ctx);
     bot.seat.requireHumanContact();
     await bot.desk.ping();
     if (typeof o.text !== "string") {
@@ -138,7 +178,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   // reading what was said is not taking the seat.
   router.rpc(SeatMethods.Occurrences, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    const bot = botFor(o);
+    const bot = botFor(o, ctx);
     const cursor = typeof o.cursor === "string" && o.cursor ? o.cursor : undefined;
     const limit = typeof o.limit === "number" ? o.limit : undefined;
     return bot.voice.page(cursor, limit);
@@ -149,7 +189,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   // Nothing here may echo `value` back, including in an error message.
   router.rpc(SeatMethods.ProvideSecret, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    const bot = botFor(o);
+    const bot = botFor(o, ctx);
     await bot.desk.ping();
     if (typeof o.occurrence_id !== "string" || !o.occurrence_id) {
       throw new ComputerError("VALIDATION", "occurrence_id is required");
@@ -178,7 +218,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
       throw new ComputerError("VALIDATION", "id is required");
     }
     await deps.provision.remove(o.id);
-    return status();
+    return status(PRIMARY_DISPLAY, ctx.seat);
   });
 }
 

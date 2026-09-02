@@ -98,7 +98,13 @@
         "Occurrences",
         "ProvideSecret",
         "CreateBot",
-        "DeleteBot"
+        "DeleteBot",
+        "Revoke",
+        "WhatsAppAccounts",
+        "WhatsAppLink",
+        "WhatsAppGroups",
+        "WhatsAppJoinGroup",
+        "WhatsAppConfig"
       ]
     }
   },

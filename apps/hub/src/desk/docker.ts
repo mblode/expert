@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { execViaSocket } from "./executor.ts";
 import { dirname } from "node:path";
 import { ComputerError, asPoint, clampCursor, unavailable } from "@computer/shared";
 import type { Button, Point, Unavailable } from "@computer/shared";
@@ -366,6 +367,13 @@ export class DockerDesk implements Desk {
       maxOutput?: number;
     },
   ): Promise<ExecResult> {
+    // With the hub running as its own user, `local` cannot spawn as box
+    // itself: the root init's executor does, over a socket only the hub can
+    // open. The environment is still the login's worth and nothing else.
+    const socket = process.env.COMPUTER_EXEC_SOCKET;
+    if (this.transport === "local" && socket) {
+      return execThroughSocket(socket, argv, this.display, opts);
+    }
     const cmd = this.transport === "local" ? argv[0]! : "docker";
     const spawnArgv =
       this.transport === "local"
@@ -425,6 +433,40 @@ interface ExecResult {
   stderr: Buffer;
   stdoutTruncated: boolean;
   stderrTruncated: boolean;
+}
+
+async function execThroughSocket(
+  socket: string,
+  argv: string[],
+  display: number,
+  opts: { timeoutMs: number; cwd?: string; stdin?: string; maxOutput?: number },
+): Promise<ExecResult> {
+  let r;
+  try {
+    r = await execViaSocket(socket, {
+      argv,
+      cwd: opts.cwd,
+      env: localEnv(display) as Record<string, string>,
+      maxOutput: opts.maxOutput,
+      stdin: opts.stdin,
+      timeoutMs: opts.timeoutMs,
+    });
+  } catch (error) {
+    throw deskDown(`executor: ${(error as Error).message}`);
+  }
+  if (r.timedOut) {
+    throw deskDown(`desk exec timed out: ${argv[0]}`);
+  }
+  if (r.error) {
+    throw deskDown(r.error);
+  }
+  return {
+    exit: r.exit,
+    stderr: r.stderr,
+    stderrTruncated: r.stderrTruncated,
+    stdout: r.stdout,
+    stdoutTruncated: r.stdoutTruncated,
+  };
 }
 
 /** What `shell` returns per stream. Anything past it is dropped as it arrives, not buffered. */

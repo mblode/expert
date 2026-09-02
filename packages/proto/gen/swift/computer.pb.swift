@@ -1382,6 +1382,274 @@ public nonisolated struct Computer_V1_DeleteBotRequest: Sendable {
   public init() {}
 }
 
+public nonisolated struct Computer_V1_RevokeRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// absent = the caller's own seat
+  public var token: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_RevokeResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var revoked: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppAccountsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppAccount: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// account id on this computer, e.g. "main"
+  public var acct: String = String()
+
+  /// the Bot this number speaks for
+  public var bot: String = String()
+
+  /// hub ingress id the bridge posts to
+  public var channelID: String = String()
+
+  /// digits, no plus; empty until linked
+  public var phone: String = String()
+
+  /// unlinked | linking | open | closed
+  public var status: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppAccountsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var accounts: [Computer_V1_WhatsAppAccount] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppLinkRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var acct: String = String()
+
+  /// start | status | unlink
+  public var action: String = String()
+
+  /// start: request a pairing code for this number
+  public var phone: String = String()
+
+  /// start on a new account: which Bot, default main
+  public var bot: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppLinkState: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var acct: String = String()
+
+  /// unlinked | linking | open | closed
+  public var status: String = String()
+
+  /// raw QR string while linking without a phone
+  public var qr: String = String()
+
+  /// 8 characters while linking with a phone
+  public var pairingCode: String = String()
+
+  /// how old the qr or code is; WhatsApp rotates a QR every 20-60 s
+  public var ageMs: Int32 = 0
+
+  public var phone: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppGroupsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var acct: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppGroup: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var jid: String = String()
+
+  public var subject: String = String()
+
+  public var size: Int32 = 0
+
+  /// in allowed_groups (an empty allowlist enables all)
+  public var enabled: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppGroupsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var groups: [Computer_V1_WhatsAppGroup] = []
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppJoinGroupRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var acct: String = String()
+
+  /// chat.whatsapp.com link or bare code
+  public var invite: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppJoinGroupResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var jid: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppAccountConfig: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var allowedGroups: [String] = []
+
+  /// mention | prefix | all
+  public var triggerMode: String = String()
+
+  public var triggerPrefix: String = String()
+
+  /// members | allowlist | anyone
+  public var dmPolicy: String = String()
+
+  public var dmAllowlist: [String] = []
+
+  public var imageSendsPerDay: Int32 = 0
+
+  public var visionEnabled: Bool = false
+
+  public var maintainerJid: String = String()
+
+  public var ownerJids: [String] = []
+
+  public var digestRecipientJids: [String] = []
+
+  public var botName: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppConfigRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var acct: String = String()
+
+  /// absent = read
+  public var config: Computer_V1_WhatsAppAccountConfig {
+    get {_config ?? Computer_V1_WhatsAppAccountConfig()}
+    set {_config = newValue}
+  }
+  /// Returns true if `config` has been explicitly set.
+  public var hasConfig: Bool {self._config != nil}
+  /// Clears the value of `config`. Subsequent reads from it will return its default value.
+  public mutating func clearConfig() {self._config = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _config: Computer_V1_WhatsAppAccountConfig? = nil
+}
+
+public nonisolated struct Computer_V1_WhatsAppConfigResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var config: Computer_V1_WhatsAppAccountConfig {
+    get {_config ?? Computer_V1_WhatsAppAccountConfig()}
+    set {_config = newValue}
+  }
+  /// Returns true if `config` has been explicitly set.
+  public var hasConfig: Bool {self._config != nil}
+  /// Clears the value of `config`. Subsequent reads from it will return its default value.
+  public mutating func clearConfig() {self._config = nil}
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _config: Computer_V1_WhatsAppAccountConfig? = nil
+}
+
 // MARK: - Code below here is support for the SwiftProtobuf runtime.
 
 fileprivate nonisolated let _protobuf_package = "computer.v1"
@@ -3961,6 +4229,588 @@ nonisolated extension Computer_V1_DeleteBotRequest: SwiftProtobuf.Message, Swift
 
   public static func ==(lhs: Computer_V1_DeleteBotRequest, rhs: Computer_V1_DeleteBotRequest) -> Bool {
     if lhs.id != rhs.id {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_RevokeRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RevokeRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.token) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.token.isEmpty {
+      try visitor.visitSingularStringField(value: self.token, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_RevokeRequest, rhs: Computer_V1_RevokeRequest) -> Bool {
+    if lhs.token != rhs.token {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_RevokeResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".RevokeResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}revoked\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularBoolField(value: &self.revoked) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.revoked != false {
+      try visitor.visitSingularBoolField(value: self.revoked, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_RevokeResponse, rhs: Computer_V1_RevokeResponse) -> Bool {
+    if lhs.revoked != rhs.revoked {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppAccountsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppAccountsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap()
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    // Load everything into unknown fields
+    while try decoder.nextFieldNumber() != nil {}
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppAccountsRequest, rhs: Computer_V1_WhatsAppAccountsRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppAccount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppAccount"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0\u{1}bot\0\u{3}channel_id\0\u{1}phone\0\u{1}status\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.acct) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.bot) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.channelID) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.phone) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.acct.isEmpty {
+      try visitor.visitSingularStringField(value: self.acct, fieldNumber: 1)
+    }
+    if !self.bot.isEmpty {
+      try visitor.visitSingularStringField(value: self.bot, fieldNumber: 2)
+    }
+    if !self.channelID.isEmpty {
+      try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 3)
+    }
+    if !self.phone.isEmpty {
+      try visitor.visitSingularStringField(value: self.phone, fieldNumber: 4)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppAccount, rhs: Computer_V1_WhatsAppAccount) -> Bool {
+    if lhs.acct != rhs.acct {return false}
+    if lhs.bot != rhs.bot {return false}
+    if lhs.channelID != rhs.channelID {return false}
+    if lhs.phone != rhs.phone {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppAccountsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppAccountsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}accounts\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.accounts) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.accounts.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.accounts, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppAccountsResponse, rhs: Computer_V1_WhatsAppAccountsResponse) -> Bool {
+    if lhs.accounts != rhs.accounts {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppLinkRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppLinkRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0\u{1}action\0\u{1}phone\0\u{1}bot\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.acct) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.action) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.phone) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.bot) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.acct.isEmpty {
+      try visitor.visitSingularStringField(value: self.acct, fieldNumber: 1)
+    }
+    if !self.action.isEmpty {
+      try visitor.visitSingularStringField(value: self.action, fieldNumber: 2)
+    }
+    if !self.phone.isEmpty {
+      try visitor.visitSingularStringField(value: self.phone, fieldNumber: 3)
+    }
+    if !self.bot.isEmpty {
+      try visitor.visitSingularStringField(value: self.bot, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppLinkRequest, rhs: Computer_V1_WhatsAppLinkRequest) -> Bool {
+    if lhs.acct != rhs.acct {return false}
+    if lhs.action != rhs.action {return false}
+    if lhs.phone != rhs.phone {return false}
+    if lhs.bot != rhs.bot {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppLinkState: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppLinkState"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0\u{1}status\0\u{1}qr\0\u{3}pairing_code\0\u{3}age_ms\0\u{1}phone\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.acct) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.status) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.qr) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.pairingCode) }()
+      case 5: try { try decoder.decodeSingularInt32Field(value: &self.ageMs) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.phone) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.acct.isEmpty {
+      try visitor.visitSingularStringField(value: self.acct, fieldNumber: 1)
+    }
+    if !self.status.isEmpty {
+      try visitor.visitSingularStringField(value: self.status, fieldNumber: 2)
+    }
+    if !self.qr.isEmpty {
+      try visitor.visitSingularStringField(value: self.qr, fieldNumber: 3)
+    }
+    if !self.pairingCode.isEmpty {
+      try visitor.visitSingularStringField(value: self.pairingCode, fieldNumber: 4)
+    }
+    if self.ageMs != 0 {
+      try visitor.visitSingularInt32Field(value: self.ageMs, fieldNumber: 5)
+    }
+    if !self.phone.isEmpty {
+      try visitor.visitSingularStringField(value: self.phone, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppLinkState, rhs: Computer_V1_WhatsAppLinkState) -> Bool {
+    if lhs.acct != rhs.acct {return false}
+    if lhs.status != rhs.status {return false}
+    if lhs.qr != rhs.qr {return false}
+    if lhs.pairingCode != rhs.pairingCode {return false}
+    if lhs.ageMs != rhs.ageMs {return false}
+    if lhs.phone != rhs.phone {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppGroupsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppGroupsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.acct) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.acct.isEmpty {
+      try visitor.visitSingularStringField(value: self.acct, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppGroupsRequest, rhs: Computer_V1_WhatsAppGroupsRequest) -> Bool {
+    if lhs.acct != rhs.acct {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppGroup: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppGroup"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}jid\0\u{1}subject\0\u{1}size\0\u{1}enabled\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.jid) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.subject) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.size) }()
+      case 4: try { try decoder.decodeSingularBoolField(value: &self.enabled) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.jid.isEmpty {
+      try visitor.visitSingularStringField(value: self.jid, fieldNumber: 1)
+    }
+    if !self.subject.isEmpty {
+      try visitor.visitSingularStringField(value: self.subject, fieldNumber: 2)
+    }
+    if self.size != 0 {
+      try visitor.visitSingularInt32Field(value: self.size, fieldNumber: 3)
+    }
+    if self.enabled != false {
+      try visitor.visitSingularBoolField(value: self.enabled, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppGroup, rhs: Computer_V1_WhatsAppGroup) -> Bool {
+    if lhs.jid != rhs.jid {return false}
+    if lhs.subject != rhs.subject {return false}
+    if lhs.size != rhs.size {return false}
+    if lhs.enabled != rhs.enabled {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppGroupsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppGroupsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}groups\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.groups) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.groups.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.groups, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppGroupsResponse, rhs: Computer_V1_WhatsAppGroupsResponse) -> Bool {
+    if lhs.groups != rhs.groups {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppJoinGroupRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppJoinGroupRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0\u{1}invite\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.acct) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.invite) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.acct.isEmpty {
+      try visitor.visitSingularStringField(value: self.acct, fieldNumber: 1)
+    }
+    if !self.invite.isEmpty {
+      try visitor.visitSingularStringField(value: self.invite, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppJoinGroupRequest, rhs: Computer_V1_WhatsAppJoinGroupRequest) -> Bool {
+    if lhs.acct != rhs.acct {return false}
+    if lhs.invite != rhs.invite {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppJoinGroupResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppJoinGroupResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}jid\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.jid) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.jid.isEmpty {
+      try visitor.visitSingularStringField(value: self.jid, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppJoinGroupResponse, rhs: Computer_V1_WhatsAppJoinGroupResponse) -> Bool {
+    if lhs.jid != rhs.jid {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppAccountConfig: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppAccountConfig"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}allowed_groups\0\u{3}trigger_mode\0\u{3}trigger_prefix\0\u{3}dm_policy\0\u{3}dm_allowlist\0\u{3}image_sends_per_day\0\u{3}vision_enabled\0\u{3}maintainer_jid\0\u{3}owner_jids\0\u{3}digest_recipient_jids\0\u{3}bot_name\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedStringField(value: &self.allowedGroups) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.triggerMode) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.triggerPrefix) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.dmPolicy) }()
+      case 5: try { try decoder.decodeRepeatedStringField(value: &self.dmAllowlist) }()
+      case 6: try { try decoder.decodeSingularInt32Field(value: &self.imageSendsPerDay) }()
+      case 7: try { try decoder.decodeSingularBoolField(value: &self.visionEnabled) }()
+      case 8: try { try decoder.decodeSingularStringField(value: &self.maintainerJid) }()
+      case 9: try { try decoder.decodeRepeatedStringField(value: &self.ownerJids) }()
+      case 10: try { try decoder.decodeRepeatedStringField(value: &self.digestRecipientJids) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.botName) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.allowedGroups.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.allowedGroups, fieldNumber: 1)
+    }
+    if !self.triggerMode.isEmpty {
+      try visitor.visitSingularStringField(value: self.triggerMode, fieldNumber: 2)
+    }
+    if !self.triggerPrefix.isEmpty {
+      try visitor.visitSingularStringField(value: self.triggerPrefix, fieldNumber: 3)
+    }
+    if !self.dmPolicy.isEmpty {
+      try visitor.visitSingularStringField(value: self.dmPolicy, fieldNumber: 4)
+    }
+    if !self.dmAllowlist.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.dmAllowlist, fieldNumber: 5)
+    }
+    if self.imageSendsPerDay != 0 {
+      try visitor.visitSingularInt32Field(value: self.imageSendsPerDay, fieldNumber: 6)
+    }
+    if self.visionEnabled != false {
+      try visitor.visitSingularBoolField(value: self.visionEnabled, fieldNumber: 7)
+    }
+    if !self.maintainerJid.isEmpty {
+      try visitor.visitSingularStringField(value: self.maintainerJid, fieldNumber: 8)
+    }
+    if !self.ownerJids.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.ownerJids, fieldNumber: 9)
+    }
+    if !self.digestRecipientJids.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.digestRecipientJids, fieldNumber: 10)
+    }
+    if !self.botName.isEmpty {
+      try visitor.visitSingularStringField(value: self.botName, fieldNumber: 11)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppAccountConfig, rhs: Computer_V1_WhatsAppAccountConfig) -> Bool {
+    if lhs.allowedGroups != rhs.allowedGroups {return false}
+    if lhs.triggerMode != rhs.triggerMode {return false}
+    if lhs.triggerPrefix != rhs.triggerPrefix {return false}
+    if lhs.dmPolicy != rhs.dmPolicy {return false}
+    if lhs.dmAllowlist != rhs.dmAllowlist {return false}
+    if lhs.imageSendsPerDay != rhs.imageSendsPerDay {return false}
+    if lhs.visionEnabled != rhs.visionEnabled {return false}
+    if lhs.maintainerJid != rhs.maintainerJid {return false}
+    if lhs.ownerJids != rhs.ownerJids {return false}
+    if lhs.digestRecipientJids != rhs.digestRecipientJids {return false}
+    if lhs.botName != rhs.botName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppConfigRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppConfigRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0\u{1}config\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.acct) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._config) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.acct.isEmpty {
+      try visitor.visitSingularStringField(value: self.acct, fieldNumber: 1)
+    }
+    try { if let v = self._config {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppConfigRequest, rhs: Computer_V1_WhatsAppConfigRequest) -> Bool {
+    if lhs.acct != rhs.acct {return false}
+    if lhs._config != rhs._config {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppConfigResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppConfigResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}config\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._config) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._config {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppConfigResponse, rhs: Computer_V1_WhatsAppConfigResponse) -> Bool {
+    if lhs._config != rhs._config {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

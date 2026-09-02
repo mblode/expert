@@ -1,8 +1,8 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { ComputerError } from "@computer/shared";
+import { ComputerError, SEAT_GUEST_METHODS } from "@computer/shared";
 import type { AuthPolicy } from "@computer/proto";
 import { MemorySeatTokenStore } from "../service/provision.ts";
-import type { SeatTokenStore } from "../service/provision.ts";
+import type { SeatRecord, SeatTokenStore } from "../service/provision.ts";
 import { PixelRegistry } from "../service/pixels.ts";
 
 type TokenKind = "agent" | "seat";
@@ -10,10 +10,15 @@ type TokenKind = "agent" | "seat";
 export interface Verified {
   kind: TokenKind | "public";
   botId?: string;
+  /** Set for seat calls: what this token may do. Handlers bind guests to their display. */
+  seat?: SeatRecord;
 }
 
 const PAIR_MAX_FAILURES = 10;
 const PAIR_LOCKOUT_MS = 60_000;
+
+/** The longest a guest seat may live. An invite asks for less; it never gets more. */
+export const GUEST_MAX_TTL_MS = 15 * 60_000;
 
 export class AuthRegistry {
   private readonly setupCode: string;
@@ -21,7 +26,7 @@ export class AuthRegistry {
   /** Live view of the roster: [token, botId] pairs. Provisioning needs no auth sync. */
   private readonly agentTokens: () => Iterable<[string, string]>;
   private readonly seats: SeatTokenStore;
-  private readonly seatTokens: Set<string>;
+  private readonly seatRecords: Map<string, SeatRecord>;
   readonly pixels: PixelRegistry;
 
   constructor(opts: {
@@ -43,7 +48,7 @@ export class AuthRegistry {
     this.setupCode = opts.setupCode;
     this.agentTokens = opts.agentTokens;
     this.seats = opts.seats ?? new MemorySeatTokenStore();
-    this.seatTokens = new Set(this.seats.load());
+    this.seatRecords = new Map(this.seats.load().map((r) => [r.token, r]));
     this.pixels = opts.pixels ?? new PixelRegistry();
   }
 
@@ -64,10 +69,15 @@ export class AuthRegistry {
       throw new ComputerError("UNAUTHENTICATED", "bad setup code");
     }
     this.pairFailures.count = 0;
-    return this.mint();
+    return this.mint({ created_at: new Date(now).toISOString(), kind: "owner" }).token;
   }
 
-  verify(policy: AuthPolicy, bearer: string | undefined): Verified {
+  /**
+   * `method` is the RPC path being called. A guest seat carries its own
+   * allowlist, checked here so a handler cannot forget; owners keep the
+   * whole Seat service as before.
+   */
+  verify(policy: AuthPolicy, bearer: string | undefined, method?: string): Verified {
     if (policy === "public" || policy === "pair") {
       return { kind: "public" };
     }
@@ -91,21 +101,106 @@ export class AuthRegistry {
       return { botId, kind: "agent" };
     }
     if (policy === "seat") {
-      if (!this.seatTokens.has(bearer)) {
+      const seat = this.seatFor(bearer);
+      if (!seat) {
         throw new ComputerError("UNAUTHENTICATED", "seat token required");
       }
-      return { kind: "seat" };
+      if (seat.kind === "guest" && method && !guestMethods(seat).includes(method)) {
+        throw new ComputerError("UNAUTHENTICATED", "this seat cannot do that");
+      }
+      return { kind: "seat", seat };
     }
     throw new ComputerError("UNAUTHENTICATED", "unknown policy");
   }
 
-  hasSeatToken(token: string | undefined): boolean {
-    return typeof token === "string" && token.length > 0 && this.seatTokens.has(token);
+  /** The record behind a live token, or nothing for an unknown, expired or revoked one. */
+  seatFor(token: string | undefined, now = Date.now()): SeatRecord | undefined {
+    if (typeof token !== "string" || token.length === 0) {
+      return undefined;
+    }
+    const record = this.seatRecords.get(token);
+    if (!record) {
+      return undefined;
+    }
+    if (record.expires_at && Date.parse(record.expires_at) <= now) {
+      // Expiry is enforced on read so a stopped sweep cannot extend a guest.
+      this.seatRecords.delete(token);
+      this.persist();
+      return undefined;
+    }
+    return record;
   }
 
-  /** Seat token (pairing) or a live pixel grant. Either may open /vnc. */
+  hasSeatToken(token: string | undefined): boolean {
+    return this.seatFor(token) !== undefined;
+  }
+
+  /** Owner seats only: the thread, provisioning, and the Eve proxy are theirs. */
+  isOwner(token: string | undefined): boolean {
+    return this.seatFor(token)?.kind === "owner";
+  }
+
+  /** Owner seat or a live pixel grant. A guest reaches /vnc through the grant its Status returned. */
   canViewPixels(token: string | undefined): boolean {
-    return this.hasSeatToken(token) || this.pixels.lookup(token) !== undefined;
+    return this.isOwner(token) || this.pixels.lookup(token) !== undefined;
+  }
+
+  /**
+   * A guest seat for one display, expiring. Minted by an invite (Phase 2),
+   * never by Pair. `methods` may only narrow the guest default, never widen it.
+   */
+  mintGuest(
+    opts: { display: number; ttlMs: number; methods?: string[]; label?: string },
+    now = Date.now(),
+  ): SeatRecord {
+    if (!Number.isInteger(opts.display) || opts.display < 1) {
+      throw new ComputerError("VALIDATION", "guest seat needs a display");
+    }
+    if (!Number.isFinite(opts.ttlMs) || opts.ttlMs <= 0) {
+      throw new ComputerError("VALIDATION", "guest seat needs a positive ttl");
+    }
+    const ttl = Math.min(opts.ttlMs, GUEST_MAX_TTL_MS);
+    const methods = (opts.methods ?? [...SEAT_GUEST_METHODS]).filter((m) =>
+      (SEAT_GUEST_METHODS as readonly string[]).includes(m),
+    );
+    return this.mint({
+      created_at: new Date(now).toISOString(),
+      display: opts.display,
+      expires_at: new Date(now + ttl).toISOString(),
+      kind: "guest",
+      label: opts.label,
+      methods,
+    });
+  }
+
+  /** Drop a token. Idempotent: revoking twice, or an unknown token, is not an error. */
+  revoke(token: string): boolean {
+    const had = this.seatRecords.delete(token);
+    if (had) {
+      this.persist();
+    }
+    return had;
+  }
+
+  /** Drop every expired guest. Reads already do this lazily; the sweep keeps the file small. */
+  sweep(now = Date.now()): number {
+    let dropped = 0;
+    for (const [token, record] of this.seatRecords) {
+      if (record.expires_at && Date.parse(record.expires_at) <= now) {
+        this.seatRecords.delete(token);
+        dropped += 1;
+      }
+    }
+    if (dropped > 0) {
+      this.persist();
+    }
+    return dropped;
+  }
+
+  /** Every live seat, tokens included: for the owner's own audit and revoke UI, never a public route. */
+  listSeats(now = Date.now()): SeatRecord[] {
+    this.sweep(now);
+    return [...this.seatRecords.values()];
   }
 
   /**
@@ -113,12 +208,20 @@ export class AuthRegistry {
    * disk is worse than a failed pairing: the phone believes it is paired and
    * the next restart says otherwise, which is the bug this store exists for.
    */
-  private mint(): string {
-    const token = randomBytes(24).toString("base64url");
-    this.seatTokens.add(token);
-    this.seats.save([...this.seatTokens]);
-    return token;
+  private mint(record: Omit<SeatRecord, "token">): SeatRecord {
+    const full: SeatRecord = { ...record, token: randomBytes(24).toString("base64url") };
+    this.seatRecords.set(full.token, full);
+    this.persist();
+    return full;
   }
+
+  private persist(): void {
+    this.seats.save([...this.seatRecords.values()]);
+  }
+}
+
+function guestMethods(seat: SeatRecord): readonly string[] {
+  return seat.methods ?? SEAT_GUEST_METHODS;
 }
 
 export function bearerFromHeader(header: string | undefined): string | undefined {

@@ -6,6 +6,8 @@ import { MemoryBotStore, MemorySeatTokenStore } from "../src/service/provision.t
 import type { SeatTokenStore } from "../src/service/provision.ts";
 import type { PolicyService } from "../src/service/policy.ts";
 import type { BotConfig } from "../src/service/bots.ts";
+import type { ChannelStore } from "../src/service/channels.ts";
+import type { BridgeClient } from "../src/service/whatsapp.ts";
 
 const SETUP_CODE = "setup-code-test";
 const AGENT_TOKEN = "agent-token-test";
@@ -39,6 +41,8 @@ export async function startHub(
     policy?: PolicyService;
     eveUrls?: Record<string, string>;
     eveSecret?: string;
+    channelStore?: ChannelStore;
+    bridge?: BridgeClient;
   } = {},
 ): Promise<StartedHub> {
   const configs = opts.bots ?? [{ display: 1, id: "main", token: AGENT_TOKEN }];
@@ -55,6 +59,8 @@ export async function startHub(
       desks.set(display, desk);
       return desk;
     },
+    bridge: opts.bridge,
+    channelStore: opts.channelStore,
     eveSecret: opts.eveSecret,
     eveUrls: opts.eveUrls,
     policy: opts.policy,

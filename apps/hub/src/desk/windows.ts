@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { execViaSocket } from "./executor.ts";
 import { createHash } from "node:crypto";
 import { ComputerError } from "@computer/shared";
 
@@ -87,10 +88,27 @@ export class LocalWindowManager implements WindowManager {
   }
 }
 
-function spawnWindow(
+async function spawnWindow(
   argv: string[],
   opts: { docker?: { container: string; user: string }; local?: boolean },
 ): Promise<{ exit: number; stderr: string }> {
+  // Same seam as the desk driver: a hub that is not box asks the root
+  // executor to start the window as box.
+  const socket = process.env.COMPUTER_EXEC_SOCKET;
+  if (opts.local && socket) {
+    const r = await execViaSocket(socket, {
+      argv,
+      env: {
+        HOME: process.env.HOME ?? "/home/box",
+        PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+      },
+      timeoutMs: 60_000,
+    });
+    if (r.error) {
+      throw new ComputerError("DAEMON_DOWN", r.error);
+    }
+    return { exit: r.exit, stderr: r.stderr.toString() };
+  }
   return new Promise((resolve, reject) => {
     const child = opts.local
       ? spawn(argv[0]!, argv.slice(1), {

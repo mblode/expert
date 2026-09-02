@@ -46,8 +46,14 @@ export const SeatMethods = {
   Pointer: path(Seat, Seat.method.pointer),
   ProvideSecret: path(Seat, Seat.method.provideSecret),
   SetPresence: path(Seat, Seat.method.setPresence),
+  Revoke: path(Seat, Seat.method.revoke),
   Status: path(Seat, Seat.method.status),
   Type: path(Seat, Seat.method.type),
+  WhatsAppAccounts: path(Seat, Seat.method.whatsAppAccounts),
+  WhatsAppConfig: path(Seat, Seat.method.whatsAppConfig),
+  WhatsAppGroups: path(Seat, Seat.method.whatsAppGroups),
+  WhatsAppJoinGroup: path(Seat, Seat.method.whatsAppJoinGroup),
+  WhatsAppLink: path(Seat, Seat.method.whatsAppLink),
 } as const;
 
 export const ALL_METHODS = [

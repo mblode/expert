@@ -7,7 +7,12 @@
       "ignoreDependencies": ["@bufbuild/protoc-gen-es"]
     },
     "apps/hub": {
-      "entry": ["src/host/boot-eves.ts", "src/host/machine-cli.ts", "test/**/*.test.ts"],
+      "entry": [
+        "src/host/boot-eves.ts",
+        "src/host/init.ts",
+        "src/host/machine-cli.ts",
+        "test/**/*.test.ts"
+      ],
       "ignoreDependencies": ["@novnc/novnc"]
     },
     "apps/web": {

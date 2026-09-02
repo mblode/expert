@@ -159,18 +159,29 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(env.PORT).toBe("2000");
   });
 
-  it("guest entrypoint starts Eves from the roster then reads the secret file", () => {
+  it("guest entrypoint hands off to the root init, which supervises desk, Eves, bridge and hub", () => {
     const script = readFileSync(
       resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"),
       "utf-8",
     );
-    expect(script).toContain("tsx src/host/boot-eves.ts");
-    expect(script).toContain("/workspace/.computer/eve-secret");
-    expect(script).toMatch(/desk-up[\s\S]*boot-eves[\s\S]*npm run start --workspace=apps\/hub/);
-    expect(script).not.toContain('boot-eves.ts\n)"');
+    expect(script).toContain("tsx src/host/init.ts");
+    // The old shape: boot-eves then a runuser'd hub. Gone with the uid split.
+    expect(script).not.toContain("boot-eves");
+    expect(script).not.toContain("runuser");
+    const init = readFileSync(resolve(import.meta.dirname, "../src/host/init.ts"), "utf-8");
+    expect(init).toMatch(/desk-up[\s\S]*eve[\s\S]*whatsapp-bridge[\s\S]*--workspace=apps\/hub/);
+    // Secrets reach children as env objects, never on argv, and the setup
+    // code never reaches a box child at all.
+    expect(init).toContain('"COMPUTER_SETUP_CODE", "WHATSAPP_BRIDGE_SECRET"');
+    expect(init).not.toMatch(/args:\s*\[[^\]]*SECRET/);
+    const dockerfile = readFileSync(
+      resolve(import.meta.dirname, "../../../deploy/fly/Dockerfile"),
+      "utf-8",
+    );
+    expect(dockerfile).toContain("useradd --create-home --uid 1001 --shell /usr/sbin/nologin hub");
   });
 
-  it("guest entrypoint does not put secrets on the runuser argv", () => {
+  it("guest entrypoint does not put secrets on any argv", () => {
     const script = readFileSync(
       resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"),
       "utf-8",
@@ -179,8 +190,7 @@ describe("eve supervisor: N Eves from the roster", () => {
       .split("\n")
       .filter((line) => !/^\s*#/.test(line))
       .join("\n");
-    expect(script).toContain("--preserve-environment");
-    // `env NAME=...` after runuser puts the value in `ps`.
+    // `env NAME=...` before a command puts the value in `ps`.
     expect(commands).not.toMatch(/\benv\s+[A-Z_]+=/);
     expect(commands).not.toContain('AI_GATEWAY_API_KEY="${AI_GATEWAY_API_KEY');
     expect(commands).not.toContain('COMPUTER_EVE_SECRET="$COMPUTER_EVE_SECRET"');

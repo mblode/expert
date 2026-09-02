@@ -359,7 +359,8 @@ describe("Connect HTTP", () => {
     const res = await fetch(`${h.url}/healthz`);
     expect(res.status).toBe(200);
     const json = (await res.json()) as Record<string, unknown>;
-    expect(json).toEqual({ ok: true });
+    // No supervisor status file in tests: the hub reports itself alone.
+    expect(json).toEqual({ hub: true, ok: true });
     expect(json).not.toHaveProperty("seat");
   });
 });

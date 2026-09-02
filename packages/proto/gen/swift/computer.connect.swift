@@ -123,6 +123,29 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
 
     @available(iOS 13, *)
     func `deleteBot`(request: Computer_V1_DeleteBotRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BoxStatus>
+
+    /// Drop a seat token: the caller's own (sign-out) or, from an owner seat,
+    /// any other. Guest seats from invites expire on their own; this is early.
+    @available(iOS 13, *)
+    func `revoke`(request: Computer_V1_RevokeRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_RevokeResponse>
+
+    /// WhatsApp is a channel of a Bot: a number linked from hello.expert by
+    /// pairing code or QR, a socket on this computer, groups the owner ticks.
+    /// Owner seat only. The hub proxies these to the bridge process it runs.
+    @available(iOS 13, *)
+    func `whatsAppAccounts`(request: Computer_V1_WhatsAppAccountsRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_WhatsAppAccountsResponse>
+
+    @available(iOS 13, *)
+    func `whatsAppLink`(request: Computer_V1_WhatsAppLinkRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_WhatsAppLinkState>
+
+    @available(iOS 13, *)
+    func `whatsAppGroups`(request: Computer_V1_WhatsAppGroupsRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_WhatsAppGroupsResponse>
+
+    @available(iOS 13, *)
+    func `whatsAppJoinGroup`(request: Computer_V1_WhatsAppJoinGroupRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_WhatsAppJoinGroupResponse>
+
+    @available(iOS 13, *)
+    func `whatsAppConfig`(request: Computer_V1_WhatsAppConfigRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_WhatsAppConfigResponse>
 }
 
 /// Concrete implementation of `Computer_V1_SeatClientInterface`.
@@ -188,6 +211,36 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
         return await self.client.unary(path: "/computer.v1.Seat/DeleteBot", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 
+    @available(iOS 13, *)
+    public func `revoke`(request: Computer_V1_RevokeRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_RevokeResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/Revoke", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `whatsAppAccounts`(request: Computer_V1_WhatsAppAccountsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_WhatsAppAccountsResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/WhatsAppAccounts", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `whatsAppLink`(request: Computer_V1_WhatsAppLinkRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_WhatsAppLinkState> {
+        return await self.client.unary(path: "/computer.v1.Seat/WhatsAppLink", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `whatsAppGroups`(request: Computer_V1_WhatsAppGroupsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_WhatsAppGroupsResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/WhatsAppGroups", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `whatsAppJoinGroup`(request: Computer_V1_WhatsAppJoinGroupRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_WhatsAppJoinGroupResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/WhatsAppJoinGroup", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `whatsAppConfig`(request: Computer_V1_WhatsAppConfigRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_WhatsAppConfigResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/WhatsAppConfig", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
     public enum Metadata {
         public enum Methods {
             public static let pair = Connect.MethodSpec(name: "Pair", service: "computer.v1.Seat", type: .unary)
@@ -201,6 +254,12 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let provideSecret = Connect.MethodSpec(name: "ProvideSecret", service: "computer.v1.Seat", type: .unary)
             public static let createBot = Connect.MethodSpec(name: "CreateBot", service: "computer.v1.Seat", type: .unary)
             public static let deleteBot = Connect.MethodSpec(name: "DeleteBot", service: "computer.v1.Seat", type: .unary)
+            public static let revoke = Connect.MethodSpec(name: "Revoke", service: "computer.v1.Seat", type: .unary)
+            public static let whatsAppAccounts = Connect.MethodSpec(name: "WhatsAppAccounts", service: "computer.v1.Seat", type: .unary)
+            public static let whatsAppLink = Connect.MethodSpec(name: "WhatsAppLink", service: "computer.v1.Seat", type: .unary)
+            public static let whatsAppGroups = Connect.MethodSpec(name: "WhatsAppGroups", service: "computer.v1.Seat", type: .unary)
+            public static let whatsAppJoinGroup = Connect.MethodSpec(name: "WhatsAppJoinGroup", service: "computer.v1.Seat", type: .unary)
+            public static let whatsAppConfig = Connect.MethodSpec(name: "WhatsAppConfig", service: "computer.v1.Seat", type: .unary)
         }
     }
 }

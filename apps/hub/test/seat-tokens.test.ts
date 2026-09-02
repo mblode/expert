@@ -5,6 +5,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { AuthRegistry } from "../src/handler/auth.ts";
 import { FileSeatTokenStore, MemorySeatTokenStore } from "../src/service/provision.ts";
 import { rpc, startHub } from "./helper.ts";
+import type { SeatRecord } from "../src/service/provision.ts";
+
+const owner = (token: string): SeatRecord => ({
+  created_at: "2026-09-02T00:00:00.000Z",
+  kind: "owner",
+  token,
+});
 
 describe("paired seats survive a restart", () => {
   const dirs: string[] = [];
@@ -58,7 +65,7 @@ describe("paired seats survive a restart", () => {
   it("writes the token file 0600 inside a 0700 dir", () => {
     const dir = join(tempDir(), "data");
     const path = join(dir, "seats.json");
-    new FileSeatTokenStore(path).save(["tok"]);
+    new FileSeatTokenStore(path).save([owner("tok")]);
     const perms = (p: string) => statSync(p).mode.toString(8).slice(-3);
     expect(perms(path)).toBe("600");
     expect(perms(dir)).toBe("700");
@@ -68,8 +75,8 @@ describe("paired seats survive a restart", () => {
     const path = join(tempDir(), "seats.json");
     const store = new FileSeatTokenStore(path);
     expect(store.load()).toEqual([]);
-    store.save(["a", "b"]);
-    expect(new FileSeatTokenStore(path).load()).toEqual(["a", "b"]);
+    store.save([owner("a"), owner("b")]);
+    expect(new FileSeatTokenStore(path).load()).toEqual([owner("a"), owner("b")]);
   });
 
   it("throws on a corrupt token file instead of silently unpairing every phone", () => {
@@ -88,7 +95,7 @@ describe("paired seats survive a restart", () => {
     const seats = new MemorySeatTokenStore();
     const auth = new AuthRegistry({ agentTokens: () => [], seats, setupCode: "s" });
     const token = auth.pair("s");
-    expect(seats.load()).toContain(token);
+    expect(seats.load().map((r) => r.token)).toContain(token);
     // A second registry over the same store starts already knowing it.
     expect(
       new AuthRegistry({ agentTokens: () => [], seats, setupCode: "s" }).hasSeatToken(token),

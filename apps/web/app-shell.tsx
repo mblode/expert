@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Button } from "./components/ui/button";
@@ -9,28 +10,31 @@ import { ChatPane } from "./components/chat-pane";
 import { DesktopPane } from "./components/desktop-pane";
 import { authClient } from "./lib/auth-client";
 import { siteConfig } from "./lib/config";
-import {
-  captureEvent,
-  identifyUser,
-  posthogForwardHeaders,
-  resetPostHog,
-} from "./lib/posthog-client";
+import { captureEvent, identifyUser, resetPostHog } from "./lib/posthog-client";
+import { reconnect, selectComputer } from "./lib/reconnect";
+import type { BoundSeat } from "./lib/reconnect";
 import { createSeat, SeatError } from "./lib/seat";
 import type { BoxStatus } from "./lib/seat";
 import { clearSessions } from "./lib/storage";
 
-interface BoundSeat {
-  computerId: string;
-  hubUrl: string;
-  seatToken: string;
-}
-
 const POLL_MS = 2000;
 
-function signOut(): void {
+/**
+ * Sign-out ends the seat on the hub too. Before scopes a seat token lived
+ * forever in `seats.json`; now the browser's token goes with the session.
+ * Best effort: a hub that is asleep or unreachable must not block signing out.
+ */
+function signOut(seat?: { hubUrl: string; seatToken: string }): void {
   clearSessions();
   resetPostHog();
-  void authClient.signOut({ fetchOptions: { onSuccess: () => window.location.assign("/") } });
+  const revoke = seat
+    ? createSeat(seat.hubUrl, seat.seatToken)
+        .revoke()
+        .catch(() => undefined)
+    : Promise.resolve();
+  void revoke.finally(() =>
+    authClient.signOut({ fetchOptions: { onSuccess: () => window.location.assign("/") } }),
+  );
 }
 
 /** The server page already required a session; this only reads the seat off it. */
@@ -69,7 +73,7 @@ export function App(): React.ReactElement {
             setRecovered(next);
           }
         }}
-        onSignOut={signOut}
+        onSignOut={() => signOut()}
       />
     );
   }
@@ -82,49 +86,10 @@ export function App(): React.ReactElement {
       hubUrl={seat.hubUrl}
       key={seat.seatToken}
       onRecovered={setRecovered}
-      onSignOut={signOut}
+      onSignOut={() => signOut({ hubUrl: seat.hubUrl, seatToken: seat.seatToken })}
       seatToken={seat.seatToken}
     />
   );
-}
-
-function readSeat(body: unknown): BoundSeat | null {
-  if (!body || typeof body !== "object") {
-    return null;
-  }
-  const { computerId, hubUrl, seatToken } = body as {
-    computerId?: string;
-    hubUrl?: string;
-    seatToken?: string;
-  };
-  if (!hubUrl || !seatToken) {
-    return null;
-  }
-  return { computerId: computerId ?? "", hubUrl, seatToken };
-}
-
-/** Ask the web server to Pair again; it holds the setup code, the browser never does. */
-async function reconnect(): Promise<BoundSeat | null> {
-  const res = await fetch("/api/computer/reconnect", {
-    headers: posthogForwardHeaders(),
-    method: "POST",
-  });
-  if (!res.ok) {
-    return null;
-  }
-  return readSeat(await res.json().catch(() => null));
-}
-
-async function selectComputer(computerId: string): Promise<BoundSeat | null> {
-  const res = await fetch("/api/computer/select", {
-    body: JSON.stringify({ computerId }),
-    headers: { "content-type": "application/json", ...posthogForwardHeaders() },
-    method: "POST",
-  });
-  if (!res.ok) {
-    return null;
-  }
-  return readSeat(await res.json().catch(() => null));
 }
 
 function Workspace({
@@ -227,7 +192,16 @@ function Workspace({
           </div>
         )}
         {offline && <output className="truncate text-xs text-red-300">{offline}</output>}
-        <Button className="ml-auto" onClick={onSignOut} size="xs" type="button" variant="outline">
+        {/* Channels is the first owner page beside the desk; WhatsApp is the only channel so far, so the link goes straight to it. */}
+        <Button
+          className="ml-auto"
+          render={<Link href="/channels/whatsapp" />}
+          size="xs"
+          variant="outline"
+        >
+          Channels
+        </Button>
+        <Button onClick={onSignOut} size="xs" type="button" variant="outline">
           Sign out
         </Button>
       </header>

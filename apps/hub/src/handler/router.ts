@@ -5,6 +5,7 @@ import { ALL_METHODS } from "@computer/proto";
 import type { AuthPolicy } from "@computer/proto";
 import type { AuthRegistry } from "./auth.ts";
 import { bearerFromHeader } from "./auth.ts";
+import type { SeatRecord } from "../service/provision.ts";
 
 type Handler = (ctx: RpcContext) => Promise<unknown>;
 
@@ -14,6 +15,8 @@ export interface RpcContext {
   kind: "agent" | "seat" | "public";
   /** Set for agent calls: the Bot the bearer token belongs to. */
   botId?: string;
+  /** Set for seat calls: the token's scope. Handlers bind a guest to its display. */
+  seat?: SeatRecord;
 }
 
 interface Route {
@@ -65,7 +68,7 @@ export class ConnectRouter {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const extra = this.extras.get(`${req.method} ${url.pathname}`);
     if (extra) {
-      await this.dispatch(req, res, extra.policy, extra.handler);
+      await this.dispatch(req, res, extra.policy, extra.handler, url.pathname);
       return true;
     }
     if (req.method !== "POST") {
@@ -75,7 +78,7 @@ export class ConnectRouter {
     if (!route) {
       return false;
     }
-    await this.dispatch(req, res, route.policy, route.handler);
+    await this.dispatch(req, res, route.policy, route.handler, url.pathname);
     return true;
   }
 
@@ -84,12 +87,19 @@ export class ConnectRouter {
     res: ServerResponse,
     policy: AuthPolicy,
     handler: Handler,
+    method: string,
   ): Promise<void> {
     try {
       const bearer = bearerFromHeader(header(req, "authorization"));
-      const verified = this.auth.verify(policy, bearer);
+      const verified = this.auth.verify(policy, bearer, method);
       const body = req.method === "GET" || req.method === "HEAD" ? {} : await readJson(req);
-      const result = await handler({ bearer, body, botId: verified.botId, kind: verified.kind });
+      const result = await handler({
+        bearer,
+        body,
+        botId: verified.botId,
+        kind: verified.kind,
+        seat: verified.seat,
+      });
       writeJson(res, 200, result ?? {});
     } catch (error) {
       writeError(res, error);

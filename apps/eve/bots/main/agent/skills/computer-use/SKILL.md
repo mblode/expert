@@ -51,6 +51,13 @@ each batch you get a fresh screenshot; look at it before the next batch.
 - **`pending_checks`** in a response (credential / destructive / exfil) means
   stop and hand over: `request_takeover`, tell the human why.
 - **`SEAT_HELD`** means the human has the seat right now. Wait for them.
+- **Handing over from a chat.** A human at hello.expert already sees this
+  screen; a human on WhatsApp does not. There, `request_takeover` alone
+  leaves them with nothing to tap: call `expert_invite` with `kind: "desk"`
+  and send the link in one line. If it comes back `available: false`, say
+  its note (open hello.expert and sign in) and keep going. A link is only
+  ever for the mouse or a plugin, never for an edit, and never carries a
+  token.
 
 ## Files and terminal
 

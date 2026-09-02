@@ -6,17 +6,22 @@
   "type": "module",
   "exports": {
     "./lib/auth": "./lib/auth.ts",
-    "./lib/hub": "./lib/hub.ts"
+    "./lib/hub": "./lib/hub.ts",
+    "./lib/channels/whatsapp": "./lib/channels/whatsapp.ts",
+    "./lib/channels/bridge-protocol": "./lib/channels/bridge-protocol.ts",
+    "./lib/format-reply": "./lib/format-reply.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
-    "eve": "^0.47.6",
+    "eve": "^0.49.0",
     "zod": "4.5.4"
   },
   "devDependencies": {
     "@types/node": "24.x",
-    "typescript": "7.0.2"
+    "typescript": "7.0.2",
+    "vitest": "^3.2.4"
   }
 }

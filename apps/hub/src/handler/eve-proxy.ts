@@ -33,7 +33,9 @@ export async function handleEveProxy(
   res: ServerResponse,
   deps: EveProxyDeps,
 ): Promise<void> {
-  if (!deps.auth.hasSeatToken(tokenFromRequest(req))) {
+  // The thread is the owner's. A guest seat took the mouse for a few minutes,
+  // it did not get to read or steer the conversation.
+  if (!deps.auth.isOwner(tokenFromRequest(req))) {
     writeJson(res, 401, { error: { code: "UNAUTHENTICATED", message: "seat token required" } });
     return;
   }
