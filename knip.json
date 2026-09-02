@@ -11,7 +11,6 @@
       "ignoreDependencies": ["@novnc/novnc"]
     },
     "apps/web": {
-      "entry": ["instrumentation-client.ts"],
       "ignoreDependencies": ["postcss"]
     },
     "apps/eve": {

@@ -4,7 +4,7 @@ import { PostHog } from "posthog-node";
  * Per-request client: Vercel functions can freeze before a long-lived queue
  * flushes. Callers must shutdown() this instance; do not reuse it.
  */
-export function createPostHogClient(): PostHog | null {
+function createPostHogClient(): PostHog | null {
   const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
   if (!token) {
     return null;
