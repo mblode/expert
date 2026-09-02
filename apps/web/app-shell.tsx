@@ -8,6 +8,12 @@ import { ChatPane } from "./components/chat-pane";
 import { DesktopPane } from "./components/desktop-pane";
 import { authClient } from "./lib/auth-client";
 import { siteConfig } from "./lib/config";
+import {
+  captureEvent,
+  identifyUser,
+  posthogForwardHeaders,
+  resetPostHog,
+} from "./lib/posthog-client";
 import { createSeat, SeatError } from "./lib/seat";
 import type { BoxStatus } from "./lib/seat";
 import { clearSessions } from "./lib/storage";
@@ -16,6 +22,7 @@ const POLL_MS = 2000;
 
 function signOut(): void {
   clearSessions();
+  resetPostHog();
   void authClient.signOut({ fetchOptions: { onSuccess: () => window.location.assign("/") } });
 }
 
@@ -23,6 +30,13 @@ function signOut(): void {
 export function App(): React.ReactElement {
   const { data: session, isPending } = authClient.useSession();
   const [recovered, setRecovered] = useState<{ hubUrl: string; seatToken: string } | null>(null);
+
+  useEffect(() => {
+    if (!session?.user?.id) {
+      return;
+    }
+    identifyUser(session.user.id, session.user.email);
+  }, [session?.user?.id, session?.user?.email]);
 
   const seat =
     recovered ??
@@ -49,6 +63,7 @@ export function App(): React.ReactElement {
 
   return (
     <Workspace
+      connectEvent={recovered ? "computer_reconnected" : "computer_connected"}
       hubUrl={seat.hubUrl}
       key={seat.seatToken}
       onRecovered={setRecovered}
@@ -60,7 +75,10 @@ export function App(): React.ReactElement {
 
 /** Ask the web server to Pair again; it holds the setup code, the browser never does. */
 async function reconnect(): Promise<{ hubUrl: string; seatToken: string } | null> {
-  const res = await fetch("/api/computer/reconnect", { method: "POST" });
+  const res = await fetch("/api/computer/reconnect", {
+    headers: posthogForwardHeaders(),
+    method: "POST",
+  });
   if (!res.ok) {
     return null;
   }
@@ -72,11 +90,13 @@ async function reconnect(): Promise<{ hubUrl: string; seatToken: string } | null
 }
 
 function Workspace({
+  connectEvent,
   hubUrl,
   onRecovered,
   onSignOut,
   seatToken,
 }: {
+  connectEvent: "computer_connected" | "computer_reconnected";
   hubUrl: string;
   onRecovered: (seat: { hubUrl: string; seatToken: string }) => void;
   onSignOut: () => void;
@@ -86,6 +106,10 @@ function Workspace({
   const [status, setStatus] = useState<BoxStatus | undefined>();
   const [display, setDisplay] = useState(1);
   const [offline, setOffline] = useState<string | null>(null);
+
+  useEffect(() => {
+    captureEvent(connectEvent);
+  }, [connectEvent]);
 
   const recoverSeat = useCallback(async () => {
     const next = await reconnect();

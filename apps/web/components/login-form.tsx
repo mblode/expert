@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { authClient } from "@/lib/auth-client";
+import { captureEvent, identifyUser } from "@/lib/posthog-client";
 
 const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
@@ -111,6 +112,11 @@ export function LoginForm({
         setPending(false);
         return;
       }
+      const { data: session } = await authClient.getSession();
+      if (session?.user?.id) {
+        identifyUser(session.user.id, session.user.email);
+      }
+      captureEvent("login_completed", { method: "email_otp" });
       // Full load so the server-rendered `/` sees the session cookie and
       // mounts the desk. Leave pending true so a second submit cannot re-check
       // the consumed code while navigation starts.
