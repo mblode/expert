@@ -1,0 +1,3 @@
+# Read by oxfmt, which honours .gitignore and .prettierignore. Generated code keeps its generator's shape.
+packages/proto/gen/
+apps/ios/
