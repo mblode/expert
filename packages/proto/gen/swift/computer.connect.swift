@@ -129,6 +129,13 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     @available(iOS 13, *)
     func `revoke`(request: Computer_V1_RevokeRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_RevokeResponse>
 
+    /// Hand a named person a seat. An owner may issue any role; an `issuer`,
+    /// which is what a control plane holds instead of the setup code, may issue
+    /// only the working roles. That containment is the point: a stolen control
+    /// plane can take the mouse, not own the box forever.
+    @available(iOS 13, *)
+    func `issue`(request: Computer_V1_IssueRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_IssueResponse>
+
     /// WhatsApp is a channel of a Bot: a number linked from hello.expert by
     /// pairing code or QR, a socket on this computer, groups the owner ticks.
     /// Owner seat only. The hub proxies these to the bridge process it runs.
@@ -217,6 +224,11 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
+    public func `issue`(request: Computer_V1_IssueRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_IssueResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/Issue", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `whatsAppAccounts`(request: Computer_V1_WhatsAppAccountsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_WhatsAppAccountsResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/WhatsAppAccounts", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -255,6 +267,7 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let createBot = Connect.MethodSpec(name: "CreateBot", service: "computer.v1.Seat", type: .unary)
             public static let deleteBot = Connect.MethodSpec(name: "DeleteBot", service: "computer.v1.Seat", type: .unary)
             public static let revoke = Connect.MethodSpec(name: "Revoke", service: "computer.v1.Seat", type: .unary)
+            public static let issue = Connect.MethodSpec(name: "Issue", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppAccounts = Connect.MethodSpec(name: "WhatsAppAccounts", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppLink = Connect.MethodSpec(name: "WhatsAppLink", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppGroups = Connect.MethodSpec(name: "WhatsAppGroups", service: "computer.v1.Seat", type: .unary)

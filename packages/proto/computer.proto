@@ -38,6 +38,11 @@ service Seat {
   // Drop a seat token: the caller's own (sign-out) or, from an owner seat,
   // any other. Guest seats from invites expire on their own; this is early.
   rpc Revoke(RevokeRequest) returns (RevokeResponse);
+  // Hand a named person a seat. An owner may issue any role; an `issuer`,
+  // which is what a control plane holds instead of the setup code, may issue
+  // only the working roles. That containment is the point: a stolen control
+  // plane can take the mouse, not own the box forever.
+  rpc Issue(IssueRequest) returns (IssueResponse);
   // WhatsApp is a channel of a Bot: a number linked from hello.expert by
   // pairing code or QR, a socket on this computer, groups the owner ticks.
   // Owner seat only. The hub proxies these to the bridge process it runs.
@@ -448,6 +453,22 @@ message RevokeRequest {
 
 message RevokeResponse {
   bool revoked = 1;
+}
+
+message IssueRequest {
+  string role = 1;       // owner | operator | viewer | guest | issuer
+  string subject = 2;    // who this is for, as the caller names them
+  uint32 ttl_sec = 3;    // 0 = no expiry, allowed only for an owner-issued seat
+  uint32 display = 4;    // 0 = any screen
+  repeated string methods = 5; // narrows the role, never widens it
+  string label = 6;      // shown in the owner's seat list
+}
+
+message IssueResponse {
+  string token = 1;      // shown once
+  string role = 2;
+  string subject = 3;
+  string expires_at = 4; // ISO, empty when it never expires
 }
 
 // --- WhatsApp channel (owner seat) ---

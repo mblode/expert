@@ -5,7 +5,7 @@ import { ALL_METHODS } from "@computer/proto";
 import type { AuthPolicy } from "@computer/proto";
 import type { AuthRegistry } from "./auth.ts";
 import { bearerFromHeader } from "./auth.ts";
-import type { SeatRecord } from "../service/provision.ts";
+import type { PrincipalRecord } from "../service/principals.ts";
 
 type Handler = (ctx: RpcContext) => Promise<unknown>;
 
@@ -15,8 +15,8 @@ export interface RpcContext {
   kind: "agent" | "seat" | "public";
   /** Set for agent calls: the Bot the bearer token belongs to. */
   botId?: string;
-  /** Set for seat calls: the token's scope. Handlers bind a guest to its display. */
-  seat?: SeatRecord;
+  /** Set for anything authenticated. Handlers bind a display-bound principal to its screen. */
+  principal?: PrincipalRecord;
 }
 
 interface Route {
@@ -98,7 +98,7 @@ export class ConnectRouter {
         body,
         botId: verified.botId,
         kind: verified.kind,
-        seat: verified.seat,
+        principal: verified.principal,
       });
       writeJson(res, 200, result ?? {});
     } catch (error) {

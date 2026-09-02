@@ -2,7 +2,9 @@ import { SeatMethods } from "@computer/proto";
 import { ComputerError, DISPLAY, PRIMARY_DISPLAY, parseDisplay } from "@computer/shared";
 import type { BoxStatus, Button } from "@computer/shared";
 import type { Bot, BotRegistry } from "../service/bots.ts";
-import type { ProvisionService, SeatRecord } from "../service/provision.ts";
+import type { ProvisionService } from "../service/provision.ts";
+import { asRole } from "../service/principals.ts";
+import type { PrincipalRecord } from "../service/principals.ts";
 import type { AuthRegistry } from "./auth.ts";
 import { withPixelToken } from "../service/pixels.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
@@ -32,14 +34,16 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     return withPixelToken(deps.vncUrl, grant);
   };
 
-  // A guest sees only its own screen: the screen list carries pixel grants,
-  // and a grant for another display would be a way around the display bind.
-  const status = (display: number = PRIMARY_DISPLAY, seat?: SeatRecord): BoxStatus => {
+  // A seat bound to one screen sees only that screen: the screen list carries
+  // pixel grants, and a grant for another display would be a way around the
+  // bind. Binding is the record's own `display`, not its role, so an operator
+  // issued for one screen is contained the same way a guest is.
+  const status = (display: number = PRIMARY_DISPLAY, seat?: PrincipalRecord): BoxStatus => {
     const bot = deps.bots.byDisplay(display);
     const visible =
-      seat?.kind === "guest"
-        ? deps.bots.all().filter((b) => b.display === display)
-        : deps.bots.all();
+      seat?.display === undefined
+        ? deps.bots.all()
+        : deps.bots.all().filter((b) => b.display === display);
     return {
       display: DISPLAY,
       screens: visible.map((b) => ({
@@ -54,13 +58,13 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   };
 
   /**
-   * The display a call is about. A guest seat was minted for one screen and
-   * an absent `display` resolves to that screen, not the primary, so a phone
-   * that omits the field still lands where its invite pointed; naming any
-   * other screen is refused before the desk is touched.
+   * The display a call is about. A seat minted for one screen resolves an
+   * absent `display` to that screen, not the primary, so a phone that omits
+   * the field still lands where its invite pointed; naming any other screen
+   * is refused before the desk is touched.
    */
-  const displayFor = (o: Record<string, unknown>, seat: SeatRecord | undefined): number => {
-    if (seat?.kind === "guest" && seat.display !== undefined) {
+  const displayFor = (o: Record<string, unknown>, seat: PrincipalRecord | undefined): number => {
+    if (seat?.display !== undefined) {
       if (o.display === undefined) {
         return seat.display;
       }
@@ -74,7 +78,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   };
 
   const botFor = (o: Record<string, unknown>, ctx: RpcContext): Bot =>
-    deps.bots.byDisplay(displayFor(o, ctx.seat));
+    deps.bots.byDisplay(displayFor(o, ctx.principal));
 
   router.rpc(SeatMethods.Pair, "pair", async ({ body }) => {
     const o = requireObject(body);
@@ -84,7 +88,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
 
   router.rpc(SeatMethods.Status, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    return status(displayFor(o, ctx.seat), ctx.seat);
+    return status(displayFor(o, ctx.principal), ctx.principal);
   });
 
   router.rpc(SeatMethods.SetPresence, "seat", async (ctx) => {
@@ -92,9 +96,9 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     if (typeof o.present !== "boolean") {
       throw new ComputerError("VALIDATION", "present must be boolean");
     }
-    const display = displayFor(o, ctx.seat);
+    const display = displayFor(o, ctx.principal);
     deps.bots.byDisplay(display).seat.setPresence(o.present);
-    return status(display, ctx.seat);
+    return status(display, ctx.principal);
   });
 
   // Sign-out, or an owner pulling a guest's invite early. Revoking the
@@ -104,10 +108,49 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     const o = requireObject(ctx.body);
     const own = ctx.bearer ?? "";
     const target = typeof o.token === "string" && o.token ? o.token : own;
-    if (target !== own && ctx.seat?.kind !== "owner") {
+    if (target !== own && ctx.principal?.role !== "owner") {
       throw new ComputerError("UNAUTHENTICATED", "only an owner seat may revoke another seat");
     }
     return { revoked: deps.auth.revoke(target) };
+  });
+
+  /**
+   * Hand a named person a seat. This is how a control plane stops being the
+   * box's owner: it pairs once, keeps an `issuer`, and calls this with the
+   * user it just authenticated. The role containment lives in the registry,
+   * which is the only place that can see who is asking.
+   */
+  router.rpc(SeatMethods.Issue, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    const by = ctx.principal;
+    if (!by) {
+      throw new ComputerError("UNAUTHENTICATED", "seat token required");
+    }
+    const ttlSec = o.ttl_sec === undefined ? undefined : Number(o.ttl_sec);
+    if (ttlSec !== undefined && (!Number.isFinite(ttlSec) || ttlSec < 0)) {
+      throw new ComputerError("VALIDATION", "ttl_sec must be a non-negative number");
+    }
+    const issued = deps.auth.issue(
+      {
+        display: o.display === undefined || o.display === 0 ? undefined : parseDisplay(o.display),
+        label: typeof o.label === "string" ? o.label : undefined,
+        methods: Array.isArray(o.methods)
+          ? o.methods.filter((m): m is string => typeof m === "string")
+          : undefined,
+        role: asRole(o.role),
+        subject: typeof o.subject === "string" && o.subject ? o.subject : undefined,
+        // 0 means "no expiry"; only an owner may ask for it, which `issue`
+        // enforces by refusing a privileged role to an issuer anyway.
+        ttlMs: ttlSec === undefined || ttlSec === 0 ? undefined : ttlSec * 1000,
+      },
+      by,
+    );
+    return {
+      expires_at: issued.expires_at ?? "",
+      role: issued.role,
+      subject: issued.subject ?? "",
+      token: issued.token,
+    };
   });
 
   // The trackpad. `move` is a delta (the human is looking at the stream, not
@@ -218,7 +261,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
       throw new ComputerError("VALIDATION", "id is required");
     }
     await deps.provision.remove(o.id);
-    return status(PRIMARY_DISPLAY, ctx.seat);
+    return status(PRIMARY_DISPLAY, ctx.principal);
   });
 }
 

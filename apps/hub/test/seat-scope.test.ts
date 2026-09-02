@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AuthRegistry, GUEST_MAX_TTL_MS } from "../src/handler/auth.ts";
-import { FileSeatTokenStore, MemorySeatTokenStore } from "../src/service/provision.ts";
+import { FilePrincipalStore, MemoryPrincipalStore } from "../src/service/principals.ts";
 import { rpc, startHub } from "./helper.ts";
 
 const agentTokens = () => [["agent-token", "main"]] as [string, string][];
@@ -23,27 +23,29 @@ describe("seat scopes", () => {
     writeFileSync(path, JSON.stringify(["old-phone-token"]));
     const auth = new AuthRegistry({
       agentTokens,
-      seats: new FileSeatTokenStore(path),
+      principals: new FilePrincipalStore(path),
       setupCode: "code",
     });
     expect(auth.isOwner("old-phone-token")).toBe(true);
-    expect(auth.verify("seat", "old-phone-token", "/computer.v1.Seat/CreateBot").seat?.kind).toBe(
-      "owner",
-    );
+    expect(
+      auth.verify("seat", "old-phone-token", "/computer.v1.Seat/CreateBot").principal?.role,
+    ).toBe("owner");
   });
 
   it("a guest seat is bound to its methods and expires", () => {
     const auth = new AuthRegistry({
       agentTokens,
-      seats: new MemorySeatTokenStore(),
+      principals: new MemoryPrincipalStore(),
       setupCode: "c",
     });
     // Real time: verify() reads the clock itself, so the guest must be live now.
     const now = Date.now();
     const guest = auth.mintGuest({ display: 2, label: "wa:invite", ttlMs: 60_000 }, now);
-    expect(guest.kind).toBe("guest");
+    expect(guest.role).toBe("guest");
     expect(guest.display).toBe(2);
-    expect(auth.verify("seat", guest.token, "/computer.v1.Seat/Pointer").seat?.kind).toBe("guest");
+    expect(auth.verify("seat", guest.token, "/computer.v1.Seat/Pointer").principal?.role).toBe(
+      "guest",
+    );
     expect(() => auth.verify("seat", guest.token, "/computer.v1.Seat/CreateBot")).toThrow(
       /cannot do that/,
     );
@@ -52,7 +54,7 @@ describe("seat scopes", () => {
     );
     expect(auth.isOwner(guest.token)).toBe(false);
     // Expired: unknown from then on, and gone from the store.
-    expect(auth.seatFor(guest.token, now + 60_001)).toBeUndefined();
+    expect(auth.principalFor(guest.token, now + 60_001)).toBeUndefined();
     expect(() => auth.verify("seat", guest.token, "/computer.v1.Seat/Status")).toThrow(
       /seat token required/,
     );
@@ -61,7 +63,7 @@ describe("seat scopes", () => {
   it("a guest ttl is capped and methods can only narrow", () => {
     const auth = new AuthRegistry({
       agentTokens,
-      seats: new MemorySeatTokenStore(),
+      principals: new MemoryPrincipalStore(),
       setupCode: "c",
     });
     const now = Date.parse("2026-09-02T00:00:00Z");
@@ -78,8 +80,8 @@ describe("seat scopes", () => {
   });
 
   it("revoke drops a token and the sweep drops expired ones", () => {
-    const store = new MemorySeatTokenStore();
-    const auth = new AuthRegistry({ agentTokens, seats: store, setupCode: "c" });
+    const store = new MemoryPrincipalStore();
+    const auth = new AuthRegistry({ agentTokens, principals: store, setupCode: "c" });
     const now = Date.parse("2026-09-02T00:00:00Z");
     const owner = auth.pair("c", now);
     const guest = auth.mintGuest({ display: 1, ttlMs: 1000 }, now);
@@ -87,7 +89,7 @@ describe("seat scopes", () => {
     expect(auth.revoke(owner)).toBe(true);
     expect(auth.revoke(owner)).toBe(false);
     expect(auth.sweep(now + 2000)).toBe(1);
-    expect(auth.seatFor(guest.token, now + 2000)).toBeUndefined();
+    expect(auth.principalFor(guest.token, now + 2000)).toBeUndefined();
     expect(store.load()).toHaveLength(0);
   });
 });

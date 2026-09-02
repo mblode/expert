@@ -34,14 +34,12 @@ export type OccurrenceKind = (typeof OCCURRENCE_KINDS)[number];
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
 /**
- * Who holds a seat token. An `owner` paired with the setup code (hello.expert
- * sign-in, the phone) and may do anything a seat can. A `guest` came from an
- * invite the Bot handed out in a chat: bound to one display, limited to the
- * methods below, and expiring, so a WhatsApp member can take the mouse for a
- * few minutes without becoming the box owner.
+ * A seat is held by a principal with a role (see `ROLES` below). An `owner`
+ * paired with the setup code and may do anything a seat can. A `guest` came
+ * from an invite the Bot handed out in a chat: bound to one display, limited
+ * to the methods below, and expiring, so a WhatsApp member can take the mouse
+ * for a few minutes without becoming the box owner.
  */
-export type SeatKind = "owner" | "guest";
-
 /** What a guest seat may call unless the invite narrows it further. Never provisioning, the thread, or clipboard read. */
 export const SEAT_GUEST_METHODS = [
   "/computer.v1.Seat/Status",
@@ -52,6 +50,71 @@ export const SEAT_GUEST_METHODS = [
   "/computer.v1.Seat/ProvideSecret",
   "/computer.v1.Seat/Revoke",
 ] as const;
+
+/**
+ * Who is calling. Every bearer the hub accepts resolves to one of these, so
+ * there is one verify path rather than one per door: a human at a seat, a
+ * Bot's Eve holding an agent token, and a service like the WhatsApp bridge or
+ * the control plane. Before this, a seat token, a bot token and a channel
+ * secret were three unrelated checks over three files, and none of them knew
+ * which human was behind a seat.
+ */
+export type PrincipalKind = "user" | "bot" | "service";
+
+/**
+ * What a principal may do, as a named bundle of methods.
+ *
+ * `owner` is unrestricted inside the Seat service, which is what a paired
+ * seat has always been: a new RPC is available to owners the moment it is
+ * registered. Every other role is an explicit allowlist, so a new RPC is
+ * denied to them until someone decides otherwise. That asymmetry is the
+ * point: adding a method must never quietly widen a narrow role.
+ */
+export const ROLES = ["owner", "operator", "viewer", "guest", "bot", "issuer", "ingress"] as const;
+export type Role = (typeof ROLES)[number];
+
+/** Roles that can mint other principals. An issuer may never hand out one of these. */
+export const PRIVILEGED_ROLES: readonly Role[] = ["owner", "issuer"];
+
+const SEAT_OCCURRENCES = "/computer.v1.Seat/Occurrences";
+const SEAT_STATUS = "/computer.v1.Seat/Status";
+const SEAT_REVOKE = "/computer.v1.Seat/Revoke";
+const SEAT_ISSUE = "/computer.v1.Seat/Issue";
+
+/**
+ * Methods per role. `undefined` means unrestricted within the service the
+ * principal's policy already gates, never "every method on the hub": an
+ * agent token is still refused by a seat-policy route and vice versa.
+ *
+ * Revoke is in every human role deliberately. Ending your own seat is not a
+ * privilege, and sign-out calls it.
+ */
+export const ROLE_METHODS: Record<Role, readonly string[] | undefined> = {
+  guest: SEAT_GUEST_METHODS,
+  // A person who may drive the box but not reshape it: no CreateBot, no
+  // WhatsApp linking, no clipboard read (it exfiltrates whatever is copied).
+  operator: [...SEAT_GUEST_METHODS, SEAT_OCCURRENCES],
+  owner: undefined,
+  viewer: [SEAT_STATUS, SEAT_OCCURRENCES, SEAT_REVOKE],
+  // The control plane: it exists to hand seats to people it has authenticated.
+  issuer: [SEAT_ISSUE, SEAT_REVOKE],
+  bot: undefined,
+  // A door, not a caller: the channel ingress is its whole surface.
+  ingress: [],
+};
+
+/** Does this role, narrowed by `methods` if the grant narrows it, allow `method`? */
+export function principalAllows(
+  role: Role,
+  methods: readonly string[] | undefined,
+  method: string | undefined,
+): boolean {
+  const allowed = methods ?? ROLE_METHODS[role];
+  if (allowed === undefined) {
+    return true;
+  }
+  return method !== undefined && allowed.includes(method);
+}
 
 /**
  * Closed on the way in, additive on the way out.
