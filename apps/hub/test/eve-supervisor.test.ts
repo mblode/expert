@@ -1,4 +1,12 @@
-import { mkdtempSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -6,11 +14,13 @@ import { FileBotStore } from "../src/service/provision.ts";
 import { ensureEveSecret, ensureRoster, ensureRosterAt } from "../src/host/ensure-roster.ts";
 import {
   DEFAULT_EVE_OVERLAY,
+  eveChildEnv,
   evePortForDisplay,
   planEveLaunches,
   resolveEveBotsRoot,
+  superviseEves,
 } from "../src/host/eve.ts";
-import { eveChildEnv } from "../src/host/start-eves.ts";
+import type { ChildSpec } from "../src/host/supervisor.ts";
 
 const temps: string[] = [];
 afterEach(() => {
@@ -157,6 +167,52 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(env.COMPUTER_EVE_SECRET).toBe("secret");
     expect(env.HOST).toBe("127.0.0.1");
     expect(env.PORT).toBe("2000");
+  });
+
+  it("supervises every launch with a health probe, its own log and the caller's uid", () => {
+    const specs: ChildSpec[] = [];
+    superviseEves(
+      { start: (spec) => specs.push(spec) },
+      [
+        { botId: "main", cwd: "/opt/eve/main", display: 1, port: 2000, token: "bot_main" },
+        { botId: "night", cwd: "/opt/eve/night", display: 2, port: 2001, token: "bot_night" },
+      ],
+      {
+        env: { PATH: "/bin" },
+        eveSecret: "secret",
+        gid: 1000,
+        hubUrl: "http://127.0.0.1:8080",
+        logDir: "/var/log/computer",
+        uid: 1000,
+      },
+    );
+    expect(specs.map((s) => s.id)).toEqual(["eve-main", "eve-night"]);
+    expect(specs[0]).toMatchObject({
+      args: ["eve", "start", "--host", "127.0.0.1", "--port", "2000"],
+      cmd: "npx",
+      cwd: "/opt/eve/main",
+      gid: 1000,
+      healthUrl: "http://127.0.0.1:2000/eve/v1/health",
+      log: "/var/log/computer/eve-main.log",
+      uid: 1000,
+    });
+    expect(specs[1]?.env?.COMPUTER_BOT_TOKEN).toBe("bot_night");
+    // A supervised child, not a detached one: no `oneShot`, so an Eve that
+    // dies is restarted rather than left down until the box reboots.
+    expect(specs[0]?.oneShot).toBeUndefined();
+  });
+
+  it("`npm run up` and the guest init share one Eve launcher", () => {
+    const host = resolve(import.meta.dirname, "../src/host");
+    for (const entry of ["init.ts", "eves.ts"]) {
+      expect(readFileSync(join(host, entry), "utf-8"), entry).toContain("superviseEves(sup,");
+    }
+    // The detached spawn `superviseEves` replaced. It is gone, not shadowed.
+    expect(existsSync(join(host, "start-eves.ts"))).toBe(false);
+    expect(existsSync(join(host, "boot-eves.ts"))).toBe(false);
+    expect(readFileSync(resolve(host, "../../../../scripts/computer.mjs"), "utf-8")).toContain(
+      "src/host/eves.ts",
+    );
   });
 
   it("guest entrypoint hands off to the root init, which supervises desk, Eves, bridge and hub", () => {

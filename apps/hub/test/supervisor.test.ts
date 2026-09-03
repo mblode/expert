@@ -87,6 +87,14 @@ describe("supervisor", () => {
     expect(onDisk.children[0]!.id).toBe("crashy");
   });
 
+  it("stays alive while a restart is pending", () => {
+    // The health timer may stay unref'd: its child holds the loop open. The
+    // restart timer may not, or a supervisor whose children are all down
+    // exits mid-backoff and nothing ever restarts them.
+    const src = readFileSync(join(import.meta.dirname, "../src/host/supervisor.ts"), "utf-8");
+    expect(src).not.toMatch(/restartTimer\.unref/);
+  });
+
   it("a binary that cannot be spawned is restarted, not reported up", async () => {
     const dir = tmp();
     const sup = new Supervisor({ backoff: { initialMs: 50, maxMs: 100, stableMs: 10_000 } });

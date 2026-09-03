@@ -28,7 +28,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { userInfo } from "node:os";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
-import { planEveLaunches, resolveEveBotsRoot } from "./eve.ts";
+import { planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
 import { Supervisor } from "./supervisor.ts";
 
 const repoRoot = resolve(import.meta.dirname, "../../..");
@@ -205,29 +205,14 @@ sup.start({
 });
 
 const eves = planEveLaunches(roster, { botsRoot });
-for (const launch of eves) {
-  sup.start({
-    args: ["eve", "start", "--host", "127.0.0.1", "--port", String(launch.port)],
-    cmd: "npx",
-    cwd: launch.cwd,
-    env: childEnv(
-      {
-        COMPUTER_BOT_TOKEN: launch.token,
-        COMPUTER_EVE_SECRET: eveSecret,
-        COMPUTER_URL: hubUrl,
-        HOST: "127.0.0.1",
-        PORT: String(launch.port),
-        USER: box.name,
-      },
-      "/home/box",
-    ),
-    gid: box.gid,
-    healthUrl: `http://127.0.0.1:${launch.port}/eve/v1/health`,
-    id: `eve-${launch.botId}`,
-    log: join(logDir, `eve-${launch.botId}.log`),
-    uid: box.uid,
-  });
-}
+superviseEves(sup, eves, {
+  env: childEnv({ USER: box.name }, "/home/box"),
+  eveSecret,
+  gid: box.gid,
+  hubUrl,
+  logDir,
+  uid: box.uid,
+});
 if (eves.length === 0) {
   console.warn(`computer init: no Eve project under ${botsRoot}; chat will report DAEMON_DOWN`);
 }
