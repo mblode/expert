@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+/** What `useVisualViewport` returns. @public */
 export interface VisualViewportBox {
   height: number;
   offsetTop: number;

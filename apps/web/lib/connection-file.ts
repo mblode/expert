@@ -8,12 +8,13 @@
 export const AUTH_KINDS = ["static", "oauth"] as const;
 export type AuthKind = (typeof AUTH_KINDS)[number];
 
-export const OAUTH_STATUSES = ["none", "needs_login", "connected"] as const;
+const OAUTH_STATUSES = ["none", "needs_login", "connected"] as const;
 export type OauthStatus = (typeof OAUTH_STATUSES)[number];
 
 /** Standalone overlay (vcmc-agent layout). Nested `bots/main` is the other shape. */
 export const GUEST_CONNECTIONS_DIR = "/workspace/eve/bots/agent/connections";
 
+/** `planConnectionFile` returns one and `connectionView` takes one. @public */
 export interface ConnectionDraft {
   authKind: AuthKind;
   connectorId?: string;
@@ -42,11 +43,11 @@ export interface ConnectionFailure {
   status: 400 | 404 | 409 | 502;
 }
 
-export function isAuthKind(value: string): value is AuthKind {
+function isAuthKind(value: string): value is AuthKind {
   return (AUTH_KINDS as readonly string[]).includes(value);
 }
 
-export function connectionSlug(name: string): string | undefined {
+function connectionSlug(name: string): string | undefined {
   const slug = name
     .trim()
     .toLowerCase()
@@ -56,7 +57,7 @@ export function connectionSlug(name: string): string | undefined {
   return slug || undefined;
 }
 
-export function parseConnectionUrl(raw: string): string | undefined {
+function parseConnectionUrl(raw: string): string | undefined {
   try {
     const url = new URL(raw.trim());
     if (url.protocol !== "https:" && url.protocol !== "http:") {
@@ -152,7 +153,7 @@ export function acceptedStaticKey(authKind: AuthKind, credential: string | undef
   return authKind === "static" && Boolean(credential?.trim());
 }
 
-export function renderConnectionSource(input: {
+function renderConnectionSource(input: {
   authKind: AuthKind;
   connectorId?: string;
   description: string;

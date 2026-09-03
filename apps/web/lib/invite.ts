@@ -7,7 +7,7 @@ export type InvitePurpose = (typeof INVITE_PURPOSES)[number];
 
 /** WhatsApp group computer. Mint defaults here unless the body names another id. */
 export const DEFAULT_INVITE_COMPUTER_ID = "vibey";
-export const DEFAULT_INVITE_TTL_MINUTES = 30;
+const DEFAULT_INVITE_TTL_MINUTES = 30;
 export const MAX_INVITE_TTL_MINUTES = 240;
 
 /**
@@ -80,7 +80,7 @@ export function hashInviteSender(sender: string): string {
  * Eve's client sends `{ kind: "desk" | "plugin" }`. Operators still send
  * `purpose`. Singular `plugin` is the public name; the path stays `/plugins`.
  */
-export function resolveInvitePurpose(input: { kind?: string; purpose?: string }): string {
+function resolveInvitePurpose(input: { kind?: string; purpose?: string }): string {
   const raw = (input.purpose ?? input.kind ?? "").trim();
   return raw === "plugin" ? "plugins" : raw;
 }
