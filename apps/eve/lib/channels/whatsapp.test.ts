@@ -37,6 +37,7 @@ describe("parseBridgePayload", () => {
       context: ["recent: hello"],
       media: [{ dataUrl: "data:image/png;base64,AA==", mime: "image/png" }],
       message: "hi",
+      messageId: "m0123456789",
       sender: "1@s.whatsapp.net",
       senderName: "Sam",
       senderPhone: "+61400000000",
@@ -48,6 +49,7 @@ describe("parseBridgePayload", () => {
       context: ["recent: hello"],
       media: [{ dataUrl: "data:image/png;base64,AA==", mime: "image/png" }],
       message: "hi",
+      messageId: "m0123456789",
       sender: "1@s.whatsapp.net",
       senderName: "Sam",
       senderPhone: "+61400000000",
@@ -164,6 +166,19 @@ describe("buildContext", () => {
       "hello.expert link is only for taking the mouse or OAuth plugin consent",
     );
     expect(block).not.toContain("account:");
+    // No id from the bridge means no line, so a tool cannot quote a handle the
+    // bridge would not resolve.
+    expect(block).not.toContain("message_id:");
+  });
+
+  it("carries the message id the send envelope quotes and reacts to", () => {
+    const [block] = buildContext({
+      message: "hi",
+      messageId: "m0123456789",
+      surface: "group",
+      token: "123@g.us",
+    });
+    expect(block).toContain("message_id: m0123456789");
   });
 
   it("labels a DM, and defaults an absent surface to the group", () => {
