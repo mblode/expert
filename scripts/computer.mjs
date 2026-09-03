@@ -117,7 +117,7 @@ async function up() {
 
   // 3. One Eve process per roster bot that has apps/eve/bots/<id>.
   //    Loopback only; the hub proxies /eve/v1 so clients know one origin.
-  startEve(run);
+  const eve = startEve(run);
 
   // 4. Pairing QR, then the hub in the foreground.
   printPairing(env);
@@ -127,15 +127,26 @@ async function up() {
     env: { ...process.env, ...run },
     stdio: "inherit",
   });
-  child.on("exit", (code) => process.exit(code ?? 0));
+  child.on("exit", (code) => {
+    // Ctrl-c already reached the supervisor through the process group; this
+    // is for the hub dying on its own. Best effort only, npx may not forward
+    // the signal, which is what the port check on the next `up` is for.
+    eve?.kill();
+    process.exit(code ?? 0);
+  });
 }
 
-/** One `eve start` per roster bot. Children are detached; this only launches them. */
+/**
+ * The supervisor the guest's PID 1 runs, minus the children a dev machine
+ * does not have: one `eve start` per roster bot, restarted with backoff and
+ * probed on /eve/v1/health. It shares this process group, so ctrl-c on the
+ * hub stops the Eves with it.
+ */
 function startEve(env) {
   const mainDir = resolve(root, "apps/eve/bots/main");
   if (!existsSync(resolve(mainDir, "package.json"))) {
     console.log("• no apps/eve/bots/main: copy that dir, mint a token, then re-run `up`");
-    return;
+    return null;
   }
   if (!process.env.AI_GATEWAY_API_KEY && !env.AI_GATEWAY_API_KEY) {
     console.log("• AI_GATEWAY_API_KEY is unset: Eve will start but model calls will fail");
@@ -144,21 +155,27 @@ function startEve(env) {
     console.log(
       `• an Eve process is already listening on :${EVE_BASE_PORT} from a previous \`up\`; leaving it`,
     );
-    return;
+    return null;
   }
-  try {
-    execFileSync("npx", ["tsx", "apps/hub/src/host/boot-eves.ts"], {
-      cwd: root,
-      env: {
-        ...process.env,
-        ...env,
-        COMPUTER_URL: env.COMPUTER_URL ?? `http://127.0.0.1:${env.COMPUTER_PORT}`,
-      },
-      stdio: "inherit",
-    });
-  } catch {
-    console.log("• boot-eves failed: chat will show Eve as not running");
-  }
+  // The supervisor mirrors its view here and the hub's /healthz reads it, so
+  // a dead Eve is as visible locally as it is on the guest. Only a run that
+  // owns the supervisor points the hub at it: /healthz calls a file nobody
+  // refreshes stale, and reports the whole box down for it.
+  env.COMPUTER_STATUS_FILE ??= resolve(root, env.COMPUTER_DATA ?? "data/bots.json").replace(
+    /bots\.json$/,
+    "status.json",
+  );
+  const eve = spawn("npx", ["tsx", "apps/hub/src/host/eves.ts"], {
+    cwd: root,
+    env: {
+      ...process.env,
+      ...env,
+      COMPUTER_URL: env.COMPUTER_URL ?? `http://127.0.0.1:${env.COMPUTER_PORT}`,
+    },
+    stdio: "inherit",
+  });
+  eve.on("error", () => console.log("• eve supervisor failed: chat will show Eve as not running"));
+  return eve;
 }
 
 async function bot(argv) {
