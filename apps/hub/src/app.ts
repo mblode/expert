@@ -12,13 +12,17 @@ import { handleChannelIngress, isChannelPath } from "./handler/channels.ts";
 import { registerWhatsApp } from "./handler/whatsapp.ts";
 import { ChannelRegistry } from "./service/channels.ts";
 import type { ChannelStore } from "./service/channels.ts";
+import { ConversationRegistry } from "./service/conversations.ts";
+import type { ConversationStore, MessageLog } from "./service/conversations.ts";
+import { TurnService } from "./service/turns.ts";
 import type { BridgeClient } from "./service/whatsapp.ts";
 import { eveUrlForDisplay } from "./host/eve.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
 import type { PolicyService } from "./service/policy.ts";
 import { ProvisionService } from "./service/provision.ts";
-import type { BotStore, SeatTokenStore } from "./service/provision.ts";
+import type { BotStore } from "./service/provision.ts";
+import type { PrincipalStore } from "./service/principals.ts";
 import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
 import type { PixelRegistry } from "./service/pixels.ts";
@@ -33,8 +37,9 @@ export interface HubOptions {
   windows: WindowManager;
   /** Persists the roster; FileBotStore in production, MemoryBotStore in tests. */
   store: BotStore;
-  /** Persists paired seat tokens. Without it every restart unpairs every phone. */
-  seatStore: SeatTokenStore;
+  /** Persists every principal: seats, and the issuers a control plane holds.
+   * Without it every restart unpairs every phone. */
+  principalStore: PrincipalStore;
   /** Hub-side approval gate. Absent = no rules = allow. */
   policy?: PolicyService;
   vncUrl: string;
@@ -52,6 +57,9 @@ export interface HubOptions {
   eveSecret?: string;
   /** Persists channel doors (the WhatsApp bridge, webhooks). Memory in tests. */
   channelStore?: ChannelStore;
+  /** The conversation index and its append-only logs. Memory in tests. */
+  conversationStore?: ConversationStore;
+  messageLog?: MessageLog;
   /** The WhatsApp bridge this hub supervises. Absent = the RPCs answer DAEMON_DOWN. */
   bridge?: BridgeClient;
   /** The supervisor's status file (init writes it). Absent = /healthz reports the hub alone. */
@@ -65,6 +73,9 @@ export interface Hub {
   bots: BotRegistry;
   provision: ProvisionService;
   channels: ChannelRegistry;
+  conversations: ConversationRegistry;
+  /** Mints and verifies the per-turn conversation binding the ingress hands to Eve. */
+  turns: TurnService;
   router: ConnectRouter;
   /** Mounts the stored roster (or provisions "main") and claims windows. */
   start: () => Promise<void>;
@@ -77,14 +88,19 @@ export function createHub(opts: HubOptions): Hub {
   const auth = new AuthRegistry({
     agentTokens: () => bots.tokenEntries(),
     pixels: opts.pixels,
-    seats: opts.seatStore,
+    principals: opts.principalStore,
     setupCode: opts.setupCode,
   });
   const router = new ConnectRouter(auth);
   const channels = new ChannelRegistry(opts.channelStore);
+  const conversations = new ConversationRegistry(opts.conversationStore, opts.messageLog);
+  // In-process: a turn is one inbound message long, so it has nothing to
+  // survive a restart for. A hub that died mid-turn has already dropped the
+  // reply the token was minted for.
+  const turns = new TurnService();
 
-  registerAgent(router, bots);
-  registerSeat(router, { auth, bots, provision, vncUrl: opts.vncUrl });
+  registerAgent(router, { bots, conversations, turns });
+  registerSeat(router, { auth, bots, conversations, provision, vncUrl: opts.vncUrl });
   registerWhatsApp(router, { bots, bridge: opts.bridge, channels });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
@@ -136,9 +152,11 @@ export function createHub(opts: HubOptions): Hub {
         await handleChannelIngress(req, res, {
           bots,
           channels,
+          conversations,
           cors: corsHeaders(),
           eveSecret,
           eveUrl,
+          turns,
         });
         return;
       }
@@ -184,6 +202,7 @@ export function createHub(opts: HubOptions): Hub {
     auth,
     bots,
     channels,
+    conversations,
     close: () =>
       new Promise((resolveClose) => {
         wss.close();
@@ -193,6 +212,7 @@ export function createHub(opts: HubOptions): Hub {
     router,
     server,
     start: () => provision.start(),
+    turns,
     wss,
   };
 }

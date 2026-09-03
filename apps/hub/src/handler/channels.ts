@@ -2,10 +2,13 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { ComputerError } from "@computer/shared";
+import type { Participant, Route } from "@computer/shared";
 import type { BotRegistry } from "../service/bots.ts";
-import type { ChannelRegistry } from "../service/channels.ts";
+import type { ChannelRecord, ChannelRegistry } from "../service/channels.ts";
+import type { ConversationRegistry } from "../service/conversations.ts";
+import type { TurnService } from "../service/turns.ts";
 import { EVE_HUB_SECRET_HEADER } from "../host/eve.ts";
-import { writeError } from "./router.ts";
+import { TURN_HEADER, writeError } from "./router.ts";
 
 const PREFIX = "/channels/";
 /**
@@ -21,6 +24,8 @@ export const CHANNEL_SECRET_HEADER = "x-channel-secret";
 export interface ChannelIngressDeps {
   channels: ChannelRegistry;
   bots: BotRegistry;
+  conversations: ConversationRegistry;
+  turns: TurnService;
   /** Where this Bot's Eve listens. Empty string means it has no Eve. */
   eveUrl: (botId: string, display: number) => string;
   /** Shared secret the Eve channel expects on loopback (`eve start`). */
@@ -80,6 +85,7 @@ export async function handleChannelIngress(
       throw new ComputerError("VALIDATION", `body over ${MAX_BODY} bytes`);
     }
     const body = await readBody(req);
+    const turn = bindTurn(deps, record, bot.id, target, body);
 
     const abort = new AbortController();
     res.on("close", () => {
@@ -94,6 +100,7 @@ export async function handleChannelIngress(
         headers: {
           "content-type": firstHeader(req.headers["content-type"]) ?? "application/json",
           ...(deps.eveSecret ? { [EVE_HUB_SECRET_HEADER]: deps.eveSecret } : {}),
+          ...(turn ? { [TURN_HEADER]: turn } : {}),
         },
         method: "POST",
         redirect: "manual",
@@ -119,6 +126,79 @@ export async function handleChannelIngress(
       writeError(res, error);
     }
   }
+}
+
+/**
+ * Resolve the inbound to a conversation and mint the turn token that binds
+ * this Eve call to it.
+ *
+ * Best effort by design. A body that is not the shape this kind expects gets
+ * no token and Eve answers exactly as it does today, including its own 400:
+ * the ingress must not become a second validator of a payload it forwards
+ * opaquely, and a missing token already means "the seat thread", which is the
+ * behaviour that predates conversations.
+ */
+function bindTurn(
+  deps: ChannelIngressDeps,
+  record: ChannelRecord,
+  botId: string,
+  target: string,
+  body: Uint8Array,
+): string | undefined {
+  const route = routeFor(record, target, body, botId);
+  if (!route) {
+    return undefined;
+  }
+  const conversation = deps.conversations.resolve(botId, route.route, route.participants);
+  return deps.turns.mint({ bot: botId, conversation_id: conversation.id }).id;
+}
+
+/** The bridge payload's two identifying fields. Anything else is not a route. */
+interface WhatsAppInbound {
+  token?: unknown;
+  sender?: unknown;
+  acct?: unknown;
+}
+
+function routeFor(
+  record: ChannelRecord,
+  target: string,
+  body: Uint8Array,
+  botId: string,
+): { route: Route; participants: Participant[] } | undefined {
+  // One kind has a route today. A webhook has no chat to be a conversation
+  // with, so it keeps forwarding untouched.
+  if (record.kind !== "whatsapp" || target !== "/eve/v1/whatsapp/message") {
+    return undefined;
+  }
+  let parsed: WhatsAppInbound;
+  try {
+    parsed = JSON.parse(Buffer.from(body).toString("utf-8")) as WhatsAppInbound;
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== "object") {
+    return undefined;
+  }
+  const jid = typeof parsed.token === "string" ? parsed.token : "";
+  if (!jid) {
+    return undefined;
+  }
+  // An older bridge does not send `acct`. A channel record is one linked
+  // number, so its id names the account when the payload does not, which
+  // keeps the route stable rather than collapsing two numbers into one.
+  const acct = typeof parsed.acct === "string" && parsed.acct ? parsed.acct : record.id;
+  // In a DM the sender is the chat; in a group the first message names one
+  // member of many. The participant list is what the record was created
+  // with and is never rewritten from a later inbound, see `resolve`.
+  const ref = typeof parsed.sender === "string" && parsed.sender ? parsed.sender : jid;
+  return {
+    participants: [
+      { bot: botId, kind: "bot" },
+      { kind: "human", ref },
+    ],
+    route: { acct, jid, kind: "whatsapp" },
+  };
 }
 
 export function parseChannelPath(pathname: string): { id: string; rest: string } | undefined {

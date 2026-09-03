@@ -59,8 +59,9 @@ import {
   phoneDigits,
 } from "./live-members.ts";
 import type { LiveMember } from "./live-members.ts";
-import { createDailyCounter, mediaSendAllowed } from "./media-send.ts";
-import type { SendMediaPayload } from "./media-send.ts";
+import { createDailyCounter, sendTargetAllowed } from "./media-send.ts";
+import type { SendMediaPayload, SendTargetGate } from "./media-send.ts";
+import { createMessageIndex } from "./message-ids.ts";
 import { loadMembersOverlay } from "./members.ts";
 import type { Member } from "./members.ts";
 import {
@@ -84,6 +85,8 @@ import {
   resolveSenderInfo,
 } from "./message-parse.ts";
 import { isOwner, parseOwnerIds } from "./owner.ts";
+import { authoriseEnvelope } from "./send-envelope.ts";
+import type { EnvelopeMedia, SendEnvelope } from "./send-envelope.ts";
 import { buildReportMessage, reportDedupKey } from "./report.ts";
 import type { FeatureReport } from "./report.ts";
 import { shouldReply } from "./routing.ts";
@@ -161,6 +164,10 @@ export interface AccountHandle {
     idempotencyKey?: string,
   ) => Promise<{ sent: boolean; deduped?: boolean }>;
   onSendMedia: (payload: SendMediaPayload) => Promise<{ sent: boolean; reason?: string }>;
+  /** The one outbound envelope: quoted reply, reaction, text, image, document. */
+  onSendEnvelope: (
+    envelope: SendEnvelope,
+  ) => Promise<{ sent: boolean; reason?: string; messageIds?: string[] }>;
 }
 
 export interface AccountRuntime {
@@ -212,6 +219,10 @@ const PROCESSED_CAP = 1000;
 const REPLIED_CAP = 1000;
 const REPORTED_CAP = 200;
 const SENT_KEY_CAP = 500;
+// Short message ids the Bot may quote or react to. Two thousand covers a busy
+// group's last day or two; past that an id falls off and the envelope refuses,
+// which is the trade this index is bounded for.
+const MESSAGE_INDEX_CAP = 2000;
 
 /** Parse a chat.whatsapp.com link or a bare invite code. */
 export const inviteCodeFrom = (invite: string): string | null => {
@@ -413,6 +424,12 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   // is a duplicate WhatsApp message.
   const sentKeys = boundedSet(SENT_KEY_CAP);
   const mediaSendCounter = createDailyCounter(() => cfg().image_sends_per_day);
+  // Every outbound envelope costs one write, whatever verb it carries: a
+  // reaction is cheap to send and still a write into someone's group.
+  const envelopeWriteCounter = createDailyCounter(() => cfg().sends_per_day);
+  // Short id -> Baileys key, so a Bot can quote or react to a message it was
+  // shown without ever handling a raw WhatsApp key. Bounded; see message-ids.ts.
+  const messageIndex = createMessageIndex(MESSAGE_INDEX_CAP);
 
   const askAgent = createChannelClient({
     acct,
@@ -427,14 +444,20 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   const downloadBuffer = (sock: WASocket, msg: WAMessage): Promise<Buffer> =>
     downloadMediaMessage(msg, "buffer", {}, { logger, reuploadRequest: sock.updateMediaMessage });
 
-  /** Send a text message and remember it so decryption-retry receipts can be answered. */
+  /**
+   * Send a text message and remember it: `sentStore` so decryption-retry
+   * receipts can be answered, and the message index so the Bot can quote or
+   * react to its own message afterwards. `quoted` makes it a threaded reply.
+   */
   const sendText = async (
     sock: WASocket,
     jid: string,
     text: string,
+    quoted?: WAMessage,
   ): Promise<WAMessage | undefined> => {
-    const sent = await sock.sendMessage(jid, { text });
+    const sent = await sock.sendMessage(jid, { text }, quoted ? { quoted } : undefined);
     sentStore.record(sent);
+    messageIndex.remember(sent?.key, text);
     return sent;
   };
 
@@ -1129,6 +1152,8 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     bot: Bot;
     jid: string;
     prompt: string;
+    /** Short id of the message being answered; null when there is nothing to quote. */
+    messageId?: string | null;
     media: Media[] | undefined;
     sender: string;
     senderName: string | undefined;
@@ -1179,6 +1204,8 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
         context: context.length ? context : undefined,
         media,
         message: prompt,
+        // The handle the Bot needs to reply to or react to this exact message.
+        messageId: args.messageId ?? undefined,
         sender,
         senderName,
         senderPhone,
@@ -1279,6 +1306,8 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     hasImage: boolean;
     isDM: boolean;
     jid: string;
+    /** Short id of this message, so the Bot can quote or react to it. */
+    messageId: string | null;
     msg: WAMessage;
     msgId: string | null | undefined;
     sender: string;
@@ -1326,6 +1355,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       extraContext: extraContext.length > 0 ? extraContext : undefined,
       jid: args.jid,
       media,
+      messageId: args.messageId,
       prompt,
       sender: args.sender,
       senderName: args.senderName,
@@ -1407,6 +1437,11 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       return;
     }
 
+    // Remember the key behind a short id before anything else can return: the
+    // Bot can only quote or react to a message that went through here, and the
+    // id it gets back is the only handle it is ever given on the real key.
+    const messageId = messageIndex.remember(msg.key, text || placeholder);
+
     // Capture every message into the buffer (powers recap + resources) BEFORE
     // any reply gating, so the transcript stays complete even for DMs we
     // won't answer. Caption-less media records as its typed placeholder.
@@ -1433,6 +1468,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       hasImage,
       isDM,
       jid,
+      messageId,
       msg,
       msgId,
       sender,
@@ -1667,6 +1703,14 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     return { sent: true };
   };
 
+  /** The identity gate every outbound verb shares, read fresh so config edits apply live. */
+  const sendGate = (): SendTargetGate => ({
+    groups: groupGate,
+    isMember: (num) => whitelist.isMember(num),
+    isOwnerJid: (j) => isOwner(owners, j, null),
+    maintainerJid: cfg().maintainer_jid || undefined,
+  });
+
   /**
    * Deliver a proactive image into a chat. Allowlisted to anywhere the bot
    * already replies (allowed groups, member / owner / maintainer DMs) and
@@ -1678,12 +1722,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     base64,
     caption,
   }: SendMediaPayload): Promise<{ sent: boolean; reason?: string }> => {
-    const allowed = mediaSendAllowed(jid, {
-      groups: groupGate,
-      isMember: (num) => whitelist.isMember(num),
-      isOwnerJid: (j) => isOwner(owners, j, null),
-      maintainerJid: cfg().maintainer_jid || undefined,
-    });
+    const allowed = sendTargetAllowed(jid, sendGate());
     if (!allowed) {
       logger.warn({ jid }, "refusing media send to non-allowlisted jid");
       return { reason: "jid not allowlisted for sends", sent: false };
@@ -1709,6 +1748,143 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       x: caption?.trim() || "[image]",
     });
     return { sent: true };
+  };
+
+  /**
+   * Decode every media item up front, enforcing the same byte cap as
+   * /send-media. All of them before any of them is sent: half an envelope
+   * delivered and then refused on the third file is not something the caller
+   * can retry cleanly.
+   */
+  const mediaBuffers = (items: EnvelopeMedia[]): Buffer[] | null => {
+    const buffers: Buffer[] = [];
+    for (const item of items) {
+      const buf = Buffer.from(item.base64, "base64");
+      if (!buf.length || buf.length > env.maxSendMediaBytes) {
+        return null;
+      }
+      buffers.push(buf);
+    }
+    return buffers;
+  };
+
+  /** Record one outbound message the envelope sent, so the transcript stays two-sided. */
+  const recordOutbound = async (
+    sock: WASocket,
+    jid: string,
+    sent: WAMessage | undefined,
+    text: string,
+  ): Promise<void> => {
+    await store.recordMessage(jid, {
+      id: sent?.key?.id ?? undefined,
+      n: botName(),
+      role: "assistant",
+      s: userPart(sock.user?.id ?? ""),
+      surface: jid.endsWith("@g.us") ? "group" : "dm",
+      t: Math.floor(Date.now() / 1000),
+      x: text,
+    });
+  };
+
+  /**
+   * The one outbound envelope: an optional quoted reply, a reaction, and up to
+   * four images or documents, in that order, into one chat.
+   *
+   * Everything that decides whether this may happen is in `authoriseEnvelope`
+   * (`send-envelope.ts`), including the rule that bare text into a group is
+   * refused unless it quotes a message there. This function only resolves the
+   * short ids to real keys and makes the Baileys calls. Every refusal happens
+   * before the first send, because WhatsApp has no multi-message transaction:
+   * once a part is in the chat there is no taking it back. A send that then
+   * fails mid-flight still reports the ids that did land.
+   */
+  const sendEnvelope = async (
+    envelope: SendEnvelope,
+  ): Promise<{ sent: boolean; reason?: string; messageIds?: string[] }> => {
+    const { jid } = envelope;
+    // Before anything is spent: a send into a chat whose socket is down costs
+    // the chat a daily slot for a message that never left.
+    const sock = requireSock();
+    const buffers = mediaBuffers(envelope.media ?? []);
+    if (!buffers) {
+      return { reason: "media empty or over size cap", sent: false };
+    }
+    const replyTo = envelope.reply_to ? messageIndex.lookup(envelope.reply_to) : undefined;
+    const reactTo = envelope.react ? messageIndex.lookup(envelope.react.to) : undefined;
+    const decision = authoriseEnvelope(
+      envelope,
+      { reactToJid: reactTo?.key.remoteJid, replyToJid: replyTo?.key.remoteJid },
+      sendGate(),
+      { media: mediaSendCounter, writes: envelopeWriteCounter },
+    );
+    if (!decision.ok) {
+      logger.warn({ jid, reason: decision.reason }, "refusing send envelope");
+      return { reason: decision.reason, sent: false };
+    }
+    const messageIds: string[] = [];
+
+    // The quoted stub is the key plus a short text body: Baileys reads only
+    // `key` and `message` off it, and the preview text is what renders in the
+    // grey line above the reply.
+    const quoted = replyTo
+      ? ({ key: replyTo.key, message: { conversation: replyTo.preview } } as WAMessage)
+      : undefined;
+
+    if (envelope.react && reactTo) {
+      const sent = await sock.sendMessage(jid, {
+        react: { key: reactTo.key, text: envelope.react.emoji },
+      });
+      // A reaction is not a message in the transcript: WhatsApp keeps it on the
+      // message it decorates, and the bridge records reactions on their own
+      // event. Nothing to record or to hand back an id for.
+      sentStore.record(sent);
+    }
+
+    if (envelope.text) {
+      const sent = await sendText(sock, jid, envelope.text, quoted);
+      // sendText already remembered it; remember is keyed on the message, so
+      // asking again is how we get the id back rather than a second entry.
+      const id = messageIndex.remember(sent?.key, envelope.text);
+      if (id) {
+        messageIds.push(id);
+      }
+      await recordOutbound(sock, jid, sent, envelope.text);
+    }
+
+    for (const [index, item] of (envelope.media ?? []).entries()) {
+      const buf = buffers[index] as Buffer;
+      // A quoted reply threads the first outbound message only: when the
+      // envelope carries text that message already took the quote, and quoting
+      // on every file would stack the same grey header three times.
+      const quoteThis = envelope.text || index > 0 ? undefined : quoted;
+      const content =
+        item.kind === "image"
+          ? { caption: item.caption, image: buf, mimetype: item.mime }
+          : {
+              caption: item.caption,
+              document: buf,
+              fileName: item.filename,
+              mimetype: item.mime,
+            };
+      const sent = await sock.sendMessage(
+        jid,
+        content,
+        quoteThis ? { quoted: quoteThis } : undefined,
+      );
+      sentStore.record(sent);
+      const id = messageIndex.remember(sent?.key, item.caption ?? "");
+      if (id) {
+        messageIds.push(id);
+      }
+      await recordOutbound(
+        sock,
+        jid,
+        sent,
+        item.caption?.trim() ||
+          (item.kind === "image" ? "[image]" : `[document] ${item.filename ?? ""}`.trim()),
+      );
+    }
+    return { messageIds, sent: true };
   };
 
   // ---- connection lifecycle ----------------------------------------------
@@ -2120,6 +2296,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       onInvite: sendInvite,
       onReport: sendReport,
       onSend: sendProactive,
+      onSendEnvelope: sendEnvelope,
       onSendMedia: sendMediaProactive,
       store,
     },

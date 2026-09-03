@@ -38,6 +38,11 @@ service Seat {
   // Drop a seat token: the caller's own (sign-out) or, from an owner seat,
   // any other. Guest seats from invites expire on their own; this is early.
   rpc Revoke(RevokeRequest) returns (RevokeResponse);
+  // Hand a named person a seat. An owner may issue any role; an `issuer`,
+  // which is what a control plane holds instead of the setup code, may issue
+  // only the working roles. That containment is the point: a stolen control
+  // plane can take the mouse, not own the box forever.
+  rpc Issue(IssueRequest) returns (IssueResponse);
   // WhatsApp is a channel of a Bot: a number linked from hello.expert by
   // pairing code or QR, a socket on this computer, groups the owner ticks.
   // Owner seat only. The hub proxies these to the bridge process it runs.
@@ -305,6 +310,9 @@ message SendMessageResponse {
   string occurrence_id = 1;
   // True when this send ended the turn (widget, secret_request).
   bool turn_ended = 2;
+  // The conversation this send landed in. Empty when the caller presented
+  // no turn binding, which is the Bot's own seat thread.
+  string conversation_id = 3;
 }
 
 // --- Seat ---
@@ -398,6 +406,17 @@ message OccurrencesRequest {
   string cursor = 1;
   int32 limit = 2;
   int32 display = 3;
+  // Additive. Absent = the display's Bot seat thread, which is what this
+  // RPC has always returned. A conversation belongs to a Bot, and a seat
+  // bound to one screen may not read another screen's Bot by id.
+  string conversation_id = 4;
+}
+
+// Who wrote a message. `system` carries hop notices and route failures.
+message MessageAuthor {
+  string kind = 1; // bot | human | system
+  string bot = 2;  // kind = bot
+  string ref = 3;  // kind = human: the identity on the route, e.g. a WA JID
 }
 
 message Occurrence {
@@ -411,6 +430,10 @@ message Occurrence {
   string answer = 8;
   string label = 9;
   bool provided = 10;
+  // Set when the entry came from a conversation rather than the seat log.
+  string conversation_id = 11;
+  MessageAuthor author = 12;
+  string turn_id = 13;
 }
 
 message OccurrencesResponse {
@@ -448,6 +471,22 @@ message RevokeRequest {
 
 message RevokeResponse {
   bool revoked = 1;
+}
+
+message IssueRequest {
+  string role = 1;       // owner | operator | viewer | guest | issuer
+  string subject = 2;    // who this is for, as the caller names them
+  uint32 ttl_sec = 3;    // 0 = no expiry, allowed only for an owner-issued seat
+  uint32 display = 4;    // 0 = any screen
+  repeated string methods = 5; // narrows the role, never widens it
+  string label = 6;      // shown in the owner's seat list
+}
+
+message IssueResponse {
+  string token = 1;      // shown once
+  string role = 2;
+  string subject = 3;
+  string expires_at = 4; // ISO, empty when it never expires
 }
 
 // --- WhatsApp channel (owner seat) ---

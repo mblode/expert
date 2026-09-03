@@ -3,13 +3,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AuthRegistry } from "../src/handler/auth.ts";
-import { FileSeatTokenStore, MemorySeatTokenStore } from "../src/service/provision.ts";
+import { FilePrincipalStore, MemoryPrincipalStore } from "../src/service/principals.ts";
 import { rpc, startHub } from "./helper.ts";
-import type { SeatRecord } from "../src/service/provision.ts";
+import type { PrincipalRecord } from "../src/service/principals.ts";
 
-const owner = (token: string): SeatRecord => ({
+const owner = (token: string): PrincipalRecord => ({
   created_at: "2026-09-02T00:00:00.000Z",
-  kind: "owner",
+  kind: "user",
+  role: "owner",
   token,
 });
 
@@ -28,15 +29,17 @@ describe("paired seats survive a restart", () => {
   };
 
   it("a phone paired before a restart is still paired after it", async () => {
-    const seatStore = new FileSeatTokenStore(join(tempDir(), "nested", "seats.json"));
+    const principalStore = new FilePrincipalStore(join(tempDir(), "nested", "seats.json"));
 
-    const first = await startHub({ seatStore });
+    const first = await startHub({ principalStore });
     const token = await first.pair();
     await expect(rpc(first.url, "/computer.v1.Seat/Status", {}, token)).resolves.toBeTruthy();
     await first.close();
 
     // A brand-new hub process, same disk. Before this store the token died here.
-    const second = await startHub({ seatStore: new FileSeatTokenStore(seatStore["path"]) });
+    const second = await startHub({
+      principalStore: new FilePrincipalStore(principalStore["path"]),
+    });
     try {
       await expect(rpc(second.url, "/computer.v1.Seat/Status", {}, token)).resolves.toMatchObject({
         state: "AGENT",
@@ -48,11 +51,11 @@ describe("paired seats survive a restart", () => {
 
   it("an unpaired token is still refused after a restart", async () => {
     const path = join(tempDir(), "seats.json");
-    const first = await startHub({ seatStore: new FileSeatTokenStore(path) });
+    const first = await startHub({ principalStore: new FilePrincipalStore(path) });
     await first.pair();
     await first.close();
 
-    const second = await startHub({ seatStore: new FileSeatTokenStore(path) });
+    const second = await startHub({ principalStore: new FilePrincipalStore(path) });
     try {
       await expect(
         rpc(second.url, "/computer.v1.Seat/Status", {}, "not-a-real-token"),
@@ -65,7 +68,7 @@ describe("paired seats survive a restart", () => {
   it("writes the token file 0600 inside a 0700 dir", () => {
     const dir = join(tempDir(), "data");
     const path = join(dir, "seats.json");
-    new FileSeatTokenStore(path).save([owner("tok")]);
+    new FilePrincipalStore(path).save([owner("tok")]);
     const perms = (p: string) => statSync(p).mode.toString(8).slice(-3);
     expect(perms(path)).toBe("600");
     expect(perms(dir)).toBe("700");
@@ -73,10 +76,10 @@ describe("paired seats survive a restart", () => {
 
   it("round-trips, and only a missing file reads as unpaired", () => {
     const path = join(tempDir(), "seats.json");
-    const store = new FileSeatTokenStore(path);
+    const store = new FilePrincipalStore(path);
     expect(store.load()).toEqual([]);
     store.save([owner("a"), owner("b")]);
-    expect(new FileSeatTokenStore(path).load()).toEqual([owner("a"), owner("b")]);
+    expect(new FilePrincipalStore(path).load()).toEqual([owner("a"), owner("b")]);
   });
 
   it("throws on a corrupt token file instead of silently unpairing every phone", () => {
@@ -86,19 +89,19 @@ describe("paired seats survive a restart", () => {
       writeFileSync(p, body);
       return p;
     };
-    expect(() => new FileSeatTokenStore(bad("{oops", "a.json")).load()).toThrow(/JSON/);
-    expect(() => new FileSeatTokenStore(bad('{"tokens":[]}', "b.json")).load()).toThrow(/array/);
-    expect(() => new FileSeatTokenStore(bad("[1,2]", "c.json")).load()).toThrow(/strings/);
+    expect(() => new FilePrincipalStore(bad("{oops", "a.json")).load()).toThrow(/JSON/);
+    expect(() => new FilePrincipalStore(bad('{"tokens":[]}', "b.json")).load()).toThrow(/array/);
+    expect(() => new FilePrincipalStore(bad("[1,2]", "c.json")).load()).toThrow(/strings/);
   });
 
   it("mints through the store, so a token is on disk before it is handed out", () => {
-    const seats = new MemorySeatTokenStore();
-    const auth = new AuthRegistry({ agentTokens: () => [], seats, setupCode: "s" });
+    const principals = new MemoryPrincipalStore();
+    const auth = new AuthRegistry({ agentTokens: () => [], principals, setupCode: "s" });
     const token = auth.pair("s");
-    expect(seats.load().map((r) => r.token)).toContain(token);
+    expect(principals.load().map((r) => r.token)).toContain(token);
     // A second registry over the same store starts already knowing it.
     expect(
-      new AuthRegistry({ agentTokens: () => [], seats, setupCode: "s" }).hasSeatToken(token),
+      new AuthRegistry({ agentTokens: () => [], principals, setupCode: "s" }).hasSeatToken(token),
     ).toBe(true);
   });
 });

@@ -59,6 +59,18 @@ reply goes back in the same response and the bridge posts it to the chat.
    hand a chat user who wants the mouse (it answers `available: false` until
    the invite RPC lands in Phase 2).
 
+3. Re-export `lib/tools/whatsapp_send.ts` for the outbound envelope: the one
+   tool that reacts, quotes, or attaches a file, mirroring the bridge's single
+   `POST /send-envelope`. The turn's final text is still the reply; this is for
+   what a plain response cannot say. It reads the chat JID and the message id
+   off the session (never off the model's copy of the context block), quotes
+   the message being answered by default, and needs `WHATSAPP_BRIDGE_SECRET`
+   plus `COMPUTER_BRIDGE_URL` (or `BRIDGE_URL`, default
+   `http://127.0.0.1:2100`). The hub's supervisor keeps that secret out of an
+   Eve child's environment on purpose, so on the Fly guest every send answers
+   `available: false` until Phase 3 mints a per-inbound reply capability; the
+   Bot answers in text either way.
+
 The route accepts either of two headers, checked in constant time:
 
 | Header                  | Secret                   | Path                                                                       |

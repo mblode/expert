@@ -11,9 +11,12 @@ import type { Seat } from "../lib/seat";
  */
 export function ClipboardPanel({
   display,
+  readable = true,
   seat,
 }: {
   display: number;
+  /** A guest seat may paste in and never read out, so the invite hides Read. */
+  readable?: boolean;
   seat: Seat;
 }): React.ReactElement {
   const [text, setText] = useState("");
@@ -44,20 +47,26 @@ export function ClipboardPanel({
           className="h-20 font-mono text-xs"
           id="clip"
           onChange={(event) => setText(event.target.value)}
-          placeholder="Read from the box, or paste something in and send it."
+          placeholder={
+            readable
+              ? "Read from the box, or paste something in and send it."
+              : "Paste something in and send it to the box."
+          }
           value={text}
         />
       </Field>
       <div className="flex flex-wrap items-center gap-2">
-        <Button
-          disabled={busy}
-          onClick={() => void act("Read from the box.", () => seat.clipboardGet(display))}
-          size="xs"
-          type="button"
-          variant="outline"
-        >
-          Read
-        </Button>
+        {readable && (
+          <Button
+            disabled={busy}
+            onClick={() => void act("Read from the box.", () => seat.clipboardGet(display))}
+            size="xs"
+            type="button"
+            variant="outline"
+          >
+            Read
+          </Button>
+        )}
         <Button
           disabled={busy || !text}
           onClick={() => void act("Sent to the box.", () => seat.clipboardSet(text, display))}

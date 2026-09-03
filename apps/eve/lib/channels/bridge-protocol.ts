@@ -35,6 +35,13 @@ export interface BridgePayload {
   /** Images attached to the message. */
   media?: BridgeMedia[];
   /**
+   * Short, opaque id for this message. It is the handle the agent passes back
+   * as `reply_to` or `react.to` on the bridge's send envelope, so a reply can
+   * quote the message it answers or react to it. The bridge holds the real
+   * WhatsApp key behind it; a raw key never reaches the model.
+   */
+  messageId?: string;
+  /**
    * Which linked number this arrived on. The bridge is multi-account, one
    * socket per `acct`, so a Bot with two numbers can tell them apart.
    */
@@ -78,7 +85,7 @@ export function parseBridgePayload(body: unknown): BridgePayload | { error: stri
 
   const payload: BridgePayload = { message, token };
 
-  for (const key of ["sender", "senderPhone", "senderName", "acct"] as const) {
+  for (const key of ["sender", "senderPhone", "senderName", "acct", "messageId"] as const) {
     const parsed = optionalString(body, key);
     if (!parsed.ok) {
       return { error: parsed.error };

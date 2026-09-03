@@ -3,6 +3,7 @@ import type { ChannelSource } from "eve/channels";
 import { defineChannel, POST } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
 import { EVE_HUB_SECRET_HEADER, eveHubSecretMatches } from "../auth.ts";
+import { TURN_HEADER } from "../hub.ts";
 import { outboundReply } from "../format-reply.ts";
 import { parseBridgePayload } from "./bridge-protocol.ts";
 import type { BridgeMedia, BridgePayload } from "./bridge-protocol.ts";
@@ -83,7 +84,7 @@ const RESPONSE_RULE =
   "Reply in plain text suitable for WhatsApp. Keep it concise, avoid Markdown tables/headings/code fences, and ask at most one short follow-up question. When they ask you to change how you work (instructions, skills, routines, plugins, computer-use), edit those files on disk and say you did. A hello.expert link is only for taking the mouse or OAuth plugin consent, never for an edit, never tokens, never VNC.";
 
 const buildContextBlock = (payload: BridgePayload): string => {
-  const { surface, token, senderName, sender, acct } = payload;
+  const { surface, token, senderName, sender, acct, messageId } = payload;
   const lines =
     surface === "dm"
       ? [
@@ -102,6 +103,9 @@ const buildContextBlock = (payload: BridgePayload): string => {
     ...(acct ? [`account: ${acct}`] : []),
     ...(senderName ? [`sender_name: ${senderName}`] : []),
     ...(sender ? [`sender_jid: ${sender}`] : []),
+    // The handle for quoting or reacting to this message on the send envelope.
+    // Absent on an older bridge, so a tool must treat it as optional.
+    ...(messageId ? [`message_id: ${messageId}`] : []),
     "</whatsapp_context>",
   ].join("\n");
 };
@@ -132,6 +136,50 @@ export const buildContext = (payload: BridgePayload): string[] => {
  */
 export const neutraliseFence = (block: string): string =>
   block.replaceAll(/<(?<slash>\/?)untrusted_context>/giu, "&lt;$<slash>untrusted_context&gt;");
+
+/**
+ * The session auth for one inbound message, kept pure so the header round
+ * trip is testable without a request.
+ *
+ * `groupJid` is the chat JID on both surfaces (the name is historical; in a
+ * DM it is the DM JID). Tools and memory key on it, so it must be the real
+ * chat and not the per-message continuation token.
+ *
+ * `turn` is the hub's binding for this turn, minted by the channel ingress
+ * and bound there to a conversation and to this Bot. It rides auth
+ * attributes rather than the prompt or a tool argument because that is the
+ * one place the model cannot reach: `send_message` reads it back off
+ * `ctx.session.auth.current` and hands it to the hub, so the hub decides
+ * which conversation the reply lands in. Absent (the direct bridge path, an
+ * eve TUI) means the Bot's seat thread, which is the behaviour that predates
+ * conversations.
+ *
+ * `messageId` rides along for the same reason the context block shows it: it
+ * is what `whatsapp_send` quotes or reacts to, and taking it from here rather
+ * than from the model's copy of that block means an id the bridge issued is
+ * the only id a send can carry.
+ */
+export const buildAuth = (
+  payload: BridgePayload,
+  via: BridgeAuthPath,
+  turn: string | undefined,
+) => {
+  const { token, sender, senderName, senderPhone, acct, messageId } = payload;
+  return {
+    attributes: {
+      groupJid: token,
+      via,
+      ...(acct ? { acct } : {}),
+      ...(messageId ? { messageId } : {}),
+      ...(senderName ? { senderName } : {}),
+      ...(senderPhone ? { senderPhone } : {}),
+      ...(turn ? { turn } : {}),
+    },
+    authenticator: "whatsapp-bridge",
+    principalId: sender ?? token,
+    principalType: "user",
+  } as const;
+};
 
 /** What `from(address).send` accepts: a string or the AI SDK's user content parts. */
 export type ChannelMessage = Parameters<ChannelSource["send"]>[0];
@@ -224,23 +272,8 @@ export default defineChannel({
       if ("error" in parsed) {
         return Response.json({ error: parsed.error }, { status: 400 });
       }
-      const { token, message, sender, senderPhone, senderName, media, acct } = parsed;
-
-      // `groupJid` is the chat JID on both surfaces (the name is historical; in
-      // a DM it is the DM JID). Tools and memory key on it, so it must be the
-      // real chat and not the per-message continuation token below.
-      const auth = {
-        attributes: {
-          groupJid: token,
-          via,
-          ...(acct ? { acct } : {}),
-          ...(senderName ? { senderName } : {}),
-          ...(senderPhone ? { senderPhone } : {}),
-        },
-        authenticator: "whatsapp-bridge",
-        principalId: sender ?? token,
-        principalType: "user",
-      } as const;
+      const { token, message, media } = parsed;
+      const auth = buildAuth(parsed, via, req.headers.get(TURN_HEADER) ?? undefined);
 
       // Fresh session per message. getEventStream replays from index 0 and is a
       // live tail that never emits `done`, so drainStream must break on the
