@@ -17,8 +17,7 @@ import { z } from "zod";
  */
 
 /** What the Bot says while there is no minting RPC. Never contains a token. */
-export const INVITE_UNAVAILABLE_NOTE =
-  "Open hello.expert and sign in, I can't mint a link from here";
+const INVITE_UNAVAILABLE_NOTE = "Open hello.expert and sign in, I can't mint a link from here";
 
 export default defineTool({
   approval: never(),

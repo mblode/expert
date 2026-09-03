@@ -3,12 +3,17 @@
  *
  * The bridge (a Baileys process the hub supervises, see
  * `docs/WHATSAPP-PARITY.md` Section 3) is the only thing that speaks this
- * shape, and both ends pin the version so a field can be added without either
- * side guessing. Hand-written validation rather than zod: the payload is small,
- * every field but two is optional, and a validator with no schema dependency
- * is one the bridge workspace can copy verbatim.
+ * shape. The version below names it and nothing more: no field on the wire
+ * carries it, `parseBridgePayload` never looks for one, and
+ * `apps/whatsapp-bridge/src/hub-client.ts` restates the payload rather than
+ * importing this file. What actually lets a field be added without either side
+ * guessing is that every field but `token` and `message` is optional and an
+ * unknown one is ignored. Hand-written validation rather than zod: the payload
+ * is small, every field but two is optional, and a validator with no schema
+ * dependency is one the bridge workspace can copy verbatim.
  */
 
+/** Open decision: put this on the wire so both ends check it, or drop it. */
 export const BRIDGE_PROTOCOL_VERSION = 1;
 
 /** One attached image, as a data URL so the model can see it without a fetch. */
