@@ -215,6 +215,24 @@ describe("eve supervisor: N Eves from the roster", () => {
     );
   });
 
+  it("init's repoRoot reaches the real repo, not a directory above the workspaces", () => {
+    // It resolved one level short, to `<root>/apps`, and everything built on
+    // it degraded in silence: `bridgeDir` became `apps/apps/whatsapp-bridge`,
+    // whose `existsSync` guard reads a missing directory as "no bridge on
+    // this image", so the WhatsApp bridge never started on the guest.
+    const host = resolve(import.meta.dirname, "../src/host");
+    const init = readFileSync(join(host, "init.ts"), "utf-8");
+    const ups = /const repoRoot = resolve\(import\.meta\.dirname, "([^"]+)"\)/.exec(init)?.[1];
+    expect(ups, "init.ts must derive repoRoot from its own directory").toBeDefined();
+    const repoRoot = resolve(host, ups as string);
+
+    const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
+    expect(pkg.workspaces, `${repoRoot} is not the workspace root`).toBeTruthy();
+    // The two paths that were silently wrong. Both must resolve to real dirs.
+    expect(existsSync(join(repoRoot, "apps/whatsapp-bridge/package.json"))).toBe(true);
+    expect(existsSync(join(repoRoot, "apps/eve/bots"))).toBe(true);
+  });
+
   it("guest entrypoint hands off to the root init, which supervises desk, Eves, bridge and hub", () => {
     const script = readFileSync(
       resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"),

@@ -31,8 +31,26 @@ import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
 import { planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
 import { Supervisor } from "./supervisor.ts";
 
-const repoRoot = resolve(import.meta.dirname, "../../..");
+/**
+ * Four levels up from `apps/hub/src/host`, and checked rather than trusted.
+ *
+ * This was three, which resolved to `<root>/apps`, and every use of it below
+ * degrades in silence when it is wrong: `bridgeDir` pointed at
+ * `apps/apps/whatsapp-bridge`, so the `existsSync` guard read a missing
+ * directory as "no bridge on this image" and the WhatsApp bridge never
+ * started on the guest at all. `imageBots` missed the same way, which only
+ * stayed invisible because a populated volume overlay wins first. A wrong
+ * root is a boot failure now, not a quieter computer.
+ */
+const repoRoot = resolve(import.meta.dirname, "../../../..");
 const { env } = process;
+
+if (!existsSync(join(repoRoot, "package.json"))) {
+  console.error(
+    `computer init: no package.json at ${repoRoot}, so this build's layout is not what init expects. Refusing to boot a computer that would silently skip the bridge and the image Bots.`,
+  );
+  process.exit(1);
+}
 
 const cloud = env.COMPUTER_CLOUD ?? "";
 const hubPort = env.COMPUTER_PORT ?? "8080";
@@ -217,7 +235,13 @@ if (eves.length === 0) {
   console.warn(`computer init: no Eve project under ${botsRoot}; chat will report DAEMON_DOWN`);
 }
 
-if (env.COMPUTER_WHATSAPP !== "off" && existsSync(join(bridgeDir, "package.json"))) {
+// Opt-in, not opt-out. Fixing `repoRoot` above makes this directory
+// reachable for the first time, so a default-on bridge would start
+// unannounced on the next deploy, and `/healthz` reports the supervisor's
+// view while fly.toml health-checks the guest on it every 30s. A bridge that
+// cannot come up would take the Machine down with it. Set
+// COMPUTER_WHATSAPP=on once it has been watched starting on a guest.
+if (env.COMPUTER_WHATSAPP === "on" && existsSync(join(bridgeDir, "package.json"))) {
   sup.start({
     args: ["run", "start", "--workspace=apps/whatsapp-bridge"],
     cmd: "npm",
