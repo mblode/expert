@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_HUB_URL } from "./config";
 import { computerById, issueSeat, VIBEY_HUB_URL } from "./computers";
+import type { IssueSeatFn } from "./computers";
 import {
   DEFAULT_INVITE_COMPUTER_ID,
   grantInviteSeat,
@@ -139,7 +140,12 @@ describe("inspectInvite", () => {
 });
 
 describe("grantInviteSeat", () => {
-  /** A hub that answers Pair, Issue and Revoke, recording what it was asked. */
+  /**
+   * A hub that answers Issue and Revoke and refuses to answer Pair.
+   *
+   * Pair throwing is the assertion: this control plane holds an `issuer` and
+   * a grant that reaches for a setup code is the bug this whole path removed.
+   */
   function fakeHub(): {
     calls: { body: unknown; method: string; token?: string; url: string }[];
     fetchImpl: typeof fetch;
@@ -155,7 +161,7 @@ describe("grantInviteSeat", () => {
         ...(auth ? { token: auth.replace("Bearer ", "") } : {}),
       });
       if (method === "Pair") {
-        return Response.json({ token: "owner_ephemeral" }, { status: 200 });
+        throw new Error("a grant must never Pair");
       }
       if (method === "Issue") {
         const asked = JSON.parse(String(init?.body)) as { role: string; ttl_sec: number };
@@ -173,10 +179,13 @@ describe("grantInviteSeat", () => {
     return { calls, fetchImpl };
   }
 
+  /** The stored grant `issueSeatAsIssuer` would have read out of the catalog. */
+  const storedIssuer = "issuer_vibey";
+
   const issueWith =
-    (fetchImpl: typeof fetch): typeof issueSeat =>
-    (computer, given, request) =>
-      issueSeat(computer, given, request, fetchImpl);
+    (fetchImpl: typeof fetch): IssueSeatFn =>
+    (computer, request) =>
+      issueSeat(computer, storedIssuer, request, fetchImpl);
 
   it("issues a guest bound to the screen, expiring with the link, never an owner", async () => {
     const { calls, fetchImpl } = fakeHub();
@@ -189,15 +198,12 @@ describe("grantInviteSeat", () => {
       role: "guest",
       seatToken: "seat_guest",
     });
-    // Vibey's hub with Vibey's code, never Blode's.
-    expect(calls[0]).toEqual({
-      body: { code: vibeyCode },
-      method: "Pair",
-      url: `${VIBEY_HUB_URL}/computer.v1.Seat/Pair`,
-    });
+    // Vibey's hub, and no setup code anywhere in the exchange: not Vibey's,
+    // not Blode's. The one credential in play is the stored issuer.
     expect(calls.every((call) => call.url.startsWith(VIBEY_HUB_URL))).toBe(true);
     expect(calls.every((call) => !call.url.includes(new URL(DEFAULT_HUB_URL).host))).toBe(true);
     expect(JSON.stringify(calls)).not.toContain(blodeCode);
+    expect(JSON.stringify(calls)).not.toContain(vibeyCode);
 
     const issue = calls.find((call) => call.method === "Issue");
     expect(issue?.body).toEqual({
@@ -210,16 +216,17 @@ describe("grantInviteSeat", () => {
       ttl_sec: 30 * 60,
     });
     expect(issue?.body).not.toHaveProperty("methods");
-    expect(issue?.token).toBe("owner_ephemeral");
+    expect(issue?.token).toBe(storedIssuer);
   });
 
-  it("spends the paired owner on one grant and revokes it in the same request", async () => {
+  it("is one Issue: no Pair, and no owner in the request at all", async () => {
     const { calls, fetchImpl } = fakeHub();
     await grantInviteSeat(draftInvite(), "desk", env(), now, issueWith(fetchImpl));
 
-    // No owner token survives the request, so none can be stored on the invite.
-    expect(calls.map((call) => call.method)).toEqual(["Pair", "Issue", "Revoke"]);
-    expect(calls.at(-1)).toMatchObject({ body: {}, method: "Revoke", token: "owner_ephemeral" });
+    // The old path was Pair, Issue, Revoke, and a crash between the first and
+    // the last stranded an unexpiring owner in the hub's seats.json.
+    expect(calls.map((call) => call.method)).toEqual(["Issue"]);
+    expect(calls.every((call) => call.token === storedIssuer)).toBe(true);
   });
 
   it("does not honour an owner token stored before scoped seats: it revokes it", async () => {
@@ -234,11 +241,14 @@ describe("grantInviteSeat", () => {
     );
     expect(granted).toMatchObject({ persist: true, role: "guest", seatToken: "seat_guest" });
 
-    const revoke = calls.find((call) => call.method === "Revoke");
-    expect(revoke).toMatchObject({
+    // Asked for with the issuer, which the hub refuses for an owner-role
+    // token: the replacement is still handed out, and that last pre-scoped
+    // owner has to be revoked at the box.
+    expect(calls.map((call) => call.method)).toEqual(["Revoke", "Issue"]);
+    expect(calls[0]).toMatchObject({
       body: { token: "owner_from_before" },
       method: "Revoke",
-      token: "owner_ephemeral",
+      token: storedIssuer,
     });
   });
 
@@ -249,7 +259,7 @@ describe("grantInviteSeat", () => {
       "desk",
       env(),
       now,
-      issue as unknown as typeof issueSeat,
+      issue as unknown as IssueSeatFn,
     );
     expect(granted).toEqual({
       computer: computerById("vibey", env()),
@@ -261,7 +271,7 @@ describe("grantInviteSeat", () => {
     expect(issue).not.toHaveBeenCalled();
   });
 
-  it("gives a plugins link the narrowest seat that can author a connection file", async () => {
+  it("gives a plugins link the installer role and no hand-narrowed owner", async () => {
     const { calls, fetchImpl } = fakeHub();
     const granted = await grantInviteSeat(
       draftInvite({ purpose: "plugins" }),
@@ -271,23 +281,20 @@ describe("grantInviteSeat", () => {
       issueWith(fetchImpl),
     );
     // Disposable and never stored: the route revokes it when the write returns.
-    expect(granted).toMatchObject({ disposable: true, persist: false, seatToken: "seat_owner" });
+    expect(granted).toMatchObject({
+      disposable: true,
+      persist: false,
+      role: "installer",
+      seatToken: "seat_installer",
+    });
 
     const issue = calls.find((call) => call.method === "Issue");
-    expect(issue?.body).toMatchObject({
-      // Writing a connection file means CreateBot, Agent.WriteFile, DeleteBot.
-      // No role but owner carries CreateBot, so the containment is the method
-      // list and the two-minute life, and `isOwner` on the hub still sees an
-      // owner. That gap is the PR's second finding.
-      methods: [
-        "/computer.v1.Seat/CreateBot",
-        "/computer.v1.Seat/DeleteBot",
-        "/computer.v1.Seat/Revoke",
-      ],
-      role: "owner",
-      ttl_sec: 120,
-    });
+    expect(issue?.body).toMatchObject({ role: "installer", ttl_sec: 120 });
+    // The role is the definition now. A `methods` list here would be this
+    // file deciding what a role means again, which is what it stopped doing.
+    expect(issue?.body).not.toHaveProperty("methods");
     expect(issue?.body).not.toHaveProperty("display");
+    expect(JSON.stringify(issue?.body)).not.toContain("owner");
   });
 
   it("never asks for a seat longer than the link has left", async () => {
@@ -312,21 +319,16 @@ describe("grantInviteSeat", () => {
     expect(ttlAsked(pluginCalls)).toBe(45);
   });
 
-  it("refuses to mint when that computer's setup code is missing", async () => {
-    const fetchImpl = vi.fn<typeof fetch>();
+  it("passes a refusal to grant straight through as a 502", async () => {
+    const issue = vi.fn().mockResolvedValue({ error: "no issuer here" });
     const result = await grantInviteSeat(
       draftInvite(),
       "desk",
-      { COMPUTER_SETUP_CODE: blodeCode },
+      env(),
       now,
-      issueWith(fetchImpl),
+      issue as unknown as IssueSeatFn,
     );
-    expect(result).toEqual({
-      error:
-        "The web server is missing COMPUTER_SETUP_CODE_VCMC, so it cannot attach to the Vibey computer.",
-      status: 502,
-    });
-    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(result).toEqual({ error: "no issuer here", status: 502 });
   });
 
   it("does not touch a hub for a wrong-computer invite", async () => {
@@ -336,7 +338,7 @@ describe("grantInviteSeat", () => {
       "desk",
       env(),
       now,
-      issue as unknown as typeof issueSeat,
+      issue as unknown as IssueSeatFn,
     );
     expect(result).toMatchObject({ status: 404 });
     expect(issue).not.toHaveBeenCalled();

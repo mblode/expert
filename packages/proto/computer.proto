@@ -32,11 +32,14 @@ service Seat {
   // the box clipboard and is never stored, logged, or returned.
   rpc ProvideSecret(ProvideSecretRequest) returns (ProvideSecretResponse);
   // Provisioning: a paired seat is the box owner. The hub allocates the
-  // next free screen and mints the Bot's token, returned exactly once.
+  // next free screen and mints the Bot's token, returned exactly once. The
+  // `installer` role is the one narrower way in, for authoring a connection
+  // file, which needs an agent token and so needs a Bot.
   rpc CreateBot(CreateBotRequest) returns (BotCredentials);
   rpc DeleteBot(DeleteBotRequest) returns (BoxStatus);
-  // Drop a seat token: the caller's own (sign-out) or, from an owner seat,
-  // any other. Guest seats from invites expire on their own; this is early.
+  // Drop a seat token: the caller's own (sign-out), any other from an owner
+  // seat, or any unprivileged one from an issuer replacing a grant it made.
+  // Guest seats from invites expire on their own; this is early.
   rpc Revoke(RevokeRequest) returns (RevokeResponse);
   // Hand a named person a seat. An owner may issue any role; an `issuer`,
   // which is what a control plane holds instead of the setup code, may issue
@@ -474,9 +477,9 @@ message RevokeResponse {
 }
 
 message IssueRequest {
-  string role = 1;       // owner | operator | viewer | guest | issuer
+  string role = 1;       // owner | operator | viewer | guest | installer | issuer
   string subject = 2;    // who this is for, as the caller names them
-  uint32 ttl_sec = 3;    // 0 = no expiry, allowed only for an owner-issued seat
+  uint32 ttl_sec = 3;    // 0 = no expiry; refused for guest and installer
   uint32 display = 4;    // 0 = any screen
   repeated string methods = 5; // narrows the role, never widens it
   string label = 6;      // shown in the owner's seat list

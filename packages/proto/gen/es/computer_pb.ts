@@ -1733,7 +1733,7 @@ export const RevokeResponseSchema: GenMessage<RevokeResponse> = /*@__PURE__*/
  */
 export type IssueRequest = Message<"computer.v1.IssueRequest"> & {
   /**
-   * owner | operator | viewer | guest | issuer
+   * owner | operator | viewer | guest | installer | issuer
    *
    * @generated from field: string role = 1;
    */
@@ -1747,7 +1747,7 @@ export type IssueRequest = Message<"computer.v1.IssueRequest"> & {
   subject: string;
 
   /**
-   * 0 = no expiry, allowed only for an owner-issued seat
+   * 0 = no expiry; refused for guest and installer
    *
    * @generated from field: uint32 ttl_sec = 3;
    */
@@ -2477,7 +2477,9 @@ export const Seat: GenService<{
   },
   /**
    * Provisioning: a paired seat is the box owner. The hub allocates the
-   * next free screen and mints the Bot's token, returned exactly once.
+   * next free screen and mints the Bot's token, returned exactly once. The
+   * `installer` role is the one narrower way in, for authoring a connection
+   * file, which needs an agent token and so needs a Bot.
    *
    * @generated from rpc computer.v1.Seat.CreateBot
    */
@@ -2495,8 +2497,9 @@ export const Seat: GenService<{
     output: typeof BoxStatusSchema;
   },
   /**
-   * Drop a seat token: the caller's own (sign-out) or, from an owner seat,
-   * any other. Guest seats from invites expire on their own; this is early.
+   * Drop a seat token: the caller's own (sign-out), any other from an owner
+   * seat, or any unprivileged one from an issuer replacing a grant it made.
+   * Guest seats from invites expire on their own; this is early.
    *
    * @generated from rpc computer.v1.Seat.Revoke
    */

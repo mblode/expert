@@ -1457,13 +1457,13 @@ public nonisolated struct Computer_V1_IssueRequest: Sendable {
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  /// owner | operator | viewer | guest | issuer
+  /// owner | operator | viewer | guest | installer | issuer
   public var role: String = String()
 
   /// who this is for, as the caller names them
   public var subject: String = String()
 
-  /// 0 = no expiry, allowed only for an owner-issued seat
+  /// 0 = no expiry; refused for guest and installer
   public var ttlSec: UInt32 = 0
 
   /// 0 = any screen

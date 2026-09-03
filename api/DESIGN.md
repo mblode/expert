@@ -147,21 +147,35 @@ this caller may do rather than which file its credential came from.
 
 A principal carries a **role**, and a role is a set of methods.
 
-| Role       | Kind    | May call                                                                                             |
-| ---------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `owner`    | user    | every Seat RPC, any display, no expiry                                                               |
-| `operator` | user    | `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardSet`, `ProvideSecret`, `Occurrences`, `Revoke` |
-| `viewer`   | user    | `Status`, `Occurrences`, `Revoke`                                                                    |
-| `guest`    | user    | the operator set minus `Occurrences`, bound to one display, always expiring, at most four hours      |
-| `issuer`   | service | `Issue`, `Revoke`                                                                                    |
-| `bot`      | bot     | the Agent service                                                                                    |
-| `ingress`  | service | the channel door only, no RPC                                                                        |
+| Role        | Kind    | May call                                                                                             |
+| ----------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `owner`     | user    | every Seat RPC, any display, no expiry                                                               |
+| `operator`  | user    | `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardSet`, `ProvideSecret`, `Occurrences`, `Revoke` |
+| `viewer`    | user    | `Status`, `Occurrences`, `Revoke`                                                                    |
+| `guest`     | user    | the operator set minus `Occurrences`, bound to one display, always expiring, at most four hours      |
+| `installer` | service | `CreateBot`, `DeleteBot`, `Revoke`, always expiring, at most ten minutes                             |
+| `issuer`    | service | `Issue`, `Revoke`                                                                                    |
+| `bot`       | bot     | the Agent service                                                                                    |
+| `ingress`   | service | the channel door only, no RPC                                                                        |
 
 `owner` is unrestricted inside the Seat service, which is what a paired
 seat has always been: an RPC added tomorrow works for the owner the moment
 it is registered. Every other role is an explicit allowlist, so the same
 new RPC stays denied to them until someone lists it. That asymmetry is
 deliberate: adding a method must never quietly widen a narrow role.
+
+`installer` exists because authoring an Eve connection file is not a
+seat-shaped act: `Agent.WriteFile` takes an agent token, so writing one
+means `CreateBot`, write as that Bot, `DeleteBot`. The control plane used
+to ask for an `owner` narrowed by `methods` to those calls, since `owner`
+was the only role carrying `CreateBot`; that is a role defined by hand at
+the call site, and the door it left open is the next route gated on the
+role rather than the method. Read its containment honestly: a Bot token is
+`shell` on the box, so an installer is one call from running code there.
+What it never reaches is the owner's HTTP doors, the clipboard, WhatsApp
+linking, `Issue`, or any seat but its own. It is a ten minute grant to do
+one job, not a safe role, and the durable fix is a Seat RPC that writes a
+connection file so no agent token is minted at all.
 
 `Pair` still mints an owner with no subject, because whoever holds the
 setup code is the owner and the hub cannot learn their name. `Issue` is
@@ -171,13 +185,24 @@ once. An owner may issue any role. An `issuer`, which is what a control
 plane holds instead of the setup code, may issue only the working roles,
 never `owner` and never another `issuer`. A stolen control plane can then
 take the mouse on the boxes it knows, which is bad, rather than own them
-forever, which is unrecoverable.
+forever, which is unrecoverable. The `installer` role is the sharp edge of
+that claim: an issuer may hand one out, and an installer may `CreateBot`,
+whose token is `shell`. So a stolen issuer reaches code execution on the
+box; it still cannot mint an owner, revoke one, or keep a seat the owner
+cannot see in the seat list and revoke.
+
+A `guest` and an `installer` are refused with no `ttl_sec`: an unexpiring
+one of either is a mistake rather than a choice, so the hub will not mint
+it even for an owner.
 
 A principal with a `display` is bound to that screen whatever its role:
 `Status` lists only that screen, an absent `display` resolves to it, and
 naming another is `UNAUTHENTICATED`. `methods` narrows a role further and
 can never widen it. `Revoke {}` ends the caller's own seat, which is what
-sign-out does; naming another token is an owner's call. `/eve/v1` (the
+sign-out does; naming another token is an owner's call, and an issuer's for
+any seat that is not an `owner` or another `issuer`, so a control plane can
+replace a grant it made without holding an owner and cannot lock the human
+out of their own box. `/eve/v1` (the
 thread), `/roster` and the pixel stream remain owner-only, and an owner
 carrying `methods` is not one of them: those doors are HTTP routes, so no
 allowlist can name them, and a grant narrowed to a couple of RPCs must not

@@ -70,16 +70,46 @@ export type PrincipalKind = "user" | "bot" | "service";
  * denied to them until someone decides otherwise. That asymmetry is the
  * point: adding a method must never quietly widen a narrow role.
  */
-export const ROLES = ["owner", "operator", "viewer", "guest", "bot", "issuer", "ingress"] as const;
+export const ROLES = [
+  "owner",
+  "operator",
+  "viewer",
+  "guest",
+  "installer",
+  "bot",
+  "issuer",
+  "ingress",
+] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Roles that can mint other principals. An issuer may never hand out one of these. */
 export const PRIVILEGED_ROLES: readonly Role[] = ["owner", "issuer"];
 
+const SEAT_CREATE_BOT = "/computer.v1.Seat/CreateBot";
+const SEAT_DELETE_BOT = "/computer.v1.Seat/DeleteBot";
 const SEAT_OCCURRENCES = "/computer.v1.Seat/Occurrences";
 const SEAT_STATUS = "/computer.v1.Seat/Status";
 const SEAT_REVOKE = "/computer.v1.Seat/Revoke";
 const SEAT_ISSUE = "/computer.v1.Seat/Issue";
+
+/**
+ * What a connection file costs to author, and nothing else.
+ *
+ * There is no seat-shaped way to write a file: `Agent.WriteFile` takes an
+ * agent token, so authoring one means `CreateBot`, write as that Bot, then
+ * `DeleteBot`. Before this role the control plane asked for an `owner`
+ * narrowed by `methods` to these three, because `owner` was the only thing
+ * carrying `CreateBot`. That worked and was the wrong shape: `methods` is a
+ * narrowing mechanism, not a role definition, so the next route gated on the
+ * role rather than the method handed a plugins invite the whole box.
+ *
+ * Read the containment honestly. A Bot token is `shell` on the box, so an
+ * installer is one call away from running code there; what it never gets is
+ * the owner's HTTP doors (the Eve thread, `/roster`, the pixel stream), the
+ * clipboard, WhatsApp linking, `Issue`, or any seat but its own to revoke.
+ * It is a short-lived grant to do one job, not a safe role.
+ */
+export const SEAT_INSTALLER_METHODS = [SEAT_CREATE_BOT, SEAT_DELETE_BOT, SEAT_REVOKE] as const;
 
 /**
  * Methods per role. `undefined` means unrestricted within the service the
@@ -91,6 +121,7 @@ const SEAT_ISSUE = "/computer.v1.Seat/Issue";
  */
 export const ROLE_METHODS: Record<Role, readonly string[] | undefined> = {
   guest: SEAT_GUEST_METHODS,
+  installer: SEAT_INSTALLER_METHODS,
   // A person who may drive the box but not reshape it: no CreateBot, no
   // WhatsApp linking, no clipboard read (it exfiltrates whatever is copied).
   operator: [...SEAT_GUEST_METHODS, SEAT_OCCURRENCES],

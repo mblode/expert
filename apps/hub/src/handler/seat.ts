@@ -104,16 +104,13 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   });
 
   // Sign-out, or an owner pulling a guest's invite early. Revoking the
-  // caller's own token needs no argument; naming another token is an
-  // owner's call, since a guest must not be able to unpair the phone.
+  // caller's own token needs no argument; who may name someone else's is the
+  // registry's call, since a guest must not be able to unpair the phone.
   router.rpc(SeatMethods.Revoke, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
     const own = ctx.bearer ?? "";
     const target = typeof o.token === "string" && o.token ? o.token : own;
-    if (target !== own && ctx.principal?.role !== "owner") {
-      throw new ComputerError("UNAUTHENTICATED", "only an owner seat may revoke another seat");
-    }
-    return { revoked: deps.auth.revoke(target) };
+    return { revoked: deps.auth.revokeFor(ctx.principal, target) };
   });
 
   /**

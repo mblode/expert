@@ -134,6 +134,19 @@ export function setupCodeFor(computer: ComputerRecord, env: EnvMap): string | un
 }
 
 /**
+ * Why a hub call did not produce what was asked for.
+ *
+ * `code` is the hub's own `ErrorCode` when it sent an envelope, and absent
+ * when the hub could not be reached at all. The difference matters to the
+ * issuer path: a rejected credential is worth forgetting, an unreachable box
+ * is not.
+ */
+export interface HubFailure {
+  error: string;
+  code?: string;
+}
+
+/**
  * One POST to a Seat RPC on a computer's hub.
  *
  * Pair is the one call with no bearer; everything else carries the token it
@@ -151,7 +164,7 @@ async function hubPost<T>(
     token?: string;
   },
   fetchImpl: typeof fetch,
-): Promise<T | { error: string }> {
+): Promise<T | HubFailure> {
   const { body, computer, method, token, whenFailed } = call;
   try {
     const res = await fetchImpl(`${computer.hubUrl}/computer.v1.Seat/${method}`, {
@@ -165,8 +178,11 @@ async function hubPost<T>(
     });
     const payload: unknown = await res.json().catch(() => null);
     if (!res.ok) {
-      const envelope = (payload as { error?: { message?: string } } | null)?.error;
-      return { error: envelope?.message ?? whenFailed(res.status) };
+      const envelope = (payload as { error?: { code?: string; message?: string } } | null)?.error;
+      return {
+        error: envelope?.message ?? whenFailed(res.status),
+        ...(envelope?.code ? { code: envelope.code } : {}),
+      };
     }
     return (payload ?? {}) as T;
   } catch (error) {
@@ -179,7 +195,7 @@ export async function pairComputer(
   computer: ComputerRecord,
   env: EnvMap,
   fetchImpl: typeof fetch = fetch,
-): Promise<{ token: string } | { error: string }> {
+): Promise<{ token: string } | HubFailure> {
   const code = setupCodeFor(computer, env);
   if (!code) {
     return {
@@ -209,15 +225,19 @@ export async function pairComputer(
 export interface SeatRequest {
   /** A role from `ROLE_METHODS`, spelled as the hub spells it. */
   role: string;
-  /** How long the seat may live. The hub caps it; this never raises that cap. */
-  ttlMs: number;
+  /**
+   * How long the seat may live. The hub caps it; this never raises that cap.
+   * Absent asks for no expiry, which only an owner may grant and only the
+   * control plane's own `issuer` grant is minted with.
+   */
+  ttlMs?: number;
   /** Bind the seat to one screen. Absent = any screen, which an invite never wants. */
   display?: number;
   /** Shown in the owner's seat list. Never a secret. */
   label?: string;
   /** Narrows the role's method set. The hub is what enforces it. */
   methods?: readonly string[];
-  /** A token this grant replaces, revoked while an owner is still in hand. */
+  /** A token this grant replaces, revoked with the same issuer that mints it. */
   replaces?: string;
   /** Who the seat is for, as this control plane names them. */
   subject?: string;
@@ -236,77 +256,84 @@ function ttlSeconds(ttlMs: number): number {
 }
 
 /**
- * Mint a scoped seat on a computer without leaving an owner behind.
+ * What a grant path is handed so it can mint a seat.
  *
- * `Pair` is still the only way in, because the web holds a setup code rather
- * than an `issuer`. So this spends a paired owner on one `Issue` and revokes
- * it in the same request: the token that survives is the narrow one, and no
- * owner token is ever written to the invite table. A crash between the two
- * leaves an unexpiring owner in the hub's seats.json, which is the strongest
- * argument for the control plane holding a stored issuer instead.
+ * No `env` and no setup code: whatever implements this already holds the
+ * credential it issues with. That is the whole point of the issuer, spelled
+ * in the type, so a future caller cannot quietly reintroduce a per-request
+ * `Pair` by reaching for a setup code that is no longer in the signature.
+ */
+export type IssueSeatFn = (
+  computer: ComputerRecord,
+  request: SeatRequest,
+) => Promise<IssuedSeat | HubFailure>;
+
+/**
+ * Mint a scoped seat with an `issuer` grant this control plane already holds.
+ *
+ * One call. No `Pair`, no owner anywhere in the request, and nothing to unwind
+ * if the process dies mid-flight. Before this, every grant paired an owner
+ * with the computer's setup code, spent it on one `Issue` and revoked it in a
+ * `finally`: a crash in that window stranded an unexpiring owner in the hub's
+ * seats.json, and the Vercel deployment was a standing owner credential for
+ * every tenant. Resolving the issuer, and refusing when there is none, is
+ * `issuer.ts`; this function only speaks to the hub.
  */
 export async function issueSeat(
   computer: ComputerRecord,
-  env: EnvMap,
+  issuer: string,
   request: SeatRequest,
   fetchImpl: typeof fetch = fetch,
-): Promise<IssuedSeat | { error: string }> {
-  const paired = await pairComputer(computer, env, fetchImpl);
-  if ("error" in paired) {
-    return paired;
-  }
-  try {
-    if (request.replaces) {
-      // Naming another token is an owner's call, so it happens here or not at
-      // all: after the finally below this request holds nothing that can.
-      await hubPost(
-        {
-          body: { token: request.replaces },
-          computer,
-          method: "Revoke",
-          token: paired.token,
-          whenFailed: () => "",
-        },
-        fetchImpl,
-      );
-    }
-    const issued = await hubPost<{ expires_at?: unknown; role?: unknown; token?: unknown }>(
+): Promise<IssuedSeat | HubFailure> {
+  if (request.replaces) {
+    // Best effort, and it can legitimately fail: an issuer may not revoke a
+    // privileged seat, so a token stored by an older control plane (an owner,
+    // before invites were scoped) survives its own replacement and has to be
+    // revoked at the box. The new grant is still the one that gets handed out.
+    await hubPost(
       {
-        // Empty fields are omitted, not sent empty: the hub reads `display: 0`
-        // as any screen and `methods: []` as a seat that may call nothing.
-        body: {
-          role: request.role,
-          ttl_sec: ttlSeconds(request.ttlMs),
-          ...(request.display === undefined ? {} : { display: request.display }),
-          ...(request.label === undefined ? {} : { label: request.label }),
-          ...(request.methods?.length ? { methods: [...request.methods] } : {}),
-          ...(request.subject === undefined ? {} : { subject: request.subject }),
-        },
+        body: { token: request.replaces },
         computer,
-        method: "Issue",
-        token: paired.token,
-        whenFailed: (status) => `Could not issue a seat on the computer (${status}).`,
+        method: "Revoke",
+        token: issuer,
+        whenFailed: () => "",
       },
       fetchImpl,
     );
-    if ("error" in issued) {
-      return issued;
-    }
-    const { token } = issued;
-    if (typeof token !== "string" || !token) {
-      return { error: "The computer accepted the grant but did not return a seat token." };
-    }
-    return {
-      expiresAt: typeof issued.expires_at === "string" ? issued.expires_at : "",
-      role: typeof issued.role === "string" && issued.role ? issued.role : request.role,
-      token,
-    };
-  } finally {
-    await hubPost(
-      { body: {}, computer, method: "Revoke", token: paired.token, whenFailed: () => "" },
-      fetchImpl,
-    );
   }
+  const issued = await hubPost<{ expires_at?: unknown; role?: unknown; token?: unknown }>(
+    {
+      // Empty fields are omitted, not sent empty: the hub reads `display: 0`
+      // as any screen and `methods: []` as a seat that may call nothing.
+      // An absent `ttlMs` is an absent `ttl_sec`, which is "no expiry", and
+      // the hub refuses that for every role but an owner-issued one.
+      body: {
+        role: request.role,
+        ...(request.ttlMs === undefined ? {} : { ttl_sec: ttlSeconds(request.ttlMs) }),
+        ...(request.display === undefined ? {} : { display: request.display }),
+        ...(request.label === undefined ? {} : { label: request.label }),
+        ...(request.methods?.length ? { methods: [...request.methods] } : {}),
+        ...(request.subject === undefined ? {} : { subject: request.subject }),
+      },
+      computer,
+      method: "Issue",
+      token: issuer,
+      whenFailed: (status) => `Could not issue a seat on the computer (${status}).`,
+    },
+    fetchImpl,
+  );
+  if ("error" in issued) {
+    return issued;
+  }
+  const { token } = issued;
+  if (typeof token !== "string" || !token) {
+    return { error: "The computer accepted the grant but did not return a seat token." };
+  }
+  return {
+    expiresAt: typeof issued.expires_at === "string" ? issued.expires_at : "",
+    role: typeof issued.role === "string" && issued.role ? issued.role : request.role,
+    token,
+  };
 }
 
 /** End a seat early. A seat may always revoke itself, whatever its role. */
