@@ -5,6 +5,7 @@ import {
   bridgeAuthConfigured,
   bridgeRequestAuthorised,
   buildContext,
+  buildSessionAuth,
   buildUserMessage,
   drainStream,
   EMPTY_REPLY_FALLBACK,
@@ -285,5 +286,45 @@ describe("drainStream", () => {
     );
     expect(reply).toBe("");
     expect(reply || EMPTY_REPLY_FALLBACK).toBe(EMPTY_REPLY_FALLBACK);
+  });
+});
+
+describe("buildSessionAuth", () => {
+  it("puts the chat, the account and the message id on the session for tools", () => {
+    expect(
+      buildSessionAuth(
+        {
+          acct: "main",
+          message: "hi",
+          messageId: "m0123456789",
+          sender: "1@s.whatsapp.net",
+          senderName: "Sam",
+          senderPhone: "+61400000000",
+          token: "123@g.us",
+        },
+        "hub",
+      ),
+    ).toEqual({
+      attributes: {
+        acct: "main",
+        groupJid: "123@g.us",
+        messageId: "m0123456789",
+        senderName: "Sam",
+        senderPhone: "+61400000000",
+        via: "hub",
+      },
+      authenticator: "whatsapp-bridge",
+      principalId: "1@s.whatsapp.net",
+      principalType: "user",
+    });
+  });
+
+  it("omits what the bridge did not send and falls back to the chat as the principal", () => {
+    expect(buildSessionAuth({ message: "hi", token: "1@s.whatsapp.net" }, "bridge")).toEqual({
+      attributes: { groupJid: "1@s.whatsapp.net", via: "bridge" },
+      authenticator: "whatsapp-bridge",
+      principalId: "1@s.whatsapp.net",
+      principalType: "user",
+    });
   });
 });

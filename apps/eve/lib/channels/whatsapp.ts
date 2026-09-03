@@ -168,6 +168,35 @@ export const buildUserMessage = (
   ];
 };
 
+/**
+ * What the session records about the caller. Tools read it back through
+ * `ctx.session.auth.current.attributes`, so it is the trusted half of a turn:
+ * everything here came from the bridge, not from anything a chat can type.
+ *
+ * `groupJid` is the chat JID on both surfaces (the name is historical; in a DM
+ * it is the DM JID). Tools and memory key on it, so it must be the real chat
+ * and not the per-message continuation token. `messageId` rides along for the
+ * same reason the context block shows it: it is what `whatsapp_send` quotes or
+ * reacts to, and taking it from here rather than from the model's copy of the
+ * block means an id the bridge issued is the only id a send can carry.
+ */
+export const buildSessionAuth = (payload: BridgePayload, via: BridgeAuthPath) => {
+  const { token, sender, senderName, senderPhone, acct, messageId } = payload;
+  return {
+    attributes: {
+      groupJid: token,
+      via,
+      ...(acct ? { acct } : {}),
+      ...(messageId ? { messageId } : {}),
+      ...(senderName ? { senderName } : {}),
+      ...(senderPhone ? { senderPhone } : {}),
+    },
+    authenticator: "whatsapp-bridge",
+    principalId: sender ?? token,
+    principalType: "user",
+  } as const;
+};
+
 /** The slice of eve's stream events this channel reads. */
 export interface ReplyStreamEvent {
   type: string;
@@ -227,23 +256,8 @@ export default defineChannel({
       if ("error" in parsed) {
         return Response.json({ error: parsed.error }, { status: 400 });
       }
-      const { token, message, sender, senderPhone, senderName, media, acct } = parsed;
-
-      // `groupJid` is the chat JID on both surfaces (the name is historical; in
-      // a DM it is the DM JID). Tools and memory key on it, so it must be the
-      // real chat and not the per-message continuation token below.
-      const auth = {
-        attributes: {
-          groupJid: token,
-          via,
-          ...(acct ? { acct } : {}),
-          ...(senderName ? { senderName } : {}),
-          ...(senderPhone ? { senderPhone } : {}),
-        },
-        authenticator: "whatsapp-bridge",
-        principalId: sender ?? token,
-        principalType: "user",
-      } as const;
+      const { token, message, media } = parsed;
+      const auth = buildSessionAuth(parsed, via);
 
       // Fresh session per message. getEventStream replays from index 0 and is a
       // live tail that never emits `done`, so drainStream must break on the
