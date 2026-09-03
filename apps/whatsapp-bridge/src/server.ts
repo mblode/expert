@@ -11,7 +11,7 @@ import { parseSendMediaBody } from "./media-send.ts";
 import { parseSendEnvelope } from "./send-envelope.ts";
 
 /**
- * The bridge's authenticated JSON HTTP API, loopback only.
+ * The bridge's authenticated JSON HTTP API.
  *
  * Two families of routes. The account routes (`/accounts…`) are what the hub's
  * `Seat.WhatsAppLink` and the hello.expert page drive: create, link by QR or
@@ -21,9 +21,27 @@ import { parseSendEnvelope } from "./send-envelope.ts";
  * param (GET) or body field (POST), defaulting to the only account when there
  * is exactly one so a single-number tenant's tools need no change.
  *
- * Every request except GET /health must carry `x-bridge-secret`. The secret
- * is process-wide (the hub holds it); the per-account connector secret is a
- * different credential and only ever travels bridge -> hub.
+ * Every request except GET /health must carry `x-bridge-secret`, and which
+ * secret it is decides what the request may reach:
+ *
+ * - the process-wide `WHATSAPP_BRIDGE_SECRET` is the **admin** credential the
+ *   hub holds. It opens every route for every account, because the hub is
+ *   what creates, links and unlinks them.
+ * - an account's own `bridge_secret` is scoped to that account. It opens the
+ *   data routes for that `acct` and nothing else: a request naming another
+ *   account is a 403 rather than a redirect, and the whole `/accounts` subtree
+ *   is refused, because provisioning is the hub's job and not a Bot's.
+ *
+ * That split is what lets one bridge serve numbers belonging to different
+ * tenants. With a single shared secret and `acct` read off the request, any
+ * holder could read any account's messages by naming a different id: harmless
+ * while the only caller is the one tenant's Eve on loopback, a cross-tenant
+ * read as soon as the process is shared. `acct` is therefore derived from the
+ * credential whenever the credential names one, and the request's own `acct`
+ * is only ever allowed to agree with it.
+ *
+ * The per-account connector secret is a third credential and points the other
+ * way: it only ever travels bridge -> hub.
  *
  * Group memory is NOT here: it lives next to the Bot that writes it. A write
  * route here would let anyone holding the shared secret write unbounded text
@@ -50,7 +68,7 @@ export interface BridgeApi {
   health: () => AccountHealth[];
   listAccounts: () => AccountSummary[];
   /** Validates, persists and starts the socket. Throws HttpError 400/409. */
-  createAccount: (body: Record<string, unknown>) => Promise<AccountSummary>;
+  createAccount: (body: Record<string, unknown>) => Promise<CreatedAccount>;
   /** Logs the device out, deletes creds and the entry. False when unknown. */
   deleteAccount: (acct: string) => Promise<boolean>;
   link: (acct: string, phone: string | null) => Promise<LinkState>;
@@ -63,7 +81,39 @@ export interface BridgeApi {
   /** The data-route surface of one account, or undefined when unknown. */
   handle: (acct: string) => AccountHandle | undefined;
   accountIds: () => string[];
+  /**
+   * Every account's own bridge credential, read fresh per request so an
+   * account created or deleted at runtime needs no server restart. Records
+   * with no secret yet (an unmigrated file, before boot mints one) are
+   * returned with an empty string and never match.
+   */
+  accountSecrets: () => { acct: string; secret: string }[];
 }
+
+/**
+ * What `POST /accounts` answers with: the new account plus the credential
+ * minted for it.
+ *
+ * This is the only response that carries a `bridge_secret`, and it only ever
+ * reaches the admin caller, which is the hub. The hub passes it to that
+ * account's Bot as `WHATSAPP_BRIDGE_SECRET` in the child env, the same way it
+ * already passes the Eve secret, so the value never lands anywhere the model
+ * can read it. `GET /accounts` still returns summaries with no secret in them:
+ * a lost credential is re-minted by deleting and recreating the account, not
+ * by reading it back.
+ */
+export interface CreatedAccount {
+  summary: AccountSummary;
+  bridgeSecret: string;
+}
+
+/**
+ * Who is calling, resolved from the presented secret before any route runs.
+ *
+ * `admin` is the hub. `account` is one Bot, and its `acct` is the credential's,
+ * not the request's.
+ */
+export type BridgePrincipal = { scope: "admin" } | { scope: "account"; acct: string };
 
 export interface StartServerArgs {
   api: BridgeApi;
@@ -91,6 +141,35 @@ const secretMatches = (provided: string, expected: string): boolean => {
   const a = createHash("sha256").update(provided).digest();
   const b = createHash("sha256").update(expected).digest();
   return timingSafeEqual(a, b);
+};
+
+/**
+ * The presented secret to a principal, or null when it matches nothing.
+ *
+ * Every candidate is compared with no early exit on a match, so the time taken
+ * does not say how far down the account list the credential sat, the same rule
+ * the hub applies to agent tokens. An empty secret on either side never
+ * matches: an account whose `bridge_secret` has not been minted yet would
+ * otherwise be unlocked by an empty header.
+ */
+export const resolvePrincipal = (
+  provided: string,
+  adminSecret: string,
+  accountSecrets: { acct: string; secret: string }[],
+): BridgePrincipal | null => {
+  if (!provided) {
+    return null;
+  }
+  let found: BridgePrincipal | null = null;
+  if (adminSecret && secretMatches(provided, adminSecret)) {
+    found = { scope: "admin" };
+  }
+  for (const entry of accountSecrets) {
+    if (entry.secret && secretMatches(provided, entry.secret) && !found) {
+      found = { acct: entry.acct, scope: "account" };
+    }
+  }
+  return found;
 };
 
 /** Collect a request body, capped at `maxBody`, and parse it as a JSON object. */
@@ -163,11 +242,33 @@ const rethrowIfNotConnected = (error: unknown): void => {
 };
 
 /**
- * Which account a legacy data route means. An explicit `acct` must exist; no
- * `acct` is fine only when there is exactly one account, because guessing
- * between two numbers would send a digest to the wrong tenant.
+ * Which account a data route means, for this caller.
+ *
+ * An account-scoped caller gets its credential's account and only that: a
+ * request naming a different one is refused rather than silently redirected,
+ * so a tool with a stale `acct` fails loudly instead of reading a stranger's
+ * chat. It may still omit `acct` entirely, which is what keeps a single-tenant
+ * Bot's existing calls working unchanged.
+ *
+ * For the admin credential an explicit `acct` must exist; no `acct` is fine
+ * only when there is exactly one account, because guessing between two numbers
+ * would send a digest to the wrong tenant.
  */
-const resolveHandle = (api: BridgeApi, acct: string | undefined | null): AccountHandle => {
+const resolveHandle = (
+  api: BridgeApi,
+  acct: string | undefined | null,
+  principal: BridgePrincipal,
+): AccountHandle => {
+  if (principal.scope === "account") {
+    if (acct && acct !== principal.acct) {
+      throw new HttpError(403, "acct is not this credential's account");
+    }
+    const own = api.handle(principal.acct);
+    if (!own) {
+      throw new HttpError(404, `unknown account ${principal.acct}`);
+    }
+    return own;
+  }
   if (acct) {
     const handle = api.handle(acct);
     if (!handle) {
@@ -203,8 +304,8 @@ const handleAccountRoutes = async (
     }
     if (method === "POST") {
       const created = await api.createAccount(await readJson(req));
-      logger.info({ acct: created.acct, bot: created.bot }, "account created");
-      return send(res, 201, { acct: created.acct });
+      logger.info({ acct: created.summary.acct, bot: created.summary.bot }, "account created");
+      return send(res, 201, { acct: created.summary.acct, bridge_secret: created.bridgeSecret });
     }
     return send(res, 405, { error: "method not allowed" });
   }
@@ -276,13 +377,14 @@ const handleAccountRoutes = async (
 const handleGetRecords = async (
   url: URL,
   api: BridgeApi,
+  principal: BridgePrincipal,
   res: ServerResponse,
 ): Promise<ServerResponse | null> => {
   const { pathname } = url;
   if (!["/messages", "/resources", "/members", "/reactions", "/export"].includes(pathname)) {
     return null;
   }
-  const handle = resolveHandle(api, url.searchParams.get("acct"));
+  const handle = resolveHandle(api, url.searchParams.get("acct"), principal);
   const { store } = handle;
   const group = url.searchParams.get("group");
 
@@ -511,6 +613,7 @@ const handlePost = async (
   req: IncomingMessage,
   url: URL,
   api: BridgeApi,
+  principal: BridgePrincipal,
   logger: Logger,
   maxMediaBody: number,
   res: ServerResponse,
@@ -521,7 +624,7 @@ const handlePost = async (
   }
   // The body carries `acct`, so it is read before the account is resolved.
   const body = await readJson(req, MEDIA_BODY_ROUTES.has(pathname) ? maxMediaBody : MAX_BODY);
-  const handle = resolveHandle(api, optionalString(body.acct));
+  const handle = resolveHandle(api, optionalString(body.acct), principal);
   switch (pathname) {
     case "/backfill": {
       return handleBackfill(body, handle, logger, res);
@@ -568,23 +671,41 @@ export const startServer = ({
       }
       const headerSecret = req.headers["x-bridge-secret"];
       const provided = Array.isArray(headerSecret) ? (headerSecret[0] ?? "") : (headerSecret ?? "");
-      if (!secretMatches(provided, secret)) {
+      const principal = resolvePrincipal(provided, secret, api.accountSecrets());
+      if (!principal) {
         return send(res, 401, { error: "unauthorized" });
       }
 
-      logger.debug({ method: req.method, path: url.pathname }, "bridge api request");
+      logger.debug(
+        {
+          acct: principal.scope === "account" ? principal.acct : undefined,
+          method: req.method,
+          path: url.pathname,
+          scope: principal.scope,
+        },
+        "bridge api request",
+      );
 
-      const accountResult = await handleAccountRoutes(req, url, api, logger, res);
-      if (accountResult !== null) {
-        return accountResult;
+      // Provisioning is the hub's, not a Bot's: creating an account, linking a
+      // number and editing config all reach across accounts or change what a
+      // number is bound to, and none of it is something the account's own
+      // credential should be able to do to itself either.
+      if (url.pathname === "/accounts" || url.pathname.startsWith("/accounts/")) {
+        if (principal.scope !== "admin") {
+          return send(res, 403, { error: "account routes require the admin secret" });
+        }
+        const accountResult = await handleAccountRoutes(req, url, api, logger, res);
+        if (accountResult !== null) {
+          return accountResult;
+        }
       }
       if (req.method === "GET") {
-        const recordsResult = await handleGetRecords(url, api, res);
+        const recordsResult = await handleGetRecords(url, api, principal, res);
         if (recordsResult !== null) {
           return recordsResult;
         }
       }
-      const postResult = await handlePost(req, url, api, logger, maxMediaBody, res);
+      const postResult = await handlePost(req, url, api, principal, logger, maxMediaBody, res);
       if (postResult !== null) {
         return postResult;
       }
