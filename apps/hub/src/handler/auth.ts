@@ -31,8 +31,18 @@ export interface Verified {
 const PAIR_MAX_FAILURES = 10;
 const PAIR_LOCKOUT_MS = 60_000;
 
-/** The longest a guest seat may live. An invite asks for less; it never gets more. */
-export const GUEST_MAX_TTL_MS = 15 * 60_000;
+/**
+ * The longest a guest seat may live. An invite asks for less; it never gets more.
+ *
+ * Four hours because that is `MAX_INVITE_TTL_MINUTES` in
+ * `apps/web/lib/invite.ts`: a desk invite binds the seat to the link's own
+ * remaining life, and the hub holding the same ceiling means a seat cannot
+ * outlive its link even if the control plane asks for more. This reads as a
+ * widening of the 15 minutes that stood here, and is the opposite: that
+ * number was applied only by `mintGuest`, which nothing on the wire reaches,
+ * so the ceiling a guest actually got was 30 days.
+ */
+export const GUEST_MAX_TTL_MS = 4 * 60 * 60_000;
 
 /** The longest anything issued for a person may live. Owners paired at the box are exempt. */
 export const ISSUED_MAX_TTL_MS = 30 * 24 * 60 * 60_000;
@@ -168,9 +178,19 @@ export class AuthRegistry {
     return this.principalFor(token)?.role;
   }
 
-  /** Owner seats only: the thread, provisioning, and the Eve proxy are theirs. */
+  /**
+   * Owner seats only: the thread, provisioning, and the Eve proxy are theirs.
+   *
+   * A narrowed owner is not one. `methods` on an owner record exists so a
+   * grant can be spent on a named few RPCs (the plugins invite mints one for
+   * CreateBot and DeleteBot), and these three doors are HTTP routes rather
+   * than RPCs, so no allowlist can name them. Reading the role alone would
+   * hand such a grant the Eve proxy and the pixel stream, which is the
+   * opposite of what narrowing it was for.
+   */
   isOwner(token: string | undefined): boolean {
-    return this.roleOf(token) === "owner";
+    const record = this.principalFor(token);
+    return record?.role === "owner" && record.methods === undefined;
   }
 
   /** Owner seat or a live pixel grant. A narrower seat reaches /vnc through the grant its Status returned. */
@@ -239,7 +259,15 @@ export class AuthRegistry {
       // rest of the record. Minting one here would make a token with no Bot.
       throw new ComputerError("VALIDATION", `the ${opts.role} role is not issued as a seat`);
     }
-    const ttl = opts.ttlMs === undefined ? undefined : Math.min(opts.ttlMs, ISSUED_MAX_TTL_MS);
+    // A guest is the one role that may never be unexpiring, and its ceiling
+    // is its own, not the 30 day one. The cap used to live only in
+    // `mintGuest`, which no wire path reaches, so `Seat.Issue` would hand out
+    // a guest good for a month, or forever when the caller asked for no ttl.
+    if (opts.role === "guest" && opts.ttlMs === undefined) {
+      throw new ComputerError("VALIDATION", "a guest seat needs a ttl");
+    }
+    const ceiling = opts.role === "guest" ? GUEST_MAX_TTL_MS : ISSUED_MAX_TTL_MS;
+    const ttl = opts.ttlMs === undefined ? undefined : Math.min(opts.ttlMs, ceiling);
     if (ttl !== undefined && (!Number.isFinite(ttl) || ttl <= 0)) {
       throw new ComputerError("VALIDATION", "ttl must be a positive number of milliseconds");
     }
