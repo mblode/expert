@@ -32,9 +32,14 @@ async function ensureInviteTable(): Promise<void> {
       expires_at INTEGER NOT NULL,
       created_at INTEGER NOT NULL,
       seat_token TEXT,
+      seat_role TEXT,
       hub_url TEXT
     )
   `);
+  // Rows written before scoped seats live in a table without the column, and
+  // SQLite has no ADD COLUMN IF NOT EXISTS: a duplicate-column error here is
+  // the normal path on every deploy after the first, not a failure.
+  await db.run(sql`ALTER TABLE invite ADD COLUMN seat_role TEXT`).catch(() => undefined);
   await db.run(
     sql`CREATE UNIQUE INDEX IF NOT EXISTS invite_token_hash_uidx ON invite (token_hash)`,
   );
@@ -45,6 +50,7 @@ function asRecord(row: typeof invite.$inferSelect): InviteRecord {
     computerId: row.computerId,
     expiresAt: row.expiresAt.getTime(),
     purpose: isInvitePurpose(row.purpose) ? row.purpose : "desk",
+    ...(row.seatRole ? { seatRole: row.seatRole } : {}),
     ...(row.seatToken ? { seatToken: row.seatToken } : {}),
     ...(row.senderHash ? { senderHash: row.senderHash } : {}),
     tokenHash: row.tokenHash,
@@ -153,7 +159,11 @@ export async function redeemStoredInvite(
     try {
       await db
         .update(invite)
-        .set({ hubUrl: granted.computer.hubUrl, seatToken: granted.seatToken })
+        .set({
+          hubUrl: granted.computer.hubUrl,
+          seatRole: granted.role,
+          seatToken: granted.seatToken,
+        })
         .where(eq(invite.tokenHash, (found as InviteRecord).tokenHash));
     } catch {
       // The token is still good for this request; the next redeem pairs again.
@@ -177,16 +187,22 @@ export async function refreshStoredInvite(
   if ("error" in inspected) {
     return inspected;
   }
-  const withoutSeat: InviteRecord = { ...(found as InviteRecord), seatToken: undefined };
-  const granted = await grantInviteSeat(withoutSeat, purpose, env, now);
+  // Drop the role, not the token: an unset role forces a fresh seat, and the
+  // old token still rides along so the hub revokes it as it mints the new one.
+  const stale: InviteRecord = { ...(found as InviteRecord), seatRole: undefined };
+  const granted = await grantInviteSeat(stale, purpose, env, now);
   if ("error" in granted) {
     return granted;
   }
   try {
     await db
       .update(invite)
-      .set({ hubUrl: granted.computer.hubUrl, seatToken: granted.seatToken })
-      .where(eq(invite.tokenHash, withoutSeat.tokenHash));
+      .set({
+        hubUrl: granted.computer.hubUrl,
+        seatRole: granted.role,
+        seatToken: granted.seatToken,
+      })
+      .where(eq(invite.tokenHash, stale.tokenHash));
   } catch {
     // Same as first redeem: the fresh token is still returned.
   }
