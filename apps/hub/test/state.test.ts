@@ -16,9 +16,6 @@ class DeadBoxDesk extends FakeDesk {
   async writeFile(): Promise<number> {
     throw new ComputerError("DAEMON_DOWN", "no such container");
   }
-  async appendFile(): Promise<number> {
-    throw new ComputerError("DAEMON_DOWN", "no such container");
-  }
 }
 
 describe("per-Bot state on the box", () => {
