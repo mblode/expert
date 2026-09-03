@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  appsPath,
   guestState,
   machinePath,
   methodFor,
   resolveFlyConfig,
   flyRequest,
+  volumesPath,
 } from "../src/host/fly-machine.ts";
 
 describe("fly-machine", () => {
@@ -15,6 +17,36 @@ describe("fly-machine", () => {
     expect(methodFor("sleep")).toBe("POST");
     expect(methodFor("status")).toBe("GET");
     expect(methodFor("list")).toBe("GET");
+  });
+
+  it("maps create onto the collection and destroy onto DELETE", () => {
+    expect(machinePath("box", "", "create")).toBe("/v1/apps/box/machines");
+    expect(machinePath("box", "d8", "destroy")).toBe("/v1/apps/box/machines/d8");
+    expect(methodFor("create")).toBe("POST");
+    expect(methodFor("destroy")).toBe("DELETE");
+    expect(appsPath()).toBe("/v1/apps");
+    expect(appsPath("box")).toBe("/v1/apps/box");
+    expect(volumesPath("box")).toBe("/v1/apps/box/volumes");
+    expect(volumesPath("box", "vol_1")).toBe("/v1/apps/box/volumes/vol_1");
+  });
+
+  it("creates without first discovering a Machine, and sends the payload", async () => {
+    // A create has no Machine to find; the discovery branch would list an app
+    // that has none and throw "no Machines in this app: fly deploy first".
+    const calls: { url: string; method?: string; body?: string }[] = [];
+    const res = await flyRequest("create", {
+      env: { FLY_API_TOKEN: "tok", FLY_APP_NAME: "box" },
+      fetch: async (url, init) => {
+        calls.push({ body: init?.body, method: init?.method, url });
+        return { ok: true, status: 200, text: async () => JSON.stringify({ id: "d8" }) };
+      },
+      payload: { config: { image: "img" } },
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe("https://api.machines.dev/v1/apps/box/machines");
+    expect(calls[0]?.method).toBe("POST");
+    expect(JSON.parse(calls[0]?.body ?? "{}")).toEqual({ config: { image: "img" } });
+    expect(res.body).toEqual({ id: "d8" });
   });
 
   it("maps Fly states onto the Grok-shaped guest words", () => {

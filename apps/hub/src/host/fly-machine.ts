@@ -16,9 +16,19 @@ const DEFAULT_FLY_API = "https://api.machines.dev";
 /** Inside a Fly Machine, no API token is needed. */
 const FLY_SOCKET = "/.fly/api";
 
-type FlyAction = "list" | "get" | "status" | "wake" | "start" | "sleep" | "stop" | "suspend";
+type FlyAction =
+  | "list"
+  | "get"
+  | "status"
+  | "wake"
+  | "start"
+  | "sleep"
+  | "stop"
+  | "suspend"
+  | "create"
+  | "destroy";
 
-interface FlyConfig {
+export interface FlyConfig {
   token: string;
   app: string;
   machine: string;
@@ -43,13 +53,33 @@ export function resolveFlyConfig(env: NodeJS.ProcessEnv = process.env): FlyConfi
   };
 }
 
+/** The apps collection, and one app. Creating a tenant starts here. */
+export function appsPath(app?: string): string {
+  return app ? `/v1/apps/${encodeURIComponent(app)}` : "/v1/apps";
+}
+
+/**
+ * The volumes collection of an app, and one volume.
+ *
+ * A tenant's `/workspace` is one volume in one region, and volumes neither
+ * replicate nor move, which is why `fly.toml` says not to scale the guest out
+ * and why provisioning creates exactly one.
+ */
+export function volumesPath(app: string, volume?: string): string {
+  if (!app) {
+    throw new Error("FLY_APP_NAME is required");
+  }
+  const base = `/v1/apps/${encodeURIComponent(app)}/volumes`;
+  return volume ? `${base}/${encodeURIComponent(volume)}` : base;
+}
+
 /** Map our verbs onto Machines API paths. `sleep` is stop. */
 export function machinePath(app: string, machine: string, action: FlyAction): string {
   if (!app) {
     throw new Error("FLY_APP_NAME is required");
   }
   const base = `/v1/apps/${encodeURIComponent(app)}/machines`;
-  if (action === "list") {
+  if (action === "list" || action === "create") {
     return base;
   }
   if (!machine) {
@@ -58,7 +88,8 @@ export function machinePath(app: string, machine: string, action: FlyAction): st
   const id = encodeURIComponent(machine);
   switch (action) {
     case "get":
-    case "status": {
+    case "status":
+    case "destroy": {
       return `${base}/${id}`;
     }
     case "wake":
@@ -78,8 +109,11 @@ export function machinePath(app: string, machine: string, action: FlyAction): st
   }
 }
 
-export function methodFor(action: FlyAction): "GET" | "POST" {
-  return action === "list" || action === "get" || action === "status" ? "GET" : "POST";
+export function methodFor(action: FlyAction): "GET" | "POST" | "DELETE" {
+  if (action === "list" || action === "get" || action === "status") {
+    return "GET";
+  }
+  return action === "destroy" ? "DELETE" : "POST";
 }
 
 /**
@@ -103,9 +137,9 @@ export function guestState(flyState: unknown): string {
   return s || "unknown";
 }
 
-type FlyFetch = (
+export type FlyFetch = (
   url: string,
-  init?: { method?: string; headers?: Record<string, string> },
+  init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) => Promise<{
   ok: boolean;
   status: number;
@@ -114,7 +148,7 @@ type FlyFetch = (
 
 export async function flyRequest(
   action: FlyAction,
-  opts: { env?: NodeJS.ProcessEnv; fetch?: FlyFetch } = {},
+  opts: { env?: NodeJS.ProcessEnv; fetch?: FlyFetch; payload?: unknown } = {},
 ): Promise<{ status: number; body: unknown; machine: string }> {
   const env = opts.env ?? process.env;
   const cfg = resolveFlyConfig(env);
@@ -127,7 +161,7 @@ export async function flyRequest(
   }
 
   let { machine } = cfg;
-  if (!machine && action !== "list") {
+  if (!machine && action !== "list" && action !== "create") {
     const listed = await flyRequest("list", { ...opts, env });
     const machines = Array.isArray(listed.body) ? listed.body : [];
     const computer = machines.find((m) => {
@@ -147,12 +181,40 @@ export async function flyRequest(
   }
 
   const path = machinePath(cfg.app, machine, action);
+  const { body, status } = await flyCall(path, methodFor(action), {
+    cfg,
+    fetch: fetchFn,
+    payload: opts.payload,
+  });
+  return { body, machine, status };
+}
+
+/**
+ * One authenticated call to any Fly API path, returning the parsed body.
+ *
+ * `flyRequest` is the machine-verb front door; provisioning also needs the
+ * apps and volumes collections, and both want the same auth, the same JSON
+ * parsing and the same error envelope. A non-2xx is an Error carrying Fly's
+ * own message, because the failures that matter here (a name already taken, a
+ * region with no capacity, a quota) are all things only Fly can say.
+ */
+export async function flyCall(
+  path: string,
+  method: "GET" | "POST" | "DELETE",
+  opts: { cfg?: FlyConfig; env?: NodeJS.ProcessEnv; fetch?: FlyFetch; payload?: unknown } = {},
+): Promise<{ status: number; body: unknown }> {
+  const cfg = opts.cfg ?? resolveFlyConfig(opts.env ?? process.env);
+  if (!cfg.token && !cfg.socket) {
+    throw new Error("FLY_API_TOKEN is required");
+  }
+  const fetchFn = opts.fetch ?? (cfg.socket ? unixFetch(cfg.socket) : globalThis.fetch);
   const res = await fetchFn(`${cfg.api}${path}`, {
+    body: opts.payload === undefined ? undefined : JSON.stringify(opts.payload),
     headers: {
       authorization: `Bearer ${cfg.token}`,
       "content-type": "application/json",
     },
-    method: methodFor(action),
+    method,
   });
   const text = await res.text();
   let body: unknown = text;
@@ -168,16 +230,19 @@ export async function flyRequest(
         : text || `HTTP ${res.status}`;
     throw new Error(`Fly API ${res.status}: ${msg}`);
   }
-  return { body, machine, status: res.status };
+  return { body, status: res.status };
 }
 
 function unixFetch(socketPath: string): FlyFetch {
   return (url, init) =>
     new Promise((resolve, reject) => {
       const u = new URL(url);
+      const body = init?.body;
       const req = http.request(
         {
-          headers: init?.headers,
+          headers: body
+            ? { ...init?.headers, "content-length": String(Buffer.byteLength(body)) }
+            : init?.headers,
           method: init?.method ?? "GET",
           path: u.pathname + u.search,
           socketPath,
@@ -196,6 +261,6 @@ function unixFetch(socketPath: string): FlyFetch {
         },
       );
       req.on("error", reject);
-      req.end();
+      req.end(body);
     });
 }
