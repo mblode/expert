@@ -147,6 +147,22 @@ const errorMessage = (error: unknown): string =>
   String((error as { message?: unknown })?.message ?? error);
 
 /**
+ * Hand a down socket back to the outer handler, which maps it to 503.
+ *
+ * Every route below wraps its account call in a catch of its own so a genuine
+ * failure reads as 502 (or 409 for a missing backfill anchor). A socket that is
+ * merely reconnecting is not that: it is transient, and a caller told 502 stops
+ * retrying something that is about to come back. So the one route family that
+ * documents "503 while the socket is down" has to let this error through
+ * rather than flatten it into its own status.
+ */
+const rethrowIfNotConnected = (error: unknown): void => {
+  if (error instanceof NotConnectedError) {
+    throw error;
+  }
+};
+
+/**
  * Which account a legacy data route means. An explicit `acct` must exist; no
  * `acct` is fine only when there is exactly one account, because guessing
  * between two numbers would send a digest to the wrong tenant.
@@ -310,6 +326,7 @@ const handleBackfill = async (
     logger.info({ acct: handle.acct, group, n }, "history backfill requested");
     return send(res, 200, { ok: true, ...result });
   } catch (error) {
+    rethrowIfNotConnected(error);
     return send(res, 409, { error: errorMessage(error) });
   }
 };
@@ -339,6 +356,7 @@ const handleReport = async (
     );
     return send(res, 200, result);
   } catch (error) {
+    rethrowIfNotConnected(error);
     return send(res, 502, { error: errorMessage(error) });
   }
 };
@@ -372,6 +390,7 @@ const handleInvite = async (
     );
     return send(res, 200, result);
   } catch (error) {
+    rethrowIfNotConnected(error);
     return send(res, 502, { error: errorMessage(error) });
   }
 };
@@ -414,6 +433,7 @@ const handleSend = async (
     logger.info({ acct: handle.acct, jid }, "proactive message sent");
     return send(res, 200, result);
   } catch (error) {
+    rethrowIfNotConnected(error);
     return send(res, 502, { error: errorMessage(error) });
   }
 };
@@ -437,6 +457,7 @@ const handleSendMedia = async (
     logger.info({ acct: handle.acct, jid: parsed.payload.jid }, "proactive media sent");
     return send(res, 200, { sent: true });
   } catch (error) {
+    rethrowIfNotConnected(error);
     return send(res, 502, { error: errorMessage(error) });
   }
 };
@@ -469,6 +490,7 @@ const handleSendEnvelope = async (
     );
     return send(res, 200, { message_ids: result.messageIds ?? [], sent: true });
   } catch (error) {
+    rethrowIfNotConnected(error);
     return send(res, 502, { error: errorMessage(error) });
   }
 };

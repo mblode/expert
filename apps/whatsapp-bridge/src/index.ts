@@ -167,6 +167,11 @@ const main = async (): Promise<void> => {
     await Promise.all([...runtimes.values()].map((r) => r.stop()));
     await new Promise<void>((resolve) => {
       server.close(() => resolve());
+      // The hub and the Bot tools reach us through fetch, which pools
+      // connections, so close() would sit on sockets that are idle but open
+      // until keepAliveTimeout. In-flight requests are untouched: this drops
+      // only the connections with nothing on them.
+      server.closeIdleConnections();
     });
     logger.info("shutdown complete");
     process.exit(0);

@@ -47,6 +47,16 @@ export const parseSendMediaBody = (
   return { payload: { base64, caption, jid, mime } };
 };
 
+/**
+ * Decode one base64 media payload and enforce the byte cap, or null when it is
+ * empty or over. `/send-media` and each file in an envelope both spend a daily
+ * slot on this answer, so the rule has one owner rather than a copy per route.
+ */
+export const decodeMediaBuffer = (base64: string, maxBytes: number): Buffer | null => {
+  const buf = Buffer.from(base64, "base64");
+  return buf.length > 0 && buf.length <= maxBytes ? buf : null;
+};
+
 /** The identity checks an outbound target is gated on. */
 export interface SendTargetGate {
   /** The account's group gate (mirrors message handling). */
@@ -62,7 +72,7 @@ export interface SendTargetGate {
  * Whether an outbound write to `jid` is allowed: anywhere the bot already
  * replies. Groups pass the same allowlist as inbound messages; DMs must be the
  * maintainer, an owner, or a whitelisted member. A member DM keyed by an
- * opaque `@lid` JID (no phone digits) fails the member check and is refused ,
+ * opaque `@lid` JID (no phone digits) fails the member check and is refused:
  * the send degrades gracefully agent-side, and group sends (the main use) are
  * unaffected.
  *

@@ -465,6 +465,43 @@ test("POST /report, /invite and /backfill validate their bodies", async () => {
   assert.equal(await status(call("POST", "/backfill", {})), 400);
 });
 
+test("a down socket is 503 on every route that needs one, never 502 or 409", async () => {
+  // Each of these routes catches around its account call to turn a genuine
+  // failure into 502 (409 for a backfill with no anchor). A socket that is only
+  // reconnecting has to survive that catch and reach the outer handler, or the
+  // caller reads "the bridge is broken" for a condition that clears itself and
+  // stops retrying. Every one of them returned the wrong code before.
+  const offline = (): never => {
+    throw new NotConnectedError();
+  };
+  accounts.set(
+    "offline",
+    fakeAccount("offline", {
+      handle: {
+        acct: "offline",
+        getMembers: () => ({ members: [], ready: true }),
+        onBackfill: offline,
+        onInvite: offline,
+        onReport: offline,
+        onSend: offline,
+        onSendEnvelope: offline,
+        onSendMedia: offline,
+        store: {} as Store,
+      },
+    }),
+  );
+  const post = (path: string, body: Record<string, unknown>) =>
+    status(call("POST", path, { acct: "offline", ...body }));
+
+  assert.equal(await post("/backfill", { group: "1@g.us" }), 503);
+  assert.equal(await post("/report", { summary: "add dark mode" }), 503);
+  assert.equal(await post("/invite", { fullName: "Ada", phone: "+61400000000" }), 503);
+  assert.equal(await post("/send", { jid: DM, text: "hi" }), 503);
+  assert.equal(await post("/send-media", { base64: "aGk=", jid: DM, mime: "image/png" }), 503);
+  assert.equal(await post("/send-envelope", { jid: DM, text: "hi" }), 503);
+  accounts.delete("offline");
+});
+
 test("unknown routes are 404", async () => {
   assert.equal(await status(get("/nope")), 404);
   assert.equal(await status(get("/accounts/main/nope")), 404);
