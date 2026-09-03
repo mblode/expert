@@ -2,11 +2,13 @@ import { createHub } from "../src/app.ts";
 import type { Hub } from "../src/app.ts";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { NoopWindowManager } from "../src/desk/windows.ts";
-import { MemoryBotStore, MemorySeatTokenStore } from "../src/service/provision.ts";
-import type { SeatTokenStore } from "../src/service/provision.ts";
+import { MemoryBotStore } from "../src/service/provision.ts";
+import { MemoryPrincipalStore } from "../src/service/principals.ts";
+import type { PrincipalStore } from "../src/service/principals.ts";
 import type { PolicyService } from "../src/service/policy.ts";
 import type { BotConfig } from "../src/service/bots.ts";
 import type { ChannelStore } from "../src/service/channels.ts";
+import type { ConversationStore, MessageLog } from "../src/service/conversations.ts";
 import type { BridgeClient } from "../src/service/whatsapp.ts";
 
 const SETUP_CODE = "setup-code-test";
@@ -18,7 +20,7 @@ export interface StartedHub {
   desks: Map<number, FakeDesk>;
   windows: NoopWindowManager;
   store: MemoryBotStore;
-  seatStore: SeatTokenStore;
+  principalStore: PrincipalStore;
   url: string;
   agent: string;
   setup: string;
@@ -37,11 +39,13 @@ export async function startHub(
     desks?: Map<number, FakeDesk>;
     vncBasePort?: number;
     /** Pass one to survive a restart in-test; a fresh hub loads what it saved. */
-    seatStore?: SeatTokenStore;
+    principalStore?: PrincipalStore;
     policy?: PolicyService;
     eveUrls?: Record<string, string>;
     eveSecret?: string;
     channelStore?: ChannelStore;
+    conversationStore?: ConversationStore;
+    messageLog?: MessageLog;
     bridge?: BridgeClient;
   } = {},
 ): Promise<StartedHub> {
@@ -50,7 +54,7 @@ export async function startHub(
   const windows = new NoopWindowManager();
   const store = new MemoryBotStore();
   store.save(configs);
-  const seatStore = opts.seatStore ?? new MemorySeatTokenStore();
+  const principalStore = opts.principalStore ?? new MemoryPrincipalStore();
   const hub = createHub({
     deskFactory: (display) => {
       const existing = desks.get(display);
@@ -61,10 +65,12 @@ export async function startHub(
     },
     bridge: opts.bridge,
     channelStore: opts.channelStore,
+    conversationStore: opts.conversationStore,
+    messageLog: opts.messageLog,
     eveSecret: opts.eveSecret,
     eveUrls: opts.eveUrls,
     policy: opts.policy,
-    seatStore,
+    principalStore,
     setupCode: SETUP_CODE,
     store,
     vncBasePort: opts.vncBasePort,
@@ -88,7 +94,7 @@ export async function startHub(
       const r = await rpc(url, "/computer.v1.Seat/Pair", { code: SETUP_CODE });
       return (r as { token: string }).token;
     },
-    seatStore,
+    principalStore,
     setup: SETUP_CODE,
     store,
     url,

@@ -39,6 +39,7 @@ test("parseAccountConfig fills every default from an empty object", () => {
     "maintainer_jid",
     "members_overlay_file",
     "owner_jids",
+    "sends_per_day",
     "trigger_mode",
     "trigger_prefix",
     "vision_enabled",

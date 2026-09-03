@@ -1,3 +1,4 @@
+import { revokeSeat } from "@/lib/computers";
 import { writeConnectionFile } from "@/lib/connection-guest";
 import { installConnection } from "@/lib/connection-install";
 import { inviteTokenFromRequest } from "@/lib/invite-access";
@@ -31,31 +32,40 @@ export async function POST(request: Request): Promise<Response> {
           url?: unknown;
         })
       : {};
-  const result = await installConnection({
-    authKind: typeof input.authKind === "string" ? input.authKind : undefined,
-    credential: typeof input.credential === "string" ? input.credential : undefined,
-    name: typeof input.name === "string" ? input.name : undefined,
-    url: typeof input.url === "string" ? input.url : undefined,
-    write: (path, source) =>
-      writeConnectionFile({
-        hubUrl: granted.hubUrl,
-        path,
-        seatToken: granted.seatToken,
-        source,
-      }),
-  });
-  if ("error" in result) {
-    return Response.json({ error: result.error }, { status: result.status });
+  try {
+    const result = await installConnection({
+      authKind: typeof input.authKind === "string" ? input.authKind : undefined,
+      credential: typeof input.credential === "string" ? input.credential : undefined,
+      name: typeof input.name === "string" ? input.name : undefined,
+      url: typeof input.url === "string" ? input.url : undefined,
+      write: (path, source) =>
+        writeConnectionFile({
+          hubUrl: granted.hubUrl,
+          path,
+          seatToken: granted.seatToken,
+          source,
+        }),
+    });
+    if ("error" in result) {
+      return Response.json({ error: result.error }, { status: result.status });
+    }
+    await captureServerEvent({
+      distinctId: distinctIdFromRequest(request, granted.computerId),
+      event: "plugin_added",
+      properties: {
+        auth_kind: result.plugin.authKind,
+        computer_id: granted.computerId,
+        installed: result.installed,
+        source: "invite",
+      },
+    });
+    return Response.json(result);
+  } finally {
+    // The plugins seat exists to write one file. It expires on its own in
+    // minutes; ending it here means a leaked response or a stalled tab cannot
+    // spend the rest of that window.
+    if (granted.disposable) {
+      await revokeSeat(granted.computer, granted.seatToken);
+    }
   }
-  await captureServerEvent({
-    distinctId: distinctIdFromRequest(request, granted.computerId),
-    event: "plugin_added",
-    properties: {
-      auth_kind: result.plugin.authKind,
-      computer_id: granted.computerId,
-      installed: result.installed,
-      source: "invite",
-    },
-  });
-  return Response.json(result);
 }

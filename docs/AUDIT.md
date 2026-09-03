@@ -73,6 +73,13 @@ Categories 1 and 2 are fixed in this pass. Category 3 is partly mitigated (email
 
 ## Open findings, ranked
 
+### Opened by the scoped-invite pass, 2026-09-03
+
+These two were found while moving the invite path off owner seats (`apps/web/lib/invite.ts`). Both fixes land in `apps/hub`, in the code PR #26 introduced, so they were reported rather than folded into a web change.
+
+- **Closed 2026-09-03. `Seat.Issue` did not hold a guest to `GUEST_MAX_TTL_MS`.** The cap was applied only by `AuthRegistry.mintGuest`, which no wire path reaches; `issue()` capped every role at `ISSUED_MAX_TTL_MS` (30 days) and minted no expiry at all when asked for none. `issue()` now refuses a guest with no ttl and clamps one to its own ceiling, raised to four hours so it matches `MAX_INVITE_TTL_MINUTES` in the control plane and a seat cannot outlive its link from either end.
+- **Closed 2026-09-03. A plugins invite held an owner, narrowed but not contained.** Authoring a connection file needs `CreateBot` + `Agent.WriteFile` + `DeleteBot`, and `owner` is the only role in `ROLE_METHODS` carrying `CreateBot`. The seat is narrowed with `methods`, lives two minutes and is revoked when the write returns, but `AuthRegistry.isOwner` read the role and not the methods, so the token still opened the Eve proxy and the pixel stream. `isOwner` now refuses an owner carrying `methods`: those three doors are HTTP routes, so no allowlist can name them, and a grant narrowed to a couple of RPCs must not inherit them. Still open underneath: there is no role that may provision and nothing else, so a connection-file write is an owner narrowed by hand.
+
 ### P0, product security
 
 1. **One computer for every account (partial).** hello.expert now binds a session to a seeded computer (`blode` → `mblode-computer`, `vibey` → `vcmc-computer`) with a per-computer setup code. There is still no self-serve Fly provisioning: extra tenants are a Fly app + volume from this repo, not a Machines API call on sign-in. Every seat on a guest is still a box owner (`CreateBot`, `DeleteBot`, clipboard read, `ProvideSecret`, the Eve thread). `AUTH_ALLOWED_EMAILS` remains the sign-in gate. See the roadmap in `docs/GROK-BOT.md`.

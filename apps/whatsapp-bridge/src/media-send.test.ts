@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { allGroups, listedGroups } from "./groups.ts";
-import { createDailyCounter, mediaSendAllowed, parseSendMediaBody } from "./media-send.ts";
+import { createDailyCounter, sendTargetAllowed, parseSendMediaBody } from "./media-send.ts";
 
 const gate = (overrides = {}) => ({
   groups: allGroups,
@@ -47,31 +47,31 @@ test("parseSendMediaBody validates jid, image mime and base64", () => {
   assert.ok("payload" in parsed && parsed.payload.caption === undefined);
 });
 
-test("mediaSendAllowed gates groups on the group allowlist", () => {
+test("sendTargetAllowed gates groups on the group allowlist", () => {
   // Empty allowlist = all groups allowed (mirrors inbound handling).
-  assert.equal(mediaSendAllowed("123@g.us", gate()), true);
-  assert.equal(mediaSendAllowed("123@g.us", gate({ groups: listedGroups(["456@g.us"]) })), false);
-  assert.equal(mediaSendAllowed("456@g.us", gate({ groups: listedGroups(["456@g.us"]) })), true);
+  assert.equal(sendTargetAllowed("123@g.us", gate()), true);
+  assert.equal(sendTargetAllowed("123@g.us", gate({ groups: listedGroups(["456@g.us"]) })), false);
+  assert.equal(sendTargetAllowed("456@g.us", gate({ groups: listedGroups(["456@g.us"]) })), true);
 });
 
-test("mediaSendAllowed gates DMs on maintainer, owner, or member", () => {
-  assert.equal(mediaSendAllowed("61400000000@s.whatsapp.net", gate()), false);
+test("sendTargetAllowed gates DMs on maintainer, owner, or member", () => {
+  assert.equal(sendTargetAllowed("61400000000@s.whatsapp.net", gate()), false);
   assert.equal(
-    mediaSendAllowed(
+    sendTargetAllowed(
       "61400000000@s.whatsapp.net",
       gate({ maintainerJid: "61400000000@s.whatsapp.net" }),
     ),
     true,
   );
   assert.equal(
-    mediaSendAllowed(
+    sendTargetAllowed(
       "61400000000@s.whatsapp.net",
       gate({ isOwnerJid: (jid: string) => jid.startsWith("61400000000") }),
     ),
     true,
   );
   assert.equal(
-    mediaSendAllowed(
+    sendTargetAllowed(
       "61411111111@s.whatsapp.net",
       gate({
         isMember: (num: string | null | undefined) => num === "61411111111",
@@ -79,7 +79,7 @@ test("mediaSendAllowed gates DMs on maintainer, owner, or member", () => {
     ),
     true,
   );
-  assert.equal(mediaSendAllowed("", gate({ isMember: () => true })), false);
+  assert.equal(sendTargetAllowed("", gate({ isMember: () => true })), false);
 });
 
 test("createDailyCounter caps per key and resets on day rollover", () => {

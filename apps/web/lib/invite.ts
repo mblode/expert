@@ -1,5 +1,5 @@
-import type { ComputerRecord, EnvMap } from "./computers";
-import { computerById, pairComputer } from "./computers";
+import type { ComputerRecord, EnvMap, SeatRequest } from "./computers";
+import { computerById, issueSeat } from "./computers";
 import { newOpaqueToken, sha256Hex } from "./secret";
 
 export const INVITE_PURPOSES = ["desk", "plugins"] as const;
@@ -15,6 +15,12 @@ export interface InviteRecord {
   expiresAt: number;
   purpose: InvitePurpose;
   seatToken?: string;
+  /**
+   * The role `seatToken` was minted with. Absent on a record written before
+   * this control plane issued scoped seats, and that absence is load-bearing:
+   * such a token is an owner, so it is replaced rather than honoured.
+   */
+  seatRole?: string;
   senderHash?: string;
   tokenHash: string;
 }
@@ -35,7 +41,11 @@ export interface RedeemFailure {
 
 export interface SeatGrant {
   computer: ComputerRecord;
+  /** Revoke it the moment this request is done: it is not a seat a person keeps. */
+  disposable: boolean;
+  /** Store it against the invite, so a reload does not mint a second seat. */
   persist: boolean;
+  role: string;
   seatToken: string;
 }
 
@@ -133,28 +143,123 @@ export function inspectInvite(
   return { computer };
 }
 
+const SEAT_CREATE_BOT = "/computer.v1.Seat/CreateBot";
+const SEAT_DELETE_BOT = "/computer.v1.Seat/DeleteBot";
+const SEAT_REVOKE = "/computer.v1.Seat/Revoke";
+
 /**
- * Pair the invite's own computer. A Vibey link never talks to Blode, even
- * when the web server's default tenant is Blode.
+ * The screen a desk link drives. Primary is where the tenant's Bot runs, and
+ * an invite has never pointed anywhere else; binding it means the phone can
+ * neither name another screen nor see one in `Status`.
+ */
+const INVITE_DISPLAY = 1;
+
+/** Long enough to create a Bot, write one file and delete the Bot again. */
+const PLUGIN_SEAT_TTL_MS = 2 * 60_000;
+
+interface SeatPlan {
+  disposable: boolean;
+  persist: boolean;
+  request: SeatRequest;
+}
+
+/**
+ * What each purpose is allowed to be on the hub.
+ *
+ * A desk link is a person on a phone, which is what `guest` names: pointer,
+ * keys, presence, paste in, answer a secret request, and nothing else. It is
+ * bound to the screen the link points at and expires with the link. Until
+ * this, a redeemed desk link was an owner seat that never expired and could
+ * drive any screen, read the clipboard, create Bots and link WhatsApp numbers.
+ *
+ * A plugins link authors a connection file, and there is no seat-shaped way to
+ * write one: `Agent.WriteFile` takes an agent token, so the web has to
+ * `CreateBot`, write, `DeleteBot` (see connection-guest.ts). No role in
+ * `ROLE_METHODS` carries `CreateBot`; `owner` is the only thing that does.
+ * Narrowing it to those three methods shuts every other Seat RPC, and the
+ * seat lives two minutes and is revoked as soon as the write returns, but it
+ * is not containment: the hub's `isOwner` reads the role and not the methods,
+ * so this token still opens the Eve proxy and the pixel stream. That is a
+ * finding, not a workaround, and it is named in the PR: the fix is hub-side,
+ * either a role that may provision or a Seat RPC that writes a connection
+ * file so no agent token is minted at all.
+ */
+function seatPlanFor(purpose: InvitePurpose, invite: InviteRecord, remainingMs: number): SeatPlan {
+  // The subject is the invite's hash, never its token: it says which link a
+  // seat came from in the owner's seat list, and it cannot be redeemed.
+  const subject = `invite:${invite.tokenHash.slice(0, 12)}`;
+  if (purpose === "plugins") {
+    return {
+      disposable: true,
+      persist: false,
+      request: {
+        label: "hello.expert plugins invite",
+        methods: [SEAT_CREATE_BOT, SEAT_DELETE_BOT, SEAT_REVOKE],
+        role: "owner",
+        subject,
+        ttlMs: Math.min(PLUGIN_SEAT_TTL_MS, remainingMs),
+      },
+    };
+  }
+  return {
+    disposable: false,
+    persist: true,
+    request: {
+      display: INVITE_DISPLAY,
+      label: "hello.expert desk invite",
+      role: "guest",
+      subject,
+      // The link's own remaining life, asked for and not clamped here. The
+      // hub owns the ceiling on a guest seat; a second clamp in the web would
+      // drift from it and read as though this were the one that mattered.
+      ttlMs: remainingMs,
+    },
+  };
+}
+
+/**
+ * Hand this invite a seat on its own computer. A Vibey link never talks to
+ * Blode, even when the web server's default tenant is Blode.
+ *
+ * A stored token is reused only when this control plane minted it under the
+ * scoped scheme, which `seatRole` records. A record from before it carries a
+ * token and no role: that token is an owner, so it is revoked and replaced on
+ * the next redeem rather than handed out again.
  */
 export async function grantInviteSeat(
   invite: InviteRecord,
   purpose: InvitePurpose,
   env: EnvMap,
   now: number,
-  pair: typeof pairComputer = pairComputer,
+  issue: typeof issueSeat = issueSeat,
 ): Promise<SeatGrant | RedeemFailure> {
   const inspected = inspectInvite(invite, purpose, env, now);
   if ("error" in inspected) {
     return inspected;
   }
   const { computer } = inspected;
-  if (invite.seatToken) {
-    return { computer, persist: false, seatToken: invite.seatToken };
+  const plan = seatPlanFor(purpose, invite, invite.expiresAt - now);
+  if (plan.persist && invite.seatToken && invite.seatRole === plan.request.role) {
+    return {
+      computer,
+      disposable: false,
+      persist: false,
+      role: plan.request.role,
+      seatToken: invite.seatToken,
+    };
   }
-  const paired = await pair(computer, env);
-  if ("error" in paired) {
-    return { error: paired.error, status: 502 };
+  const issued = await issue(computer, env, {
+    ...plan.request,
+    ...(invite.seatToken ? { replaces: invite.seatToken } : {}),
+  });
+  if ("error" in issued) {
+    return { error: issued.error, status: 502 };
   }
-  return { computer, persist: true, seatToken: paired.token };
+  return {
+    computer,
+    disposable: plan.disposable,
+    persist: plan.persist,
+    role: issued.role,
+    seatToken: issued.token,
+  };
 }
