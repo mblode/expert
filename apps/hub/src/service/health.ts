@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 
 /** One supervised child as the supervisor's status file reports it. */
-export interface HealthChild {
+interface HealthChild {
   id: string;
   state: string;
   healthy: boolean | null;
   restarts: number;
 }
 
-export interface HealthReport {
+interface HealthReport {
   ok: boolean;
   hub: true;
   /** Absent when no supervisor status is available (local dev, tests). */

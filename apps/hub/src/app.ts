@@ -29,7 +29,7 @@ import type { PixelRegistry } from "./service/pixels.ts";
 import { attachVncProxy } from "./vnc-proxy.ts";
 import { readHealth } from "./service/health.ts";
 
-export interface HubOptions {
+interface HubOptions {
   setupCode: string;
   /** Builds the per-screen desk driver; the registry mounts one per Bot. */
   deskFactory: (display: number) => Desk;

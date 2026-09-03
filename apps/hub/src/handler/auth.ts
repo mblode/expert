@@ -20,7 +20,7 @@ import { PixelRegistry } from "../service/pixels.ts";
  * are still stored with their display in the roster and adapted here, which
  * keeps this change about identity rather than about storage.
  */
-export interface Verified {
+interface Verified {
   kind: "agent" | "seat" | "public";
   /** Set for agent calls: the Bot the bearer belongs to. */
   botId?: string;

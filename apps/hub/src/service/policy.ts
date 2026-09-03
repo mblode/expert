@@ -55,7 +55,7 @@ export interface PolicyVerdict {
   reason: string;
 }
 
-export type PolicyRequest =
+type PolicyRequest =
   | { tool: "computer"; action: Action }
   | { tool: "shell"; argv: string[]; cwd: string };
 

@@ -27,11 +27,11 @@ const LEGACY_PREFIX = "/channels/";
  */
 const MAX_BODY = 12 * 1024 * 1024;
 /** The header a connector presents. Never the seat token, never the Eve secret. */
-export const CONNECTOR_SECRET_HEADER = "x-connector-secret";
+const CONNECTOR_SECRET_HEADER = "x-connector-secret";
 /** Compatibility alias, retired with `LEGACY_PREFIX` above. */
-export const LEGACY_CONNECTOR_SECRET_HEADER = "x-channel-secret";
+const LEGACY_CONNECTOR_SECRET_HEADER = "x-channel-secret";
 
-export interface ConnectorIngressDeps {
+interface ConnectorIngressDeps {
   connectors: ConnectorRegistry;
   bots: BotRegistry;
   conversations: ConversationRegistry;

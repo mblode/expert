@@ -32,7 +32,7 @@ export interface ConnectorRecord {
 }
 
 /** What a list may show: everything but the secret. */
-export type ConnectorSummary = Omit<ConnectorRecord, "secret">;
+type ConnectorSummary = Omit<ConnectorRecord, "secret">;
 
 export interface ConnectorStore {
   load(): ConnectorRecord[];
@@ -118,7 +118,7 @@ function connectorRecordFrom(entry: unknown, path: string): ConnectorRecord {
   };
 }
 
-export function mintConnectorSecret(): string {
+function mintConnectorSecret(): string {
   return randomBytes(32).toString("base64url");
 }
 

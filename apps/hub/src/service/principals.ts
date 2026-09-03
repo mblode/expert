@@ -89,7 +89,7 @@ const KINDS: readonly PrincipalKind[] = ["user", "bot", "service"];
  * migrated principal has none, and the hub reports it as an unattributed
  * seat rather than inventing a person.
  */
-export function principalFrom(entry: unknown, path: string): PrincipalRecord {
+function principalFrom(entry: unknown, path: string): PrincipalRecord {
   if (typeof entry === "string") {
     return {
       created_at: "1970-01-01T00:00:00.000Z",
