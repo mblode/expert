@@ -1,27 +1,81 @@
+/**
+ * The marketing page's words, in one file so the claims can be read together.
+ *
+ * Two rules they are written to. Say what the product does rather than what it
+ * is made of: a visitor does not buy Eve, a hub or a Fly Machine, they buy a
+ * computer that keeps working and a screen they can take. And claim nothing
+ * that is not live, because the nearest competitors are free desktop apps that
+ * wrap agents on your own machine, and the one thing they cannot do is hand a
+ * stranger a real browser for half an hour.
+ */
+
+export const howItWorks = [
+  {
+    body: "An email code, and the computer is already running.",
+    step: "01",
+    title: "Sign in",
+  },
+  {
+    body: "It drives a real browser and a terminal while you watch the screen.",
+    step: "02",
+    title: "Give it work",
+  },
+  {
+    body: "At a password or a captcha it hands you the mouse. Tap I’m done and it carries on.",
+    step: "03",
+    title: "Take the seat",
+  },
+];
+
+export const whatYouGet = [
+  {
+    description:
+      "One Linux machine per account, with Chrome, a terminal, and files that survive a restart. Close the laptop and it keeps going.",
+    title: "A computer that stays",
+  },
+  {
+    description:
+      "The screen is live and view-only until you take it. Then the mouse, keyboard and clipboard are yours, and the agent waits.",
+    title: "A seat you can take",
+  },
+  {
+    description:
+      "Send someone a link and it opens the screen on their phone for half an hour, then dies. They never sign in.",
+    title: "A link you can hand over",
+  },
+];
+
 export const faqs = [
   {
     answer:
-      "An Eve agent from Vercel plus a computer you can watch and use, on the web, desktop, and iOS.",
+      "One Linux computer that stays on, and an agent that drives it. You watch the screen and take over whenever you want.",
     question: "What is this?",
   },
   {
-    answer: "Open hello.expert and sign in with email.",
+    answer: "Open hello.expert and sign in with an email code. The computer is already waiting.",
     question: "How do I start?",
   },
   {
-    answer: "You talk to Eve. It uses the computer. You can take over anytime.",
-    question: "What does Eve do?",
+    answer:
+      "Yes. Take the seat and the mouse, keyboard and clipboard are yours; the agent's next move waits until you hand it back.",
+    question: "Can I drive it myself?",
   },
   {
-    answer: "No. Sign in and drive the computer yourself.",
-    question: "Do I have to use Eve?",
+    answer:
+      "You do. It asks for the seat, or for a masked code that goes straight to the computer's clipboard and never reaches the model.",
+    question: "Who types the passwords and 2FA codes?",
   },
   {
-    answer: "Same sign-in. Same Eve. Same computer.",
+    answer:
+      "Yes. A link opens one screen for a set time and then expires, and it can paste but never read what the computer copied.",
+    question: "Can I hand the screen to someone else?",
+  },
+  {
+    answer: "/workspace and the browser profiles survive restarts. Installed packages do not.",
+    question: "Does it keep my files?",
+  },
+  {
+    answer: "Same sign-in, same computer, same conversation.",
     question: "What about desktop and iOS?",
-  },
-  {
-    answer: "No. Sign in. That is how you get Eve and the computer.",
-    question: "Do I paste a skill into Cursor?",
   },
 ];

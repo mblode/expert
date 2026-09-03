@@ -1,5 +1,6 @@
 export const siteConfig = {
-  description: "Vercel Eve and a computer. On the web, desktop, and your phone.",
+  description:
+    "An agent with its own computer. Always on, and you can take the mouse whenever you want.",
   installCommand: "npx skills add https://hello.expert",
   links: {
     author: "https://blode.co",
