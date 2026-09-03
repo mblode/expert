@@ -53,6 +53,7 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 
 ## References
 
+- Deploying, and how to tell each step worked: `docs/DEPLOY.md`
 - Audit and open findings: `docs/AUDIT.md`
 - Grok Bot research, gap analysis, roadmap: `docs/GROK-BOT.md`
 - WhatsApp parity plan (Vibey as one tenant, phases and todos): `docs/WHATSAPP-PARITY.md`

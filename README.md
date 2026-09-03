@@ -50,6 +50,8 @@ npm run bot -- rm night    # frees the screen
 
 ## Deploy
 
+Step by step, with the check that proves each step worked: [docs/DEPLOY.md](docs/DEPLOY.md). The shape of it:
+
 The cloud path is one Fly Machine per tenant in `syd` running the desk, one agent process per Bot, and the hub. Blode is [fly.toml](fly.toml). Vibey is a second app and volume, same guest image, from [fly.vcmc.toml](fly.vcmc.toml). Both guests are shared-cpu-2x / 2 GB and suspend when idle. Do not `fly deploy` without `-c` when you mean Vibey: that command targets `mblode-computer`.
 
 ```bash
