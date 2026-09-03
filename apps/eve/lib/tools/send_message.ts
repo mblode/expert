@@ -5,8 +5,17 @@ import { hubRpc } from "../hub.ts";
 export default defineTool({
   description:
     "Say something to the human. This is the ONLY thing they see, all your other text is a private scratchpad, so a turn that ends without a send is silence. Reply with a short text send before you start work, then send again with the result: acknowledging is not delivering. A widget or secret_request ENDS the turn, stop and wait; sending again before they answer fails.",
-  async execute(input) {
-    return await hubRpc<{ occurrence_id: string; turn_ended: boolean }>("sendMessage", input);
+  // `ctx.session.auth.current` is the verified inbound principal, which is
+  // route auth and not a prompt: eve's own multi-tenant guidance is that a
+  // prompt asking for another tenant cannot change it. Absent (the eve TUI,
+  // the seat's `/eve/v1` proxy) means the Bot's seat thread, unchanged.
+  async execute(input, ctx) {
+    const turn = ctx.session.auth.current?.attributes.turn;
+    return await hubRpc<{
+      conversation_id?: string;
+      occurrence_id: string;
+      turn_ended: boolean;
+    }>("sendMessage", input, typeof turn === "string" ? turn : undefined);
   },
   inputSchema: z.object({
     kind: z.enum(["text", "widget", "secret_request"]),

@@ -8,6 +8,7 @@ import { NotConnectedError } from "./account.ts";
 import type { AccountHandle, AccountHealth, LinkState } from "./account.ts";
 import { defaultAccountConfig } from "./accounts.ts";
 import type { AccountConfig, AccountSummary } from "./accounts.ts";
+import type { SendEnvelope } from "./send-envelope.ts";
 import { HttpError, startServer } from "./server.ts";
 import type { BridgeApi, StartServerArgs } from "./server.ts";
 import type { Store } from "./store.ts";
@@ -39,10 +40,12 @@ interface FakeAccount {
   config: AccountConfig;
   handle: AccountHandle;
   sends: { jid: string; text: string; key?: string }[];
+  envelopes: SendEnvelope[];
 }
 
 const fakeAccount = (acct: string, overrides: Partial<FakeAccount> = {}): FakeAccount => {
   const sends: FakeAccount["sends"] = [];
+  const envelopes: FakeAccount["envelopes"] = [];
   const store = {
     allMessages: async () => [{ s: "A", t: 1, x: `all:${acct}` }],
     recentMessages: async (_jid: string, n: number) => [{ s: "A", t: 1, x: `${acct}:${n}` }],
@@ -61,9 +64,18 @@ const fakeAccount = (acct: string, overrides: Partial<FakeAccount> = {}): FakeAc
         sends.push({ jid, key, text });
         return { sent: true };
       },
+      onSendEnvelope: async (envelope) => {
+        envelopes.push(envelope);
+        // The route must not second-guess a policy refusal: it turns whatever
+        // reason the account gives into one 403.
+        return envelope.jid === "blocked@g.us"
+          ? { reason: "jid not allowlisted for sends", sent: false }
+          : { messageIds: ["mabc1234567"], sent: true };
+      },
       onSendMedia: async () => ({ sent: true }),
       store,
     },
+    envelopes,
     health: { acct, attempts: 0, failingSince: null, lastCloseCode: null, whatsapp: "connecting" },
     link: { acct, age_ms: 1200, pairing_code: null, phone: null, qr: QR, status: "linking" },
     sends,
@@ -412,6 +424,32 @@ test("POST /send-media validates the payload and permits groups", async () => {
     await status(call("POST", "/send-media", { jid: "1@g.us", mime: "text/plain" })),
     400,
   );
+});
+
+test("POST /send-envelope validates the body and hands the account one envelope", async () => {
+  const ok = await call("POST", "/send-envelope", {
+    jid: "1@g.us",
+    reply_to: "m0123456789",
+    text: "on it",
+  });
+  assert.equal(ok.status, 200);
+  assert.deepEqual(await ok.json(), { message_ids: ["mabc1234567"], sent: true });
+  const last = accounts.get("main")!.envelopes.at(-1);
+  assert.deepEqual(last, { jid: "1@g.us", reply_to: "m0123456789", text: "on it" });
+  // A malformed envelope never reaches the account.
+  const seen = accounts.get("main")!.envelopes.length;
+  assert.equal(await status(call("POST", "/send-envelope", { jid: "1@g.us" })), 400);
+  assert.equal(await status(call("POST", "/send-envelope", { text: "hi" })), 400);
+  assert.equal(accounts.get("main")!.envelopes.length, seen);
+});
+
+test("POST /send-envelope turns a policy refusal into a 403", async () => {
+  const res = await call("POST", "/send-envelope", {
+    jid: "blocked@g.us",
+    react: { emoji: "👍", to: "m0123456789" },
+  });
+  assert.equal(res.status, 403);
+  assert.deepEqual(await res.json(), { error: "jid not allowlisted for sends" });
 });
 
 test("POST /report, /invite and /backfill validate their bodies", async () => {
