@@ -109,37 +109,63 @@ test("ACCT_ID_RE is lowercase, dash-friendly, and at most 32 chars", () => {
   assert.equal(ACCT_ID_RE.test(""), false);
 });
 
-test("parseAccountRecord defaults channel_id and config, and requires the secret", () => {
-  const record = parseAccountRecord({ acct: "main", bot: "main", channel_secret: "s" });
-  assert.equal(record.channel_id, "whatsapp");
+test("parseAccountRecord defaults connector_id and config, and requires the secret", () => {
+  const record = parseAccountRecord({ acct: "main", bot: "main", connector_secret: "s" });
+  assert.equal(record.connector_id, "whatsapp");
   assert.equal(record.phone, null);
   assert.deepEqual(record.config, defaultAccountConfig());
-  assert.throws(() => parseAccountRecord({ acct: "main", bot: "main" }), /channel_secret/u);
+  assert.throws(() => parseAccountRecord({ acct: "main", bot: "main" }), /connector_secret/u);
   assert.throws(
-    () => parseAccountRecord({ acct: "Bad Id", bot: "main", channel_secret: "s" }),
+    () => parseAccountRecord({ acct: "Bad Id", bot: "main", connector_secret: "s" }),
     /acct/u,
   );
-  assert.throws(() => parseAccountRecord({ acct: "main", channel_secret: "s" }), /bot/u);
+  assert.throws(() => parseAccountRecord({ acct: "main", connector_secret: "s" }), /bot/u);
   assert.throws(
-    () => parseAccountRecord({ acct: "main", bot: "main", channel_id: "a/b", channel_secret: "s" }),
-    /channel_id/u,
+    () =>
+      parseAccountRecord({ acct: "main", bot: "main", connector_id: "a/b", connector_secret: "s" }),
+    /connector_id/u,
   );
 });
 
-test("parseAccountRecord keeps a hub-issued channel_id", () => {
+test("parseAccountRecord keeps a hub-issued connector_id", () => {
+  const record = parseAccountRecord({
+    acct: "main",
+    bot: "main",
+    connector_id: "whatsapp-main",
+    connector_secret: "s",
+    phone: "+61 400 000 000",
+  });
+  assert.equal(record.connector_id, "whatsapp-main");
+  assert.equal(record.phone, "61400000000");
+});
+
+// The migration, from the file's side: both deployed volumes hold an
+// accounts.json written under the pre-rename names, and a throw here is a
+// bridge that will not start, which is every linked number down.
+test("parseAccountRecord reads the pre-rename channel_id and channel_secret", () => {
   const record = parseAccountRecord({
     acct: "main",
     bot: "main",
     channel_id: "whatsapp-main",
-    channel_secret: "s",
-    phone: "+61 400 000 000",
+    channel_secret: "old",
   });
-  assert.equal(record.channel_id, "whatsapp-main");
-  assert.equal(record.phone, "61400000000");
+  assert.equal(record.connector_id, "whatsapp-main");
+  assert.equal(record.connector_secret, "old");
+  // A rewrite emits only the new names, so the file migrates on first write.
+  assert.equal(Object.hasOwn(record, "channel_id"), false);
+  assert.equal(Object.hasOwn(record, "channel_secret"), false);
+  // The new spelling wins when a file somehow carries both.
+  const both = parseAccountRecord({
+    acct: "main",
+    bot: "main",
+    channel_secret: "old",
+    connector_secret: "new",
+  });
+  assert.equal(both.connector_secret, "new");
 });
 
 test("parseAccountsFile refuses duplicates and the wrong version", () => {
-  const one = { acct: "main", bot: "main", channel_secret: "s" };
+  const one = { acct: "main", bot: "main", connector_secret: "s" };
   assert.throws(() => parseAccountsFile({ accounts: [one, one], version: 1 }), /duplicate/u);
   assert.throws(() => parseAccountsFile({ accounts: [one], version: 2 }), /version/u);
   assert.equal(parseAccountsFile({ version: 1 }).accounts.length, 0);
@@ -167,14 +193,14 @@ test("a missing accounts.json is an empty registry", async () => {
   assert.deepEqual(await loadAccountsFile(path.join(dir, "nope")), { accounts: [], version: 1 });
 });
 
-// The state dir holds channel secrets and Baileys creds. Whatever the umask,
+// The state dir holds connector secrets and Baileys creds. Whatever the umask,
 // the file must come out unreadable to the box user the model runs as.
 test("saveAccountsFile writes 0600 inside a 0700 dir and round-trips", async () => {
   const dir = path.join(await mkdtemp(path.join(tmpdir(), "wa-accounts-")), "state");
   const record = parseAccountRecord({
     acct: "main",
     bot: "main",
-    channel_secret: "top-secret",
+    connector_secret: "top-secret",
     config: { allowed_groups: ["1@g.us"] },
   });
   await saveAccountsFile(dir, { accounts: [record], version: 1 });
@@ -188,7 +214,7 @@ test("saveAccountsFile writes 0600 inside a 0700 dir and round-trips", async () 
 test("the registry persists every mutation and refuses a duplicate id", async () => {
   const dir = path.join(await mkdtemp(path.join(tmpdir(), "wa-accounts-")), "state");
   const registry = createAccountsRegistry(dir, { accounts: [], version: 1 });
-  const record = parseAccountRecord({ acct: "main", bot: "main", channel_secret: "s" });
+  const record = parseAccountRecord({ acct: "main", bot: "main", connector_secret: "s" });
   await registry.add(record);
   await assert.rejects(() => registry.add(record), /already exists/u);
   const afterAdd = await savedAccounts(dir);

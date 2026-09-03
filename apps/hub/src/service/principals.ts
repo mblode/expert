@@ -6,13 +6,13 @@ import { readTokenFile, writeTokenFile } from "./provision.ts";
  * Every bearer the hub accepts, in one shape.
  *
  * Before this there were three unrelated checks: a seat token in `seats.json`,
- * a bot token in `bots.json`, and a channel secret in `channels.json`, each
+ * a bot token in `bots.json`, and a connector secret in `connectors.json`, each
  * with its own verify path and its own idea of what a caller may do. None of
  * them recorded *who* was behind a seat, so a second person on one computer
  * was just a second owner token: nothing to attribute, nothing to revoke on
  * its own, and no way to hand someone the mouse without handing them the box.
  *
- * A principal fixes the model, not yet the storage. Bots and channels still
+ * A principal fixes the model, not yet the storage. Bots and connectors still
  * live in their own files (a Bot record carries a display and a desk, which
  * is not auth state) and are adapted into this shape at verify time. Moving
  * them into one store is mechanical once callers speak Principal, and it is

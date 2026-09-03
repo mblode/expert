@@ -5,7 +5,7 @@ import { ComputerError } from "@computer/shared";
  * Turn tokens: how the hub knows which conversation a `send_message` belongs
  * to without the model being able to say.
  *
- * The channel ingress mints one, bound to the conversation it just resolved
+ * The connector ingress mints one, bound to the conversation it just resolved
  * and to the Bot it is about to call, and forwards it as `x-computer-turn`.
  * Eve puts it on the session's auth attributes, which tool code reads and a
  * prompt cannot change, and the `send_message` tool hands it back on the same

@@ -3,7 +3,7 @@ import { ComputerError } from "@computer/shared";
 /**
  * The hub's view of the WhatsApp bridge it supervises on this Machine
  * (`apps/whatsapp-bridge`, loopback, `x-bridge-secret`). hello.expert never
- * talks to the bridge; it talks to the hub, which owns the account's channel
+ * talks to the bridge; it talks to the hub, which owns the account's connector
  * record and secret, and forwards the linking, groups and config calls here.
  *
  * A bridge that is not running is `DAEMON_DOWN`, the same word the rest of
@@ -15,7 +15,7 @@ export type WhatsAppStatus = "unlinked" | "linking" | "open" | "closed";
 export interface WhatsAppAccount {
   acct: string;
   bot: string;
-  channel_id: string;
+  connector_id: string;
   phone: string | null;
   status: WhatsAppStatus;
 }
@@ -80,8 +80,8 @@ export class BridgeClient {
   createAccount(body: {
     acct: string;
     bot: string;
-    channel_id: string;
-    channel_secret: string;
+    connector_id: string;
+    connector_secret: string;
     phone?: string;
   }): Promise<{ acct: string }> {
     return this.call("POST", "/accounts", body);

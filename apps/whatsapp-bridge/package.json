@@ -2,7 +2,7 @@
   "name": "@computer/whatsapp-bridge",
   "version": "0.0.0",
   "private": true,
-  "description": "Multi-account Baileys WhatsApp bridge: a hub-supervised process on the tenant Machine that forwards chat to the hub's channel ingress.",
+  "description": "Multi-account Baileys WhatsApp bridge: a hub-supervised process on the tenant Machine that forwards chat to the hub's connector ingress.",
   "type": "module",
   "scripts": {
     "start": "tsx src/index.ts",

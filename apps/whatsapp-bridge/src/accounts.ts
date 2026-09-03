@@ -6,13 +6,18 @@ import path from "node:path";
  *
  * ```
  * { "version": 1, "accounts": [ { "acct": "main", "bot": "main", "phone": "614…" | null,
- *   "channel_id": "whatsapp", "channel_secret": "…", "config": { … } } ] }
+ *   "connector_id": "whatsapp", "connector_secret": "…", "config": { … } } ] }
  * ```
  *
+ * `channel_id` / `channel_secret` are the pre-rename names and are still read,
+ * because the file on both deployed volumes carries them and a parse error
+ * here is a bridge that will not start, which is every linked number down.
+ * A write emits the new names, so the first mutation migrates the file.
+ *
  * It lives in the state dir next to the Baileys auth directories and carries
- * the channel secrets, so it is hub-owned: 0700 on the directory, 0600 on the
- * file, and the model must never read it (the hub's `read_file` refuses the
- * state dir). Every field the Railway deployment used to take as env is the
+ * the connector secrets, so it is hub-owned: 0700 on the directory, 0600 on
+ * the file, and the model must never read it (the hub's `read_file` refuses
+ * the state dir). Every field the Railway deployment used to take as env is the
  * `config` object here, with a validated default for each, so a tenant can
  * change the allowlist or the trigger from the hello.expert page and the
  * bridge applies it live.
@@ -61,9 +66,9 @@ export interface AccountRecord {
   acct: string;
   bot: string;
   phone: string | null;
-  /** Hub channel id; inbound goes to `/channels/<channel_id>/message`. */
-  channel_id: string;
-  channel_secret: string;
+  /** Hub connector id; inbound goes to `/connectors/<connector_id>/message`. */
+  connector_id: string;
+  connector_secret: string;
   config: AccountConfig;
 }
 
@@ -85,13 +90,13 @@ export interface AccountSummary {
   acct: string;
   bot: string;
   phone: string | null;
-  channel_id: string;
+  connector_id: string;
   status: LinkStatus;
   display_name?: string;
 }
 
 export const ACCT_ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/u;
-export const DEFAULT_CHANNEL_ID = "whatsapp";
+export const DEFAULT_CONNECTOR_ID = "whatsapp";
 
 const TRIGGER_MODES = new Set(["mention", "prefix", "all"]);
 const GROUP_POLICIES = new Set(["all", "listed"]);
@@ -234,26 +239,31 @@ export const parseAccountRecord = (raw: unknown): AccountRecord => {
   if (!bot) {
     throw new Error("bot is required");
   }
-  const channel_secret = typeof o.channel_secret === "string" ? o.channel_secret.trim() : "";
-  if (!channel_secret) {
-    throw new Error("channel_secret is required");
+  // The pre-rename spellings are accepted so an unmigrated accounts.json on a
+  // deployed volume, and an older hub still posting them to POST /accounts,
+  // both keep working. Retire them once both tenants have rewritten the file.
+  const rawSecret = o.connector_secret ?? o.channel_secret;
+  const connector_secret = typeof rawSecret === "string" ? rawSecret.trim() : "";
+  if (!connector_secret) {
+    throw new Error("connector_secret is required");
   }
-  const channel_id =
-    o.channel_id === undefined || o.channel_id === null
-      ? DEFAULT_CHANNEL_ID
-      : typeof o.channel_id === "string"
-        ? o.channel_id.trim()
+  const rawId = o.connector_id ?? o.channel_id;
+  const connector_id =
+    rawId === undefined || rawId === null
+      ? DEFAULT_CONNECTOR_ID
+      : typeof rawId === "string"
+        ? rawId.trim()
         : "";
   // A path segment on the hub: keep it to what a URL can carry unencoded.
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(channel_id)) {
-    throw new Error("channel_id must be a short URL-safe id");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(connector_id)) {
+    throw new Error("connector_id must be a short URL-safe id");
   }
   return {
     acct,
     bot,
-    channel_id,
-    channel_secret,
     config: parseAccountConfig(o.config),
+    connector_id,
+    connector_secret,
     phone: parsePhone(o.phone),
   };
 };
@@ -311,7 +321,7 @@ export const loadAccountsFile = async (stateDir: string): Promise<AccountsFile> 
 /**
  * Write accounts.json atomically (temp + rename) at 0600 inside a 0700 dir.
  * The modes are the whole point of the state dir: the model can run `shell`
- * as the box user, and a readable channel secret there would let it forge
+ * as the box user, and a readable connector secret there would let it forge
  * inbound messages to its own Bot.
  */
 export const saveAccountsFile = async (stateDir: string, file: AccountsFile): Promise<void> => {

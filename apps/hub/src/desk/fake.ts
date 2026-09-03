@@ -167,12 +167,6 @@ export class FakeDesk implements Desk {
     return Buffer.byteLength(content, "utf-8");
   }
 
-  async appendFile(path: string, content: string): Promise<number> {
-    const before = this.files.get(path)?.content ?? "";
-    this.files.set(path, { content: before + content });
-    return Buffer.byteLength(content, "utf-8");
-  }
-
   async focusHint(): Promise<FocusHint> {
     return this.hint;
   }

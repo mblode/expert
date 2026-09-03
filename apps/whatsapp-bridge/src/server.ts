@@ -22,7 +22,7 @@ import { parseSendEnvelope } from "./send-envelope.ts";
  * is exactly one so a single-number tenant's tools need no change.
  *
  * Every request except GET /health must carry `x-bridge-secret`. The secret
- * is process-wide (the hub holds it); the per-account channel secret is a
+ * is process-wide (the hub holds it); the per-account connector secret is a
  * different credential and only ever travels bridge -> hub.
  *
  * Group memory is NOT here: it lives next to the Bot that writes it. A write

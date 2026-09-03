@@ -17,7 +17,7 @@ export interface BridgeEnv {
   port: number;
   /** Guards every HTTP route except GET /health. */
   bridgeSecret: string;
-  /** Hub base URL; inbound messages POST to `${computerUrl}/channels/<id>/message`. */
+  /** Hub base URL; inbound messages POST to `${computerUrl}/connectors/<id>/message`. */
   computerUrl: string;
   /** accounts.json and `<acct>/auth/` Baileys creds. Hub-owned, 0700. */
   stateDir: string;

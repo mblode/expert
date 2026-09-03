@@ -1,20 +1,23 @@
 import type { Logger } from "pino";
 
 /**
- * HTTP client for the hub's channel ingress. Forwards an inbound WhatsApp
- * message to `POST ${COMPUTER_URL}/channels/<channel_id>/message` and returns
- * the Bot's reply text, with bounded retry/backoff so a transient blip never
- * drops accepted work.
+ * HTTP client for the hub's connector ingress. Forwards an inbound WhatsApp
+ * message to `POST ${COMPUTER_URL}/connectors/<connector_id>/message` and
+ * returns the Bot's reply text, with bounded retry/backoff so a transient blip
+ * never drops accepted work.
  *
  * The payload is bridge protocol v1, the shape `vcmc-agent`'s channel already
  * speaks (`token`, `message`, `sender`, `senderPhone`, `senderName`,
  * `context[]`, `surface`, `media[]`), plus `acct` so a Bot served by two
  * numbers can tell them apart and `messageId` so it can quote or react to what
- * it is answering. Auth is the account's channel secret in
- * `x-channel-secret`; the hub matches it against channels.json and forwards to
- * that Bot's Eve on loopback. The endpoint, secret, timeout, logger and sleep
- * are injected so this module owns no env or global state and the retry
- * policy tests without a socket.
+ * it is answering. Auth is the account's connector secret in
+ * `x-connector-secret`; the hub matches it against connectors.json and
+ * forwards to that Bot's Eve on loopback. This sends only the new name: a hub
+ * still accepts `x-channel-secret` so an unredeployed bridge keeps working,
+ * and that alias is dead weight rather than load-bearing once both tenants
+ * run this code. The endpoint, secret, timeout, logger and sleep are injected
+ * so this module owns no env or global state and the retry policy tests
+ * without a socket.
  */
 
 /** An image or PDF downloaded off a message, ready to forward as a file part. */
@@ -48,11 +51,11 @@ export interface AgentReply {
 }
 
 /** Config for the client; injected so the module owns no env/global state. */
-export interface ChannelClientConfig {
+export interface ConnectorClientConfig {
   /** Which account this client speaks for; rides in the payload as `acct`. */
   acct: string;
   endpoint: string;
-  channelSecret: string;
+  connectorSecret: string;
   timeoutMs: number;
   logger: Logger;
   sleep: (ms: number) => Promise<void>;
@@ -71,16 +74,16 @@ type RetryableError = Error & { retryable?: boolean };
  * never drop accepted work on a blip. Other non-OK statuses (4xx except 429)
  * are not retryable and throw immediately.
  */
-export const createChannelClient =
+export const createConnectorClient =
   ({
     acct,
     endpoint,
-    channelSecret,
+    connectorSecret,
     timeoutMs,
     logger,
     sleep,
     maxAttempts = 3,
-  }: ChannelClientConfig): ((args: AskAgentArgs) => Promise<AgentReply>) =>
+  }: ConnectorClientConfig): ((args: AskAgentArgs) => Promise<AgentReply>) =>
   async ({
     context,
     media,
@@ -111,7 +114,7 @@ export const createChannelClient =
           }),
           headers: {
             "content-type": "application/json",
-            "x-channel-secret": channelSecret,
+            "x-connector-secret": connectorSecret,
           },
           method: "POST",
           signal: AbortSignal.timeout(timeoutMs),

@@ -6,7 +6,7 @@
  *   desk-up (box, once) → Eve per Bot (box) → the WhatsApp bridge (hub) → the hub (hub)
  *
  * The hub is no longer `box` (AUDIT P0 #2): what the model's `shell` can read
- * is what box can read, and the roster, seat tokens, channel secrets and
+ * is what box can read, and the roster, seat tokens, connector secrets and
  * Baileys credentials are now hub-owned at 0700. The hub runs desk commands
  * as box through `sudo -u box` (one sudoers line in the image). Everything
  * under /workspace that the Bot works in is still box's.
@@ -141,6 +141,9 @@ for (const f of [
   "eve-secret",
   "bots.json",
   "seats.json",
+  "connectors.json",
+  // The pre-rename name, still on both deployed volumes until a write
+  // migrates it. Owned here so an unmigrated tenant keeps its door.
   "channels.json",
   "policy.json",
   "whatsapp/bridge-secret",
@@ -197,7 +200,7 @@ const sup = new Supervisor({
  * The login's worth for box children, plus the model keys Eve needs. Never the
  * setup code or the bridge secret: Eve shares uid box with the model's `shell`,
  * so anything in its environ is the model's too. WhatsApp reaches Eve through
- * the hub's channel door with the Eve secret; a Bot that needs to call the
+ * the hub's connector door with the Eve secret; a Bot that needs to call the
  * bridge back gets a per-account credential in Phase 4, not the admin secret.
  */
 const DENY = new Set(["COMPUTER_SETUP_CODE", "WHATSAPP_BRIDGE_SECRET", "FLY_API_TOKEN"]);

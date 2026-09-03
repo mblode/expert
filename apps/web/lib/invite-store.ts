@@ -13,6 +13,7 @@ import {
 } from "./invite";
 import type { InviteDraft, InvitePurpose, InviteRecord, RedeemFailure, SeatGrant } from "./invite";
 import { inviteOrigin, invitePath } from "./invite-origin";
+import { issueSeatAsIssuer } from "./issuer";
 
 export interface MintedInvite {
   computerId: string;
@@ -151,7 +152,13 @@ export async function redeemStoredInvite(
   if ("error" in inspected) {
     return inspected;
   }
-  const granted = await grantInviteSeat(found as InviteRecord, purpose, env, now);
+  const granted = await grantInviteSeat(
+    found as InviteRecord,
+    purpose,
+    env,
+    now,
+    issueSeatAsIssuer,
+  );
   if ("error" in granted) {
     return granted;
   }
@@ -166,7 +173,7 @@ export async function redeemStoredInvite(
         })
         .where(eq(invite.tokenHash, (found as InviteRecord).tokenHash));
     } catch {
-      // The token is still good for this request; the next redeem pairs again.
+      // The token is still good for this request; the next redeem issues again.
     }
   }
   return {
@@ -190,7 +197,7 @@ export async function refreshStoredInvite(
   // Drop the role, not the token: an unset role forces a fresh seat, and the
   // old token still rides along so the hub revokes it as it mints the new one.
   const stale: InviteRecord = { ...(found as InviteRecord), seatRole: undefined };
-  const granted = await grantInviteSeat(stale, purpose, env, now);
+  const granted = await grantInviteSeat(stale, purpose, env, now, issueSeatAsIssuer);
   if ("error" in granted) {
     return granted;
   }

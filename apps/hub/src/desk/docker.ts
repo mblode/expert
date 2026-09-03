@@ -278,12 +278,8 @@ export class DockerDesk implements Desk {
     return this.put(path, content, ">");
   }
 
-  async appendFile(path: string, content: string): Promise<number> {
-    return this.put(path, content, ">>");
-  }
-
-  /** Truncate or append; the parent directory is made either way. `path` is absolute (resolveWorkspacePath). */
-  private async put(path: string, content: string, redirect: ">" | ">>"): Promise<number> {
+  /** Truncate; the parent directory is made either way. `path` is absolute (resolveWorkspacePath). */
+  private async put(path: string, content: string, redirect: ">"): Promise<number> {
     const dir = dirname(path);
     const r = await this.exec(
       ["bash", "-c", `mkdir -p ${shellQuote(dir)} && cat ${redirect} ${shellQuote(path)}`],

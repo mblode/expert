@@ -55,7 +55,7 @@ export const SEAT_GUEST_METHODS = [
  * Who is calling. Every bearer the hub accepts resolves to one of these, so
  * there is one verify path rather than one per door: a human at a seat, a
  * Bot's Eve holding an agent token, and a service like the WhatsApp bridge or
- * the control plane. Before this, a seat token, a bot token and a channel
+ * the control plane. Before this, a seat token, a bot token and a connector
  * secret were three unrelated checks over three files, and none of them knew
  * which human was behind a seat.
  */
@@ -70,16 +70,46 @@ export type PrincipalKind = "user" | "bot" | "service";
  * denied to them until someone decides otherwise. That asymmetry is the
  * point: adding a method must never quietly widen a narrow role.
  */
-export const ROLES = ["owner", "operator", "viewer", "guest", "bot", "issuer", "ingress"] as const;
+export const ROLES = [
+  "owner",
+  "operator",
+  "viewer",
+  "guest",
+  "installer",
+  "bot",
+  "issuer",
+  "ingress",
+] as const;
 export type Role = (typeof ROLES)[number];
 
 /** Roles that can mint other principals. An issuer may never hand out one of these. */
 export const PRIVILEGED_ROLES: readonly Role[] = ["owner", "issuer"];
 
+const SEAT_CREATE_BOT = "/computer.v1.Seat/CreateBot";
+const SEAT_DELETE_BOT = "/computer.v1.Seat/DeleteBot";
 const SEAT_OCCURRENCES = "/computer.v1.Seat/Occurrences";
 const SEAT_STATUS = "/computer.v1.Seat/Status";
 const SEAT_REVOKE = "/computer.v1.Seat/Revoke";
 const SEAT_ISSUE = "/computer.v1.Seat/Issue";
+
+/**
+ * What a connection file costs to author, and nothing else.
+ *
+ * There is no seat-shaped way to write a file: `Agent.WriteFile` takes an
+ * agent token, so authoring one means `CreateBot`, write as that Bot, then
+ * `DeleteBot`. Before this role the control plane asked for an `owner`
+ * narrowed by `methods` to these three, because `owner` was the only thing
+ * carrying `CreateBot`. That worked and was the wrong shape: `methods` is a
+ * narrowing mechanism, not a role definition, so the next route gated on the
+ * role rather than the method handed a plugins invite the whole box.
+ *
+ * Read the containment honestly. A Bot token is `shell` on the box, so an
+ * installer is one call away from running code there; what it never gets is
+ * the owner's HTTP doors (the Eve thread, `/roster`, the pixel stream), the
+ * clipboard, WhatsApp linking, `Issue`, or any seat but its own to revoke.
+ * It is a short-lived grant to do one job, not a safe role.
+ */
+export const SEAT_INSTALLER_METHODS = [SEAT_CREATE_BOT, SEAT_DELETE_BOT, SEAT_REVOKE] as const;
 
 /**
  * Methods per role. `undefined` means unrestricted within the service the
@@ -91,6 +121,7 @@ const SEAT_ISSUE = "/computer.v1.Seat/Issue";
  */
 export const ROLE_METHODS: Record<Role, readonly string[] | undefined> = {
   guest: SEAT_GUEST_METHODS,
+  installer: SEAT_INSTALLER_METHODS,
   // A person who may drive the box but not reshape it: no CreateBot, no
   // WhatsApp linking, no clipboard read (it exfiltrates whatever is copied).
   operator: [...SEAT_GUEST_METHODS, SEAT_OCCURRENCES],
@@ -99,7 +130,9 @@ export const ROLE_METHODS: Record<Role, readonly string[] | undefined> = {
   // The control plane: it exists to hand seats to people it has authenticated.
   issuer: [SEAT_ISSUE, SEAT_REVOKE],
   bot: undefined,
-  // A door, not a caller: the channel ingress is its whole surface.
+  // A door, not a caller: the connector ingress is its whole surface. The
+  // role keeps its name through the connector rename: it says what shape of
+  // principal this is (an inbound door), not which object opened it.
   ingress: [],
 };
 
@@ -418,6 +451,16 @@ export interface Message {
   body: MessageBody;
   /** Set for anything a turn produced. */
   turn_id?: string;
+  /**
+   * The id of the `widget` or `secret_request` this message closes.
+   *
+   * A widget's `answer` and a secret_request's `provided` are resolution
+   * state, and the log is append-only: the line that recorded the request
+   * is never rewritten. So the answer is carried by the message that
+   * answers it, and the two fields are derived on read. Without this a
+   * person simply typing after a widget would look like an answer to it.
+   */
+  resolves?: string;
 }
 
 export interface Conversation {
@@ -431,4 +474,11 @@ export interface Conversation {
   last_seq: number;
   created_at: string;
   updated_at: string;
+  /**
+   * The path the pre-conversations occurrence log was imported from, set
+   * once the import has run. It is the marker that keeps the import
+   * one-shot, and it lives in the index rather than in a file of its own so
+   * that "the log was seeded" cannot drift from the log it seeded.
+   */
+  imported_from?: string;
 }

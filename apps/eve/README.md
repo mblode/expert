@@ -75,7 +75,7 @@ The route accepts either of two headers, checked in constant time:
 
 | Header                  | Secret                   | Path                                                                       |
 | ----------------------- | ------------------------ | -------------------------------------------------------------------------- |
-| `x-computer-eve-secret` | `COMPUTER_EVE_SECRET`    | Production. The hub's `/channels/whatsapp/message` ingress on loopback     |
+| `x-computer-eve-secret` | `COMPUTER_EVE_SECRET`    | Production. The hub's `/connectors/<id>/message` ingress on loopback       |
 | `x-bridge-secret`       | `WHATSAPP_BRIDGE_SECRET` | Direct. A bridge with no hub in front, the eve TUI, or the Vercel fallback |
 
 `COMPUTER_EVE_SECRET` is the hub-to-Eve secret this process already holds

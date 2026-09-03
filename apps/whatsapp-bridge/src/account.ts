@@ -44,7 +44,7 @@ import {
 import type { BridgeEnv } from "./env.ts";
 import { allGroups, groupAllowed, listedGroups } from "./groups.ts";
 import type { GroupGate } from "./groups.ts";
-import { createChannelClient } from "./hub-client.ts";
+import { createConnectorClient } from "./hub-client.ts";
 import type { AgentReply, Media } from "./hub-client.ts";
 import { buildInviteMessage, inviteDedupKey } from "./invite.ts";
 import type { InviteRequest } from "./invite.ts";
@@ -431,10 +431,10 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   // shown without ever handling a raw WhatsApp key. Bounded; see message-ids.ts.
   const messageIndex = createMessageIndex(MESSAGE_INDEX_CAP);
 
-  const askAgent = createChannelClient({
+  const askAgent = createConnectorClient({
     acct,
-    channelSecret: record.channel_secret,
-    endpoint: `${env.computerUrl}/channels/${record.channel_id}/message`,
+    connectorSecret: record.connector_secret,
+    endpoint: `${env.computerUrl}/connectors/${record.connector_id}/message`,
     logger,
     sleep,
     timeoutMs: env.agentTimeoutMs,
@@ -2236,7 +2236,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   const summary = (): AccountSummary => ({
     acct,
     bot: record.bot,
-    channel_id: record.channel_id,
+    connector_id: record.connector_id,
     phone: record.phone,
     status: linkState().status,
     ...(displayName ? { display_name: displayName } : {}),

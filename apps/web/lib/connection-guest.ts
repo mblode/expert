@@ -3,11 +3,17 @@ import { randomBytes } from "node:crypto";
 /**
  * Land an Eve connection file on the guest overlay.
  *
- * Agent.WriteFile is agent-token auth, not seat. Seat has Pair, CreateBot,
- * ProvideSecret, and no WriteFile. The smallest existing path is Pair (the
- * invite already did that), CreateBot to mint a throwaway agent token,
- * WriteFile onto the shared /workspace, then DeleteBot so the extra screen
- * does not stay.
+ * Agent.WriteFile is agent-token auth, not seat. Seat has CreateBot,
+ * ProvideSecret, and no WriteFile. So the smallest existing path is CreateBot
+ * to mint a throwaway agent token, WriteFile onto the shared /workspace, then
+ * DeleteBot so the extra screen does not stay.
+ *
+ * The seat handed in is an `installer`: exactly CreateBot, DeleteBot and
+ * Revoke, minutes long, issued by the control plane's own grant rather than
+ * paired. This file needs nothing else, which is why the role is shaped this
+ * way round. Note the residue: the bot token minted below is a full agent
+ * token for as long as the Bot exists, so the DeleteBot in the `finally` is
+ * the thing that ends it, not the seat's expiry.
  *
  * ProvideSecret cannot set process.env. It answers an open secret_request
  * by putting a value on the box clipboard. There is no Seat RPC that

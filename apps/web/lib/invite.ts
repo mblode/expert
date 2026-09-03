@@ -1,5 +1,5 @@
-import type { ComputerRecord, EnvMap, SeatRequest } from "./computers";
-import { computerById, issueSeat } from "./computers";
+import type { ComputerRecord, EnvMap, IssueSeatFn, SeatRequest } from "./computers";
+import { computerById } from "./computers";
 import { newOpaqueToken, sha256Hex } from "./secret";
 
 export const INVITE_PURPOSES = ["desk", "plugins"] as const;
@@ -143,10 +143,6 @@ export function inspectInvite(
   return { computer };
 }
 
-const SEAT_CREATE_BOT = "/computer.v1.Seat/CreateBot";
-const SEAT_DELETE_BOT = "/computer.v1.Seat/DeleteBot";
-const SEAT_REVOKE = "/computer.v1.Seat/Revoke";
-
 /**
  * The screen a desk link drives. Primary is where the tenant's Bot runs, and
  * an invite has never pointed anywhere else; binding it means the phone can
@@ -174,15 +170,15 @@ interface SeatPlan {
  *
  * A plugins link authors a connection file, and there is no seat-shaped way to
  * write one: `Agent.WriteFile` takes an agent token, so the web has to
- * `CreateBot`, write, `DeleteBot` (see connection-guest.ts). No role in
- * `ROLE_METHODS` carries `CreateBot`; `owner` is the only thing that does.
- * Narrowing it to those three methods shuts every other Seat RPC, and the
- * seat lives two minutes and is revoked as soon as the write returns, but it
- * is not containment: the hub's `isOwner` reads the role and not the methods,
- * so this token still opens the Eve proxy and the pixel stream. That is a
- * finding, not a workaround, and it is named in the PR: the fix is hub-side,
- * either a role that may provision or a Seat RPC that writes a connection
- * file so no agent token is minted at all.
+ * `CreateBot`, write, `DeleteBot` (see connection-guest.ts). That is what the
+ * hub's `installer` role is: those three calls and nothing else. This used to
+ * ask for an `owner` narrowed by `methods` to the same three, because `owner`
+ * was the only role carrying `CreateBot`, which meant a role defined at the
+ * call site and an `isOwner` that read the role rather than the narrowing.
+ * The seat still lives two minutes and is still revoked as soon as the write
+ * returns; what changed is that the hub, not this file, decides what it may
+ * do. It is not a safe seat even so: `CreateBot` returns an agent token and
+ * an agent token is `shell` on the box, which is why it is minutes long.
  */
 function seatPlanFor(purpose: InvitePurpose, invite: InviteRecord, remainingMs: number): SeatPlan {
   // The subject is the invite's hash, never its token: it says which link a
@@ -194,8 +190,7 @@ function seatPlanFor(purpose: InvitePurpose, invite: InviteRecord, remainingMs: 
       persist: false,
       request: {
         label: "hello.expert plugins invite",
-        methods: [SEAT_CREATE_BOT, SEAT_DELETE_BOT, SEAT_REVOKE],
-        role: "owner",
+        role: "installer",
         subject,
         ttlMs: Math.min(PLUGIN_SEAT_TTL_MS, remainingMs),
       },
@@ -221,6 +216,10 @@ function seatPlanFor(purpose: InvitePurpose, invite: InviteRecord, remainingMs: 
  * Hand this invite a seat on its own computer. A Vibey link never talks to
  * Blode, even when the web server's default tenant is Blode.
  *
+ * `issue` is passed in rather than imported: the caller is what holds this
+ * control plane's grant on that computer (`issueSeatAsIssuer`), and a test
+ * hands in a fetch double. Nothing here can reach a setup code.
+ *
  * A stored token is reused only when this control plane minted it under the
  * scoped scheme, which `seatRole` records. A record from before it carries a
  * token and no role: that token is an owner, so it is revoked and replaced on
@@ -231,7 +230,7 @@ export async function grantInviteSeat(
   purpose: InvitePurpose,
   env: EnvMap,
   now: number,
-  issue: typeof issueSeat = issueSeat,
+  issue: IssueSeatFn,
 ): Promise<SeatGrant | RedeemFailure> {
   const inspected = inspectInvite(invite, purpose, env, now);
   if ("error" in inspected) {
@@ -248,7 +247,7 @@ export async function grantInviteSeat(
       seatToken: invite.seatToken,
     };
   }
-  const issued = await issue(computer, env, {
+  const issued = await issue(computer, {
     ...plan.request,
     ...(invite.seatToken ? { replaces: invite.seatToken } : {}),
   });

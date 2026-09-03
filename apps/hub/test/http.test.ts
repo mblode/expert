@@ -357,16 +357,16 @@ describe("Connect HTTP", () => {
     opened.push(h);
     ({ url } = h);
     const token = await h.pair();
-    const channel = h.hub.channels.add({ bot: "main", id: "whatsapp-main", kind: "whatsapp" });
+    const connector = h.hub.connectors.add({ bot: "main", id: "whatsapp-main", kind: "whatsapp" });
 
-    const inbound = await fetch(`${h.url}/channels/whatsapp-main/message`, {
+    const inbound = await fetch(`${h.url}/connectors/whatsapp-main/message`, {
       body: JSON.stringify({
         acct: "main",
         message: "hello",
         sender: "1@s.whatsapp.net",
         token: "g@g.us",
       }),
-      headers: { "content-type": "application/json", "x-channel-secret": channel.secret },
+      headers: { "content-type": "application/json", "x-connector-secret": connector.secret },
       method: "POST",
     });
     // The bridge's contract is unchanged: one POST, one `{ reply }`, built
@@ -375,7 +375,7 @@ describe("Connect HTTP", () => {
     expect(inbound.status).toBe(200);
     expect(answered.reply).toBe("on it");
 
-    const conversation = h.hub.conversations.list()[0]!;
+    const conversation = h.hub.conversations.list().find((c) => c.route.kind === "whatsapp")!;
     expect(answered.sent.conversation_id).toBe(conversation.id);
 
     // The additive field: the turn's messages, oldest first, each authored
@@ -406,7 +406,13 @@ describe("Connect HTTP", () => {
     opened.push(h);
     const token = await h.pair();
     // A send with no turn binding: the eve TUI, the `/eve/v1` proxy, today.
-    await rpc(h.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "hi" }, h.agent);
+    const sent = (await rpc(
+      h.url,
+      "/computer.v1.Agent/SendMessage",
+      { kind: "text", text: "hi" },
+      h.agent,
+    )) as { conversation_id: string };
+    const seatId = sent.conversation_id;
     const page = (await rpc(h.url, "/computer.v1.Seat/Occurrences", {}, token)) as {
       entries: Record<string, unknown>[];
       next_cursor: string | null;
@@ -415,6 +421,10 @@ describe("Connect HTTP", () => {
     expect(page.entries).toEqual([
       {
         at: expect.any(Number),
+        // Additive, and now filled in on this route too: the seat thread is
+        // a conversation like any other, which is what phase 2 finished.
+        author: { bot: "main", kind: "bot" },
+        conversation_id: seatId,
         id: expect.any(String),
         images: [],
         kind: "text",
@@ -422,8 +432,9 @@ describe("Connect HTTP", () => {
         text: "hi",
       },
     ]);
-    // No conversation was created and the response carries no conversation id.
-    expect(h.hub.conversations.list()).toEqual([]);
+    // The only conversation is the Bot's own thread: nothing on this path
+    // resolves a route, so nothing new was created by the send.
+    expect(h.hub.conversations.list().map((c) => c.route)).toEqual([{ kind: "seat" }]);
 
     // A conversation id that does not exist is a refusal, not an empty page.
     await expect(
@@ -478,6 +489,76 @@ describe("Connect HTTP", () => {
     // And the same send with no turn header still lands in the seat thread.
     await rpc(h.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "hi" }, h.agent);
     expect(h.hub.bots.byId("main").voice.page().entries).toHaveLength(1);
+  });
+
+  it("lists every conversation on a screen, and only an owner may ask", async () => {
+    const h = await startHub({
+      bots: [
+        { display: 1, id: "main", token: "agent-token-test" },
+        { display: 2, id: "night", token: "agent-token-night" },
+      ],
+    });
+    opened.push(h);
+    const token = await h.pair();
+    const chat = h.hub.conversations.resolve(
+      "main",
+      { acct: "main", jid: "g@g.us", kind: "whatsapp" },
+      [
+        { bot: "main", kind: "bot" },
+        { kind: "human", ref: "1@s.whatsapp.net" },
+      ],
+    );
+    h.hub.conversations.send(
+      chat.id,
+      { bot: "main", kind: "bot" },
+      {
+        images: [],
+        kind: "text",
+        text: "on it",
+      },
+    );
+
+    const list = async (body: unknown, as: string) =>
+      (await rpc(h.url, "/computer.v1.Seat/Conversations", body, as)) as {
+        conversations: { id: string; route: { kind: string }; last_seq: number }[];
+      };
+
+    // An unbound owner asking for nothing sees every screen: both Bots'
+    // seat threads and the one WhatsApp chat.
+    const all = await list({}, token);
+    const kinds = all.conversations.map((c) => c.route.kind);
+    expect(kinds.filter((k) => k === "seat")).toHaveLength(2);
+    expect(kinds.filter((k) => k === "whatsapp")).toHaveLength(1);
+    // `last_seq` mirrors the log tail, so a picker knows there is something
+    // new without paging for it.
+    expect(all.conversations.find((c) => c.id === chat.id)).toMatchObject({
+      last_seq: 1,
+      participants: [
+        { bot: "main", kind: "bot" },
+        { kind: "human", ref: "1@s.whatsapp.net" },
+      ],
+      route: { acct: "main", jid: "g@g.us", kind: "whatsapp" },
+    });
+    // Naming a screen narrows it to that Bot's conversations.
+    const screen2 = await list({ display: 2 }, token);
+    expect(screen2.conversations.map((c) => c.route.kind)).toEqual(["seat"]);
+
+    // A seat minted for screen 2 sees screen 2, whatever it asks for, and is
+    // refused when it names another. Same containment as Occurrences: this
+    // list is how a client would find a conversation id to read.
+    const owner = h.hub.auth.principalFor(token)!;
+    const phone = h.hub.auth.issue({ display: 2, role: "owner", subject: "phone" }, owner);
+    const bound = await list({}, phone.token);
+    expect(bound.conversations.map((c) => c.route.kind)).toEqual(["seat"]);
+    expect(bound.conversations.some((c) => c.id === chat.id)).toBe(false);
+    await expect(list({ display: 1 }, phone.token)).rejects.toMatchObject({
+      code: "UNAUTHENTICATED",
+    });
+
+    // Owner only, and for free: every narrower role is an allowlist, so a
+    // Seat RPC nobody listed reaches the box's owner and nobody else.
+    const viewer = h.hub.auth.issue({ role: "viewer", subject: "grace" }, owner);
+    await expect(list({}, viewer.token)).rejects.toMatchObject({ code: "UNAUTHENTICATED" });
   });
 
   it("Occurrences and ProvideSecret both require a seat token", async () => {

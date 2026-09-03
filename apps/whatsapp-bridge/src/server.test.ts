@@ -79,7 +79,7 @@ const fakeAccount = (acct: string, overrides: Partial<FakeAccount> = {}): FakeAc
     health: { acct, attempts: 0, failingSince: null, lastCloseCode: null, whatsapp: "connecting" },
     link: { acct, age_ms: 1200, pairing_code: null, phone: null, qr: QR, status: "linking" },
     sends,
-    summary: { acct, bot: acct, channel_id: `whatsapp-${acct}`, phone: null, status: "linking" },
+    summary: { acct, bot: acct, connector_id: `whatsapp-${acct}`, phone: null, status: "linking" },
     ...overrides,
   };
 };
@@ -92,8 +92,8 @@ let server: ReturnType<typeof startServer>;
 const api: BridgeApi = {
   accountIds: () => [...accounts.keys()],
   createAccount: async (body) => {
-    if (typeof body.acct !== "string" || !body.channel_secret) {
-      throw new HttpError(400, "acct and channel_secret required");
+    if (typeof body.acct !== "string" || !body.connector_secret) {
+      throw new HttpError(400, "acct and connector_secret required");
     }
     if (accounts.has(body.acct)) {
       throw new HttpError(409, "exists");
@@ -228,14 +228,14 @@ test("every other route rejects a missing or wrong secret", async () => {
 
 // ---- accounts ---------------------------------------------------------------
 
-test("GET /accounts lists summaries and never the channel secret", async () => {
+test("GET /accounts lists summaries and never the connector secret", async () => {
   const res = await get("/accounts");
   assert.equal(res.status, 200);
   const raw = await res.text();
   assert.equal(raw.includes("secret"), false);
   assert.deepEqual(JSON.parse(raw), {
     accounts: [
-      { acct: "main", bot: "main", channel_id: "whatsapp-main", phone: null, status: "linking" },
+      { acct: "main", bot: "main", connector_id: "whatsapp-main", phone: null, status: "linking" },
     ],
   });
 });
@@ -244,14 +244,14 @@ test("POST /accounts creates (201), refuses a duplicate (409) and a bad body (40
   const res = await call("POST", "/accounts", {
     acct: "second",
     bot: "main",
-    channel_id: "whatsapp-second",
-    channel_secret: "s2",
+    connector_id: "whatsapp-second",
+    connector_secret: "s2",
   });
   assert.equal(res.status, 201);
   assert.deepEqual(await res.json(), { acct: "second" });
-  assert.equal(created.at(-1)?.channel_id, "whatsapp-second");
+  assert.equal(created.at(-1)?.connector_id, "whatsapp-second");
   assert.equal(
-    await status(call("POST", "/accounts", { acct: "second", channel_secret: "s2" })),
+    await status(call("POST", "/accounts", { acct: "second", connector_secret: "s2" })),
     409,
   );
   assert.equal(await status(call("POST", "/accounts", { bot: "main" })), 400);

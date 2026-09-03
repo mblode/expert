@@ -14,7 +14,7 @@ import { PixelRegistry } from "../service/pixels.ts";
 /**
  * One verify path for every door.
  *
- * A seat token, a bot token and a channel secret used to be three unrelated
+ * A seat token, a bot token and a connector secret used to be three unrelated
  * checks; they now resolve to one `PrincipalRecord`, so a handler asks what
  * this caller may do rather than which file its credential came from. Bots
  * are still stored with their display in the roster and adapted here, which
@@ -46,6 +46,27 @@ export const GUEST_MAX_TTL_MS = 4 * 60 * 60_000;
 
 /** The longest anything issued for a person may live. Owners paired at the box are exempt. */
 export const ISSUED_MAX_TTL_MS = 30 * 24 * 60 * 60_000;
+
+/**
+ * The longest an `installer` may live. Long enough to create a Bot, write one
+ * connection file and delete the Bot again on a slow link; short enough that
+ * a leaked one is not a standing licence to mint agent tokens, which is what
+ * `CreateBot` is. The control plane asks for two minutes.
+ */
+export const INSTALLER_MAX_TTL_MS = 10 * 60_000;
+
+/**
+ * Roles that must always expire, and the ceiling each one gets.
+ *
+ * A role is in here when an unexpiring grant of it would be a mistake rather
+ * than a choice: a guest came from a link that itself expires, and an
+ * installer exists for the length of one file write. Everything else falls
+ * back to `ISSUED_MAX_TTL_MS`, and only an owner may ask for no expiry at all.
+ */
+const MUST_EXPIRE: Partial<Record<Role, number>> = {
+  guest: GUEST_MAX_TTL_MS,
+  installer: INSTALLER_MAX_TTL_MS,
+};
 
 export class AuthRegistry {
   private readonly setupCode: string;
@@ -255,18 +276,19 @@ export class AuthRegistry {
       throw new ComputerError("DENIED", `an issuer may not issue the ${opts.role} role`);
     }
     if (opts.role === "bot" || opts.role === "ingress") {
-      // Those come from CreateBot and the channel registry, which own the
+      // Those come from CreateBot and the connector registry, which own the
       // rest of the record. Minting one here would make a token with no Bot.
       throw new ComputerError("VALIDATION", `the ${opts.role} role is not issued as a seat`);
     }
-    // A guest is the one role that may never be unexpiring, and its ceiling
-    // is its own, not the 30 day one. The cap used to live only in
+    // Some roles may never be unexpiring, and each carries its own ceiling
+    // rather than the 30 day one. The guest cap used to live only in
     // `mintGuest`, which no wire path reaches, so `Seat.Issue` would hand out
     // a guest good for a month, or forever when the caller asked for no ttl.
-    if (opts.role === "guest" && opts.ttlMs === undefined) {
-      throw new ComputerError("VALIDATION", "a guest seat needs a ttl");
+    const mustExpire = MUST_EXPIRE[opts.role];
+    if (mustExpire !== undefined && opts.ttlMs === undefined) {
+      throw new ComputerError("VALIDATION", `a ${opts.role} seat needs a ttl`);
     }
-    const ceiling = opts.role === "guest" ? GUEST_MAX_TTL_MS : ISSUED_MAX_TTL_MS;
+    const ceiling = mustExpire ?? ISSUED_MAX_TTL_MS;
     const ttl = opts.ttlMs === undefined ? undefined : Math.min(opts.ttlMs, ceiling);
     if (ttl !== undefined && (!Number.isFinite(ttl) || ttl <= 0)) {
       throw new ComputerError("VALIDATION", "ttl must be a positive number of milliseconds");
@@ -281,6 +303,34 @@ export class AuthRegistry {
       role: opts.role,
       subject: opts.subject,
     });
+  }
+
+  /**
+   * Drop a token on behalf of a principal.
+   *
+   * A seat may always end itself, which is what sign-out does. Naming someone
+   * else's is an owner's call, and an issuer's for the seats an issuer could
+   * have handed out in the first place: the control plane replaces a link's
+   * seat when the link is redeemed again, and it holds no owner to do it
+   * with. The privileged two stay out of its reach, so a stolen control plane
+   * cannot lock the human out of their own box; that is the same rule as
+   * `issue`, read in the other direction.
+   */
+  revokeFor(by: PrincipalRecord | undefined, target: string): boolean {
+    if (!by) {
+      throw new ComputerError("UNAUTHENTICATED", "seat token required");
+    }
+    if (target !== by.token) {
+      if (by.role === "issuer") {
+        const victim = this.principalFor(target);
+        if (victim && PRIVILEGED_ROLES.includes(victim.role)) {
+          throw new ComputerError("DENIED", `an issuer may not revoke ${victim.role}`);
+        }
+      } else if (by.role !== "owner") {
+        throw new ComputerError("UNAUTHENTICATED", "only an owner seat may revoke another seat");
+      }
+    }
+    return this.revoke(target);
   }
 
   /** Drop a token. Idempotent: revoking twice, or an unknown token, is not an error. */

@@ -11,7 +11,7 @@ import { allowedBind, refuseBindMessage } from "./host/bind.ts";
 import { loadPolicy } from "./service/policy.ts";
 import { FileBotStore } from "./service/provision.ts";
 import { FilePrincipalStore } from "./service/principals.ts";
-import { FileChannelStore } from "./service/channels.ts";
+import { FileConnectorStore } from "./service/connectors.ts";
 import { FileConversationStore, FileMessageLog } from "./service/conversations.ts";
 import { BridgeClient, DEFAULT_BRIDGE_URL } from "./service/whatsapp.ts";
 import { PixelRegistry } from "./service/pixels.ts";
@@ -57,7 +57,12 @@ const hub = createHub({
     ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
   }),
   policy: loadPolicy(join(dataDir, "policy.json")),
-  channelStore: new FileChannelStore(join(dataDir, "channels.json")),
+  // The second path is the pre-rename file, still sitting on both deployed
+  // volumes. Read falls back to it, write always lands on `connectors.json`.
+  connectorStore: new FileConnectorStore(
+    join(dataDir, "connectors.json"),
+    join(dataDir, "channels.json"),
+  ),
   // Hub-owned, beside the roster. Deliberately not `/workspace/.bots`, which
   // the model's `shell` and `write_file` run as `box` can rewrite.
   conversationStore: new FileConversationStore(join(dataDir, "conversations.json")),

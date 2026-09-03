@@ -7,7 +7,7 @@ import { MemoryPrincipalStore } from "../src/service/principals.ts";
 import type { PrincipalStore } from "../src/service/principals.ts";
 import type { PolicyService } from "../src/service/policy.ts";
 import type { BotConfig } from "../src/service/bots.ts";
-import type { ChannelStore } from "../src/service/channels.ts";
+import type { ConnectorStore } from "../src/service/connectors.ts";
 import type { ConversationStore, MessageLog } from "../src/service/conversations.ts";
 import type { BridgeClient } from "../src/service/whatsapp.ts";
 
@@ -43,7 +43,7 @@ export async function startHub(
     policy?: PolicyService;
     eveUrls?: Record<string, string>;
     eveSecret?: string;
-    channelStore?: ChannelStore;
+    connectorStore?: ConnectorStore;
     conversationStore?: ConversationStore;
     messageLog?: MessageLog;
     bridge?: BridgeClient;
@@ -64,7 +64,7 @@ export async function startHub(
       return desk;
     },
     bridge: opts.bridge,
-    channelStore: opts.channelStore,
+    connectorStore: opts.connectorStore,
     conversationStore: opts.conversationStore,
     messageLog: opts.messageLog,
     eveSecret: opts.eveSecret,

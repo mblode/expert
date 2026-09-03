@@ -47,6 +47,7 @@ service Seat {
   rpc ClipboardGet
   rpc ClipboardSet
   rpc Occurrences       // the thread, paged
+  rpc Conversations     // every place a Bot's voice speaks (owner)
   rpc ProvideSecret     // answer a secret_request: value → clipboard only
   rpc CreateBot         // provision: next free screen + minted token
   rpc DeleteBot
@@ -60,10 +61,10 @@ service Seat {
 }
 ```
 
-`POST /channels/<id>/<path>` is the third door, beside the seat and the
-agent token: a channel secret. It is how the WhatsApp bridge on this
+`POST /connectors/<id>/<path>` is the third door, beside the seat and the
+agent token: a connector secret. It is how the WhatsApp bridge on this
 computer, and later a webhook or Slack, reaches a Bot's Eve (see
-**Channels**).
+**Connectors**).
 
 `GET /spec` is the HTTP view of `Agent.Spec`. An agent that can fetch
 JSON does not need the proto. `GET /roster` (seat) lists Bots and their
@@ -147,21 +148,35 @@ this caller may do rather than which file its credential came from.
 
 A principal carries a **role**, and a role is a set of methods.
 
-| Role       | Kind    | May call                                                                                             |
-| ---------- | ------- | ---------------------------------------------------------------------------------------------------- |
-| `owner`    | user    | every Seat RPC, any display, no expiry                                                               |
-| `operator` | user    | `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardSet`, `ProvideSecret`, `Occurrences`, `Revoke` |
-| `viewer`   | user    | `Status`, `Occurrences`, `Revoke`                                                                    |
-| `guest`    | user    | the operator set minus `Occurrences`, bound to one display, always expiring, at most four hours      |
-| `issuer`   | service | `Issue`, `Revoke`                                                                                    |
-| `bot`      | bot     | the Agent service                                                                                    |
-| `ingress`  | service | the channel door only, no RPC                                                                        |
+| Role        | Kind    | May call                                                                                             |
+| ----------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `owner`     | user    | every Seat RPC, any display, no expiry                                                               |
+| `operator`  | user    | `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardSet`, `ProvideSecret`, `Occurrences`, `Revoke` |
+| `viewer`    | user    | `Status`, `Occurrences`, `Revoke`                                                                    |
+| `guest`     | user    | the operator set minus `Occurrences`, bound to one display, always expiring, at most four hours      |
+| `installer` | service | `CreateBot`, `DeleteBot`, `Revoke`, always expiring, at most ten minutes                             |
+| `issuer`    | service | `Issue`, `Revoke`                                                                                    |
+| `bot`       | bot     | the Agent service                                                                                    |
+| `ingress`   | service | the connector door only, no RPC                                                                      |
 
 `owner` is unrestricted inside the Seat service, which is what a paired
 seat has always been: an RPC added tomorrow works for the owner the moment
 it is registered. Every other role is an explicit allowlist, so the same
 new RPC stays denied to them until someone lists it. That asymmetry is
 deliberate: adding a method must never quietly widen a narrow role.
+
+`installer` exists because authoring an Eve connection file is not a
+seat-shaped act: `Agent.WriteFile` takes an agent token, so writing one
+means `CreateBot`, write as that Bot, `DeleteBot`. The control plane used
+to ask for an `owner` narrowed by `methods` to those calls, since `owner`
+was the only role carrying `CreateBot`; that is a role defined by hand at
+the call site, and the door it left open is the next route gated on the
+role rather than the method. Read its containment honestly: a Bot token is
+`shell` on the box, so an installer is one call from running code there.
+What it never reaches is the owner's HTTP doors, the clipboard, WhatsApp
+linking, `Issue`, or any seat but its own. It is a ten minute grant to do
+one job, not a safe role, and the durable fix is a Seat RPC that writes a
+connection file so no agent token is minted at all.
 
 `Pair` still mints an owner with no subject, because whoever holds the
 setup code is the owner and the hub cannot learn their name. `Issue` is
@@ -171,13 +186,24 @@ once. An owner may issue any role. An `issuer`, which is what a control
 plane holds instead of the setup code, may issue only the working roles,
 never `owner` and never another `issuer`. A stolen control plane can then
 take the mouse on the boxes it knows, which is bad, rather than own them
-forever, which is unrecoverable.
+forever, which is unrecoverable. The `installer` role is the sharp edge of
+that claim: an issuer may hand one out, and an installer may `CreateBot`,
+whose token is `shell`. So a stolen issuer reaches code execution on the
+box; it still cannot mint an owner, revoke one, or keep a seat the owner
+cannot see in the seat list and revoke.
+
+A `guest` and an `installer` are refused with no `ttl_sec`: an unexpiring
+one of either is a mistake rather than a choice, so the hub will not mint
+it even for an owner.
 
 A principal with a `display` is bound to that screen whatever its role:
 `Status` lists only that screen, an absent `display` resolves to it, and
 naming another is `UNAUTHENTICATED`. `methods` narrows a role further and
 can never widen it. `Revoke {}` ends the caller's own seat, which is what
-sign-out does; naming another token is an owner's call. `/eve/v1` (the
+sign-out does; naming another token is an owner's call, and an issuer's for
+any seat that is not an `owner` or another `issuer`, so a control plane can
+replace a grant it made without holding an owner and cannot lock the human
+out of their own box. `/eve/v1` (the
 thread), `/roster` and the pixel stream remain owner-only, and an owner
 carrying `methods` is not one of them: those doors are HTTP routes, so no
 allowlist can name them, and a grant narrowed to a couple of RPCs must not
@@ -213,9 +239,11 @@ it is still there. It works once per request.
 
 `Seat.Occurrences { cursor?, limit?, conversation_id? }` pages a thread
 oldest-first; `cursor` is the last `seq` the caller has. Without a
-`conversation_id` it is the display's Bot thread, which persists on the box
-at `/workspace/.bots/<id>/transcript.jsonl`. With one it is that
-conversation, below.
+`conversation_id` it is the display's Bot `seat` conversation, which is
+where the thread has always been and is now one conversation among the
+Bot's; with one it is that conversation, below. Entries carry an additive
+`conversation_id` and `author`, and the `cursor` / `next_cursor` / `seq`
+contract is untouched.
 
 There is no Seat RPC to answer a `widget` yet: a client re-opens the turn
 by sending a new message through its harness. That is a known gap.
@@ -237,7 +265,7 @@ at 0600 in a 0700 directory: the model runs as `box` and cannot read or
 rewrite what a bot-to-bot hop will be audited from.
 
 **Which conversation a `send_message` lands in is the hub's answer, never
-the model's.** The channel ingress resolves the inbound to a conversation
+the model's.** The connector ingress resolves the inbound to a conversation
 and mints a **turn token** bound to `{ conversation_id, bot, hops_left,
 deadline_at }`, forwarded to Eve as `x-computer-turn` beside the hub secret.
 Eve puts it on the session's auth attributes, where tool code reads it and a
@@ -248,33 +276,65 @@ token is the Bot's seat thread. `send_message` grows no target: a
 conversation id addresses a human's route, so letting the model name one is
 the injection path the five-tool rule refuses.
 
-The turn rules are unchanged and are now per conversation, which is why a
-`widget` waiting on hello.expert no longer makes the next WhatsApp reply
-`CONFLICT`.
+The turn rules are unchanged and are now per conversation, enforced in one
+place for every route, which is why a `widget` waiting on hello.expert no
+longer makes the next WhatsApp reply `CONFLICT`. A `widget`'s `answer` and a
+`secret_request`'s `provided` are derived on read from the message that
+closed the request: the log is append-only, so a line is never rewritten.
 
-## Channels
+`Seat.Conversations { display? }` lists them:
+`{ id, route, participants, last_seq, updated_at }[]`, no message bodies,
+`Seat.Occurrences` is still the read. Owner seat only, and contained by the
+screen the seat was minted for, exactly as `Occurrences` is: a seat bound to
+display N must not learn that another display's Bot has a conversation, let
+alone read it.
+
+Each Bot's `seat` conversation is seeded once, at boot, from the
+`/workspace/.bots/<id>/transcript.jsonl` the hub wrote before conversations
+existed, with `seq` carried through so a cursor held across the deploy still
+means what it meant. It runs once, marked on the record, and it is a resume
+rather than a second copy if it is interrupted. That file is then read no
+more and written never again; it is not deleted, for the same reason
+deleting a Bot leaves its box state alone. It is the human's record.
+
+## Connectors
 
 A Bot is reached by its owner through the seat, by the model through its
-agent token, and by everything else through a **channel**: a record
-`{ id, kind, bot, secret, paths? }` in the hub's `channels.json` with its
+agent token, and by everything else through a **connector**: a record
+`{ id, kind, bot, secret, paths? }` in the hub's `connectors.json` with its
 own secret, minted once and rotated or removed on its own. The ingress
-maps `POST /channels/<id>/<rest>` with header `x-channel-secret` onto that
-Bot's Eve at `/eve/v1/<kind>/<rest>`, adding the hub's loopback secret;
+maps `POST /connectors/<id>/<rest>` with header `x-connector-secret` onto
+that Bot's Eve at `/eve/v1/<kind>/<rest>`, adding the hub's loopback secret;
 `paths` narrows which Eve routes the door may reach. There is no lockout
 on this door, unlike `Pair`: it is public and its ids are guessable, so a
 lockout would let a stranger block the real bridge; the 256-bit secret and
 a constant-time compare are the defence. Bodies are capped at 12 MiB (two
-bridge images as data URLs). A seat token is not a channel secret and a
-channel secret opens nothing else.
+bridge images as data URLs). A seat token is not a connector secret and a
+connector secret opens nothing else.
+
+A connector points **inward** and carries a credential this hub minted. A
+plugin, the neighbouring word, points **outward** at a remote MCP or
+OpenAPI service and carries a credential a human consented to hand over.
+The credential faces the opposite way in each, so the two names never
+collapse into one. `kind` names an Eve channel file (`whatsapp` finds
+`apps/eve/lib/channels/whatsapp.ts`), and a channel is still what eve calls
+that file: the door in front of it is the connector.
+
+The rename landed with two compatibility aliases, because both tenants have
+a `channels.json` on the volume and a deployed bridge posting the old
+spelling. The ingress also answers `POST /channels/<id>/<rest>` and also
+accepts `x-channel-secret`, and the store reads `channels.json` when there
+is no `connectors.json`, writing only the new name. Both aliases go once
+Blode and Vibey run a bridge that sends the new names.
 
 The WhatsApp bridge is a hub-supervised process on the same Machine, one
 Baileys socket per linked number. Linking is an owner's job on
 hello.expert through the `WhatsApp*` Seat RPCs: `WhatsAppLink { acct,
-action: "start", phone? }` creates the account's channel record
+action: "start", phone? }` creates the account's connector record
 (`whatsapp-<acct>`, kind `whatsapp`, path `/eve/v1/whatsapp/message`), tells
 the bridge about it, and returns a pairing code (with `phone`) or a raw QR
 string (without) to render; `action: "status"` polls; `action: "unlink"`
-logs the device out and removes the channel record with it. `WhatsAppConfig`
+logs the device out and removes the connector record with it. `WhatsAppConfig`
 holds which groups the number serves (`group_policy: "all" | "listed"`,
 `allowed_groups`), how it is triggered, who may DM it, and the image cap.
 The bridge's own credentials live under the hub's user, which the model's
@@ -446,7 +506,7 @@ enforce the seat. A pixel token opens only the display it was minted for.
 Two users. `box` is the desk and the model: X, Chromium, Eve, the model's
 `shell`, everything the Bot works on under `/workspace`. `hub` is the hub
 and the WhatsApp bridge: it owns `/workspace/.computer` (roster, seat
-tokens, channel secrets, the Eve secret, Baileys credentials) at 0700.
+tokens, connector secrets, the Eve secret, Baileys credentials) at 0700.
 Under one uid there is no boundary, so the hub is not `box`; when it needs
 the desk it runs the command through `sudo -u box`, the one sudoers line
 in the image. Bots are still not security boundaries

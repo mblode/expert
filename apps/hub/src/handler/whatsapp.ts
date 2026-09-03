@@ -1,14 +1,14 @@
 import { SeatMethods } from "@computer/proto";
 import { ComputerError } from "@computer/shared";
 import type { BotRegistry } from "../service/bots.ts";
-import type { ChannelRegistry } from "../service/channels.ts";
+import type { ConnectorRegistry } from "../service/connectors.ts";
 import type { BridgeClient, WhatsAppAccountConfig } from "../service/whatsapp.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
 
 export interface WhatsAppDeps {
   bots: BotRegistry;
-  channels: ChannelRegistry;
+  connectors: ConnectorRegistry;
   /** Absent = no bridge on this computer; every call is DAEMON_DOWN. */
   bridge?: BridgeClient;
 }
@@ -60,8 +60,8 @@ export function normalisePhone(raw: unknown): string | undefined {
   return digits;
 }
 
-/** The channel record a WhatsApp account posts through. One per account. */
-export function channelIdFor(acct: string): string {
+/** The connector record a WhatsApp account posts through. One per account. */
+export function connectorIdFor(acct: string): string {
   return `whatsapp-${acct}`;
 }
 
@@ -86,7 +86,7 @@ export function registerWhatsApp(router: ConnectRouter, deps: WhatsAppDeps): voi
         await bridge.removeAccount(acct);
         // The door closes with the number: a secret with no account behind
         // it would otherwise keep authenticating a bridge that lost its state.
-        deps.channels.remove(channelIdFor(acct));
+        deps.connectors.remove(connectorIdFor(acct));
         return {
           acct,
           age_ms: null,
@@ -103,18 +103,18 @@ export function registerWhatsApp(router: ConnectRouter, deps: WhatsAppDeps): voi
           const botId = typeof o.bot === "string" && o.bot ? o.bot : deps.bots.primary().id;
           // Validates the Bot exists before anything is minted.
           const bot = deps.bots.byId(botId);
-          const id = channelIdFor(acct);
+          const id = connectorIdFor(acct);
           // A record left from a bridge that lost its accounts file is
           // rotated rather than reused: the bridge needs a secret it can
           // hold, and the old one is nowhere it can read.
-          const record = deps.channels.byId(id)
-            ? deps.channels.rotate(id)
-            : deps.channels.add({ bot: bot.id, id, kind: "whatsapp", paths: WHATSAPP_EVE_PATHS });
+          const record = deps.connectors.byId(id)
+            ? deps.connectors.rotate(id)
+            : deps.connectors.add({ bot: bot.id, id, kind: "whatsapp", paths: WHATSAPP_EVE_PATHS });
           await bridge.createAccount({
             acct,
             bot: bot.id,
-            channel_id: record.id,
-            channel_secret: record.secret,
+            connector_id: record.id,
+            connector_secret: record.secret,
             phone,
           });
         }

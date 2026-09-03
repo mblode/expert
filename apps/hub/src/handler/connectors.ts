@@ -4,13 +4,20 @@ import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import { ComputerError } from "@computer/shared";
 import type { Participant, Route } from "@computer/shared";
 import type { BotRegistry } from "../service/bots.ts";
-import type { ChannelRecord, ChannelRegistry } from "../service/channels.ts";
+import type { ConnectorRecord, ConnectorRegistry } from "../service/connectors.ts";
 import type { ConversationRegistry } from "../service/conversations.ts";
 import type { TurnService } from "../service/turns.ts";
 import { EVE_HUB_SECRET_HEADER } from "../host/eve.ts";
 import { TURN_HEADER, writeError } from "./router.ts";
 
-const PREFIX = "/channels/";
+const PREFIX = "/connectors/";
+/**
+ * Compatibility alias. The WhatsApp bridge deployed on both tenants posts to
+ * `/channels/<id>/<rest>`, and a hub that only answered the new prefix would
+ * cut it off the moment it deployed. Remove this, and the header alias below,
+ * once Blode and Vibey are both running a bridge that sends the new names.
+ */
+const LEGACY_PREFIX = "/channels/";
 /**
  * Wider than the seat router's 1 MiB: the bridge attaches up to two 4 MB
  * images or a 3 MB PDF as base64 data URLs (4/3 growth), so a real photo is
@@ -18,11 +25,13 @@ const PREFIX = "/channels/";
  * stops a dump.
  */
 const MAX_BODY = 12 * 1024 * 1024;
-/** The header a channel presents. Never the seat token, never the Eve secret. */
-export const CHANNEL_SECRET_HEADER = "x-channel-secret";
+/** The header a connector presents. Never the seat token, never the Eve secret. */
+export const CONNECTOR_SECRET_HEADER = "x-connector-secret";
+/** Compatibility alias, retired with `LEGACY_PREFIX` above. */
+export const LEGACY_CONNECTOR_SECRET_HEADER = "x-channel-secret";
 
-export interface ChannelIngressDeps {
-  channels: ChannelRegistry;
+export interface ConnectorIngressDeps {
+  connectors: ConnectorRegistry;
   bots: BotRegistry;
   conversations: ConversationRegistry;
   turns: TurnService;
@@ -33,12 +42,12 @@ export interface ChannelIngressDeps {
   cors: Record<string, string>;
 }
 
-export function isChannelPath(pathname: string): boolean {
-  return pathname.startsWith(PREFIX);
+export function isConnectorPath(pathname: string): boolean {
+  return pathname.startsWith(PREFIX) || pathname.startsWith(LEGACY_PREFIX);
 }
 
 /**
- * `/channels/<id>/<rest>` → the Bot's Eve at `/eve/v1/<kind>/<rest>`.
+ * `/connectors/<id>/<rest>` → the Bot's Eve at `/eve/v1/<kind>/<rest>`.
  *
  * This is the door for anything that is not a seat: the WhatsApp bridge on
  * loopback today, a webhook or Slack later. It sits beside the seat-gated
@@ -47,25 +56,29 @@ export function isChannelPath(pathname: string): boolean {
  * claims to be". Both end at the same Eve with the same hub secret, so an Eve
  * channel file cannot tell them apart and does not need to.
  */
-export async function handleChannelIngress(
+export async function handleConnectorIngress(
   req: IncomingMessage,
   res: ServerResponse,
-  deps: ChannelIngressDeps,
+  deps: ConnectorIngressDeps,
 ): Promise<void> {
   try {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
-    const parsed = parseChannelPath(url.pathname);
+    const parsed = parseConnectorPath(url.pathname);
     if (!parsed) {
-      throw new ComputerError("VALIDATION", "channel path is /channels/<id>/<path>");
+      throw new ComputerError("VALIDATION", "connector path is /connectors/<id>/<path>");
     }
     if (req.method !== "POST") {
-      throw new ComputerError("VALIDATION", "channels take POST");
+      throw new ComputerError("VALIDATION", "connectors take POST");
     }
-    const secret = firstHeader(req.headers[CHANNEL_SECRET_HEADER]);
-    const record = deps.channels.verify(parsed.id, secret);
+    // Either header opens the door; a bridge sends one or the other, never
+    // both, so there is nothing to reconcile when the alias goes.
+    const secret =
+      firstHeader(req.headers[CONNECTOR_SECRET_HEADER]) ??
+      firstHeader(req.headers[LEGACY_CONNECTOR_SECRET_HEADER]);
+    const record = deps.connectors.verify(parsed.id, secret);
     const target = `/eve/v1/${record.kind}/${parsed.rest}`;
     if (record.paths && record.paths.length > 0 && !record.paths.includes(target)) {
-      throw new ComputerError("DENIED", `channel ${record.id} may not reach ${target}`);
+      throw new ComputerError("DENIED", `connector ${record.id} may not reach ${target}`);
     }
     let bot;
     try {
@@ -73,7 +86,7 @@ export async function handleChannelIngress(
     } catch {
       throw new ComputerError(
         "VALIDATION",
-        `channel ${record.id} points at unknown bot ${record.bot}`,
+        `connector ${record.id} points at unknown bot ${record.bot}`,
       );
     }
     const base = deps.eveUrl(bot.id, bot.display).replace(/\/$/, "");
@@ -139,8 +152,8 @@ export async function handleChannelIngress(
  * behaviour that predates conversations.
  */
 function bindTurn(
-  deps: ChannelIngressDeps,
-  record: ChannelRecord,
+  deps: ConnectorIngressDeps,
+  record: ConnectorRecord,
   botId: string,
   target: string,
   body: Uint8Array,
@@ -161,7 +174,7 @@ interface WhatsAppInbound {
 }
 
 function routeFor(
-  record: ChannelRecord,
+  record: ConnectorRecord,
   target: string,
   body: Uint8Array,
   botId: string,
@@ -184,7 +197,7 @@ function routeFor(
   if (!jid) {
     return undefined;
   }
-  // An older bridge does not send `acct`. A channel record is one linked
+  // An older bridge does not send `acct`. A connector record is one linked
   // number, so its id names the account when the payload does not, which
   // keeps the route stable rather than collapsing two numbers into one.
   const acct = typeof parsed.acct === "string" && parsed.acct ? parsed.acct : record.id;
@@ -201,11 +214,16 @@ function routeFor(
   };
 }
 
-export function parseChannelPath(pathname: string): { id: string; rest: string } | undefined {
-  if (!pathname.startsWith(PREFIX)) {
+export function parseConnectorPath(pathname: string): { id: string; rest: string } | undefined {
+  const prefix = pathname.startsWith(PREFIX)
+    ? PREFIX
+    : pathname.startsWith(LEGACY_PREFIX)
+      ? LEGACY_PREFIX
+      : undefined;
+  if (prefix === undefined) {
     return undefined;
   }
-  const tail = pathname.slice(PREFIX.length);
+  const tail = pathname.slice(prefix.length);
   const slash = tail.indexOf("/");
   if (slash <= 0 || slash === tail.length - 1) {
     return undefined;

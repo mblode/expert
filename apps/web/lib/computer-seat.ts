@@ -55,7 +55,19 @@ export async function ensureComputerCatalog(): Promise<void> {
   }
 }
 
-/** Pair, then remember the token for this user on this computer. */
+/**
+ * Pair, then remember the token for this user on this computer.
+ *
+ * This is the last per-request `Pair` in the control plane, and it stays one
+ * deliberately. A signed-in user on hello.expert is an `owner`: the workspace
+ * reads `/roster`, streams pixels and talks to the Bot through `/eve/v1`, and
+ * all three are owner-only HTTP routes rather than RPCs, so no `methods` list
+ * and no narrower role reaches them. An `issuer` may not issue `owner`, which
+ * is the containment that makes the stored issuer worth having, so moving
+ * this path onto `Seat.Issue` is not a swap: it needs those three doors to
+ * stop being owner-only first, which is a hub change and its own decision
+ * about what a hello.expert session is allowed to be. See docs/AUDIT.md.
+ */
 async function pairAndPersist(
   userId: string,
   email: string,
