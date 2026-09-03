@@ -61,7 +61,7 @@ export async function hubRpc<T>(path: HubPath, body: unknown, turn?: string): Pr
   if (!res.ok) {
     const error = (json as { error?: { code?: string; message?: string } } | null)?.error;
     throw new Error(
-      `${error?.code ?? `HTTP_${res.status}`}: ${error?.message ?? text.slice(0, 200) ?? "hub call failed"}`,
+      `${error?.code ?? `HTTP_${res.status}`}: ${error?.message ?? (text.slice(0, 200) || "hub call failed")}`,
     );
   }
   return json as T;
