@@ -1,6 +1,6 @@
 <div align="center">
 
-# [Computer](https://hello.expert)
+# [Expert](https://hello.expert)
 
 **A persistent Linux computer your AI agents drive and you can take the seat of**
 
