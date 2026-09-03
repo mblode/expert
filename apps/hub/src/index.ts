@@ -9,7 +9,8 @@ import {
 } from "./desk/index.ts";
 import { allowedBind, refuseBindMessage } from "./host/bind.ts";
 import { loadPolicy } from "./service/policy.ts";
-import { FileBotStore, FileSeatTokenStore } from "./service/provision.ts";
+import { FileBotStore } from "./service/provision.ts";
+import { FilePrincipalStore } from "./service/principals.ts";
 import { FileChannelStore } from "./service/channels.ts";
 import { BridgeClient, DEFAULT_BRIDGE_URL } from "./service/whatsapp.ts";
 import { PixelRegistry } from "./service/pixels.ts";
@@ -49,7 +50,7 @@ const hub = createHub({
   deskFactory: createDesk,
   windows,
   store: new FileBotStore(rosterPath),
-  seatStore: new FileSeatTokenStore(join(dataDir, "seats.json")),
+  principalStore: new FilePrincipalStore(join(dataDir, "seats.json")),
   pixels: new PixelRegistry({
     tokenDir: process.env.COMPUTER_VNC_TOKEN_DIR ?? join(dataDir, "vnc-tokens"),
     ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,

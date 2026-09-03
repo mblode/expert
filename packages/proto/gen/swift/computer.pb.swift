@@ -1407,6 +1407,54 @@ public nonisolated struct Computer_V1_RevokeResponse: Sendable {
   public init() {}
 }
 
+public nonisolated struct Computer_V1_IssueRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// owner | operator | viewer | guest | issuer
+  public var role: String = String()
+
+  /// who this is for, as the caller names them
+  public var subject: String = String()
+
+  /// 0 = no expiry, allowed only for an owner-issued seat
+  public var ttlSec: UInt32 = 0
+
+  /// 0 = any screen
+  public var display: UInt32 = 0
+
+  /// narrows the role, never widens it
+  public var methods: [String] = []
+
+  /// shown in the owner's seat list
+  public var label: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_IssueResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// shown once
+  public var token: String = String()
+
+  public var role: String = String()
+
+  public var subject: String = String()
+
+  /// ISO, empty when it never expires
+  public var expiresAt: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Computer_V1_WhatsAppAccountsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -4289,6 +4337,106 @@ nonisolated extension Computer_V1_RevokeResponse: SwiftProtobuf.Message, SwiftPr
 
   public static func ==(lhs: Computer_V1_RevokeResponse, rhs: Computer_V1_RevokeResponse) -> Bool {
     if lhs.revoked != rhs.revoked {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_IssueRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IssueRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}subject\0\u{3}ttl_sec\0\u{1}display\0\u{1}methods\0\u{1}label\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.subject) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.ttlSec) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.display) }()
+      case 5: try { try decoder.decodeRepeatedStringField(value: &self.methods) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 1)
+    }
+    if !self.subject.isEmpty {
+      try visitor.visitSingularStringField(value: self.subject, fieldNumber: 2)
+    }
+    if self.ttlSec != 0 {
+      try visitor.visitSingularUInt32Field(value: self.ttlSec, fieldNumber: 3)
+    }
+    if self.display != 0 {
+      try visitor.visitSingularUInt32Field(value: self.display, fieldNumber: 4)
+    }
+    if !self.methods.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.methods, fieldNumber: 5)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_IssueRequest, rhs: Computer_V1_IssueRequest) -> Bool {
+    if lhs.role != rhs.role {return false}
+    if lhs.subject != rhs.subject {return false}
+    if lhs.ttlSec != rhs.ttlSec {return false}
+    if lhs.display != rhs.display {return false}
+    if lhs.methods != rhs.methods {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_IssueResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IssueResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{1}role\0\u{1}subject\0\u{3}expires_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.token) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.subject) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.expiresAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.token.isEmpty {
+      try visitor.visitSingularStringField(value: self.token, fieldNumber: 1)
+    }
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 2)
+    }
+    if !self.subject.isEmpty {
+      try visitor.visitSingularStringField(value: self.subject, fieldNumber: 3)
+    }
+    if !self.expiresAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.expiresAt, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_IssueResponse, rhs: Computer_V1_IssueResponse) -> Bool {
+    if lhs.token != rhs.token {return false}
+    if lhs.role != rhs.role {return false}
+    if lhs.subject != rhs.subject {return false}
+    if lhs.expiresAt != rhs.expiresAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

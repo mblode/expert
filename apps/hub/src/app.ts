@@ -18,7 +18,8 @@ import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
 import type { PolicyService } from "./service/policy.ts";
 import { ProvisionService } from "./service/provision.ts";
-import type { BotStore, SeatTokenStore } from "./service/provision.ts";
+import type { BotStore } from "./service/provision.ts";
+import type { PrincipalStore } from "./service/principals.ts";
 import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
 import type { PixelRegistry } from "./service/pixels.ts";
@@ -33,8 +34,9 @@ export interface HubOptions {
   windows: WindowManager;
   /** Persists the roster; FileBotStore in production, MemoryBotStore in tests. */
   store: BotStore;
-  /** Persists paired seat tokens. Without it every restart unpairs every phone. */
-  seatStore: SeatTokenStore;
+  /** Persists every principal: seats, and the issuers a control plane holds.
+   * Without it every restart unpairs every phone. */
+  principalStore: PrincipalStore;
   /** Hub-side approval gate. Absent = no rules = allow. */
   policy?: PolicyService;
   vncUrl: string;
@@ -77,7 +79,7 @@ export function createHub(opts: HubOptions): Hub {
   const auth = new AuthRegistry({
     agentTokens: () => bots.tokenEntries(),
     pixels: opts.pixels,
-    seats: opts.seatStore,
+    principals: opts.principalStore,
     setupCode: opts.setupCode,
   });
   const router = new ConnectRouter(auth);

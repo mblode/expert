@@ -51,6 +51,7 @@ service Seat {
   rpc CreateBot         // provision: next free screen + minted token
   rpc DeleteBot
   rpc Revoke            // end a seat: the caller's own, or (owner) any
+  rpc Issue             // hand a named person a seat with a role (owner, issuer)
   rpc WhatsAppAccounts  // the numbers linked to this computer (owner)
   rpc WhatsAppLink      // link by pairing code or QR, poll, unlink (owner)
   rpc WhatsAppGroups    // groups the number is in, with enabled flags (owner)
@@ -137,19 +138,55 @@ cannot require permission.
 `I'm done` is `SetPresence({ present: false })`. It is not a model
 tool. After it, the next `computer` call runs.
 
-### Owner and guest seats
+### Principals and roles
 
-A seat token has a `kind`. `Pair` mints an **owner** seat: any display,
-every Seat RPC, no expiry, the box owner. An **owner** may `Revoke` any
-seat; `Revoke {}` with no token ends the caller's own, which is what
-sign-out does. A **guest** seat comes from an invite the Bot handed out in
-a chat (a WhatsApp member taking the mouse): bound to one display, limited
-to `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardSet`,
-`ProvideSecret` and `Revoke`, expiring within fifteen minutes. A guest's
-`Status` lists only its screen, an absent `display` resolves to that
-screen, any other display is `UNAUTHENTICATED`, and `/eve/v1` (the thread)
-and `/roster` refuse it. Guests are the reason seats carry scope at all:
-before them every token in `seats.json` was a permanent owner.
+Every bearer the hub accepts is a **principal**: a `user` at a seat, a
+`bot` holding an agent token, or a `service` like the WhatsApp bridge or a
+control plane. One verify path checks all three, so a handler asks what
+this caller may do rather than which file its credential came from.
+
+A principal carries a **role**, and a role is a set of methods.
+
+| Role       | Kind    | May call                                                                                             |
+| ---------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `owner`    | user    | every Seat RPC, any display, no expiry                                                               |
+| `operator` | user    | `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardSet`, `ProvideSecret`, `Occurrences`, `Revoke` |
+| `viewer`   | user    | `Status`, `Occurrences`, `Revoke`                                                                    |
+| `guest`    | user    | the operator set minus `Occurrences`, bound to one display, always expiring, at most four hours      |
+| `issuer`   | service | `Issue`, `Revoke`                                                                                    |
+| `bot`      | bot     | the Agent service                                                                                    |
+| `ingress`  | service | the channel door only, no RPC                                                                        |
+
+`owner` is unrestricted inside the Seat service, which is what a paired
+seat has always been: an RPC added tomorrow works for the owner the moment
+it is registered. Every other role is an explicit allowlist, so the same
+new RPC stays denied to them until someone lists it. That asymmetry is
+deliberate: adding a method must never quietly widen a narrow role.
+
+`Pair` still mints an owner with no subject, because whoever holds the
+setup code is the owner and the hub cannot learn their name. `Issue` is
+how a principal that _does_ know its users hands one of them a seat:
+`Issue { role, subject, ttl_sec, display, methods, label }` returns a token
+once. An owner may issue any role. An `issuer`, which is what a control
+plane holds instead of the setup code, may issue only the working roles,
+never `owner` and never another `issuer`. A stolen control plane can then
+take the mouse on the boxes it knows, which is bad, rather than own them
+forever, which is unrecoverable.
+
+A principal with a `display` is bound to that screen whatever its role:
+`Status` lists only that screen, an absent `display` resolves to it, and
+naming another is `UNAUTHENTICATED`. `methods` narrows a role further and
+can never widen it. `Revoke {}` ends the caller's own seat, which is what
+sign-out does; naming another token is an owner's call. `/eve/v1` (the
+thread), `/roster` and the pixel stream remain owner-only, and an owner
+carrying `methods` is not one of them: those doors are HTTP routes, so no
+allowlist can name them, and a grant narrowed to a couple of RPCs must not
+inherit the three that were never narrowed. A `guest` always expires.
+
+Seats on disk from before this predate roles: a bare token string is an
+owner that never expires, and a record whose `kind` is `owner` or `guest`
+carried its role there. Both still load, and neither names a subject, so
+the hub reports them as unattributed rather than inventing a person.
 
 `request_takeover` is a `computer` action. It moves `AGENT → WAITING`
 and returns a screenshot. Further `computer` calls return `SEAT_HELD`

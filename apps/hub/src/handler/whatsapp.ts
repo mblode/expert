@@ -20,11 +20,12 @@ const WHATSAPP_EVE_PATHS = ["/eve/v1/whatsapp/message"];
 
 /**
  * Linking a number is an owner's job: it hands a phone number's identity to
- * this computer and decides which groups a Bot listens in. A guest seat took
- * the mouse for a few minutes and gets none of this.
+ * this computer and decides which groups a Bot listens in. Every narrower
+ * role, from an operator down to a guest that took the mouse for a few
+ * minutes, gets none of this.
  */
 function requireOwner(ctx: RpcContext): void {
-  if (ctx.seat?.kind !== "owner") {
+  if (ctx.principal?.role !== "owner") {
     throw new ComputerError("UNAUTHENTICATED", "an owner seat is required");
   }
 }
