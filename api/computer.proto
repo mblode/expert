@@ -310,6 +310,9 @@ message SendMessageResponse {
   string occurrence_id = 1;
   // True when this send ended the turn (widget, secret_request).
   bool turn_ended = 2;
+  // The conversation this send landed in. Empty when the caller presented
+  // no turn binding, which is the Bot's own seat thread.
+  string conversation_id = 3;
 }
 
 // --- Seat ---
@@ -403,6 +406,17 @@ message OccurrencesRequest {
   string cursor = 1;
   int32 limit = 2;
   int32 display = 3;
+  // Additive. Absent = the display's Bot seat thread, which is what this
+  // RPC has always returned. A conversation belongs to a Bot, and a seat
+  // bound to one screen may not read another screen's Bot by id.
+  string conversation_id = 4;
+}
+
+// Who wrote a message. `system` carries hop notices and route failures.
+message MessageAuthor {
+  string kind = 1; // bot | human | system
+  string bot = 2;  // kind = bot
+  string ref = 3;  // kind = human: the identity on the route, e.g. a WA JID
 }
 
 message Occurrence {
@@ -416,6 +430,10 @@ message Occurrence {
   string answer = 8;
   string label = 9;
   bool provided = 10;
+  // Set when the entry came from a conversation rather than the seat log.
+  string conversation_id = 11;
+  MessageAuthor author = 12;
+  string turn_id = 13;
 }
 
 message OccurrencesResponse {

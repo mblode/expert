@@ -343,3 +343,75 @@ export const ACTION_TYPES = [
 ] as const;
 
 export type ActionType = (typeof ACTION_TYPES)[number];
+
+/**
+ * Conversations: one record per place the Bot's voice speaks.
+ *
+ * A conversation is the durable half of a route. `send_message` appends to
+ * the conversation the hub bound the current turn to, and a transport
+ * delivers from it, so the seat thread, a WhatsApp chat and (later) a peer
+ * hop are one object with three routes rather than three code paths.
+ *
+ * The route kinds are a const in the style of `OCCURRENCE_KINDS`: the union
+ * is derived from it, so a new kind is one edit and a file on disk carrying
+ * an unknown one is rejected on read rather than silently mounted.
+ */
+export const CONVERSATION_ROUTE_KINDS = ["seat", "whatsapp", "peer"] as const;
+export type ConversationRouteKind = (typeof CONVERSATION_ROUTE_KINDS)[number];
+
+/** Where messages leave for. `peer` is bot-to-bot and has no writer yet. */
+export type Route =
+  | { kind: "seat" }
+  | { kind: "whatsapp"; acct: string; jid: string }
+  | { kind: "peer"; bot: string };
+
+/**
+ * Who is in the conversation. `ref` is the human's identity on the route: a
+ * WhatsApp JID here, a seat subject once the seat route lands.
+ */
+export type Participant =
+  | { kind: "bot"; bot: string }
+  | { kind: "human"; ref: string; display_name?: string };
+
+/** Who wrote a message. `system` carries hop notices and route failures. */
+export type Author =
+  | { kind: "bot"; bot: string }
+  | { kind: "human"; ref: string }
+  | { kind: "system" };
+
+/**
+ * Exactly today's occurrence bodies with `id`, `seq` and `at` lifted out.
+ * Not one new kind: the turn rules that hang off `widget` and
+ * `secret_request` are unchanged, they just become per conversation.
+ */
+export type MessageBody =
+  | { kind: "human"; text: string }
+  | { kind: "text"; text: string; images: string[] }
+  | { kind: "widget"; prompt: string; options: string[]; answer: string | null }
+  | { kind: "secret_request"; prompt: string; label: string; provided: boolean };
+
+export interface Message {
+  /** The existing `occ_<...>` shape, unchanged. */
+  id: string;
+  conversation_id: string;
+  /** Per conversation, monotonic, survives restart. */
+  seq: number;
+  at: number;
+  author: Author;
+  body: MessageBody;
+  /** Set for anything a turn produced. */
+  turn_id?: string;
+}
+
+export interface Conversation {
+  /** `conv_<base64url>`. */
+  id: string;
+  /** Whose voice speaks here. */
+  bot: string;
+  route: Route;
+  participants: Participant[];
+  /** Mirrors the log tail, so a list needs no file read. */
+  last_seq: number;
+  created_at: string;
+  updated_at: string;
+}

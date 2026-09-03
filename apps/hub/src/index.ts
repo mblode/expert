@@ -12,6 +12,7 @@ import { loadPolicy } from "./service/policy.ts";
 import { FileBotStore } from "./service/provision.ts";
 import { FilePrincipalStore } from "./service/principals.ts";
 import { FileChannelStore } from "./service/channels.ts";
+import { FileConversationStore, FileMessageLog } from "./service/conversations.ts";
 import { BridgeClient, DEFAULT_BRIDGE_URL } from "./service/whatsapp.ts";
 import { PixelRegistry } from "./service/pixels.ts";
 
@@ -57,6 +58,10 @@ const hub = createHub({
   }),
   policy: loadPolicy(join(dataDir, "policy.json")),
   channelStore: new FileChannelStore(join(dataDir, "channels.json")),
+  // Hub-owned, beside the roster. Deliberately not `/workspace/.bots`, which
+  // the model's `shell` and `write_file` run as `box` can rewrite.
+  conversationStore: new FileConversationStore(join(dataDir, "conversations.json")),
+  messageLog: new FileMessageLog(join(dataDir, "conversations")),
   bridge: new BridgeClient({
     secret: bridgeSecret,
     url: process.env.COMPUTER_BRIDGE_URL ?? DEFAULT_BRIDGE_URL,

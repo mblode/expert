@@ -1,13 +1,22 @@
 import { AgentMethods } from "@computer/proto";
 import { ComputerError, DISPLAY, SPEC_ID, SPEC_VERSION, TOOLS, WORKSPACE } from "@computer/shared";
 import { parseActions } from "../service/computer.ts";
-import { parseSendBody } from "../service/voice.ts";
+import { buildBody, parseSendBody } from "../service/voice.ts";
 import type { Bot, BotRegistry } from "../service/bots.ts";
+import type { ConversationRegistry } from "../service/conversations.ts";
+import type { TurnService } from "../service/turns.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
 
+export interface AgentDeps {
+  bots: BotRegistry;
+  conversations: ConversationRegistry;
+  turns: TurnService;
+}
+
 /** Agent token → Bot → screen. The model never names a display. */
-export function registerAgent(router: ConnectRouter, bots: BotRegistry): void {
+export function registerAgent(router: ConnectRouter, deps: AgentDeps): void {
+  const { bots } = deps;
   const bot = (ctx: RpcContext): Bot => {
     if (!ctx.botId) {
       throw new ComputerError("UNAUTHENTICATED", "agent token required");
@@ -25,9 +34,25 @@ export function registerAgent(router: ConnectRouter, bots: BotRegistry): void {
 
   // The voice leads the tool table: everything else is work the human
   // never sees unless this is called.
-  router.rpc(AgentMethods.SendMessage, "agent", async (ctx) =>
-    bot(ctx).voice.send(parseSendBody(ctx.body)),
-  );
+  router.rpc(AgentMethods.SendMessage, "agent", async (ctx) => {
+    const b = bot(ctx);
+    const body = parseSendBody(ctx.body);
+    // No turn token is the Bot's seat thread, byte for byte as before: the
+    // seat surface, the eve TUI and the `/eve/v1` proxy all arrive this way
+    // and none of them has a conversation yet. A turn token is the hub's own
+    // binding, minted at the channel ingress, so it is trusted over anything
+    // in the body, which is the model's.
+    if (!ctx.turn) {
+      return await b.voice.send(body);
+    }
+    const turn = deps.turns.verify(ctx.turn, b.id);
+    return deps.conversations.send(
+      turn.conversation_id,
+      { bot: b.id, kind: "bot" },
+      buildBody(body),
+      turn.id,
+    );
+  });
 
   router.rpc(AgentMethods.Computer, "agent", async (ctx) => {
     const o = requireObject(ctx.body);

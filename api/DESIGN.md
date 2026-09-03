@@ -208,12 +208,46 @@ value on the box clipboard and nowhere else, not the thread, not the
 response, not the model's context, and clears it after two minutes if
 it is still there. It works once per request.
 
-`Seat.Occurrences { cursor?, limit? }` pages the thread oldest-first;
-`cursor` is the last `seq` the caller has. The thread persists on the
-box at `/workspace/.bots/<id>/transcript.jsonl`.
+`Seat.Occurrences { cursor?, limit?, conversation_id? }` pages a thread
+oldest-first; `cursor` is the last `seq` the caller has. Without a
+`conversation_id` it is the display's Bot thread, which persists on the box
+at `/workspace/.bots/<id>/transcript.jsonl`. With one it is that
+conversation, below.
 
 There is no Seat RPC to answer a `widget` yet: a client re-opens the turn
 by sending a new message through its harness. That is a known gap.
+
+## Conversations
+
+A **conversation** is one place the Bot's voice speaks: a record
+`{ id, bot, route, participants, last_seq, created_at, updated_at }` the hub
+owns. The route is where messages leave for, `{ kind: "seat" }`,
+`{ kind: "whatsapp", acct, jid }` or `{ kind: "peer", bot }`, and a
+conversation is created by an inbound on a route that already exists or by
+an owner. There is no create-a-route path from the model, in any phase.
+
+Messages are append-only, `seq` monotonic per conversation, each with an
+`author` (`bot`, `human` or `system`) and the same four bodies the Voice
+section lists. The index is `/workspace/.computer/conversations.json` and
+each log is `/workspace/.computer/conversations/<id>.jsonl`, both hub-owned
+at 0600 in a 0700 directory: the model runs as `box` and cannot read or
+rewrite what a bot-to-bot hop will be audited from.
+
+**Which conversation a `send_message` lands in is the hub's answer, never
+the model's.** The channel ingress resolves the inbound to a conversation
+and mints a **turn token** bound to `{ conversation_id, bot, hops_left,
+deadline_at }`, forwarded to Eve as `x-computer-turn` beside the hub secret.
+Eve puts it on the session's auth attributes, where tool code reads it and a
+prompt cannot reach it, and `send_message` hands it back on the same header.
+The hub refuses a token it did not mint or one past its deadline
+(`UNAUTHENTICATED`) and one presented by another Bot (`DENIED`). No turn
+token is the Bot's seat thread. `send_message` grows no target: a
+conversation id addresses a human's route, so letting the model name one is
+the injection path the five-tool rule refuses.
+
+The turn rules are unchanged and are now per conversation, which is why a
+`widget` waiting on hello.expert no longer makes the next WhatsApp reply
+`CONFLICT`.
 
 ## Channels
 
