@@ -10,7 +10,12 @@ import { DEFAULT_HUB_URL, trimSlashes } from "./config";
 
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
-/** Where the box says its cursor actually is, after a move. */
+/**
+ * Where the box says its cursor actually is, after a move. Exported because it
+ * is what `Seat.move` resolves to.
+ *
+ * @public
+ */
 export interface PointerResponse {
   cursor: { x: number; y: number };
   seat: SeatState;
@@ -30,6 +35,7 @@ export interface BoxStatus {
   screens: Screen[];
 }
 
+/** The buttons `Seat.click` accepts. @public */
 export type Button = "left" | "right" | "middle" | "back" | "forward";
 
 /**

@@ -67,6 +67,10 @@ export function InvitePlugins({
       setName("");
       setUrl("");
       setKey("");
+    } catch {
+      // A phone on a dead connection throws out of fetch rather than
+      // answering, which used to leave the form looking like it had saved.
+      setError("Could not reach hello.expert. Check your connection and try again.");
     } finally {
       setBusy(false);
     }

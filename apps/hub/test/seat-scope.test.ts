@@ -157,6 +157,42 @@ describe("seat scopes over the wire", () => {
     }
   });
 
+  it("DeleteBot answers on the caller's screen, not the primary's", async () => {
+    // `status` mints a pixel grant for every screen it reports, and the VNC
+    // proxy honours a grant for the display it names. Returning the primary's
+    // status here handed a seat bound to display 2 a live grant for display 1:
+    // the one Seat RPC that walked around the binding the rest enforce.
+    const h = await startHub({
+      bots: [
+        { display: 1, id: "main", token: "t1" },
+        { display: 2, id: "night", token: "t2" },
+        { display: 3, id: "day", token: "t3" },
+      ],
+    });
+    try {
+      const owner = await h.pair();
+      const bound = h.hub.auth.issue(
+        { display: 2, role: "owner", ttlMs: 60_000 },
+        h.hub.auth.principalFor(owner)!,
+      );
+      const res = (await rpc(h.url, "/computer.v1.Seat/DeleteBot", { id: "day" }, bound.token)) as {
+        vnc_url: string;
+        screens: { display: number }[];
+      };
+      expect(res.screens.map((s) => s.display)).toEqual([2]);
+      const pixel = new URL(res.vnc_url).searchParams.get("token")!;
+      expect(h.hub.auth.pixels.lookup(pixel)?.display).toBe(2);
+
+      // An unbound owner still gets the primary, which is what it always was.
+      const unbound = (await rpc(h.url, "/computer.v1.Seat/DeleteBot", { id: "night" }, owner)) as {
+        screens: { display: number }[];
+      };
+      expect(unbound.screens.map((s) => s.display)).toEqual([1]);
+    } finally {
+      await h.close();
+    }
+  });
+
   it("an installer provisions and reaches nothing else, doors included", async () => {
     const h = await startHub();
     try {

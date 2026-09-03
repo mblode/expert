@@ -1,5 +1,5 @@
 #!/bin/bash
-# stop-window N — release window index N: stop its Chromium, x11vnc and
+# stop-window N releases window index N: stop its Chromium, x11vnc and
 # Xvfb, and clear its entry in /workspace/.window-assignments.json.
 set -euo pipefail
 

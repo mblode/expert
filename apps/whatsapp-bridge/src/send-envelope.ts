@@ -219,7 +219,14 @@ export const parseSendEnvelope = (
   return { envelope };
 };
 
-/** Where the messages an envelope refers to actually live, once resolved. */
+/**
+ * Where the messages an envelope refers to actually live, once resolved.
+ *
+ * The argument of `authoriseEnvelope`, the gate holding the
+ * never-post-to-a-group rule; `EnvelopeLimits` beside it is already exported.
+ *
+ * @public
+ */
 export interface EnvelopeTargets {
   /** Chat holding the `reply_to` message; undefined when the id did not resolve. */
   replyToJid?: string;
@@ -235,6 +242,11 @@ export interface EnvelopeLimits {
   media: DailyCounter;
 }
 
+/**
+ * The verdict of `authoriseEnvelope`, and `reason` is the 403 body.
+ *
+ * @public
+ */
 export type EnvelopeDecision = { ok: true } | { ok: false; reason: string };
 
 /**

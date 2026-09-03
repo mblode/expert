@@ -12,7 +12,6 @@ export COMPUTER_DESK="${COMPUTER_DESK:-local}"
 export COMPUTER_DATA="${COMPUTER_DATA:-/workspace/.computer/bots.json}"
 export COMPUTER_VNC_HOST="${COMPUTER_VNC_HOST:-127.0.0.1}"
 export COMPUTER_VNC_PORT="${COMPUTER_VNC_PORT:-5900}"
-export COMPUTER_VNC_TOKEN_DIR="${COMPUTER_VNC_TOKEN_DIR:-/tmp/computer-vnc}"
 export COMPUTER_URL="${COMPUTER_URL:-http://127.0.0.1:8080}"
 # Image default. init prefers /workspace/eve/bots when that tree has an Eve
 # project (tenant overlay, including a standalone agent/).
@@ -23,9 +22,16 @@ if [[ -z "${COMPUTER_PUBLIC_URL:-}" && -n "${FLY_APP_NAME:-}" ]]; then
   export COMPUTER_PUBLIC_URL="https://${FLY_APP_NAME}.fly.dev"
 fi
 
-# The pixel token dir is shared with x11vnc's viewer: keep it where it was.
-mkdir -p "$COMPUTER_VNC_TOKEN_DIR" /run/computer
-chown box:box "$COMPUTER_VNC_TOKEN_DIR"
+# The desk's fork-token dir, start-window's own default, box-owned because
+# start-window runs as box. COMPUTER_VNC_TOKEN_DIR is deliberately not
+# exported: init hands the whole env to the hub child, so one exported path
+# became both writers' path, and the hub (uid hub) writes its pixel tokens
+# through PixelRegistry. A box-owned 0755 directory holding box-owned 0600
+# files is unwritable by hub, so Seat.Status threw EACCES for every fork
+# display. Unset, the hub keeps its own default under the hub-owned
+# /workspace/.computer/vnc-tokens that init creates at 0700.
+mkdir -p /tmp/computer-vnc "$COMPUTER_RUN_DIR"
+chown box:box /tmp/computer-vnc
 
 # COMPUTER_SETUP_CODE must be a Fly secret; init refuses to mint one on a
 # cloud deployment (set COMPUTER_ALLOW_MINTED_SETUP_CODE=1 to override for

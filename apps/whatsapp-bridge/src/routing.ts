@@ -29,7 +29,7 @@ export interface DmPolicy {
   dmAllowlist: Set<string>;
 }
 
-export interface ShouldReplyArgs {
+interface ShouldReplyArgs {
   isDM: boolean;
   /** True for the bridge account's own "message yourself" chat. */
   isSelfChat: boolean;

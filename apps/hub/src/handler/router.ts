@@ -4,7 +4,7 @@ import type { ErrorCode } from "@computer/shared";
 import { ALL_METHODS } from "@computer/proto";
 import type { AuthPolicy } from "@computer/proto";
 import type { AuthRegistry } from "./auth.ts";
-import { bearerFromHeader } from "./auth.ts";
+import { bearerFromHeader, firstHeader } from "./auth.ts";
 import type { PrincipalRecord } from "../service/principals.ts";
 
 type Handler = (ctx: RpcContext) => Promise<unknown>;
@@ -161,8 +161,7 @@ export function writeJson(res: ServerResponse, status: number, body: unknown): v
 }
 
 function header(req: IncomingMessage, name: string): string | undefined {
-  const v = req.headers[name];
-  return Array.isArray(v) ? v[0] : v;
+  return firstHeader(req.headers[name]);
 }
 
 /** Largest JSON body: a 20-action batch or a 4000-char type is kilobytes; a screenshot never goes this way. */

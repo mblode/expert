@@ -13,12 +13,21 @@ import {
 } from "./computers";
 import { db } from "./db";
 
+/** Every seat call here resolves to one, so a route can name what it holds. @public */
 export interface ComputerSeat {
   computerId: string;
   computers: ComputerChoice[];
   hubUrl: string;
   seatToken?: string;
   seatError?: string;
+  /**
+   * The account may not open the computer it asked for, as opposed to the hub
+   * being unreachable. Only `bindComputerSeat` can say that, and only it sets
+   * this; the route reads it to answer 403 rather than 502. It used to answer
+   * by matching the first two words of `seatError`, so rewording the sentence
+   * silently turned a refusal into a gateway error.
+   */
+  denied?: boolean;
 }
 
 function catalog(email: string): ComputerRecord[] {
@@ -185,6 +194,7 @@ export async function bindComputerSeat(
       return noneConfigured(email);
     }
     return viewFor(email, fallback, {
+      denied: true,
       seatError: "That computer is not available for this account.",
     });
   }

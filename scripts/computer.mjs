@@ -16,7 +16,7 @@ import { execFileSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
-import { resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 const require = createRequire(import.meta.url);
 
@@ -24,6 +24,22 @@ const root = resolve(import.meta.dirname, "..");
 /** First Eve listens here; display N uses EVE_BASE_PORT + (N - 1). Mirrors apps/hub/src/host/eve.ts. */
 const EVE_BASE_PORT = 2000;
 const envPath = resolve(root, ".env");
+
+/** The roster file. `COMPUTER_DATA` names it; everything else lives beside it. */
+function dataFile(env) {
+  return resolve(root, env.COMPUTER_DATA ?? "data/bots.json");
+}
+
+/**
+ * A sibling of the roster in the same data dir, derived the way init.ts does
+ * it (`dirname` + `join`). This used to rewrite the `bots.json` suffix, which
+ * is a no-op on a roster named anything else: `COMPUTER_DATA=data/roster.json`
+ * resolved `connectors.json` back onto the roster, and adding a connector
+ * overwrote every Bot token with the connector list.
+ */
+function beside(env, name) {
+  return join(dirname(dataFile(env)), name);
+}
 
 const [cmd, ...args] = process.argv.slice(2);
 
@@ -161,10 +177,7 @@ function startEve(env) {
   // a dead Eve is as visible locally as it is on the guest. Only a run that
   // owns the supervisor points the hub at it: /healthz calls a file nobody
   // refreshes stale, and reports the whole box down for it.
-  env.COMPUTER_STATUS_FILE ??= resolve(root, env.COMPUTER_DATA ?? "data/bots.json").replace(
-    /bots\.json$/,
-    "status.json",
-  );
+  env.COMPUTER_STATUS_FILE ??= beside(env, "status.json");
   const eve = spawn("npx", ["tsx", "apps/hub/src/host/eves.ts"], {
     cwd: root,
     env: {
@@ -217,9 +230,7 @@ async function bot(argv) {
     }
     case "token": {
       requireId(id);
-      const store = JSON.parse(
-        readFileSync(resolve(root, env.COMPUTER_DATA ?? "data/bots.json"), "utf-8"),
-      );
+      const store = JSON.parse(readFileSync(dataFile(env), "utf-8"));
       const entry = store.find((b) => b.id === id);
       if (!entry) {
         throw new Error(`no bot ${id}, run \`npm run bot -- ls\``);
@@ -250,9 +261,8 @@ async function bot(argv) {
  */
 function connector(argv, env) {
   const [sub, id, kind, botId] = argv;
-  const dataFile = resolve(root, env.COMPUTER_DATA ?? "data/bots.json");
-  const path = dataFile.replace(/bots\.json$/, "connectors.json");
-  const legacyPath = dataFile.replace(/bots\.json$/, "channels.json");
+  const path = beside(env, "connectors.json");
+  const legacyPath = beside(env, "channels.json");
   const readFrom = () =>
     existsSync(path) ? path : existsSync(legacyPath) ? legacyPath : undefined;
   const load = () => {

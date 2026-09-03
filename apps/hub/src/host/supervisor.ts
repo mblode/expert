@@ -34,9 +34,9 @@ export interface ChildSpec {
   oneShot?: boolean;
 }
 
-export type ChildState = "starting" | "up" | "down" | "restarting" | "done" | "stopped";
+type ChildState = "starting" | "up" | "down" | "restarting" | "done" | "stopped";
 
-export interface ChildStatus {
+interface ChildStatus {
   id: string;
   state: ChildState;
   pid: number | null;
@@ -46,13 +46,13 @@ export interface ChildStatus {
   since: string;
 }
 
-export interface SupervisorStatus {
+interface SupervisorStatus {
   ok: boolean;
   at: string;
   children: ChildStatus[];
 }
 
-export interface SupervisorOptions {
+interface SupervisorOptions {
   /** Where `status()` is mirrored so another process (the hub) can read it. */
   statusFile?: string;
   /** Log rotation: a log over this size is moved aside once at (re)start. */

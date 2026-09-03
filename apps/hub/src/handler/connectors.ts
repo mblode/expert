@@ -8,6 +8,7 @@ import type { ConnectorRecord, ConnectorRegistry } from "../service/connectors.t
 import type { ConversationRegistry } from "../service/conversations.ts";
 import type { TurnService } from "../service/turns.ts";
 import { EVE_HUB_SECRET_HEADER } from "../host/eve.ts";
+import { firstHeader } from "./auth.ts";
 import { TURN_HEADER, writeError } from "./router.ts";
 
 const PREFIX = "/connectors/";
@@ -26,11 +27,11 @@ const LEGACY_PREFIX = "/channels/";
  */
 const MAX_BODY = 12 * 1024 * 1024;
 /** The header a connector presents. Never the seat token, never the Eve secret. */
-export const CONNECTOR_SECRET_HEADER = "x-connector-secret";
+const CONNECTOR_SECRET_HEADER = "x-connector-secret";
 /** Compatibility alias, retired with `LEGACY_PREFIX` above. */
-export const LEGACY_CONNECTOR_SECRET_HEADER = "x-channel-secret";
+const LEGACY_CONNECTOR_SECRET_HEADER = "x-channel-secret";
 
-export interface ConnectorIngressDeps {
+interface ConnectorIngressDeps {
   connectors: ConnectorRegistry;
   bots: BotRegistry;
   conversations: ConversationRegistry;
@@ -241,10 +242,6 @@ function daemonDown(botId: string): ComputerError {
     "DAEMON_DOWN",
     `the agent is not running for bot ${botId}: the guest starts it with eve start`,
   );
-}
-
-function firstHeader(v: string | string[] | undefined): string | undefined {
-  return Array.isArray(v) ? v[0] : v;
 }
 
 async function readBody(req: IncomingMessage): Promise<Uint8Array<ArrayBuffer>> {

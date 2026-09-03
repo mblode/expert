@@ -5,9 +5,30 @@ import type { AuthFn } from "eve/channels/auth";
 /** Header the hub injects on loopback `/eve/v1` proxy requests. */
 export const EVE_HUB_SECRET_HEADER = "x-computer-eve-secret";
 
+/**
+ * An env secret, or undefined when the variable is unset, empty, or blank.
+ *
+ * One owner for that rule, because two variables are read at three doors and
+ * the copies had already drifted: `resolveBridge` read a whitespace-only
+ * `WHATSAPP_BRIDGE_SECRET` as no credential at all, while the inbound check
+ * read the same value as a live secret, so a header of those same blanks
+ * opened the route.
+ *
+ * The value comes back untrimmed on purpose. A secret is compared byte for
+ * byte, and trimming here would stop matching a secret whose file on the
+ * guest ends in a newline; only the is-there-one decision looks past the
+ * whitespace.
+ */
+export function secretFromEnv(
+  key: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string | undefined {
+  const secret = env[key];
+  return secret?.trim() ? secret : undefined;
+}
+
 export function eveHubSecretFromEnv(env: NodeJS.ProcessEnv = process.env): string | undefined {
-  const secret = env.COMPUTER_EVE_SECRET;
-  return secret && secret.length > 0 ? secret : undefined;
+  return secretFromEnv("COMPUTER_EVE_SECRET", env);
 }
 
 export function eveHubSecretMatches(

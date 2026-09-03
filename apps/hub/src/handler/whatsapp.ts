@@ -6,7 +6,7 @@ import type { BridgeClient, WhatsAppAccountConfig } from "../service/whatsapp.ts
 import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
 
-export interface WhatsAppDeps {
+interface WhatsAppDeps {
   bots: BotRegistry;
   connectors: ConnectorRegistry;
   /** Absent = no bridge on this computer; every call is DAEMON_DOWN. */

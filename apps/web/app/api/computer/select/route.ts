@@ -23,7 +23,7 @@ export async function POST(request: Request): Promise<Response> {
   if (seat.seatError || !seat.seatToken) {
     return Response.json(
       { error: seat.seatError ?? "Could not attach to the computer." },
-      { status: seat.seatError?.startsWith("That computer") ? 403 : 502 },
+      { status: seat.denied ? 403 : 502 },
     );
   }
   await captureServerEvent({

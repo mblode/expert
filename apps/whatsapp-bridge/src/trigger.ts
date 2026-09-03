@@ -156,7 +156,7 @@ export const extractEdit = (
 };
 
 /** Inputs for the edit-reply decision; all state is passed in so it stays pure. */
-export interface EditReplyDecision {
+interface EditReplyDecision {
   jid: string;
   fromMe?: boolean | null;
   targetId?: string | null;

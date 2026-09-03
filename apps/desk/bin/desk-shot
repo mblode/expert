@@ -6,7 +6,7 @@ cleanup() { rm -f "$out"; }
 trap cleanup EXIT
 
 if [[ -n "${1:-}" ]]; then
-  # crop WxH+X+Y from a full 1280×800 shot — zoom does not rematch coords
+  # crop WxH+X+Y from a full 1280×800 shot; zoom does not rematch coords
   IFS=',' read -r x y w h <<<"$1"
   import -window root -crop "${w}x${h}+${x}+${y}" "png:$out"
 else

@@ -42,7 +42,7 @@ export interface IssuerStore {
  * it and dropped the moment the hub refuses it, which is what rules 1 and 2
  * above need.
  */
-export const dbIssuerStore: IssuerStore = {
+const dbIssuerStore: IssuerStore = {
   async clear(computerId) {
     await ensureIssuerColumns();
     await db
@@ -80,6 +80,7 @@ async function ensureIssuerColumns(): Promise<void> {
     .catch(() => undefined);
 }
 
+/** The options both issuer entry points take. @public */
 export interface IssuerOptions {
   fetchImpl?: typeof fetch;
   store?: IssuerStore;

@@ -14,8 +14,16 @@ import { rpc, startHub } from "./helper.ts";
 /** A check command that is a real process, so the failure modes are real ones. */
 const node = (script: string): string[] => [process.execPath, "-e", script];
 
-/** Short timeout: the point is the deny, not the wait. */
-const policy = (rules: PolicyRule[]) => new PolicyService(rules, { checkTimeoutMs: 200 });
+/**
+ * Every check here spawns a real Node process, and spawn latency on a loaded
+ * machine is not small. The budget has to clear that, or the suite fails on
+ * its own timeout rather than on the behaviour under test: at 200ms for every
+ * case this went red under a parallel `npm run check`, twice, on a decision
+ * the check had already returned correctly. Only the hanging check wants a
+ * short one, and it passes its own.
+ */
+const policy = (rules: PolicyRule[], checkTimeoutMs = 5000) =>
+  new PolicyService(rules, { checkTimeoutMs });
 
 const CLICK = { type: "click", x: asPixelX(10), y: asPixelY(10) } as const;
 
@@ -89,8 +97,11 @@ describe("policy: the gate is in the hub", () => {
  * Claude Code's hook default is the opposite, and that default is the bug.
  */
 describe("policy fails closed", () => {
-  const broken: [name: string, check: string[]][] = [
-    ["times out", node("setTimeout(() => {}, 60000)")],
+  // The third field is the check timeout, present only where the check never
+  // returns: waiting the full budget out there would cost the suite 5s for one
+  // case that is already proven at 200ms.
+  const broken: [name: string, check: string[], timeoutMs?: number][] = [
+    ["times out", node("setTimeout(() => {}, 60000)"), 200],
     ["crashes", node("throw new Error('boom')")],
     ["exits non-zero without output", node("process.exit(3)")],
     ["returns garbage", node("console.log('not json at all')")],
@@ -99,9 +110,9 @@ describe("policy fails closed", () => {
     ["names a missing command", ["/nonexistent/check-please", "--x"]],
   ];
 
-  for (const [name, check] of broken) {
+  for (const [name, check, timeoutMs] of broken) {
     it(`denies when the check ${name}`, async () => {
-      const p = policy([{ check, id: "gate", tool: "computer" }]);
+      const p = policy([{ check, id: "gate", tool: "computer" }], timeoutMs);
       expect(await p.evaluate({ action: CLICK, tool: "computer" })).toMatchObject({
         decision: "deny",
         rule: "gate",
@@ -109,7 +120,7 @@ describe("policy fails closed", () => {
     });
 
     it(`allows when the check ${name} and the rule opts out with fail_open`, async () => {
-      const p = policy([{ check, fail_open: true, id: "gate", tool: "computer" }]);
+      const p = policy([{ check, fail_open: true, id: "gate", tool: "computer" }], timeoutMs);
       expect(await p.evaluate({ action: CLICK, tool: "computer" })).toMatchObject({
         decision: "allow",
       });

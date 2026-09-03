@@ -7,8 +7,23 @@ export type InvitePurpose = (typeof INVITE_PURPOSES)[number];
 
 /** WhatsApp group computer. Mint defaults here unless the body names another id. */
 export const DEFAULT_INVITE_COMPUTER_ID = "vibey";
-export const DEFAULT_INVITE_TTL_MINUTES = 30;
+const DEFAULT_INVITE_TTL_MINUTES = 30;
 export const MAX_INVITE_TTL_MINUTES = 240;
+
+/**
+ * The one computer a mint secret may open.
+ *
+ * An operator is an account and the account is the tenant boundary, so what an
+ * operator may mint for is already decided by `accessibleComputers`. A mint
+ * secret is not an account: it is one shared string on a Bot, and until this it
+ * read `computerId` straight off the request body, so Vibey's Eve could mint a
+ * desk link on Blode and redeem a seat there. `INVITE_MINT_COMPUTER_ID` moves
+ * that decision to the deployment; unset means the computer the secret was
+ * introduced for.
+ */
+export function mintSecretComputerId(env: EnvMap): string {
+  return env.INVITE_MINT_COMPUTER_ID?.trim() || DEFAULT_INVITE_COMPUTER_ID;
+}
 
 export interface InviteRecord {
   computerId: string;
@@ -65,7 +80,7 @@ export function hashInviteSender(sender: string): string {
  * Eve's client sends `{ kind: "desk" | "plugin" }`. Operators still send
  * `purpose`. Singular `plugin` is the public name; the path stays `/plugins`.
  */
-export function resolveInvitePurpose(input: { kind?: string; purpose?: string }): string {
+function resolveInvitePurpose(input: { kind?: string; purpose?: string }): string {
   const raw = (input.purpose ?? input.kind ?? "").trim();
   return raw === "plugin" ? "plugins" : raw;
 }

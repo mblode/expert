@@ -59,7 +59,7 @@ import {
   phoneDigits,
 } from "./live-members.ts";
 import type { LiveMember } from "./live-members.ts";
-import { createDailyCounter, sendTargetAllowed } from "./media-send.ts";
+import { createDailyCounter, decodeMediaBuffer, sendTargetAllowed } from "./media-send.ts";
 import type { SendMediaPayload, SendTargetGate } from "./media-send.ts";
 import { createMessageIndex } from "./message-ids.ts";
 import { loadMembersOverlay } from "./members.ts";
@@ -191,7 +191,7 @@ export interface AccountRuntime {
   applyRecord: (next: AccountRecord) => Promise<void>;
 }
 
-export interface AccountRuntimeDeps {
+interface AccountRuntimeDeps {
   record: AccountRecord;
   env: BridgeEnv;
   logger: Logger;
@@ -315,10 +315,17 @@ const noCaptionNote = (media: Media[] | undefined, docContext: string[] | undefi
   return "";
 };
 
-/** Resolve a unix-second timestamp from a reaction's senderTimestampMs (ms). */
-const resolveReactionTs = (senderTimestampMs: proto.IReaction["senderTimestampMs"]): number => {
+/**
+ * Resolve a unix-second timestamp from a reaction's senderTimestampMs (ms).
+ * A live reaction has nothing better to fall back to than now; a history-synced
+ * one falls back to the timestamp of the message it decorates.
+ */
+const resolveReactionTs = (
+  senderTimestampMs: proto.IReaction["senderTimestampMs"],
+  fallbackTs: number = Math.floor(Date.now() / 1000),
+): number => {
   const ms = Number(senderTimestampMs);
-  return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : Math.floor(Date.now() / 1000);
+  return Number.isFinite(ms) && ms > 0 ? Math.floor(ms / 1000) : fallbackTs;
 };
 
 export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime => {
@@ -459,6 +466,29 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     sentStore.record(sent);
     messageIndex.remember(sent?.key, text);
     return sent;
+  };
+
+  /**
+   * Record one message the bridge sent, so the transcript stays two-sided. The
+   * one owner of the outbound row: every verb (a reply, the graceful failure
+   * note, a proactive DM, an envelope's text or files) lands here, so the bot's
+   * own name, identity and surface cannot drift between them.
+   */
+  const recordOutbound = async (
+    sock: WASocket,
+    jid: string,
+    sent: WAMessage | undefined,
+    text: string,
+  ): Promise<void> => {
+    await store.recordMessage(jid, {
+      id: sent?.key?.id ?? undefined,
+      n: botName(),
+      role: "assistant",
+      s: userPart(sock.user?.id ?? ""),
+      surface: jid.endsWith("@g.us") ? "group" : "dm",
+      t: Math.floor(Date.now() / 1000),
+      x: text,
+    });
   };
 
   /**
@@ -728,13 +758,14 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     msg: WAMessage,
     msgId: string,
     isDM: boolean,
+    lookup: NameLookup,
   ): Promise<void> => {
     // Same mention-token resolution as the live path: backfilled rows feed the
     // same tail/search corpus, so they should carry names, not raw digits.
     const text = resolveMentions(
       extractText(msg.message),
       getContextInfo(msg.message)?.mentionedJid,
-      mentionLookupFor(currentSock ? getBot(currentSock) : null),
+      lookup,
     );
     const placeholder = mediaPlaceholder(msg.message);
     if (!text && !placeholder) {
@@ -751,7 +782,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       id: msgId,
       // No pushName on the synced record: resolve a name so the row doesn't
       // render as raw lid digits downstream.
-      n: name ?? mentionLookupFor(null)(sender),
+      n: name ?? lookup(sender),
       role: msg.key.fromMe ? "assistant" : "user",
       s: sender,
       surface,
@@ -776,12 +807,11 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       if (!reactor || !msgId) {
         continue;
       }
-      const rt = Number(r?.senderTimestampMs);
       await store.recordReaction(jid, {
         emoji: r?.text || "",
         n: lidMap.get(reactor)?.name ?? null,
         s: reactor,
-        t: Number.isFinite(rt) && rt > 0 ? Math.floor(rt / 1000) : fallbackTs,
+        t: resolveReactionTs(r?.senderTimestampMs, fallbackTs),
         target: msgId,
       });
     }
@@ -793,7 +823,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
    * process via `historySeen`; downstream consumers also dedup by
    * content/reactor, so cross-restart re-syncs stay clean.
    */
-  const recordHistoryMessage = async (msg: WAMessage): Promise<void> => {
+  const recordHistoryMessage = async (msg: WAMessage, lookup: NameLookup): Promise<void> => {
     const jid = msg?.key?.remoteJid ?? "";
     const isGroup = jid.endsWith("@g.us");
     const isDM =
@@ -808,7 +838,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     if (!dedupeHistoryMsgId(msgId)) {
       return;
     }
-    await recordHistoryBody(jid, msg, msgId as string, isDM);
+    await recordHistoryBody(jid, msg, msgId as string, isDM, lookup);
     if (Array.isArray(msg.reactions) && msg.reactions.length > 0) {
       await recordHistoryReactions(jid, msg.reactions, msgId as string, messageTs(msg));
     }
@@ -1124,23 +1154,17 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   };
 
   /** Send a graceful failure note to the user and record it in the store. */
-  const sendGracefulFailure = async (sock: WASocket, bot: Bot, jid: string): Promise<void> => {
+  const sendGracefulFailure = async (sock: WASocket, jid: string): Promise<void> => {
     const note = "Something went wrong handling that one - give it a moment and try again.";
+    let sent: WAMessage | undefined;
     try {
-      await sendText(sock, jid, note);
+      sent = await sendText(sock, jid, note);
     } catch (sendError) {
       logger.error({ err: sendError, jid }, "failed to send graceful failure note");
     }
     // Record the note too, guarded separately so a logging failure can't crash the loop.
     try {
-      await store.recordMessage(jid, {
-        n: botName(),
-        role: "assistant",
-        s: bot.number as string,
-        surface: jid.endsWith("@g.us") ? "group" : "dm",
-        t: Math.floor(Date.now() / 1000),
-        x: note,
-      });
+      await recordOutbound(sock, jid, sent, note);
     } catch (recordError) {
       logger.error({ err: recordError, jid }, "failed to record graceful failure note");
     }
@@ -1149,7 +1173,6 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   /** Build context, call the hub, send the reply, and record it in the store. */
   const sendAgentReply = async (args: {
     sock: WASocket;
-    bot: Bot;
     jid: string;
     prompt: string;
     /** Short id of the message being answered; null when there is nothing to quote. */
@@ -1161,7 +1184,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     senderPhone: string | null;
     extraContext?: string[];
   }): Promise<void> => {
-    const { sock, bot, jid, prompt, media, sender, senderName, surface, senderPhone } = args;
+    const { sock, jid, prompt, media, sender, senderName, surface, senderPhone } = args;
     const buildContext = async (): Promise<string[]> => {
       const blocks: string[] = [];
       try {
@@ -1217,7 +1240,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       // what the graceful note exists for: the user watched "typing" start, so
       // ending in silence reads as being ignored.
       logger.error({ error, jid, sender }, "hub request failed");
-      await sendGracefulFailure(sock, bot, jid);
+      await sendGracefulFailure(sock, jid);
       return;
     }
     const { reply } = result;
@@ -1227,16 +1250,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     void setPresence(sock, jid, "paused");
     if (reply) {
       const sent = await sendText(sock, jid, reply);
-      // Record the bot's own reply so the transcript is two-sided.
-      await store.recordMessage(jid, {
-        id: sent?.key?.id ?? undefined,
-        n: botName(),
-        role: "assistant",
-        s: bot.number as string,
-        surface,
-        t: Math.floor(Date.now() / 1000),
-        x: reply,
-      });
+      await recordOutbound(sock, jid, sent, reply);
     }
   };
 
@@ -1282,7 +1296,6 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     const senderPhone = userPart(phoneNumberJid(key) ?? "") || null;
     logger.info({ jid, targetId }, "replying to an edited-in mention");
     await sendAgentReply({
-      bot,
       jid,
       media: undefined,
       prompt: triggeredText,
@@ -1351,7 +1364,6 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     }
     const extraContext = [...(docContext ?? []), ...(quotedBlock ? [quotedBlock] : [])];
     await sendAgentReply({
-      bot: args.bot,
       extraContext: extraContext.length > 0 ? extraContext : undefined,
       jid: args.jid,
       media,
@@ -1567,9 +1579,16 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       return;
     }
     logger.info({ count: history.length }, "history sync: backfilling messages");
+    // Composed once for the whole sync. Building this walks the live set and
+    // the overlay and sorts the result, so rebuilding it per message turned a
+    // full backfill into minutes of CPU on a Machine that is also running the
+    // desk, the hub and Eve. Nothing in the loop mutates the live set or the
+    // overlay, and the lid sources are read through live closures, so one
+    // snapshot gives the same answer every message would have got.
+    const lookup = mentionLookupFor(currentSock ? getBot(currentSock) : null);
     for (const msg of history) {
       try {
-        await recordHistoryMessage(msg);
+        await recordHistoryMessage(msg, lookup);
       } catch (error) {
         logger.warn({ error }, "failed to record history message");
       }
@@ -1691,15 +1710,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     // The reply landing is what ends "typing" on a proactive send: there is no
     // request-response turn behind it to clear the indicator.
     void setPresence(sock, jid, "paused");
-    await store.recordMessage(jid, {
-      id: sent?.key?.id ?? undefined,
-      n: botName(),
-      role: "assistant",
-      s: userPart(sock.user?.id ?? ""),
-      surface: "dm",
-      t: Math.floor(Date.now() / 1000),
-      x: text,
-    });
+    await recordOutbound(sock, jid, sent, text);
     return { sent: true };
   };
 
@@ -1727,26 +1738,22 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       logger.warn({ jid }, "refusing media send to non-allowlisted jid");
       return { reason: "jid not allowlisted for sends", sent: false };
     }
+    const buf = decodeMediaBuffer(base64, env.maxSendMediaBytes);
+    if (!buf) {
+      return { reason: "image empty or over size cap", sent: false };
+    }
+    // The budget is spent last, the same order sendEnvelope keeps: an oversized
+    // image or a socket that is down would otherwise cost the chat one of its
+    // daily slots for a message that never left, and the slot is gone till
+    // tomorrow.
+    const sock = requireSock();
     if (!mediaSendCounter.take(jid)) {
       logger.warn({ jid }, "media send refused (daily cap reached)");
       return { reason: "daily image limit reached for this chat", sent: false };
     }
-    const buf = Buffer.from(base64, "base64");
-    if (!buf.length || buf.length > env.maxSendMediaBytes) {
-      return { reason: "image empty or over size cap", sent: false };
-    }
-    const sock = requireSock();
     const sent = await sock.sendMessage(jid, { caption, image: buf, mimetype: mime });
     sentStore.record(sent);
-    await store.recordMessage(jid, {
-      id: sent?.key?.id ?? undefined,
-      n: botName(),
-      role: "assistant",
-      s: userPart(sock.user?.id ?? ""),
-      surface: jid.endsWith("@g.us") ? "group" : "dm",
-      t: Math.floor(Date.now() / 1000),
-      x: caption?.trim() || "[image]",
-    });
+    await recordOutbound(sock, jid, sent, caption?.trim() || "[image]");
     return { sent: true };
   };
 
@@ -1759,31 +1766,13 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   const mediaBuffers = (items: EnvelopeMedia[]): Buffer[] | null => {
     const buffers: Buffer[] = [];
     for (const item of items) {
-      const buf = Buffer.from(item.base64, "base64");
-      if (!buf.length || buf.length > env.maxSendMediaBytes) {
+      const buf = decodeMediaBuffer(item.base64, env.maxSendMediaBytes);
+      if (!buf) {
         return null;
       }
       buffers.push(buf);
     }
     return buffers;
-  };
-
-  /** Record one outbound message the envelope sent, so the transcript stays two-sided. */
-  const recordOutbound = async (
-    sock: WASocket,
-    jid: string,
-    sent: WAMessage | undefined,
-    text: string,
-  ): Promise<void> => {
-    await store.recordMessage(jid, {
-      id: sent?.key?.id ?? undefined,
-      n: botName(),
-      role: "assistant",
-      s: userPart(sock.user?.id ?? ""),
-      surface: jid.endsWith("@g.us") ? "group" : "dm",
-      t: Math.floor(Date.now() / 1000),
-      x: text,
-    });
   };
 
   /**

@@ -4,11 +4,10 @@
 # Claim window index N (X display :N) for a Bot.
 # X.Org (Xvfb) 1280×800 + x11vnc on localhost RFB 5900+N (view-only).
 # noVNC/websockify ports: :1 → 6080, forks :N → 6080+(N-1).
-# Assignments live in /workspace/.window-assignments.json — on the volume,
-# so a claim outlives the container — with sha256 owner hashes, never raw
-# tokens. Re-claim by the same owner is idempotent; a different owner gets
-# exit 9. Bots are not security boundaries — same box user, shared
-# /workspace.
+# Assignments live in /workspace/.window-assignments.json, on the volume so a
+# claim outlives the container, with sha256 owner hashes, never raw tokens.
+# Re-claim by the same owner is idempotent; a different owner gets exit 9.
+# Bots are not security boundaries: same box user, shared /workspace.
 set -euo pipefail
 
 N="${1:?usage: start-window N [owner-hash] [bot-id] [--force]}"
@@ -68,7 +67,7 @@ PY
 
 alive() { DISPLAY="$DISPLAY_NAME" xdpyinfo >/dev/null 2>&1; }
 
-# Already serving this display? Idempotent success — but only when the
+# Already serving this display? Idempotent success, but only when the
 # server is really alive. A restart leaves the socket file behind, and
 # trusting it would leave the box with a dead desktop that looks up.
 if alive; then
@@ -80,7 +79,7 @@ if [[ -e "/tmp/.X11-unix/X$N" || -e "/tmp/.X${N}-lock" ]]; then
   rm -f "/tmp/.X11-unix/X$N" "/tmp/.X${N}-lock"
 fi
 
-# X.Org virtual framebuffer — not TigerVNC/Xvnc. x11vnc attaches for
+# X.Org virtual framebuffer, not TigerVNC/Xvnc. x11vnc attaches for
 # pixels; RFB input is off (-viewonly). Seat RPCs inject XTEST.
 Xvfb "$DISPLAY_NAME" \
   -screen 0 1280x800x24 \
@@ -125,12 +124,12 @@ DISPLAY="$DISPLAY_NAME" openbox >"/tmp/openbox-$N.log" 2>&1 &
 sleep 0.4
 
 # Chromium per window. Every profile is under ~/.config, which is the
-# volume, so all of them survive a rebuild — not just window 1's.
+# volume, so all of them survive a rebuild, not just window 1's.
 # --no-sandbox: the container is the sandbox; Chromium's own needs
 # privileges a desk container should not have.
 # The occlusion/backgrounding flags are load-bearing: with no VNC viewer
 # attached Chromium decides the window is not visible and stops painting, so
-# the agent's screenshot keeps returning a frozen frame — it navigates, sees
+# the agent's screenshot keeps returning a frozen frame: it navigates, sees
 # the old page, and retries forever.
 CHROMIUM="$(command -v chromium || command -v chromium-browser || true)"
 if [[ -n "$CHROMIUM" ]]; then

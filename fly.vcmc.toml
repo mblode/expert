@@ -31,7 +31,11 @@ HOME = "/home/box"
 COMPUTER_IDLE_SUSPEND_SEC = "1200"
 COMPUTER_VNC_TTL_SEC = "900"
 COMPUTER_NOVNC_BASE = "6080"
-COMPUTER_VNC_TOKEN_DIR = "/tmp/computer-vnc"
+# COMPUTER_VNC_TOKEN_DIR is deliberately unset. It reaches every child,
+# and the hub and the desk are different uids: the hub writes its pixel
+# tokens under the hub-owned /workspace/.computer/vnc-tokens init makes,
+# the desk keeps start-window's box-owned /tmp/computer-vnc. One shared
+# path made the hub write into a box-owned directory (EACCES per fork).
 COMPUTER_DESK = "local"
 COMPUTER_DATA = "/workspace/.computer/bots.json"
 COMPUTER_VNC_HOST = "127.0.0.1"

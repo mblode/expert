@@ -69,7 +69,7 @@ export function parseComputerBindings(raw: string | undefined): Map<string, stri
   return out;
 }
 
-export function parseEmailList(raw: string | undefined): Set<string> {
+function parseEmailList(raw: string | undefined): Set<string> {
   return new Set(
     (raw ?? "")
       .split(",")

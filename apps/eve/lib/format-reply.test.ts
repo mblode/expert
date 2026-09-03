@@ -39,6 +39,24 @@ describe("cleanReply: Markdown to WhatsApp", () => {
     expect(cleanReply(art)).toBe(art);
   });
 
+  it("leaves a pasted command inside a fence exactly as it was written", () => {
+    // The prose rules used to run straight through a fence: a `#` comment
+    // line came out `*bold*` and `**` collapsed to one asterisk, so the
+    // command a member copied out of the chat was not the one that went in.
+    const block = "```\n# install deps\nnpm i -- **x** --flag\n```";
+    expect(cleanReply(block)).toBe(block);
+  });
+
+  it("still cleans the prose on both sides of a fence", () => {
+    expect(cleanReply("**before** ```\n**kept**\n``` **after**")).toBe(
+      "*before* ```\n**kept**\n``` *after*",
+    );
+  });
+
+  it("treats an unclosed fence as prose, which is how WhatsApp renders it", () => {
+    expect(cleanReply("```\n**loud**")).toBe("```\n*loud*");
+  });
+
   it("does not touch single-underscore italics or list dashes", () => {
     expect(cleanReply("- _keen_ on this")).toBe("- _keen_ on this");
   });

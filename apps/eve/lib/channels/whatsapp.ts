@@ -2,7 +2,12 @@ import { randomUUID } from "node:crypto";
 import type { ChannelSource } from "eve/channels";
 import { defineChannel, POST } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
-import { EVE_HUB_SECRET_HEADER, eveHubSecretMatches } from "../auth.ts";
+import {
+  EVE_HUB_SECRET_HEADER,
+  eveHubSecretFromEnv,
+  eveHubSecretMatches,
+  secretFromEnv,
+} from "../auth.ts";
 import { TURN_HEADER } from "../hub.ts";
 import { outboundReply } from "../format-reply.ts";
 import { parseBridgePayload } from "./bridge-protocol.ts";
@@ -26,6 +31,10 @@ import type { BridgeMedia, BridgePayload } from "./bridge-protocol.ts";
 
 /** Direct-path header: the bridge and Eve share `WHATSAPP_BRIDGE_SECRET`. */
 export const BRIDGE_SECRET_HEADER = "x-bridge-secret";
+
+/** The direct door's secret, read through the one rule `secretFromEnv` owns. */
+const bridgeSecretFromEnv = (env: NodeJS.ProcessEnv): string | undefined =>
+  secretFromEnv("WHATSAPP_BRIDGE_SECRET", env);
 
 /**
  * What the Bot says when a turn completes with no text in it.
@@ -57,12 +66,10 @@ export function bridgeRequestAuthorised(
   headers: Headers,
   env: NodeJS.ProcessEnv = process.env,
 ): BridgeAuthPath | null {
-  const hubSecret = env.COMPUTER_EVE_SECRET || undefined;
-  if (eveHubSecretMatches(headers.get(EVE_HUB_SECRET_HEADER), hubSecret)) {
+  if (eveHubSecretMatches(headers.get(EVE_HUB_SECRET_HEADER), eveHubSecretFromEnv(env))) {
     return "hub";
   }
-  const bridgeSecret = env.WHATSAPP_BRIDGE_SECRET || undefined;
-  if (eveHubSecretMatches(headers.get(BRIDGE_SECRET_HEADER), bridgeSecret)) {
+  if (eveHubSecretMatches(headers.get(BRIDGE_SECRET_HEADER), bridgeSecretFromEnv(env))) {
     return "bridge";
   }
   return null;
@@ -70,7 +77,7 @@ export function bridgeRequestAuthorised(
 
 /** True when at least one door has a secret behind it. */
 export function bridgeAuthConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
-  return Boolean(env.COMPUTER_EVE_SECRET || env.WHATSAPP_BRIDGE_SECRET);
+  return Boolean(eveHubSecretFromEnv(env) ?? bridgeSecretFromEnv(env));
 }
 
 /**
@@ -84,7 +91,15 @@ const RESPONSE_RULE =
   "Reply in plain text suitable for WhatsApp. Keep it concise, avoid Markdown tables/headings/code fences, and ask at most one short follow-up question. When they ask you to change how you work (instructions, skills, routines, plugins, computer-use), edit those files on disk and say you did. A hello.expert link is only for taking the mouse or OAuth plugin consent, never for an edit, never tokens, never VNC.";
 
 const buildContextBlock = (payload: BridgePayload): string => {
-  const { surface, token, senderName, sender, acct, messageId } = payload;
+  // Every value below is interpolated into the block the model is told to
+  // trust, and `senderName` is a WhatsApp profile name its owner picked, so
+  // each one goes through `contextValue` first. See that function.
+  const { surface } = payload;
+  const token = contextValue(payload.token) ?? "";
+  const senderName = contextValue(payload.senderName);
+  const sender = contextValue(payload.sender);
+  const acct = contextValue(payload.acct);
+  const messageId = contextValue(payload.messageId);
   const lines =
     surface === "dm"
       ? [
@@ -131,11 +146,38 @@ export const buildContext = (payload: BridgePayload): string[] => {
 /**
  * A member who types `</untrusted_context>` into the chat would otherwise
  * close the fence from inside it and have the rest of the tail read as
- * unfenced context. Entity-escape the tag either way round; the model still
- * sees the words, they just cannot terminate the block.
+ * unfenced context. Entity-escape either fence tag, either way round; the
+ * model still sees the words, they just cannot terminate a block.
+ *
+ * `whatsapp_context` is in here for the same reason and a sharper one. That
+ * block is the channel's own, the one carrying `response_instructions`, and
+ * its `sender_name` line is a WhatsApp profile name the sender chose: a name
+ * of `</whatsapp_context>` closed the trusted block from inside it and left
+ * everything the sender wrote after it sitting outside every fence, which is
+ * strictly worse than the hole this function was written to close.
  */
 export const neutraliseFence = (block: string): string =>
-  block.replaceAll(/<(?<slash>\/?)untrusted_context>/giu, "&lt;$<slash>untrusted_context&gt;");
+  block.replaceAll(
+    /<(?<slash>\/?)(?<tag>untrusted_context|whatsapp_context)>/giu,
+    // The tag is lower-cased on the way out, which is what a literal
+    // replacement did when there was only one tag name to write. It keeps
+    // the escaped form one shape whatever case the sender typed; the match
+    // is case-insensitive either way, so nothing about the escape rests on it.
+    (_match, slash: string, tag: string) => `&lt;${slash}${tag.toLowerCase()}&gt;`,
+  );
+
+/**
+ * One value on a `key: value` line of the channel's own context block:
+ * fence-escaped, flattened to a single line, or undefined when nothing
+ * survives. The newlines go because a second line here is a field the bridge
+ * never sent, and a reader (model or human) cannot tell the two apart.
+ */
+const contextValue = (value: string | undefined): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  return neutraliseFence(value.replaceAll(/[\r\n]+/gu, " ")).trim() || undefined;
+};
 
 /**
  * The session auth for one inbound message, kept pure so the header round

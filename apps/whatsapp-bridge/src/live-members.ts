@@ -13,7 +13,7 @@ import { userPart } from "./trigger.ts";
  */
 
 /** One person currently in a WhatsApp group. At least one of phone/lid is set. */
-export interface LiveParticipant {
+interface LiveParticipant {
   /** Bare phone digits (no +), when WhatsApp gave a PN identity. */
   phone?: string;
   /** Opaque lid user-part, when WhatsApp gave a lid identity. */
@@ -23,7 +23,7 @@ export interface LiveParticipant {
 }
 
 /** Persisted shape: group JID → current participants. */
-export type ParticipantsByGroup = Record<string, LiveParticipant[]>;
+type ParticipantsByGroup = Record<string, LiveParticipant[]>;
 
 /** Overlay profile plus optional live lid, as GET /members returns it. */
 export type LiveMember = Member & { lid?: string };
@@ -65,7 +65,7 @@ export const samePerson = (a: LiveParticipant, b: LiveParticipant): boolean => {
 };
 
 /** Merge two sightings of the same person, preferring newly-learned fields. */
-export const mergePerson = (cur: LiveParticipant, next: LiveParticipant): LiveParticipant => ({
+const mergePerson = (cur: LiveParticipant, next: LiveParticipant): LiveParticipant => ({
   lid: next.lid || cur.lid,
   name: next.name?.trim() || cur.name,
   phone: next.phone || cur.phone,
@@ -246,7 +246,7 @@ export const formatMemberContext = (members: readonly LiveMember[]): string | nu
 };
 
 /** In-memory live roster: per-group upsert/remove/replace, dirty flag, seed. */
-export interface LiveRoster {
+interface LiveRoster {
   all: () => LiveParticipant[];
   clearDirty: () => void;
   dirty: () => boolean;

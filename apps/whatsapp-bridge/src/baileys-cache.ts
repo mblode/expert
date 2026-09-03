@@ -22,7 +22,7 @@ const sentKey = (remoteJid: string | null | undefined, id: string | null | undef
   `${remoteJid ?? ""}:${id ?? ""}`;
 
 /** Bounded store of recently sent message contents, for getMessage retry replies. */
-export interface SentStore {
+interface SentStore {
   /** Remember a just-sent message so its retry receipt can be answered. No-op on missing jid/id/content. */
   record: (sent?: WAMessage) => void;
   /** Look up the proto content Baileys needs to re-encrypt, or undefined if unknown. */
@@ -45,7 +45,7 @@ export const createSentStore = (cap = 500): SentStore => {
 };
 
 /** The subset of Baileys' CacheStore we implement (get/set/del/flushAll). */
-export interface CacheStore {
+interface CacheStore {
   get: <T>(key: string) => T | undefined;
   set: <T>(key: string, value: T) => void;
   del: (key: string) => void;
