@@ -449,6 +449,16 @@ export interface Message {
   body: MessageBody;
   /** Set for anything a turn produced. */
   turn_id?: string;
+  /**
+   * The id of the `widget` or `secret_request` this message closes.
+   *
+   * A widget's `answer` and a secret_request's `provided` are resolution
+   * state, and the log is append-only: the line that recorded the request
+   * is never rewritten. So the answer is carried by the message that
+   * answers it, and the two fields are derived on read. Without this a
+   * person simply typing after a widget would look like an answer to it.
+   */
+  resolves?: string;
 }
 
 export interface Conversation {
@@ -462,4 +472,11 @@ export interface Conversation {
   last_seq: number;
   created_at: string;
   updated_at: string;
+  /**
+   * The path the pre-conversations occurrence log was imported from, set
+   * once the import has run. It is the marker that keeps the import
+   * one-shot, and it lives in the index rather than in a file of its own so
+   * that "the log was seeded" cannot drift from the log it seeded.
+   */
+  imported_from?: string;
 }

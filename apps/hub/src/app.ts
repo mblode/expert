@@ -83,8 +83,11 @@ export interface Hub {
 }
 
 export function createHub(opts: HubOptions): Hub {
-  const bots = new BotRegistry(opts.deskFactory, opts.store.load(), opts.policy);
-  const provision = new ProvisionService(bots, opts.windows, opts.store);
+  // Before the roster: every Bot's voice speaks into a conversation, so the
+  // store has to exist before a Bot can be mounted over it.
+  const conversations = new ConversationRegistry(opts.conversationStore, opts.messageLog);
+  const bots = new BotRegistry(opts.deskFactory, opts.store.load(), opts.policy, conversations);
+  const provision = new ProvisionService(bots, opts.windows, opts.store, conversations);
   const auth = new AuthRegistry({
     agentTokens: () => bots.tokenEntries(),
     pixels: opts.pixels,
@@ -93,7 +96,6 @@ export function createHub(opts: HubOptions): Hub {
   });
   const router = new ConnectRouter(auth);
   const channels = new ChannelRegistry(opts.channelStore);
-  const conversations = new ConversationRegistry(opts.conversationStore, opts.messageLog);
   // In-process: a turn is one inbound message long, so it has nothing to
   // survive a restart for. A hub that died mid-turn has already dropped the
   // reply the token was minted for.

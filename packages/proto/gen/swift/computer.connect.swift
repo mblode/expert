@@ -111,6 +111,12 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     @available(iOS 13, *)
     func `occurrences`(request: Computer_V1_OccurrencesRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_OccurrencesResponse>
 
+    /// Every place a Bot's voice speaks: the picker a phone needs before it can
+    /// ask for a thread, and the audit view of a bot-to-bot hop. Owner seat
+    /// only, and contained by the screen the seat was minted for.
+    @available(iOS 13, *)
+    func `conversations`(request: Computer_V1_ConversationsRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_ConversationsResponse>
+
     /// Deliver a masked value for an open secret_request. The value goes to
     /// the box clipboard and is never stored, logged, or returned.
     @available(iOS 13, *)
@@ -207,6 +213,11 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
+    public func `conversations`(request: Computer_V1_ConversationsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_ConversationsResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/Conversations", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `provideSecret`(request: Computer_V1_ProvideSecretRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_ProvideSecretResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/ProvideSecret", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -266,6 +277,7 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let clipboardGet = Connect.MethodSpec(name: "ClipboardGet", service: "computer.v1.Seat", type: .unary)
             public static let clipboardSet = Connect.MethodSpec(name: "ClipboardSet", service: "computer.v1.Seat", type: .unary)
             public static let occurrences = Connect.MethodSpec(name: "Occurrences", service: "computer.v1.Seat", type: .unary)
+            public static let conversations = Connect.MethodSpec(name: "Conversations", service: "computer.v1.Seat", type: .unary)
             public static let provideSecret = Connect.MethodSpec(name: "ProvideSecret", service: "computer.v1.Seat", type: .unary)
             public static let createBot = Connect.MethodSpec(name: "CreateBot", service: "computer.v1.Seat", type: .unary)
             public static let deleteBot = Connect.MethodSpec(name: "DeleteBot", service: "computer.v1.Seat", type: .unary)

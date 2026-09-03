@@ -47,6 +47,7 @@ service Seat {
   rpc ClipboardGet
   rpc ClipboardSet
   rpc Occurrences       // the thread, paged
+  rpc Conversations     // every place a Bot's voice speaks (owner)
   rpc ProvideSecret     // answer a secret_request: value → clipboard only
   rpc CreateBot         // provision: next free screen + minted token
   rpc DeleteBot
@@ -238,9 +239,11 @@ it is still there. It works once per request.
 
 `Seat.Occurrences { cursor?, limit?, conversation_id? }` pages a thread
 oldest-first; `cursor` is the last `seq` the caller has. Without a
-`conversation_id` it is the display's Bot thread, which persists on the box
-at `/workspace/.bots/<id>/transcript.jsonl`. With one it is that
-conversation, below.
+`conversation_id` it is the display's Bot `seat` conversation, which is
+where the thread has always been and is now one conversation among the
+Bot's; with one it is that conversation, below. Entries carry an additive
+`conversation_id` and `author`, and the `cursor` / `next_cursor` / `seq`
+contract is untouched.
 
 There is no Seat RPC to answer a `widget` yet: a client re-opens the turn
 by sending a new message through its harness. That is a known gap.
@@ -273,9 +276,26 @@ token is the Bot's seat thread. `send_message` grows no target: a
 conversation id addresses a human's route, so letting the model name one is
 the injection path the five-tool rule refuses.
 
-The turn rules are unchanged and are now per conversation, which is why a
-`widget` waiting on hello.expert no longer makes the next WhatsApp reply
-`CONFLICT`.
+The turn rules are unchanged and are now per conversation, enforced in one
+place for every route, which is why a `widget` waiting on hello.expert no
+longer makes the next WhatsApp reply `CONFLICT`. A `widget`'s `answer` and a
+`secret_request`'s `provided` are derived on read from the message that
+closed the request: the log is append-only, so a line is never rewritten.
+
+`Seat.Conversations { display? }` lists them:
+`{ id, route, participants, last_seq, updated_at }[]`, no message bodies,
+`Seat.Occurrences` is still the read. Owner seat only, and contained by the
+screen the seat was minted for, exactly as `Occurrences` is: a seat bound to
+display N must not learn that another display's Bot has a conversation, let
+alone read it.
+
+Each Bot's `seat` conversation is seeded once, at boot, from the
+`/workspace/.bots/<id>/transcript.jsonl` the hub wrote before conversations
+existed, with `seq` carried through so a cursor held across the deploy still
+means what it meant. It runs once, marked on the record, and it is a resume
+rather than a second copy if it is interrupted. That file is then read no
+more and written never again; it is not deleted, for the same reason
+deleting a Bot leaves its box state alone. It is the human's record.
 
 ## Channels
 

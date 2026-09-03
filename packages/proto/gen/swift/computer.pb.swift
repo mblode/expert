@@ -965,8 +965,8 @@ public nonisolated struct Computer_V1_SendMessageResponse: Sendable {
   /// True when this send ended the turn (widget, secret_request).
   public var turnEnded: Bool = false
 
-  /// The conversation this send landed in. Empty when the caller presented
-  /// no turn binding, which is the Bot's own seat thread.
+  /// The conversation this send landed in. With no turn binding that is the
+  /// Bot's own seat conversation, which is where it has always gone.
   public var conversationID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -1266,9 +1266,9 @@ public nonisolated struct Computer_V1_OccurrencesRequest: Sendable {
 
   public var display: Int32 = 0
 
-  /// Additive. Absent = the display's Bot seat thread, which is what this
-  /// RPC has always returned. A conversation belongs to a Bot, and a seat
-  /// bound to one screen may not read another screen's Bot by id.
+  /// Additive. Absent = the display's Bot seat conversation, which is what
+  /// this RPC has always returned. A conversation belongs to a Bot, and a
+  /// seat bound to one screen may not read another screen's Bot by id.
   public var conversationID: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -1322,7 +1322,7 @@ public nonisolated struct Computer_V1_Occurrence: Sendable {
 
   public var provided: Bool = false
 
-  /// Set when the entry came from a conversation rather than the seat log.
+  /// The conversation this entry belongs to. The seat thread is one too.
   public var conversationID: String = String()
 
   public var author: Computer_V1_MessageAuthor {
@@ -1351,6 +1351,105 @@ public nonisolated struct Computer_V1_OccurrencesResponse: Sendable {
   public var entries: [Computer_V1_Occurrence] = []
 
   public var nextCursor: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_ConversationsRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// 0/absent = every screen this seat may see. A seat bound to one screen
+  /// gets that screen whatever it asks for.
+  public var display: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Where a conversation's messages leave for. Fields are per kind: `acct`
+/// and `jid` for whatsapp, `bot` for peer, neither for seat.
+public nonisolated struct Computer_V1_ConversationRoute: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// seat | whatsapp | peer
+  public var kind: String = String()
+
+  public var acct: String = String()
+
+  public var jid: String = String()
+
+  public var bot: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Who is in it. `ref` is the human's identity on the route: a WhatsApp JID,
+/// or "seat" for the person at the screen.
+public nonisolated struct Computer_V1_ConversationParticipant: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// bot | human
+  public var kind: String = String()
+
+  public var bot: String = String()
+
+  public var ref: String = String()
+
+  public var displayName: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// No message bodies: this is the list, Occurrences is the read.
+public nonisolated struct Computer_V1_Conversation: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var id: String = String()
+
+  public var route: Computer_V1_ConversationRoute {
+    get {_route ?? Computer_V1_ConversationRoute()}
+    set {_route = newValue}
+  }
+  /// Returns true if `route` has been explicitly set.
+  public var hasRoute: Bool {self._route != nil}
+  /// Clears the value of `route`. Subsequent reads from it will return its default value.
+  public mutating func clearRoute() {self._route = nil}
+
+  public var participants: [Computer_V1_ConversationParticipant] = []
+
+  /// The log tail, so a client knows there is something new without paging.
+  public var lastSeq: Int32 = 0
+
+  public var updatedAt: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _route: Computer_V1_ConversationRoute? = nil
+}
+
+public nonisolated struct Computer_V1_ConversationsResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var conversations: [Computer_V1_Conversation] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4221,6 +4320,210 @@ nonisolated extension Computer_V1_OccurrencesResponse: SwiftProtobuf.Message, Sw
   public static func ==(lhs: Computer_V1_OccurrencesResponse, rhs: Computer_V1_OccurrencesResponse) -> Bool {
     if lhs.entries != rhs.entries {return false}
     if lhs.nextCursor != rhs.nextCursor {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ConversationsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConversationsRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}display\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.display != 0 {
+      try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ConversationsRequest, rhs: Computer_V1_ConversationsRequest) -> Bool {
+    if lhs.display != rhs.display {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ConversationRoute: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConversationRoute"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}acct\0\u{1}jid\0\u{1}bot\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.acct) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.jid) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.bot) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.acct.isEmpty {
+      try visitor.visitSingularStringField(value: self.acct, fieldNumber: 2)
+    }
+    if !self.jid.isEmpty {
+      try visitor.visitSingularStringField(value: self.jid, fieldNumber: 3)
+    }
+    if !self.bot.isEmpty {
+      try visitor.visitSingularStringField(value: self.bot, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ConversationRoute, rhs: Computer_V1_ConversationRoute) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.acct != rhs.acct {return false}
+    if lhs.jid != rhs.jid {return false}
+    if lhs.bot != rhs.bot {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ConversationParticipant: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConversationParticipant"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}bot\0\u{1}ref\0\u{3}display_name\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.bot) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.ref) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.displayName) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.bot.isEmpty {
+      try visitor.visitSingularStringField(value: self.bot, fieldNumber: 2)
+    }
+    if !self.ref.isEmpty {
+      try visitor.visitSingularStringField(value: self.ref, fieldNumber: 3)
+    }
+    if !self.displayName.isEmpty {
+      try visitor.visitSingularStringField(value: self.displayName, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ConversationParticipant, rhs: Computer_V1_ConversationParticipant) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.bot != rhs.bot {return false}
+    if lhs.ref != rhs.ref {return false}
+    if lhs.displayName != rhs.displayName {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_Conversation: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Conversation"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}route\0\u{1}participants\0\u{3}last_seq\0\u{3}updated_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularMessageField(value: &self._route) }()
+      case 3: try { try decoder.decodeRepeatedMessageField(value: &self.participants) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.lastSeq) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.updatedAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
+    }
+    try { if let v = self._route {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+    } }()
+    if !self.participants.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.participants, fieldNumber: 3)
+    }
+    if self.lastSeq != 0 {
+      try visitor.visitSingularInt32Field(value: self.lastSeq, fieldNumber: 4)
+    }
+    if !self.updatedAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.updatedAt, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_Conversation, rhs: Computer_V1_Conversation) -> Bool {
+    if lhs.id != rhs.id {return false}
+    if lhs._route != rhs._route {return false}
+    if lhs.participants != rhs.participants {return false}
+    if lhs.lastSeq != rhs.lastSeq {return false}
+    if lhs.updatedAt != rhs.updatedAt {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ConversationsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ConversationsResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}conversations\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.conversations) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.conversations.isEmpty {
+      try visitor.visitRepeatedMessageField(value: self.conversations, fieldNumber: 1)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ConversationsResponse, rhs: Computer_V1_ConversationsResponse) -> Bool {
+    if lhs.conversations != rhs.conversations {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

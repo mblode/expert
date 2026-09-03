@@ -8,6 +8,7 @@ import {
 import type { BotId } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 import { ComputerService } from "./computer.ts";
+import { ConversationRegistry } from "./conversations.ts";
 import { FileService } from "./files.ts";
 import { PolicyService } from "./policy.ts";
 import { SeatService } from "./seat.ts";
@@ -31,7 +32,7 @@ export interface Bot {
   token: string;
   desk: Desk;
   seat: SeatService;
-  /** This Bot's directory on the box: profile, memory, transcript. Never its token. */
+  /** This Bot's directory on the box: profile, memory, the old transcript. Never its token. */
   state: BotState;
   voice: VoiceService;
   computer: ComputerService;
@@ -48,6 +49,8 @@ export class BotRegistry {
     private readonly deskFactory: (display: number) => Desk,
     configs: BotConfig[] = [],
     private readonly policy: PolicyService = new PolicyService(),
+    /** Where every Bot's voice speaks. Box-wide for the same reason policy is. */
+    private readonly conversations: ConversationRegistry = new ConversationRegistry(),
   ) {
     for (const c of configs) {
       this.add(c);
@@ -87,9 +90,10 @@ export class BotRegistry {
       desk,
       seat,
       state,
-      // The Bot's directory is where the occurrence log stops being a
-      // process-lifetime thing; ProvisionService reads it back at boot.
-      voice: new VoiceService(desk, undefined, state),
+      // The thread is the Bot's `seat` conversation, hub-owned and resolved
+      // by route, so a Bot re-created under a name it had before adopts what
+      // it left behind. ProvisionService seeds it from the box at boot.
+      voice: new VoiceService(desk, c.id, this.conversations),
       computer: new ComputerService(desk, seat, this.policy),
       files: new FileService(desk, seat, this.policy),
     };

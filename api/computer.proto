@@ -28,6 +28,10 @@ service Seat {
   // The thread the human sees. Cursor-paged: the phone restores it on
   // launch instead of replaying the whole log.
   rpc Occurrences(OccurrencesRequest) returns (OccurrencesResponse);
+  // Every place a Bot's voice speaks: the picker a phone needs before it can
+  // ask for a thread, and the audit view of a bot-to-bot hop. Owner seat
+  // only, and contained by the screen the seat was minted for.
+  rpc Conversations(ConversationsRequest) returns (ConversationsResponse);
   // Deliver a masked value for an open secret_request. The value goes to
   // the box clipboard and is never stored, logged, or returned.
   rpc ProvideSecret(ProvideSecretRequest) returns (ProvideSecretResponse);
@@ -313,8 +317,8 @@ message SendMessageResponse {
   string occurrence_id = 1;
   // True when this send ended the turn (widget, secret_request).
   bool turn_ended = 2;
-  // The conversation this send landed in. Empty when the caller presented
-  // no turn binding, which is the Bot's own seat thread.
+  // The conversation this send landed in. With no turn binding that is the
+  // Bot's own seat conversation, which is where it has always gone.
   string conversation_id = 3;
 }
 
@@ -409,9 +413,9 @@ message OccurrencesRequest {
   string cursor = 1;
   int32 limit = 2;
   int32 display = 3;
-  // Additive. Absent = the display's Bot seat thread, which is what this
-  // RPC has always returned. A conversation belongs to a Bot, and a seat
-  // bound to one screen may not read another screen's Bot by id.
+  // Additive. Absent = the display's Bot seat conversation, which is what
+  // this RPC has always returned. A conversation belongs to a Bot, and a
+  // seat bound to one screen may not read another screen's Bot by id.
   string conversation_id = 4;
 }
 
@@ -433,7 +437,7 @@ message Occurrence {
   string answer = 8;
   string label = 9;
   bool provided = 10;
-  // Set when the entry came from a conversation rather than the seat log.
+  // The conversation this entry belongs to. The seat thread is one too.
   string conversation_id = 11;
   MessageAuthor author = 12;
   string turn_id = 13;
@@ -442,6 +446,44 @@ message Occurrence {
 message OccurrencesResponse {
   repeated Occurrence entries = 1;
   string next_cursor = 2;
+}
+
+message ConversationsRequest {
+  // 0/absent = every screen this seat may see. A seat bound to one screen
+  // gets that screen whatever it asks for.
+  int32 display = 1;
+}
+
+// Where a conversation's messages leave for. Fields are per kind: `acct`
+// and `jid` for whatsapp, `bot` for peer, neither for seat.
+message ConversationRoute {
+  string kind = 1; // seat | whatsapp | peer
+  string acct = 2;
+  string jid = 3;
+  string bot = 4;
+}
+
+// Who is in it. `ref` is the human's identity on the route: a WhatsApp JID,
+// or "seat" for the person at the screen.
+message ConversationParticipant {
+  string kind = 1; // bot | human
+  string bot = 2;
+  string ref = 3;
+  string display_name = 4;
+}
+
+// No message bodies: this is the list, Occurrences is the read.
+message Conversation {
+  string id = 1;
+  ConversationRoute route = 2;
+  repeated ConversationParticipant participants = 3;
+  // The log tail, so a client knows there is something new without paging.
+  int32 last_seq = 4;
+  string updated_at = 5;
+}
+
+message ConversationsResponse {
+  repeated Conversation conversations = 1;
 }
 
 message ProvideSecretRequest {

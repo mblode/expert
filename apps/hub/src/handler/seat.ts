@@ -219,11 +219,12 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   // The thread. Read-only, and deliberately NOT gated on requireHumanContact:
   // reading what was said is not taking the seat.
   //
-  // `conversation_id` is additive: absent is the display's Bot thread, which
-  // is what every caller does today. Naming one is the same read through the
-  // conversation store, and it is still contained by the screen the seat was
-  // minted for: a conversation belongs to a Bot, a Bot is on a screen, and a
-  // seat bound to one screen must not read another one's thread by id.
+  // `conversation_id` is additive: absent is the display's Bot seat
+  // conversation, which is what every caller does today, and is the same
+  // read through the same store. Naming one is still contained by the screen
+  // the seat was minted for: a conversation belongs to a Bot, a Bot is on a
+  // screen, and a seat bound to one screen must not read another one's
+  // thread by id.
   router.rpc(SeatMethods.Occurrences, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
     const cursor = typeof o.cursor === "string" && o.cursor ? o.cursor : undefined;
@@ -240,6 +241,39 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
       return deps.conversations.page(conversation.id, cursor, limit);
     }
     return botFor(o, ctx).voice.page(cursor, limit);
+  });
+
+  /**
+   * Every conversation a Bot on a screen this seat may see speaks into.
+   *
+   * Owner only, and for free: `owner` is the one role with no method
+   * allowlist, so a new Seat RPC reaches owners and nobody else until
+   * someone lists it (`ROLE_METHODS`). Screen containment is the same rule
+   * `Occurrences` follows: a seat bound to display N lists that Bot's
+   * conversations and cannot see, let alone read, another display's.
+   */
+  router.rpc(SeatMethods.Conversations, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    // 0 is the proto default for an absent int32, and `parseDisplay` refuses
+    // it, so it is read as "not asked" here the way `Seat.Issue` reads it.
+    const asked = o.display === undefined || o.display === 0 ? undefined : o.display;
+    const visible =
+      ctx.principal?.display === undefined && asked === undefined
+        ? deps.bots.all()
+        : [deps.bots.byDisplay(displayFor({ display: asked }, ctx.principal))];
+    const ids = new Set(visible.map((b) => b.id as string));
+    return {
+      conversations: deps.conversations
+        .list()
+        .filter((c) => ids.has(c.bot))
+        .map((c) => ({
+          id: c.id,
+          last_seq: c.last_seq,
+          participants: c.participants,
+          route: c.route,
+          updated_at: c.updated_at,
+        })),
+    };
   });
 
   // A masked value for an open secret_request. It goes to the clipboard and
