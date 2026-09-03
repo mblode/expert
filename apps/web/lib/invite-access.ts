@@ -21,7 +21,7 @@ export function inviteTokenFromRequest(request: Request, body?: unknown): string
 }
 
 /** Either env name is the mint secret. Both may be set to the same value. */
-export function mintSecrets(env: EnvMap): string[] {
+function mintSecrets(env: EnvMap): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
   for (const name of ["EXPERT_INVITE_SECRET", "INVITE_MINT_SECRET"] as const) {

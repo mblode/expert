@@ -21,6 +21,7 @@ const TYPE_IDLE_MS = 300;
  */
 const TAP_SLOP = 8;
 
+/** What `useSeatInput` returns, so a component can name the shape it spreads. @public */
 export interface SeatInput {
   error: string | null;
   /** Attach to the drawn cursor; it is moved directly, not through React. */

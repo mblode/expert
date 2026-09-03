@@ -114,7 +114,7 @@ export function parseAllowlist(text: string): { jids: string[]; invalid: string[
   return { invalid, jids: [...new Set(jids)] };
 }
 
-export function formatAllowlist(jids: readonly string[] | undefined): string {
+function formatAllowlist(jids: readonly string[] | undefined): string {
   return (jids ?? []).map(jidToPhone).join("\n");
 }
 
@@ -229,6 +229,7 @@ export type LinkView =
   | { kind: "linked"; phone: string | null }
   | { kind: "closed"; phone: string | null };
 
+/** The events a caller dispatches into `reduceLink`. @public */
 export type LinkEvent =
   | { type: "state"; state: WhatsAppLinkState; method?: LinkMethod }
   | { type: "accounts"; accounts: WhatsAppAccount[]; acct: string }

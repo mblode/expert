@@ -1,6 +1,7 @@
 import { acceptedStaticKey, connectionView, planConnectionFile } from "./connection-file";
 import type { ConnectionFailure, ConnectionView } from "./connection-file";
 
+/** The success half of what `installConnection` resolves to. @public */
 export interface InstallResult {
   installed: boolean;
   plugin: ConnectionView;

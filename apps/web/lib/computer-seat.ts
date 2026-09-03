@@ -13,6 +13,7 @@ import {
 } from "./computers";
 import { db } from "./db";
 
+/** Every seat call here resolves to one, so a route can name what it holds. @public */
 export interface ComputerSeat {
   computerId: string;
   computers: ComputerChoice[];

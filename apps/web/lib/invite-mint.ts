@@ -26,6 +26,7 @@ export function parseInviteMintBody(body: unknown): {
   };
 }
 
+/** The `mint` option `respondToInviteMint` takes, so a test can pass its own. @public */
 export type InviteMintFn = (
   input: ReturnType<typeof parseInviteMintBody>,
   request: Request | undefined,
