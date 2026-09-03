@@ -23,7 +23,7 @@ export function eveUrlForDisplay(display: number, basePort = EVE_BASE_PORT): str
   return `http://127.0.0.1:${evePortForDisplay(display, basePort)}`;
 }
 
-export interface EveLaunch {
+interface EveLaunch {
   botId: string;
   display: number;
   port: number;
@@ -31,7 +31,7 @@ export interface EveLaunch {
   token: string;
 }
 
-export function isEveProject(dir: string, exists: (path: string) => boolean = existsSync): boolean {
+function isEveProject(dir: string, exists: (path: string) => boolean = existsSync): boolean {
   return exists(join(dir, "package.json")) && exists(join(dir, "agent"));
 }
 
@@ -55,7 +55,7 @@ export function resolveEveBotsRoot(opts: {
 }
 
 /** Nested `bots/<id>` or, for roster `main`, a standalone Eve project at botsRoot. */
-export function eveProjectCwd(
+function eveProjectCwd(
   botsRoot: string,
   botId: string,
   exists: (path: string) => boolean = existsSync,
@@ -99,7 +99,7 @@ export function planEveLaunches(
   return launches;
 }
 
-export interface EveChildOptions {
+interface EveChildOptions {
   hubUrl: string;
   eveSecret: string;
   /** Per-Bot logs land here as `eve-<botId>.log`. */

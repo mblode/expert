@@ -12,7 +12,7 @@ interface FileEntry {
   content: string;
 }
 
-export interface FakeDeskOptions {
+interface FakeDeskOptions {
   failPing?: boolean;
   display?: number;
 }

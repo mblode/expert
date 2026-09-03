@@ -40,7 +40,7 @@ export type Occurrence = Flat<MessageBody>;
 const BOX_STATE_ROOT = "/workspace/.bots";
 
 /** Grok's profile fields, snake_cased like the rest of our on-box JSON. */
-export interface BotProfile {
+interface BotProfile {
   id: string;
   name: string;
   description: string;
@@ -51,7 +51,7 @@ export interface BotProfile {
 
 type MemoryKind = "note" | "episode";
 
-export interface MemoryEntry {
+interface MemoryEntry {
   /** sha1 of the normalised content: the same fact written twice is one entry. */
   id: string;
   date: string;

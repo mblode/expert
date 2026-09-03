@@ -29,7 +29,7 @@ import type { ConversationEntry, ConversationPage, ConversationRegistry } from "
  * WhatsApp reply `CONFLICT`.
  */
 
-export type SendBody =
+type SendBody =
   | { kind: "text"; text: string; images?: string[] }
   | { kind: "widget"; prompt: string; options: string[] }
   | { kind: "secret_request"; prompt: string; label: string };

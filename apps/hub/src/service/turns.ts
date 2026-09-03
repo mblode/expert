@@ -16,7 +16,7 @@ import { ComputerError } from "@computer/shared";
  * the bot-to-bot guards will need no second mechanism. Nothing decrements
  * `hops_left` today: there is one Bot per deployment and no peer route.
  */
-export interface Turn {
+interface Turn {
   id: string;
   conversation_id: string;
   /** The Bot this turn was minted for. Another Bot presenting it is refused. */
