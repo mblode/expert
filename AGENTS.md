@@ -55,5 +55,6 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 - Grok Bot research, gap analysis, roadmap: `docs/GROK-BOT.md`
 - WhatsApp parity plan (Vibey as one tenant, phases and todos): `docs/WHATSAPP-PARITY.md`
 - System architecture, the seams, and the target shape: `docs/ARCHITECTURE.md`
+- Conversations plan (one record for the model's voice, iOS and bot-to-bot): `docs/plans/conversations.md`
 - Design rationale and sources: `api/RESEARCH.md`; historical plan: `docs/history/`
 - Eve project layout and adding a bot: `apps/eve/README.md`
