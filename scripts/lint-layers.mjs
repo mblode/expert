@@ -32,8 +32,10 @@ function walk(dir) {
 let failed = false;
 for (const { dir, forbidden } of RULES) {
   for (const layer of forbidden) {
-    // A path segment, so `./error-handler.ts` is not a false positive.
-    const pattern = new RegExp(`(?:from\\s+|import\\()["'][^"']*/${layer}/`);
+    // A path segment, so `./error-handler.ts` is not a false positive. The
+    // bare `import "..."` arm matters: a side-effect import has no `from`, and
+    // an upward one still runs the module it is not allowed to depend on.
+    const pattern = new RegExp(`(?:from\\s+|import\\(|import\\s+)["'][^"']*/${layer}/`);
     for (const file of walk(join(srcRoot, dir))) {
       if (pattern.test(readFileSync(file, "utf-8"))) {
         console.error(
