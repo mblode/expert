@@ -7,16 +7,16 @@ Three surfaces, deployed separately and in this order. The web app is safe to
 ship first because it degrades against an older hub on purpose; the hub is what
 switches new features on.
 
-| Surface        | Where            | Deployed by                       |
-| -------------- | ---------------- | --------------------------------- |
-| Control plane  | Vercel           | `git push origin main`            |
-| Blode computer | Fly, `syd`       | `fly deploy -c fly.toml`          |
-| Vibey computer | Fly, `syd`       | `fly deploy -c fly.vcmc.toml`     |
+| Surface        | Where      | Deployed by                   |
+| -------------- | ---------- | ----------------------------- |
+| Control plane  | Vercel     | `git push origin main`        |
+| Blode computer | Fly, `syd` | `fly deploy -c fly.toml`      |
+| Vibey computer | Fly, `syd` | `fly deploy -c fly.vcmc.toml` |
 
 ## 0. Before anything: build the guest image
 
 CI never builds it. It runs `hadolint` over `deploy/fly/Dockerfile` and builds
-the *desk* image, so a guest image that cannot build is not caught until a
+the _desk_ image, so a guest image that cannot build is not caught until a
 Machine is already restarting.
 
 ```bash
@@ -143,12 +143,12 @@ that only exists if the Bot re-exports the channel at
 In `vcmc-agent`, on Railway. All three or none: a half-configured bridge falls
 back to @vibey rather than posting into a 404.
 
-| Variable                  | Value                                             |
-| ------------------------- | ------------------------------------------------- |
-| `EXPERT_URL`              | `https://mblode-computer.fly.dev` (hub, not Eve)  |
-| `EXPERT_CONNECTOR_SECRET` | printed by step 4                                 |
-| `EXPERT_CONNECTOR_ID`     | `whatsapp`                                        |
-| `EXPERT_DM_JIDS`          | `+61456455551`                                    |
+| Variable                  | Value                                            |
+| ------------------------- | ------------------------------------------------ |
+| `EXPERT_URL`              | `https://mblode-computer.fly.dev` (hub, not Eve) |
+| `EXPERT_CONNECTOR_SECRET` | printed by step 4                                |
+| `EXPERT_CONNECTOR_ID`     | `whatsapp`                                       |
+| `EXPERT_DM_JIDS`          | `+61456455551`                                   |
 
 Blode's computer, not Vibey's. @vibey's own Eve already runs on
 `vcmc-computer` and the bridge's `EVE_URL` points there, so sending the owner
