@@ -19,14 +19,11 @@
       "entry": ["lib/**/*.test.ts"],
       "ignoreDependencies": ["postcss"]
     },
-    "apps/eve": {
-      "entry": ["lib/**/*.ts"]
-    },
+    "apps/eve": {},
     "apps/eve/bots/main": {
       "entry": ["agent/**/*.ts"]
     }
   },
-  "ignoreExportsUsedInFile": true,
   "ignoreIssues": {
     "apps/web/components/ui/**": ["exports", "types", "nsExports", "nsTypes"]
   }
