@@ -51,7 +51,7 @@ export interface AgentReply {
 }
 
 /** Config for the client; injected so the module owns no env/global state. */
-export interface ConnectorClientConfig {
+interface ConnectorClientConfig {
   /** Which account this client speaks for; rides in the payload as `acct`. */
   acct: string;
   endpoint: string;

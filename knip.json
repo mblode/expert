@@ -25,6 +25,15 @@
     }
   },
   "ignoreIssues": {
-    "apps/web/components/ui/**": ["exports", "types", "nsExports", "nsTypes"]
+    "apps/web/components/ui/**": ["exports", "types", "nsExports", "nsTypes"],
+    // The shape of a shared primitive, kept nameable so a consumer can annotate it
+    // instead of writing `ReturnType<typeof boundedSet>` as account.ts had to.
+    "apps/whatsapp-bridge/src/bounded-set.ts": ["types"],
+    // Same, and the doc comment on `JidQueue` is the record of the ordering bug it fixed.
+    "apps/whatsapp-bridge/src/jid-queue.ts": ["types"],
+    // The short-id/raw-key seam: these four name what may reach a model and what may not.
+    "apps/whatsapp-bridge/src/message-ids.ts": ["types"],
+    // The argument and verdict of `authoriseEnvelope`, the gate holding the never-post-to-a-group rule.
+    "apps/whatsapp-bridge/src/send-envelope.ts": ["types"]
   }
 }

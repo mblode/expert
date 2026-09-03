@@ -13,10 +13,10 @@
 
 import type { Logger } from "pino";
 
-export type WaVersion = [number, number, number];
-export type WaVersionSource = "wa-web" | "baileys-repo";
+type WaVersion = [number, number, number];
+type WaVersionSource = "wa-web" | "baileys-repo";
 
-export interface ResolvedWaVersion {
+interface ResolvedWaVersion {
   version: WaVersion;
   source: WaVersionSource;
 }

@@ -106,7 +106,7 @@ const officeBodyEntries = (ext: string, names: string[]): string[] => {
 };
 
 /** What flavour of document we're looking at, which decides how we read it. */
-export type DocumentKind = "pdf" | "text" | "office" | "binary";
+type DocumentKind = "pdf" | "text" | "office" | "binary";
 
 /**
  * Classify a document by mime (preferred) then filename extension. PDFs go to

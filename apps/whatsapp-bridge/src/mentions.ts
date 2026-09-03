@@ -34,7 +34,7 @@ export const memberNameLookup = (members: readonly Member[]): NameLookup => {
 };
 
 /** Sources a composed mention lookup draws on, in priority order. */
-export interface MentionSources {
+interface MentionSources {
   /** The bot's own id user-parts (phone + lid); these resolve to `botName`. */
   botIds?: ReadonlySet<string> | null;
   botName?: string;
@@ -66,7 +66,7 @@ export const composeMentionLookup =
   };
 
 /** A learned lid<->phone pairing, with a display name when the source had one. */
-export interface LidPair {
+interface LidPair {
   lid: string;
   phone: string;
   name?: string;
