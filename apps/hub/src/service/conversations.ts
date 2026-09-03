@@ -63,11 +63,9 @@ export interface ConversationPage {
  * specific to import and nothing more specific to invent. A WhatsApp
  * participant carries its JID here; this is the seat's equivalent.
  *
- * Exported with nothing importing it yet because it is a wire value, not an
- * implementation detail: `ConversationParticipant.ref` in `api/computer.proto`
- * documents `"seat"` as the one non-JID `ref`, and `Seat.Conversations` already
- * puts it on the wire. This stays the hub's single named source of it.
- *
+ * Stays exported with no importer because `api/computer.proto` documents it as
+ * the one non-JID `ConversationParticipant.ref` and `Seat.Conversations` already
+ * puts it on the wire, so it is a contract rather than an internal.
  * @public
  */
 export const SEAT_HUMAN_REF = "seat";
