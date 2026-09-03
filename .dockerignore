@@ -7,6 +7,13 @@ data
 **/.next
 **/out
 **/.eve
+# `eve build` writes `.output` beside `.eve`, and the guest image runs its own
+# `eve build`. A local one copied into the context makes that step try to
+# rename the existing directory to a backup, which is EXDEV across the overlay
+# and fails the whole image. It never reaches a clean checkout because git
+# ignores it, so only a deploy from a working tree hits it: exactly the tree
+# anyone has after running Eve locally, and exactly when a deploy matters.
+**/.output
 apps/ios
 # Product web is Vercel-only. The guest image is Eve + hub + desk; do not
 # ship the Next tree. The Dockerfile drops apps/web from workspaces before

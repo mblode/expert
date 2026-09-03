@@ -37,6 +37,7 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 - `apps/web` typecheck reads `.next/types`; a route you deleted can leave a stale reference until `rm -rf apps/web/.next && npx next build`.
 - `apps/hub/test/eve-channel-auth.test.ts` is excluded from the hub tsconfig because it imports `apps/eve`; vitest still runs it.
 - No Docker daemon in Claude Code on the web and similar sandboxes: `npm run up` uses the fake desk, and the desk image smoke test only runs in CI.
+- **`fly deploy` builds from the working tree, so a local `eve build` breaks it.** `.dockerignore` must exclude `**/.output` as well as `**/.eve`: the guest image runs its own `eve build`, which renames any existing `.output` to a backup, and a local one copied into the context makes that rename EXDEV across the overlay and fails the image on the last step. Nothing catches it first: `.output` is git-ignored so a clean checkout never has one, and CI only runs hadolint over `deploy/fly/Dockerfile` (it builds the desk image, never the guest). Build it by hand before a deploy that matters: `docker build -f deploy/fly/Dockerfile -t expert-guest-verify .`
 
 ## Conventions
 
