@@ -8,8 +8,12 @@ export interface InstallResult {
 
 /**
  * Author the Eve connection file and write it onto the guest overlay.
- * The write is Pair + CreateBot + Agent.WriteFile + DeleteBot: hello.expert
- * holds a seat token, and WriteFile is the model's door.
+ *
+ * `write` is CreateBot + Agent.WriteFile + DeleteBot on a two-minute
+ * `installer` seat (`connection-guest.ts`), because WriteFile is the model's
+ * door and takes an agent token, not a seat. There is no `Pair` behind it any
+ * more: the seat is issued from the control plane's own grant, so nothing on
+ * this path can reach a setup code.
  */
 export async function installConnection(input: {
   authKind?: string;

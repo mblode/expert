@@ -114,7 +114,7 @@ export async function mintStoredInvite(
   return mintedInviteFromDraft(planned, request, env);
 }
 
-/** Validate the link and name the computer. Does not Pair: plugins are files. */
+/** Validate the link and name the computer. Grants no seat: rendering is not redeeming. */
 export async function loadStoredInvite(
   token: string,
   purpose: InvitePurpose,
@@ -137,12 +137,23 @@ export async function loadStoredInvite(
   };
 }
 
-export async function redeemStoredInvite(
+type GrantedInvite = (SeatGrant & { computerId: string; hubUrl: string }) | RedeemFailure;
+
+/**
+ * Look the link up, grant it a seat on its own computer, remember the seat.
+ *
+ * Redeem and refresh differ by one thing, `fresh`, and were two copies of this
+ * until the empty-token guard existed in one of them and not the other. The
+ * guard matters most on the path that mints: `hashInviteToken("")` is a
+ * perfectly good hash and would be looked up like any other.
+ */
+async function grantStoredInvite(
   token: string,
   purpose: InvitePurpose,
-  env: EnvMap = process.env,
-  now = Date.now(),
-): Promise<(SeatGrant & { computerId: string; hubUrl: string }) | RedeemFailure> {
+  env: EnvMap,
+  now: number,
+  fresh: boolean,
+): Promise<GrantedInvite> {
   const trimmed = token.trim();
   if (!trimmed) {
     return { error: "This link is not valid.", status: 404 };
@@ -152,13 +163,13 @@ export async function redeemStoredInvite(
   if ("error" in inspected) {
     return inspected;
   }
-  const granted = await grantInviteSeat(
-    found as InviteRecord,
-    purpose,
-    env,
-    now,
-    issueSeatAsIssuer,
-  );
+  // Refresh drops the role, not the token: an unset role forces a fresh seat,
+  // and the old token still rides along so the hub revokes it as it mints the
+  // new one.
+  const record: InviteRecord = fresh
+    ? { ...(found as InviteRecord), seatRole: undefined }
+    : (found as InviteRecord);
+  const granted = await grantInviteSeat(record, purpose, env, now, issueSeatAsIssuer);
   if ("error" in granted) {
     return granted;
   }
@@ -171,7 +182,7 @@ export async function redeemStoredInvite(
           seatRole: granted.role,
           seatToken: granted.seatToken,
         })
-        .where(eq(invite.tokenHash, (found as InviteRecord).tokenHash));
+        .where(eq(invite.tokenHash, record.tokenHash));
     } catch {
       // The token is still good for this request; the next redeem issues again.
     }
@@ -183,39 +194,21 @@ export async function redeemStoredInvite(
   };
 }
 
-export async function refreshStoredInvite(
+export function redeemStoredInvite(
   token: string,
   purpose: InvitePurpose,
   env: EnvMap = process.env,
   now = Date.now(),
-): Promise<(SeatGrant & { computerId: string; hubUrl: string }) | RedeemFailure> {
-  const found = await byTokenHash(hashInviteToken(token.trim()));
-  const inspected = inspectInvite(found, purpose, env, now);
-  if ("error" in inspected) {
-    return inspected;
-  }
-  // Drop the role, not the token: an unset role forces a fresh seat, and the
-  // old token still rides along so the hub revokes it as it mints the new one.
-  const stale: InviteRecord = { ...(found as InviteRecord), seatRole: undefined };
-  const granted = await grantInviteSeat(stale, purpose, env, now, issueSeatAsIssuer);
-  if ("error" in granted) {
-    return granted;
-  }
-  try {
-    await db
-      .update(invite)
-      .set({
-        hubUrl: granted.computer.hubUrl,
-        seatRole: granted.role,
-        seatToken: granted.seatToken,
-      })
-      .where(eq(invite.tokenHash, stale.tokenHash));
-  } catch {
-    // Same as first redeem: the fresh token is still returned.
-  }
-  return {
-    ...granted,
-    computerId: granted.computer.id,
-    hubUrl: granted.computer.hubUrl,
-  };
+): Promise<GrantedInvite> {
+  return grantStoredInvite(token, purpose, env, now, false);
+}
+
+/** The hub forgot this link's seat: mint another and revoke the one it replaces. */
+export function refreshStoredInvite(
+  token: string,
+  purpose: InvitePurpose,
+  env: EnvMap = process.env,
+  now = Date.now(),
+): Promise<GrantedInvite> {
+  return grantStoredInvite(token, purpose, env, now, true);
 }

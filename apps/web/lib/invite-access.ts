@@ -57,18 +57,29 @@ function secretEquals(offered: string, allowed: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+/**
+ * The caller is holding the mint secret rather than an operator session.
+ *
+ * Worth telling apart from `canMintInvite`, because the two doors carry
+ * different authority. An operator is an account, so the catalog it may open
+ * is already decided by `accessibleComputers`. The secret is one shared string
+ * held by a Bot: it names nobody, so it inherits no binding, and what it may
+ * mint for has to be pinned somewhere else (`mintSecretComputerId`).
+ */
+function holdsMintSecret(request: Request, env: EnvMap): boolean {
+  const allowed = mintSecrets(env);
+  if (allowed.length === 0) {
+    return false;
+  }
+  return offeredMintSecrets(request).some((offered) =>
+    allowed.some((secret) => secretEquals(offered, secret)),
+  );
+}
+
 export function canMintInvite(
   request: Request,
   email: string | undefined,
   env: EnvMap = process.env,
 ): boolean {
-  const allowed = mintSecrets(env);
-  if (allowed.length > 0) {
-    for (const offered of offeredMintSecrets(request)) {
-      if (allowed.some((secret) => secretEquals(offered, secret))) {
-        return true;
-      }
-    }
-  }
-  return Boolean(email && isComputerOperator(email, env));
+  return holdsMintSecret(request, env) || Boolean(email && isComputerOperator(email, env));
 }

@@ -142,7 +142,15 @@ function Workspace({
 
   useEffect(() => {
     let live = true;
+    // A suspended Machine takes seconds to wake and Status has no client-side
+    // timeout, so without this the wake queues a poll every two seconds and
+    // whichever answers last repaints the seat, which can be the oldest.
+    let inFlight = false;
     const tick = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       try {
         const next = await seat.status(display);
         if (!live) {
@@ -157,6 +165,8 @@ function Workspace({
           return;
         }
         setOffline(error instanceof Error ? error.message : "hub unreachable");
+      } finally {
+        inFlight = false;
       }
     };
     void tick();
