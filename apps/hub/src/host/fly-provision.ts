@@ -6,7 +6,7 @@
  * declared. `fly deploy` is a client of the same API, so nothing here is a
  * private path; what it replaces is a human writing `fly.<tenant>.toml`,
  * running `fly apps create`, `fly volumes create` and `fly deploy`, then
- * adding the tenant to the control plane's catalog by hand.
+ * adding the tenant to `COMPUTER_BINDINGS` on the control plane.
  *
  * The shape is app-per-tenant, matching `fly.toml` and `fly.vcmc.toml`. One
  * app, one volume, one Machine, one hostname. Machine-per-tenant inside a
@@ -17,15 +17,18 @@
  * in one namespace. An app is also the unit a `fly.dev` hostname and a delete
  * come in.
  *
- * This module deliberately does NOT set secrets. Fly delivers app secrets to
- * the guest as environment variables, so an unwary caller could pass
- * `COMPUTER_SETUP_CODE` in `env` here and the guest would boot happily: the
- * difference is that a Machine's `config.env` reads back out of
- * `GET /machines/<id>`, and a secret does not. `assertNoSecrets` refuses that
- * rather than leaving it to reviewer memory. Set the tenant's secrets on the
- * app first (`fly secrets set`, or the platform's GraphQL `setSecrets`), then
- * create the Machine, which is also the order that gets them into the first
- * boot rather than the second.
+ * Every computer is the same computer, so `ComputerSpec` is three fields and
+ * there are no options. The guest size, the region, the volume size and the
+ * suspend behaviour are constants, not settings: nothing has yet needed two
+ * computers to differ in any of them, and the first thing that does is a
+ * better moment to add the knob than now.
+ *
+ * There is no `env` parameter, and that absence is the point. Fly delivers app
+ * secrets to the guest as environment variables, so an `env` here would boot a
+ * guest carrying a setup code perfectly well, and a Machine's `config.env`
+ * reads back out of `GET /machines/<id>` where a secret does not. Set the
+ * tenant's secrets on the app first (`fly secrets set -a <app>`), then create
+ * the Machine, which is also the order that gets them into the first boot.
  *
  * Still not a custom Firecracker orchestrator; see the note in
  * `fly-machine.ts`. This asks Fly for a Machine, it does not run one.
@@ -44,56 +47,39 @@ const WORKSPACE_VOLUME = "computer_workspace";
  * Machine the wake path cannot find.
  */
 export const PROCESS_GROUP = "computer";
+/** Both tenants live here, and a volume cannot move between regions anyway. */
+const REGION = "syd";
+/** `/workspace` holds the desk files, the roster and Eve's build. */
+const VOLUME_GB = 10;
 
 /**
- * Env keys that must never reach `config.env`, because each one is a
- * credential that would then be readable from the Machines API.
+ * What a tenant computer is.
  *
- * The same three `init.ts` strips from every child environment, for the same
- * reason in a different direction: there so the model cannot read them, here
- * so anyone holding a Fly token cannot.
+ * Only what actually differs between two of them. Everything else is a
+ * constant above, because every computer runs the same guest at the same size
+ * in the same region: a knob for the size or the region would be a setting
+ * nobody has yet had a reason to set, and the first real reason is a better
+ * time to add it than now.
+ *
+ * There is deliberately no `env`. Fly delivers app secrets to the guest as
+ * environment variables, so an `env` here would boot fine carrying a setup
+ * code, and `config.env` reads back out of `GET /machines/<id>` where a secret
+ * does not. Having no parameter makes that impossible rather than checked.
+ * Set the tenant's secrets on the app first (`fly secrets set`), then create.
  */
-const SECRET_ENV = new Set(["COMPUTER_SETUP_CODE", "WHATSAPP_BRIDGE_SECRET", "FLY_API_TOKEN"]);
-
-/** What a tenant computer is, in the terms the API takes. */
 export interface ComputerSpec {
   /** Fly app name, and so the tenant's hostname: `<app>.fly.dev`. */
   app: string;
   /** Fly organisation slug the app is created under. */
   org: string;
-  /** Region for both the volume and the Machine. They must agree: volumes do not move. */
-  region: string;
   /** Guest image reference, the one `deploy/fly/Dockerfile` produced. */
   image: string;
-  /** Non-secret guest configuration. Secrets go on the app, never here. */
-  env?: Record<string, string>;
-  /** Volume size. `/workspace` holds the desk files, the roster and Eve's build. */
-  volumeSizeGb?: number;
-  cpus?: number;
-  memoryMb?: number;
-  /**
-   * `suspend` keeps the memory snapshot and wakes in well under a second;
-   * `off` is what a tenant holding a WhatsApp socket needs, because the socket
-   * cannot survive a suspend. Anything else is a tenant that pays for idle.
-   */
-  autostop?: "suspend" | "stop" | "off";
 }
 
 interface CallOpts {
   cfg?: FlyConfig;
   env?: NodeJS.ProcessEnv;
   fetch?: FlyFetch;
-}
-
-/** Refuse an env that carries a credential. Throws naming the key, so the fix is obvious. */
-export function assertNoSecrets(env: Record<string, string> | undefined): void {
-  for (const key of Object.keys(env ?? {})) {
-    if (SECRET_ENV.has(key)) {
-      throw new Error(
-        `${key} must be set as a Fly app secret, not in the Machine config: config.env reads back from the Machines API`,
-      );
-    }
-  }
 }
 
 /**
@@ -110,7 +96,6 @@ export function assertNoSecrets(env: Record<string, string> | undefined): void {
  * guest with no `/workspace` mints a fresh roster on a volume that vanishes.
  */
 export function machineConfig(spec: ComputerSpec, volumeId: string): Record<string, unknown> {
-  assertNoSecrets(spec.env);
   return {
     auto_destroy: false,
     checks: {
@@ -128,15 +113,14 @@ export function machineConfig(spec: ComputerSpec, volumeId: string): Record<stri
       COMPUTER_BIND: "0.0.0.0",
       COMPUTER_CLOUD: "fly",
       COMPUTER_PORT: "8080",
-      ...spec.env,
     },
     guest: {
       cpu_kind: "shared",
       // Chromium, Xvfb, Eve and the hub do not fit in 1 GB, and one vCPU
       // stutters VNC while Eve drives the desk. 2 GB is also Fly's ceiling for
       // a suspendable Machine, so a bigger guest trades wake for headroom.
-      cpus: spec.cpus ?? 2,
-      memory_mb: spec.memoryMb ?? 2048,
+      cpus: 2,
+      memory_mb: 2048,
     },
     image: spec.image,
     metadata: { fly_process_group: PROCESS_GROUP },
@@ -145,7 +129,7 @@ export function machineConfig(spec: ComputerSpec, volumeId: string): Record<stri
     services: [
       {
         autostart: true,
-        autostop: spec.autostop ?? "suspend",
+        autostop: "suspend",
         concurrency: { hard_limit: 40, soft_limit: 20, type: "requests" },
         internal_port: 8080,
         min_machines_running: 0,
@@ -180,7 +164,6 @@ export async function createComputer(
   spec: ComputerSpec,
   opts: CallOpts = {},
 ): Promise<CreatedComputer> {
-  assertNoSecrets(spec.env);
   await flyCall(appsPath(), "POST", {
     ...opts,
     payload: { app_name: spec.app, org_slug: spec.org },
@@ -190,8 +173,8 @@ export async function createComputer(
     ...opts,
     payload: {
       name: WORKSPACE_VOLUME,
-      region: spec.region,
-      size_gb: spec.volumeSizeGb ?? 10,
+      region: REGION,
+      size_gb: VOLUME_GB,
     },
   });
   const volumeId = idOf(volume.body);
@@ -203,7 +186,7 @@ export async function createComputer(
     ...opts,
     payload: {
       config: machineConfig(spec, volumeId),
-      region: spec.region,
+      region: REGION,
     },
   });
   const machineId = idOf(machine.body);

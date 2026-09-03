@@ -19,7 +19,7 @@ const USAGE = [
   "  npm run machine -- sleep     stop: processes die; volumes persist (v1)",
   "  npm run machine -- suspend   memory snapshot if the Machine is eligible",
   "",
-  "  npm run machine -- create <app> <org> <image> [region]",
+  "  npm run machine -- create <app> <org> <image>",
   "                               app + volume + Machine for a new tenant",
   "  npm run machine -- destroy <app>",
   "                               delete the app, and its Machines and volumes with it",
@@ -102,12 +102,12 @@ async function act(action: "wake" | "sleep" | "suspend", label: string): Promise
  * asked for rather than an edit to an existing one.
  */
 async function create(): Promise<void> {
-  const [app, org, image, region = "syd"] = process.argv.slice(3);
+  const [app, org, image] = process.argv.slice(3);
   if (!(app && org && image)) {
-    console.error(`create needs <app> <org> <image> [region]\n${USAGE}`);
+    console.error(`create needs <app> <org> <image>\n${USAGE}`);
     process.exit(1);
   }
-  const created = await createComputer({ app, image, org, region });
+  const created = await createComputer({ app, image, org });
   console.log(`app      ${created.app}`);
   console.log(`machine  ${created.machineId}`);
   console.log(`volume   ${created.volumeId}`);

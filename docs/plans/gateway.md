@@ -66,7 +66,7 @@ Two Fly facts to plan around. Org quotas on apps and Machines exist and are rais
 
 Not on Vercel. `ARCHITECTURE.md` section 2 already notes that the control plane holding every tenant's setup code makes its blast radius the whole fleet; adding a token that can create and destroy every Machine in the org makes that worse, and Vercel has no `/.fly/api` socket so it would have to be a real org token in an environment variable.
 
-Put it on the gateway. The always-on Machine is already there, it is not tenant-facing, and no model can reach it. `apps/web` calls a narrow provisioner API on it (`create`, `destroy`) behind its own secret. Until that service exists, `npm run machine -- create <app> <org> <image> [region]` is the same operation run by hand.
+Put it on the gateway. The always-on Machine is already there, it is not tenant-facing, and no model can reach it. `apps/web` calls a narrow provisioner API on it (`create`, `destroy`) behind its own secret. Until that service exists, `npm run machine -- create <app> <org> <image>` is the same operation run by hand.
 
 ## 7. What is done and what is next
 
@@ -74,15 +74,24 @@ Done, in this branch:
 
 - Per-account bridge credentials and `acct` scoping, so one bridge can serve several tenants without cross-tenant reads (`apps/whatsapp-bridge/src/server.ts`, `accounts.ts`).
 - Per-account `hub_url`, so one bridge can post to several tenant hubs, with the 6PN trap documented where it bites.
-- `createComputer` / `destroyComputer` against the Machines API, with the process-group metadata and `autostart` the wake path depends on, and a refusal to put a credential in `config.env` (`apps/hub/src/host/fly-provision.ts`).
-- `COMPUTER_CATALOG`, so adding a tenant is configuration rather than a code change (`apps/web/lib/computers.ts`).
+- `createComputer` / `destroyComputer` against the Machines API, with the process-group metadata and `autostart` the wake path depends on, and no `env` parameter to put a credential in `config.env` through (`apps/hub/src/host/fly-provision.ts`).
 
 Next, in order, because each one needs the last:
 
 1. **Hand each Bot its account's `bridge_secret`.** `init.ts` strips `WHATSAPP_BRIDGE_SECRET` from every child environment, and rightly: Eve shares uid `box` with the model's `shell`, so the admin credential must never be there. The per-account credential is the thing that comment anticipates. The wrinkle is ordering: the bridge mints missing secrets at its own boot, which happens after init has already planned the Eve children, so either init mints them or the Eves pick one up on the following boot. Pick deliberately.
 2. **Per-account restart in the bridge**, so one number's socket dying is not every number's.
 3. **The provisioner service on the gateway**, holding the Fly token, with `apps/web` calling it on sign-up.
-4. **Tenant rows replacing `COMPUTER_CATALOG`.** The `computer` table already exists as a cache; the catalog stays synchronous today and making it a database read turns `computersFromEnv`, `boundComputerId`, `accessibleComputers` and both invite paths async at once. That is a real refactor and it should not ride along with anything else.
+4. **Tenant rows.** Adding a tenant is still an edit to `computersFromEnv`, which is fine for two and stops being fine when someone signs up on their own. A middle step of a `COMPUTER_CATALOG` environment variable was built and then reverted: it bought a code change nobody had needed to make yet, at the price of a second variable describing tenants beside `COMPUTER_BINDINGS`. Go straight to rows when the trigger fires. The `computer` table already exists as a cache; making it the source turns `computersFromEnv`, `boundComputerId`, `accessibleComputers` and both invite paths async at once, so it should ride alone.
 5. **The setup code becomes a stored `issuer`.** `computer.issuerToken` is already a column. A generated-per-tenant setup code sitting in the control plane is the same credential problem in a new place, so provisioning should end by minting an issuer grant and forgetting the code.
 
 The two invariants from `ARCHITECTURE.md` section 8 survive all of it, and are the test for anything proposed here. The hub is still the only door: the gateway reaches a tenant through the connector ingress, which is policy, the audit trail and the wake path, and not around it. And the Machine is still the only isolation boundary: the gateway is a second host, so it is a second boundary, which is exactly why nothing tenant-facing may run on it.
+
+## 8. What this deliberately does not configure
+
+Every setting is a thing to get wrong, document and maintain, so the bar for adding one here is a case where two computers genuinely have to differ. Today none do.
+
+The guest size is fixed at 2 vCPU and 2 GB, because that is what Chromium, Xvfb, Eve and the hub need and also Fly's ceiling for a suspendable Machine, so it is bounded on both sides. The region is `syd`, because both tenants are there and a volume cannot move regions anyway. The volume is one size. `autostop` is `suspend` with no way to ask for anything else, because a tenant that must stay awake is the exact problem this plan removes: once the socket lives on the gateway, no tenant has a reason to.
+
+There is no `env` parameter, which is not a simplification but a guarantee: with no way to pass one, there is no way to put a setup code somewhere the Machines API reads it back.
+
+When one of these genuinely needs to vary, add it then, for that reason. A knob added ahead of its reason is a knob whose correct value nobody knows.

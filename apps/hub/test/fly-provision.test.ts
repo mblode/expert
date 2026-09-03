@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  assertNoSecrets,
   createComputer,
   destroyComputer,
   machineConfig,
@@ -13,7 +12,6 @@ const spec: ComputerSpec = {
   app: "acme-computer",
   image: "registry.fly.io/acme-computer:deployment-1",
   org: "personal",
-  region: "syd",
 };
 
 /** A fetch that records calls and answers each with the queued body. */
@@ -35,17 +33,15 @@ const recorder = (bodies: unknown[]) => {
 };
 
 describe("fly-provision", () => {
-  it("refuses a credential in the Machine config", () => {
-    // config.env reads back out of GET /machines/<id>; a Fly secret does not.
-    expect(() => assertNoSecrets({ COMPUTER_SETUP_CODE: "hunter2" })).toThrow(
-      /must be set as a Fly app secret/u,
-    );
-    expect(() => assertNoSecrets({ WHATSAPP_BRIDGE_SECRET: "s" })).toThrow(/app secret/u);
-    expect(() => assertNoSecrets({ FLY_API_TOKEN: "t" })).toThrow(/app secret/u);
-    expect(() => assertNoSecrets({ COMPUTER_DESK: "local" })).not.toThrow();
-    expect(() => machineConfig({ ...spec, env: { FLY_API_TOKEN: "t" } }, "vol_1")).toThrow(
-      /app secret/u,
-    );
+  it("puts no caller-supplied env in the Machine config", () => {
+    // config.env reads back out of GET /machines/<id> and a Fly app secret
+    // does not, so there is no env parameter to smuggle a setup code through.
+    const config = machineConfig(spec, "vol_1") as { env: Record<string, string> };
+    expect(config.env).toEqual({
+      COMPUTER_BIND: "0.0.0.0",
+      COMPUTER_CLOUD: "fly",
+      COMPUTER_PORT: "8080",
+    });
   });
 
   it("carries the process group the wake path looks for", () => {
@@ -61,13 +57,6 @@ describe("fly-provision", () => {
     // autostart is what lets an inbound request resume a suspended tenant.
     expect(config.services[0]?.autostart).toBe(true);
     expect(config.services[0]?.autostop).toBe("suspend");
-  });
-
-  it("lets a WhatsApp tenant turn suspend off without touching the rest", () => {
-    const config = machineConfig({ ...spec, autostop: "off" }, "vol_1") as {
-      services: { autostop: string }[];
-    };
-    expect(config.services[0]?.autostop).toBe("off");
   });
 
   it("creates app, volume and Machine in that order and returns the hostname", async () => {

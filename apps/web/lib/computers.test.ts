@@ -77,58 +77,6 @@ describe("computer catalog", () => {
       })[1]?.hubUrl,
     ).toBe("https://vibey-named.example");
   });
-
-  it("COMPUTER_CATALOG replaces the seeded pair entirely", () => {
-    const computers = computersFromEnv({
-      COMPUTER_CATALOG:
-        "acme|https://acme-computer.fly.dev, blode|https://blode.example|Blode|COMPUTER_SETUP_CODE",
-    });
-    expect(computers.map((c) => c.id)).toEqual(["acme", "blode"]);
-    // Vibey is gone: opting in means listing every tenant, so a half-filled
-    // variable cannot leave a computer reachable that the operator meant to
-    // remove.
-    expect(computers.find((c) => c.id === "vibey")).toBeUndefined();
-  });
-
-  it("fills the label and the setup-code env var from the id", () => {
-    const [acme] = computersFromEnv({ COMPUTER_CATALOG: "acme-two|https://acme.fly.dev" });
-    expect(acme?.label).toBe("Acme-two");
-    expect(acme?.setupCodeEnv).toBe("COMPUTER_SETUP_CODE_ACME_TWO");
-    expect(acme?.hubUrl).toBe("https://acme.fly.dev");
-  });
-
-  it("trims a trailing slash and takes the first entry for a repeated id", () => {
-    const computers = computersFromEnv({
-      COMPUTER_CATALOG: "acme|https://first.example/,acme|https://second.example",
-    });
-    expect(computers).toHaveLength(1);
-    expect(computers[0]?.hubUrl).toBe("https://first.example");
-  });
-
-  it("skips a malformed entry instead of failing the whole catalog", () => {
-    // Read on every request that resolves a computer, sign-in included: one
-    // tenant's typo must not lock the rest out of their box.
-    const computers = computersFromEnv({
-      COMPUTER_CATALOG: "|https://no-id.example,missing-url,acme|https://acme.fly.dev",
-    });
-    expect(computers.map((c) => c.id)).toEqual(["acme"]);
-  });
-
-  it("falls back to the seeded pair when the variable is unset or unusable", () => {
-    // An empty catalog would give every account no computer at all, which is
-    // what an unbound address should mean and not what a blank env var should.
-    expect(computersFromEnv({ COMPUTER_CATALOG: "" }).map((c) => c.id)).toEqual(["blode", "vibey"]);
-    expect(computersFromEnv({ COMPUTER_CATALOG: " , " }).map((c) => c.id)).toEqual([
-      "blode",
-      "vibey",
-    ]);
-  });
-
-  it("resolves a catalog tenant by id, aliases included", () => {
-    const catalogEnv = { COMPUTER_CATALOG: "acme|https://acme.fly.dev" };
-    expect(computerById("acme", catalogEnv)?.hubUrl).toBe("https://acme.fly.dev");
-    expect(computerById("blode", catalogEnv)).toBeUndefined();
-  });
 });
 
 describe("computer binding", () => {
