@@ -4,6 +4,7 @@ import {
   BRIDGE_SECRET_HEADER,
   bridgeAuthConfigured,
   bridgeRequestAuthorised,
+  buildAuth,
   buildContext,
   buildUserMessage,
   drainStream,
@@ -285,5 +286,52 @@ describe("drainStream", () => {
     );
     expect(reply).toBe("");
     expect(reply || EMPTY_REPLY_FALLBACK).toBe(EMPTY_REPLY_FALLBACK);
+  });
+});
+
+describe("buildAuth", () => {
+  const payload = {
+    acct: "main",
+    message: "hi",
+    sender: "1@s.whatsapp.net",
+    senderName: "Sam",
+    senderPhone: "+61400000000",
+    token: "g@g.us",
+  } as const;
+
+  it("carries the hub's turn binding on the session's auth attributes", () => {
+    const auth = buildAuth(payload, "hub", "turn_abc");
+    // Auth attributes, not the prompt and not a tool argument: `send_message`
+    // reads it back off `ctx.session.auth.current`, which route auth sets and
+    // a prompt cannot change.
+    expect(auth.attributes).toEqual({
+      acct: "main",
+      groupJid: "g@g.us",
+      senderName: "Sam",
+      senderPhone: "+61400000000",
+      turn: "turn_abc",
+      via: "hub",
+    });
+    expect(auth.principalId).toBe("1@s.whatsapp.net");
+    // The chat JID stays the real chat, which memory and tools key on.
+    expect(auth.attributes.groupJid).toBe(payload.token);
+  });
+
+  it("omits the turn entirely when the request carried none", () => {
+    // The direct bridge path and the eve TUI. No turn means the Bot's seat
+    // thread hub-side, which is the behaviour that predates conversations.
+    const auth = buildAuth(payload, "bridge", undefined);
+    expect(auth.attributes).not.toHaveProperty("turn");
+    expect(auth.attributes.via).toBe("bridge");
+  });
+
+  it("falls back to the chat JID as the principal when no sender is named", () => {
+    const auth = buildAuth({ message: "hi", token: "1@s.whatsapp.net" }, "hub", "turn_abc");
+    expect(auth.principalId).toBe("1@s.whatsapp.net");
+    expect(auth.attributes).toEqual({
+      groupJid: "1@s.whatsapp.net",
+      turn: "turn_abc",
+      via: "hub",
+    });
   });
 });

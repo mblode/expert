@@ -1,5 +1,53 @@
+import { createServer } from "node:http";
+import type { Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { rpc, startHub } from "./helper.ts";
+
+/**
+ * A stand-in Eve for the WhatsApp channel: it takes the inbound, calls
+ * `Agent.SendMessage` back on the hub with whatever turn header it was
+ * handed, and answers `{ reply }` the way the real channel does.
+ */
+function replyingEve(
+  hubUrl: () => string,
+  agentToken: string,
+): Promise<{
+  url: string;
+  close: () => Promise<void>;
+}> {
+  const server: Server = createServer((req, res) => {
+    let raw = "";
+    req.on("data", (c) => {
+      raw += c;
+    });
+    req.on("end", () => {
+      const turn = req.headers["x-computer-turn"] as string | undefined;
+      void fetch(`${hubUrl()}/computer.v1.Agent/SendMessage`, {
+        body: JSON.stringify({ kind: "text", text: "on it" }),
+        headers: {
+          authorization: `Bearer ${agentToken}`,
+          "content-type": "application/json",
+          ...(turn ? { "x-computer-turn": turn } : {}),
+        },
+        method: "POST",
+      })
+        .then((r) => r.text())
+        .then((sent) => {
+          res.writeHead(200, { "content-type": "application/json" });
+          res.end(JSON.stringify({ reply: "on it", sent: JSON.parse(sent) }));
+        });
+    });
+  });
+  return new Promise((resolve) => {
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address() as { port: number };
+      resolve({
+        close: () => new Promise((r) => server.close(() => r())),
+        url: `http://127.0.0.1:${addr.port}`,
+      });
+    });
+  });
+}
 
 const opened: { close: () => Promise<void> }[] = [];
 afterEach(async () => {
@@ -299,6 +347,137 @@ describe("Connect HTTP", () => {
     const body = await thread.text();
     expect(body).not.toContain("424242");
     expect(body).toContain("secret_request");
+  });
+
+  it("serves a WhatsApp turn's reply out of a conversation, end to end", async () => {
+    let url = "";
+    const eve = await replyingEve(() => url, "agent-token-test");
+    opened.push(eve);
+    const h = await startHub({ eveSecret: "hub-secret", eveUrls: { main: eve.url } });
+    opened.push(h);
+    ({ url } = h);
+    const token = await h.pair();
+    const channel = h.hub.channels.add({ bot: "main", id: "whatsapp-main", kind: "whatsapp" });
+
+    const inbound = await fetch(`${h.url}/channels/whatsapp-main/message`, {
+      body: JSON.stringify({
+        acct: "main",
+        message: "hello",
+        sender: "1@s.whatsapp.net",
+        token: "g@g.us",
+      }),
+      headers: { "content-type": "application/json", "x-channel-secret": channel.secret },
+      method: "POST",
+    });
+    // The bridge's contract is unchanged: one POST, one `{ reply }`, built
+    // by drainStream and returned synchronously.
+    const answered = (await inbound.json()) as { reply: string; sent: { conversation_id: string } };
+    expect(inbound.status).toBe(200);
+    expect(answered.reply).toBe("on it");
+
+    const conversation = h.hub.conversations.list()[0]!;
+    expect(answered.sent.conversation_id).toBe(conversation.id);
+
+    // The additive field: the turn's messages, oldest first, each authored
+    // by the Bot, with the reply text on the last one.
+    const page = (await rpc(
+      h.url,
+      "/computer.v1.Seat/Occurrences",
+      { conversation_id: conversation.id },
+      token,
+    )) as { entries: { author: { kind: string }; kind: string; text?: string; seq: number }[] };
+    expect(page.entries).toHaveLength(1);
+    expect(page.entries[0]).toMatchObject({
+      author: { bot: "main", kind: "bot" },
+      kind: "text",
+      seq: 1,
+      text: "on it",
+    });
+
+    // And the seat thread is untouched: nothing leaked across the routes.
+    const seat = (await rpc(h.url, "/computer.v1.Seat/Occurrences", {}, token)) as {
+      entries: unknown[];
+    };
+    expect(seat.entries).toEqual([]);
+  });
+
+  it("Occurrences without a conversation_id is the seat thread, exactly as before", async () => {
+    const h = await startHub();
+    opened.push(h);
+    const token = await h.pair();
+    // A send with no turn binding: the eve TUI, the `/eve/v1` proxy, today.
+    await rpc(h.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "hi" }, h.agent);
+    const page = (await rpc(h.url, "/computer.v1.Seat/Occurrences", {}, token)) as {
+      entries: Record<string, unknown>[];
+      next_cursor: string | null;
+    };
+    expect(page.next_cursor).toBeNull();
+    expect(page.entries).toEqual([
+      {
+        at: expect.any(Number),
+        id: expect.any(String),
+        images: [],
+        kind: "text",
+        seq: 1,
+        text: "hi",
+      },
+    ]);
+    // No conversation was created and the response carries no conversation id.
+    expect(h.hub.conversations.list()).toEqual([]);
+
+    // A conversation id that does not exist is a refusal, not an empty page.
+    await expect(
+      rpc(h.url, "/computer.v1.Seat/Occurrences", { conversation_id: "conv_nope" }, token),
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("refuses a send whose turn token is unknown, expired or another Bot's", async () => {
+    const h = await startHub({
+      bots: [
+        { display: 1, id: "main", token: "agent-token-test" },
+        { display: 2, id: "night", token: "agent-token-night" },
+      ],
+    });
+    opened.push(h);
+    const conversation = h.hub.conversations.resolve(
+      "main",
+      { acct: "main", jid: "g@g.us", kind: "whatsapp" },
+      [{ bot: "main", kind: "bot" }],
+    );
+    const send = (token: string, turn: string) =>
+      fetch(`${h.url}/computer.v1.Agent/SendMessage`, {
+        body: JSON.stringify({ kind: "text", text: "hi" }),
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": "application/json",
+          "x-computer-turn": turn,
+        },
+        method: "POST",
+      });
+
+    // A token the hub never minted. A Bot has no way to make one: it comes
+    // off a header the ingress writes and the model never sees.
+    const invented = await send("agent-token-test", "turn_invented");
+    expect(invented.status).toBe(401);
+
+    const turn = h.hub.turns.mint({ bot: "main", conversation_id: conversation.id });
+    // A real one, presented by the other Bot on the box. Bots share the box
+    // and are not a trust boundary there, but attribution in the record is
+    // the point, so night may not speak in main's conversation.
+    const wrongBot = await send("agent-token-night", turn.id);
+    expect(wrongBot.status).toBe(403);
+    await expect(wrongBot.json()).resolves.toMatchObject({ error: { code: "DENIED" } });
+
+    // Past its deadline: the reply it was minted for is long gone.
+    h.hub.turns.expire(turn.deadline_at + 1);
+    const stale = await send("agent-token-test", turn.id);
+    expect(stale.status).toBe(401);
+
+    // Nothing was written by any of the three refusals.
+    expect(h.hub.conversations.page(conversation.id).entries).toEqual([]);
+    // And the same send with no turn header still lands in the seat thread.
+    await rpc(h.url, "/computer.v1.Agent/SendMessage", { kind: "text", text: "hi" }, h.agent);
+    expect(h.hub.bots.byId("main").voice.page().entries).toHaveLength(1);
   });
 
   it("Occurrences and ProvideSecret both require a seat token", async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { DEFAULT_HUB_URL } from "./config";
-import { computerById, pairComputer, VIBEY_HUB_URL } from "./computers";
+import { computerById, issueSeat, VIBEY_HUB_URL } from "./computers";
 import {
   DEFAULT_INVITE_COMPUTER_ID,
   grantInviteSeat,
@@ -139,51 +139,187 @@ describe("inspectInvite", () => {
 });
 
 describe("grantInviteSeat", () => {
-  it("pairs the invite's computer, never Blode, for a Vibey desk link", async () => {
+  /** A hub that answers Pair, Issue and Revoke, recording what it was asked. */
+  function fakeHub(): {
+    calls: { body: unknown; method: string; token?: string; url: string }[];
+    fetchImpl: typeof fetch;
+  } {
+    const calls: { body: unknown; method: string; token?: string; url: string }[] = [];
     const fetchImpl = vi.fn<typeof fetch>(async (input, init) => {
-      expect(String(input)).toBe(`${VIBEY_HUB_URL}/computer.v1.Seat/Pair`);
-      expect(String(input)).not.toContain(new URL(DEFAULT_HUB_URL).host);
-      expect(JSON.parse(String(init?.body))).toEqual({ code: vibeyCode });
-      expect(JSON.parse(String(init?.body)).code).not.toBe(blodeCode);
-      return Response.json({ token: "seat_vibey" }, { status: 200 });
+      const method = String(input).split("/computer.v1.Seat/")[1] ?? "";
+      const auth = new Headers(init?.headers).get("authorization") ?? undefined;
+      calls.push({
+        body: JSON.parse(String(init?.body)),
+        method,
+        url: String(input),
+        ...(auth ? { token: auth.replace("Bearer ", "") } : {}),
+      });
+      if (method === "Pair") {
+        return Response.json({ token: "owner_ephemeral" }, { status: 200 });
+      }
+      if (method === "Issue") {
+        const asked = JSON.parse(String(init?.body)) as { role: string; ttl_sec: number };
+        return Response.json(
+          {
+            expires_at: new Date(now + asked.ttl_sec * 1000).toISOString(),
+            role: asked.role,
+            token: `seat_${asked.role}`,
+          },
+          { status: 200 },
+        );
+      }
+      return Response.json({ revoked: true }, { status: 200 });
     });
-    const pair: typeof pairComputer = (computer, given) => pairComputer(computer, given, fetchImpl);
+    return { calls, fetchImpl };
+  }
 
-    const granted = await grantInviteSeat(draftInvite(), "desk", env(), now, pair);
+  const issueWith =
+    (fetchImpl: typeof fetch): typeof issueSeat =>
+    (computer, given, request) =>
+      issueSeat(computer, given, request, fetchImpl);
+
+  it("issues a guest bound to the screen, expiring with the link, never an owner", async () => {
+    const { calls, fetchImpl } = fakeHub();
+    const granted = await grantInviteSeat(draftInvite(), "desk", env(), now, issueWith(fetchImpl));
+
     expect(granted).toEqual({
       computer: computerById("vibey", env()),
+      disposable: false,
       persist: true,
-      seatToken: "seat_vibey",
+      role: "guest",
+      seatToken: "seat_guest",
     });
-    expect(fetchImpl).toHaveBeenCalledOnce();
+    // Vibey's hub with Vibey's code, never Blode's.
+    expect(calls[0]).toEqual({
+      body: { code: vibeyCode },
+      method: "Pair",
+      url: `${VIBEY_HUB_URL}/computer.v1.Seat/Pair`,
+    });
+    expect(calls.every((call) => call.url.startsWith(VIBEY_HUB_URL))).toBe(true);
+    expect(calls.every((call) => !call.url.includes(new URL(DEFAULT_HUB_URL).host))).toBe(true);
+    expect(JSON.stringify(calls)).not.toContain(blodeCode);
+
+    const issue = calls.find((call) => call.method === "Issue");
+    expect(issue?.body).toEqual({
+      display: 1,
+      label: "hello.expert desk invite",
+      role: "guest",
+      // The link has 30 minutes left, so the seat asks for 30 minutes. The
+      // hub, not this, is what caps a guest seat.
+      subject: `invite:${draftInvite().tokenHash.slice(0, 12)}`,
+      ttl_sec: 30 * 60,
+    });
+    expect(issue?.body).not.toHaveProperty("methods");
+    expect(issue?.token).toBe("owner_ephemeral");
   });
 
-  it("reuses a seat already minted for this invite", async () => {
-    const pair = vi.fn();
+  it("spends the paired owner on one grant and revokes it in the same request", async () => {
+    const { calls, fetchImpl } = fakeHub();
+    await grantInviteSeat(draftInvite(), "desk", env(), now, issueWith(fetchImpl));
+
+    // No owner token survives the request, so none can be stored on the invite.
+    expect(calls.map((call) => call.method)).toEqual(["Pair", "Issue", "Revoke"]);
+    expect(calls.at(-1)).toMatchObject({ body: {}, method: "Revoke", token: "owner_ephemeral" });
+  });
+
+  it("does not honour an owner token stored before scoped seats: it revokes it", async () => {
+    const { calls, fetchImpl } = fakeHub();
+    // A record written by the old path: a seat token and no role.
     const granted = await grantInviteSeat(
-      draftInvite({ seatToken: "seat_reuse" }),
+      draftInvite({ seatToken: "owner_from_before" }),
       "desk",
       env(),
       now,
-      pair,
+      issueWith(fetchImpl),
+    );
+    expect(granted).toMatchObject({ persist: true, role: "guest", seatToken: "seat_guest" });
+
+    const revoke = calls.find((call) => call.method === "Revoke");
+    expect(revoke).toMatchObject({
+      body: { token: "owner_from_before" },
+      method: "Revoke",
+      token: "owner_ephemeral",
+    });
+  });
+
+  it("reuses a seat this control plane already minted under the scoped scheme", async () => {
+    const issue = vi.fn();
+    const granted = await grantInviteSeat(
+      draftInvite({ seatRole: "guest", seatToken: "seat_reuse" }),
+      "desk",
+      env(),
+      now,
+      issue as unknown as typeof issueSeat,
     );
     expect(granted).toEqual({
       computer: computerById("vibey", env()),
+      disposable: false,
       persist: false,
+      role: "guest",
       seatToken: "seat_reuse",
     });
-    expect(pair).not.toHaveBeenCalled();
+    expect(issue).not.toHaveBeenCalled();
   });
 
-  it("refuses to pair when that computer's setup code is missing", async () => {
+  it("gives a plugins link the narrowest seat that can author a connection file", async () => {
+    const { calls, fetchImpl } = fakeHub();
+    const granted = await grantInviteSeat(
+      draftInvite({ purpose: "plugins" }),
+      "plugins",
+      env(),
+      now,
+      issueWith(fetchImpl),
+    );
+    // Disposable and never stored: the route revokes it when the write returns.
+    expect(granted).toMatchObject({ disposable: true, persist: false, seatToken: "seat_owner" });
+
+    const issue = calls.find((call) => call.method === "Issue");
+    expect(issue?.body).toMatchObject({
+      // Writing a connection file means CreateBot, Agent.WriteFile, DeleteBot.
+      // No role but owner carries CreateBot, so the containment is the method
+      // list and the two-minute life, and `isOwner` on the hub still sees an
+      // owner. That gap is the PR's second finding.
+      methods: [
+        "/computer.v1.Seat/CreateBot",
+        "/computer.v1.Seat/DeleteBot",
+        "/computer.v1.Seat/Revoke",
+      ],
+      role: "owner",
+      ttl_sec: 120,
+    });
+    expect(issue?.body).not.toHaveProperty("display");
+  });
+
+  it("never asks for a seat longer than the link has left", async () => {
+    const { calls, fetchImpl } = fakeHub();
+    const ttlAsked = (asked: { body: unknown; method: string }[]): unknown =>
+      (asked.find((call) => call.method === "Issue")?.body as { ttl_sec?: unknown } | undefined)
+        ?.ttl_sec;
+
+    const nearlyDone = draftInvite({ expiresAt: now + 45_000 });
+    await grantInviteSeat(nearlyDone, "desk", env(), now, issueWith(fetchImpl));
+    expect(ttlAsked(calls)).toBe(45);
+
+    // The plugins seat asks for two minutes, and never more than the link.
+    const { calls: pluginCalls, fetchImpl: pluginFetch } = fakeHub();
+    await grantInviteSeat(
+      { ...nearlyDone, purpose: "plugins" },
+      "plugins",
+      env(),
+      now,
+      issueWith(pluginFetch),
+    );
+    expect(ttlAsked(pluginCalls)).toBe(45);
+  });
+
+  it("refuses to mint when that computer's setup code is missing", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
-    const pair: typeof pairComputer = (computer, given) => pairComputer(computer, given, fetchImpl);
     const result = await grantInviteSeat(
       draftInvite(),
       "desk",
       { COMPUTER_SETUP_CODE: blodeCode },
       now,
-      pair,
+      issueWith(fetchImpl),
     );
     expect(result).toEqual({
       error:
@@ -193,16 +329,16 @@ describe("grantInviteSeat", () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it("does not pair a wrong-computer invite", async () => {
-    const pair = vi.fn();
+  it("does not touch a hub for a wrong-computer invite", async () => {
+    const issue = vi.fn();
     const result = await grantInviteSeat(
       draftInvite({ computerId: "ghost" }),
       "desk",
       env(),
       now,
-      pair,
+      issue as unknown as typeof issueSeat,
     );
     expect(result).toMatchObject({ status: 404 });
-    expect(pair).not.toHaveBeenCalled();
+    expect(issue).not.toHaveBeenCalled();
   });
 });

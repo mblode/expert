@@ -11,10 +11,15 @@ import { startHub } from "./helper.ts";
 /** A stand-in Eve that records what reached it. */
 function fakeEve(): Promise<{
   url: string;
-  seen: { path: string; secret: string | undefined; body: string }[];
+  seen: { path: string; secret: string | undefined; turn: string | undefined; body: string }[];
   close: () => Promise<void>;
 }> {
-  const seen: { path: string; secret: string | undefined; body: string }[] = [];
+  const seen: {
+    path: string;
+    secret: string | undefined;
+    turn: string | undefined;
+    body: string;
+  }[] = [];
   const server: Server = createServer((req, res) => {
     let body = "";
     req.on("data", (c) => {
@@ -25,6 +30,7 @@ function fakeEve(): Promise<{
         body,
         path: req.url ?? "",
         secret: req.headers["x-computer-eve-secret"] as string | undefined,
+        turn: req.headers["x-computer-turn"] as string | undefined,
       });
       res.writeHead(200, { "content-type": "application/json" });
       res.end(JSON.stringify({ reply: "hi" }));
@@ -179,6 +185,90 @@ describe("channel ingress", () => {
       });
       expect(get.status).toBe(400);
       expect(eve.seen).toHaveLength(1);
+    } finally {
+      await h.close();
+      await eve.close();
+    }
+  });
+
+  it("resolves the chat to a conversation once and mints a fresh turn per message", async () => {
+    const eve = await fakeEve();
+    const h = await startHub({ eveSecret: "hub-secret", eveUrls: { main: eve.url } });
+    try {
+      const rec = h.hub.channels.add({
+        bot: "main",
+        id: "whatsapp-main",
+        kind: "whatsapp",
+        paths: ["/eve/v1/whatsapp/message"],
+      });
+      const post = (body: unknown) =>
+        fetch(`${h.url}/channels/whatsapp-main/message`, {
+          body: JSON.stringify(body),
+          headers: { "content-type": "application/json", "x-channel-secret": rec.secret },
+          method: "POST",
+        });
+      const inbound = {
+        acct: "main",
+        message: "hello",
+        sender: "1@s.whatsapp.net",
+        token: "g@g.us",
+      };
+      const first = await post(inbound);
+      const second = await post({ ...inbound, message: "again" });
+      expect(first.status).toBe(200);
+      expect(second.status).toBe(200);
+
+      // One conversation for the route, participants from the first sight.
+      expect(h.hub.conversations.list()).toEqual([
+        expect.objectContaining({
+          bot: "main",
+          participants: [
+            { bot: "main", kind: "bot" },
+            { kind: "human", ref: "1@s.whatsapp.net" },
+          ],
+          route: { acct: "main", jid: "g@g.us", kind: "whatsapp" },
+        }),
+      ]);
+
+      // A turn token per message, never reused: it is one turn's reach.
+      const turns = eve.seen.map((s) => s.turn);
+      expect(turns.every((t) => typeof t === "string" && t.startsWith("turn_"))).toBe(true);
+      expect(new Set(turns).size).toBe(2);
+      // It never touches the response the bridge reads, and it is bound to
+      // the conversation the hub resolved, which the body never names.
+      expect(eve.seen[0]!.body).not.toContain("turn_");
+      expect(eve.seen[0]!.body).not.toContain("conv_");
+
+      // A second chat on the same number is its own conversation.
+      await post({ ...inbound, token: "other@g.us" });
+      expect(h.hub.conversations.list()).toHaveLength(2);
+    } finally {
+      await h.close();
+      await eve.close();
+    }
+  });
+
+  it("binds nothing for a door with no chat behind it", async () => {
+    const eve = await fakeEve();
+    const h = await startHub({ eveSecret: "hub-secret", eveUrls: { main: eve.url } });
+    try {
+      const hook = h.hub.channels.add({ bot: "main", id: "hooks", kind: "webhook" });
+      const wa = h.hub.channels.add({ bot: "main", id: "whatsapp-main", kind: "whatsapp" });
+      const post = (id: string, secret: string, body: string) =>
+        fetch(`${h.url}/channels/${id}/message`, {
+          body,
+          headers: { "content-type": "application/json", "x-channel-secret": secret },
+          method: "POST",
+        });
+      // A webhook has no chat to be a conversation with.
+      await post("hooks", hook.secret, JSON.stringify({ anything: true }));
+      // Neither has a WhatsApp body the bridge would never send. The ingress
+      // forwards it untouched and lets Eve answer with its own 400 rather
+      // than becoming a second validator of a payload it proxies.
+      await post("whatsapp-main", wa.secret, "not json");
+      await post("whatsapp-main", wa.secret, JSON.stringify({ message: "hi" }));
+      expect(eve.seen.map((s) => s.turn)).toEqual([undefined, undefined, undefined]);
+      expect(h.hub.conversations.list()).toEqual([]);
     } finally {
       await h.close();
       await eve.close();

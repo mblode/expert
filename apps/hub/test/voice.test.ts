@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { ComputerError } from "@computer/shared";
 import { FakeDesk } from "../src/desk/fake.ts";
-import { VoiceService, parseSendBody } from "../src/service/voice.ts";
+import { VoiceService, buildBody, parseSendBody } from "../src/service/voice.ts";
+import {
+  ConversationRegistry,
+  MemoryConversationStore,
+  MemoryMessageLog,
+} from "../src/service/conversations.ts";
 
 /** `ttlMs` shortens the clipboard window; omit it for the shipped two minutes. */
 const voice = (ttlMs?: number) => {
@@ -147,6 +152,36 @@ describe("the voice", () => {
     const last = v.page("4", 100);
     expect(last.entries).toHaveLength(1);
     expect(last.next_cursor).toBeNull();
+  });
+
+  it("a widget on the seat thread does not block a send on a WhatsApp conversation", async () => {
+    const { desk, v } = voice();
+    const conversations = new ConversationRegistry(
+      new MemoryConversationStore(),
+      new MemoryMessageLog(),
+    );
+    const chat = conversations.resolve("main", { acct: "main", jid: "g@g.us", kind: "whatsapp" }, [
+      { bot: "main", kind: "bot" },
+    ]);
+
+    // The human on hello.expert is being waited on.
+    await v.send({ kind: "widget", options: ["a", "b"], prompt: "Which?" });
+    await expect(v.send({ kind: "text", text: "and another thing" })).rejects.toThrow(/turn ended/);
+
+    // A WhatsApp message arrives and gets its answer. Before conversations
+    // this failed with CONFLICT, because one Bot had one turnEnded flag and
+    // the two surfaces shared it.
+    const sent = conversations.send(
+      chat.id,
+      { bot: "main", kind: "bot" },
+      buildBody({ kind: "text", text: "hi" }),
+      "turn_x",
+    );
+    expect(sent.turn_ended).toBe(false);
+    expect(sent.conversation_id).toBe(chat.id);
+    // The seat thread is still waiting, which is the half that must not change.
+    await expect(v.send({ kind: "text", text: "still?" })).rejects.toThrow(/turn ended/);
+    expect(desk.clipboard).toBe("");
   });
 
   it("parses the wire body and rejects an unknown kind", () => {
