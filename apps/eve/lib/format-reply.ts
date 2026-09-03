@@ -9,12 +9,17 @@
  *     leaves the inner asterisks showing). Markdown emphasis is normalised to
  *     WhatsApp's single-asterisk bold so it renders cleanly.
  *
- * Triple-backtick blocks are deliberately left alone: WhatsApp renders them as
- * monospace, which is what makes ASCII art and a pasted command land.
+ * Triple-backtick blocks are held out of all of it: WhatsApp renders them as
+ * monospace, which is what makes ASCII art and a pasted command land. The
+ * exemption is real rather than incidental. Every rule below runs on prose
+ * only, because a shell snippet is full of the characters they rewrite: a
+ * `# comment` line came back out as `*comment*`, and a `**` inside a fence
+ * collapsed to one asterisk, so the command a member copied out of the chat
+ * was not the command that went in.
  *
  * Kept pure and standalone so it is unit-testable without booting the agent.
  */
-export const cleanReply = (text: string): string =>
+const cleanProse = (text: string): string =>
   text
     // Markdown ATX headings (`## Title`) become a WhatsApp bold line, no leading #.
     .replaceAll(/^[ \t]{0,3}#{1,6}[ \t]+(?<heading>.+?)[ \t]*#*$/gmu, "*$<heading>*")
@@ -29,7 +34,24 @@ export const cleanReply = (text: string): string =>
     .replaceAll(/ *[—–] +| +[—–] */gu, ", ")
     // A dash joining two words becomes a comma; a numeric range (4 to 5 with a
     // dash between the digits) is kept because that is real punctuation.
-    .replaceAll(/(?<pre>[a-zA-Z])[—–](?<post>[a-zA-Z])/gu, "$<pre>, $<post>")
+    .replaceAll(/(?<pre>[a-zA-Z])[—–](?<post>[a-zA-Z])/gu, "$<pre>, $<post>");
+
+/**
+ * A monospace fence and everything in it. Non-greedy so each pair closes at
+ * its own terminator; an unclosed trailing fence falls through as prose,
+ * which is also how WhatsApp renders it.
+ */
+const FENCED = /(?<fenced>```[\s\S]*?```)/u;
+
+/**
+ * Markdown to WhatsApp, prose only. `split` on a pattern with one capture
+ * group puts the fences at the odd indices, so they are rejoined untouched.
+ */
+export const cleanReply = (text: string): string =>
+  text
+    .split(FENCED)
+    .map((part, index) => (index % 2 === 1 ? part : cleanProse(part)))
+    .join("")
     .trim();
 
 /**

@@ -34,13 +34,15 @@ export type OccurrenceKind = (typeof OCCURRENCE_KINDS)[number];
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
 /**
+ * What a guest seat may call unless the invite narrows it further. Never
+ * provisioning, the thread, or clipboard read.
+ *
  * A seat is held by a principal with a role (see `ROLES` below). An `owner`
  * paired with the setup code and may do anything a seat can. A `guest` came
  * from an invite the Bot handed out in a chat: bound to one display, limited
  * to the methods below, and expiring, so a WhatsApp member can take the mouse
  * for a few minutes without becoming the box owner.
  */
-/** What a guest seat may call unless the invite narrows it further. Never provisioning, the thread, or clipboard read. */
 export const SEAT_GUEST_METHODS = [
   "/computer.v1.Seat/Status",
   "/computer.v1.Seat/SetPresence",
