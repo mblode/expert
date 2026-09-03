@@ -195,6 +195,45 @@ their own Machine.
 Confirm from the bridge logs: every forwarded message logs a `target`, `vcmc`
 or `expert`.
 
+## 6. Let a Bot hand out desk links
+
+Without this a Bot in a chat answers "open hello.expert and sign in": it holds
+no mint secret, so `expert_invite` degrades rather than minting. One shared
+string, set on both ends, turns that into a link that opens the screen on the
+member's phone (`apps/eve/lib/tools/expert_invite.ts`, `POST /api/invite`).
+
+```bash
+# The control plane. Either name works; the same value goes on the computer.
+vercel env add EXPERT_INVITE_SECRET production   # a fresh random string
+# Which computer that secret may mint for. Unset means `vibey`, so set it
+# explicitly on any deployment where that is not the answer.
+vercel env add INVITE_MINT_COMPUTER_ID production
+
+# The computer whose Bot hands the link out. `EXPERT_ORIGIN` only needs
+# setting if the control plane is not https://hello.expert.
+fly secrets set EXPERT_INVITE_SECRET=… -a vcmc-computer
+```
+
+The secret is not in the hub's `DENY` list, so it reaches the Eve child like
+any other env, and Eve shares a uid with the model's `shell`: treat it as
+something the Bot holds, which is the point. What it buys is a desk link on
+one computer, rate-capped at eight in ten minutes per computer
+(`MINT_WINDOW_MAX`), and nothing else. Redeeming one is still a guest seat
+bound to screen 1 that expires with the link.
+
+Confirm, from anywhere:
+
+```bash
+curl -s -X POST https://hello.expert/api/invite \
+  -H 'content-type: application/json' -H "x-invite-secret: $SECRET" \
+  -d '{"kind":"desk"}'
+# {"computerId":"vibey","purpose":"desk","url":"https://hello.expert/desk/…"}
+```
+
+Open that URL on a phone: it should show the screen with a bottom bar (the
+clipboard, take over or I'm done, the keyboard) and a ⋯ menu holding trackpad
+mode. A tap clicks where you tapped, two fingers scroll, a pinch magnifies.
+
 ## Rolling back
 
 ```bash

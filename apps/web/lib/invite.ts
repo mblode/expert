@@ -51,7 +51,7 @@ export interface InviteDraft {
 
 export interface RedeemFailure {
   error: string;
-  status: 400 | 403 | 404 | 410 | 502;
+  status: 400 | 403 | 404 | 410 | 429 | 502;
 }
 
 export interface SeatGrant {

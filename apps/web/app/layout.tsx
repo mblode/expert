@@ -21,7 +21,7 @@ const emilioLight = localFont({
   weight: "300",
 });
 
-const siteTitle = `${siteConfig.name} | Eve and a computer`;
+const siteTitle = `${siteConfig.name} | An agent with its own computer`;
 
 export const metadata: Metadata = {
   description: siteConfig.description,

@@ -7,6 +7,7 @@ import { BotSettings } from "./components/bot-settings";
 import { BotSidebar } from "./components/bot-sidebar";
 import { ChatPane } from "./components/chat-pane";
 import { ConnectError } from "./components/connect-error";
+import { DesktopPane } from "./components/desktop-pane";
 import { ScreenRail } from "./components/screen-rail";
 import {
   Dialog,
@@ -293,6 +294,7 @@ function Workspace({
         profile={profiles[botId]}
         screenNeedsYou={waitingElsewhere}
         seat={seat}
+        seatState={screens.find((s) => s.display === display)?.state}
       />
 
       <div className="hidden min-h-0 border-border border-l lg:block">{rail}</div>
@@ -324,15 +326,27 @@ function Workspace({
         </DialogContent>
       </Dialog>
 
+      {/* On a phone the screen is the whole page while you are on it, not a
+          card of it: the rail's job is to sit beside a conversation, and there
+          is no beside. This is the same pane the invite link opens, with the
+          owner's clipboard because an owner seat may read it. */}
       <Dialog onOpenChange={setScreenOpen} open={screenOpen}>
-        <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
+        <DialogContent className="h-dvh max-h-none w-screen max-w-none gap-0 overflow-hidden rounded-none border-0 p-0 sm:max-w-none [&_header]:pr-12">
           <DialogHeader className="sr-only">
             <DialogTitle>
               <ComputerUseIcon className="sr-only" />
               Screen
             </DialogTitle>
           </DialogHeader>
-          {rail}
+          <DesktopPane
+            display={display}
+            layout="phone"
+            onDisplayChange={setDisplay}
+            onStatus={setStatus}
+            readable
+            seat={seat}
+            status={status}
+          />
         </DialogContent>
       </Dialog>
     </div>

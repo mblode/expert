@@ -65,6 +65,9 @@ const SECRET_ENV_KEYS = [
   "COMPUTER_BOT_TOKEN",
   "COMPUTER_EVE_SECRET",
   "COMPUTER_SETUP_CODE",
+  // The invite mint secret. The link it buys is public and belongs in a chat;
+  // the string that mints links does not, and both are in this process.
+  "EXPERT_INVITE_SECRET",
   "FIRECRAWL_API_KEY",
   "WHATSAPP_BRIDGE_SECRET",
 ] as const;

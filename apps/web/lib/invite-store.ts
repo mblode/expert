@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, count, eq, gte, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import { invite } from "../db/invite";
@@ -81,6 +81,39 @@ export function mintedInviteFromDraft(
   };
 }
 
+/**
+ * How many links one computer may hand out in ten minutes when the caller is
+ * a Bot rather than an operator.
+ *
+ * Anyone who can @mention the Bot can ask it for the desk, which is the
+ * product (`docs/WHATSAPP-PARITY.md` decision 5), and each link redeems to a
+ * seat on a screen that other people are also on. A cap is what stops one
+ * member, or one model in a loop, turning that into an unbounded supply of
+ * them. Eight is more than a real conversation needs and far fewer than a loop
+ * produces. An operator is an account with its own computer and is not counted.
+ */
+const MINT_WINDOW_MS = 10 * 60_000;
+const MINT_WINDOW_MAX = 8;
+
+/**
+ * Links minted for this computer inside the window. Fails open: the row store
+ * is the same one the insert below needs, so a database that cannot answer
+ * this is about to refuse the mint anyway, and guessing "over the limit" from
+ * an error would turn a blip into a refusal a member cannot understand.
+ */
+async function mintsInWindow(computerId: string, since: number): Promise<number> {
+  try {
+    await ensureInviteTable();
+    const [row] = await db
+      .select({ minted: count() })
+      .from(invite)
+      .where(and(eq(invite.computerId, computerId), gte(invite.createdAt, new Date(since))));
+    return row?.minted ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function mintStoredInvite(
   input: {
     computerId?: string;
@@ -92,10 +125,18 @@ export async function mintStoredInvite(
   request: Request | undefined,
   env: EnvMap = process.env,
   now = Date.now(),
+  /** The caller holds a mint secret rather than an operator session. */
+  limited = false,
 ): Promise<MintedInvite | RedeemFailure> {
   const planned = planInvite(input, env, now);
   if ("error" in planned) {
     return planned;
+  }
+  if (
+    limited &&
+    (await mintsInWindow(planned.computerId, now - MINT_WINDOW_MS)) >= MINT_WINDOW_MAX
+  ) {
+    return { error: "Too many links for this computer just now. Try again shortly.", status: 429 };
   }
   try {
     await ensureInviteTable();

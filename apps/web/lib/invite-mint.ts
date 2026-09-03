@@ -32,6 +32,8 @@ export type InviteMintFn = (
   request: Request | undefined,
   env: EnvMap,
   now: number,
+  /** The caller is a Bot holding the mint secret, so the rate cap applies. */
+  limited: boolean,
 ) => Promise<MintedInvite | RedeemFailure>;
 
 /** Persist-free mint for tests that pin the Eve client wire. */
@@ -59,10 +61,10 @@ export async function mintInviteWithoutStore(
  */
 function scopeToMinter(
   input: ReturnType<typeof parseInviteMintBody>,
-  email: string | undefined,
+  operator: boolean,
   env: EnvMap,
 ): ReturnType<typeof parseInviteMintBody> | RedeemFailure {
-  if (email && isComputerOperator(email, env)) {
+  if (operator) {
     return input;
   }
   const allowed = mintSecretComputerId(env);
@@ -91,7 +93,8 @@ export async function respondToInviteMint(
     return Response.json({ error: "Not allowed to mint an invite." }, { status: 401 });
   }
   const body: unknown = await request.json().catch(() => null);
-  const scoped = scopeToMinter(parseInviteMintBody(body), email, env);
+  const operator = Boolean(email && isComputerOperator(email, env));
+  const scoped = scopeToMinter(parseInviteMintBody(body), operator, env);
   if ("error" in scoped) {
     return Response.json({ error: scoped.error }, { status: scoped.status });
   }
@@ -100,6 +103,7 @@ export async function respondToInviteMint(
     request,
     env,
     opts.now ?? Date.now(),
+    !operator,
   );
   if ("error" in minted) {
     return Response.json({ error: minted.error }, { status: minted.status });
