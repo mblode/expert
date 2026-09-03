@@ -70,20 +70,20 @@ A later Eve tree that is not `apps/eve/bots/main` (the Vibey agent lives in its 
 
 The product web is `apps/web` on Vercel with Root Directory `apps/web`. It is the control plane: a signed-in user is bound to a computer. Required variables:
 
-| Variable                                 | Notes                                                                         |
-| ---------------------------------------- | ----------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it             |
-| `BETTER_AUTH_URL`                        | `https://hello.expert`                                                        |
-| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                     |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                        |
-| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                                |
-| `COMPUTER_SETUP_CODE`                    | Blode Fly hub secret; server-only                                             |
-| `COMPUTER_SETUP_CODE_VCMC`               | Vibey Fly hub secret; server-only. Not Blode's code                           |
-| `NEXT_PUBLIC_HUB_URL`                    | Fallback hub (`https://mblode-computer.fly.dev`) when a session has no bind   |
-| `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers. Unset: every signed-in user                         |
-| `COMPUTER_BINDINGS`                      | Optional `email:blode,email:vibey` default bind                               |
-| `INVITE_MINT_SECRET`                     | Mint secret for `/desk` and `/plugins` links. Alias of `EXPERT_INVITE_SECRET` |
-| `EXPERT_INVITE_SECRET`                   | Same mint secret. Eve sends it as `x-invite-secret` (WhatsApp)                |
+| Variable                                 | Notes                                                                               |
+| ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it                   |
+| `BETTER_AUTH_URL`                        | `https://hello.expert`                                                              |
+| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                           |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                              |
+| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                                      |
+| `COMPUTER_SETUP_CODE`                    | Blode Fly hub secret; server-only                                                   |
+| `COMPUTER_SETUP_CODE_VCMC`               | Vibey Fly hub secret; server-only. Not Blode's code                                 |
+| `NEXT_PUBLIC_HUB_URL`                    | Blode's hub when no `COMPUTER_HUB_URL_BLODE`. Not a fallback for an unbound account |
+| `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers and mint invites. Unset: nobody                            |
+| `COMPUTER_BINDINGS`                      | `email:blode,email:vibey`. An email with no binding gets no computer                |
+| `INVITE_MINT_SECRET`                     | Mint secret for `/desk` and `/plugins` links. Alias of `EXPERT_INVITE_SECRET`       |
+| `EXPERT_INVITE_SECRET`                   | Same mint secret. Eve sends it as `x-invite-secret` (WhatsApp)                      |
 
 A WhatsApp tap opens a short-lived invite: `/desk/<token>` is the phone desk (take/yield seat, pointer, keyboard). `/plugins/<token>` adds an Eve connection file under `agent/connections/` on the guest. Plugins are files, not a database table. Skills stay as files too.
 
