@@ -37,7 +37,7 @@ import type { FlyConfig, FlyFetch } from "./fly-machine.ts";
 /** Where a created guest mounts its volume. Matches `fly.toml` and the Dockerfile. */
 export const WORKSPACE_PATH = "/workspace";
 /** The volume name every tenant uses; it is scoped by app, so it need not be unique. */
-export const WORKSPACE_VOLUME = "computer_workspace";
+const WORKSPACE_VOLUME = "computer_workspace";
 /**
  * The process group `fly-machine.ts` looks for when an app has several
  * Machines and no `FLY_MACHINE_ID`. A created Machine that omits it is a
@@ -160,7 +160,7 @@ export function machineConfig(spec: ComputerSpec, volumeId: string): Record<stri
 }
 
 /** What a successful create leaves behind, and what a destroy needs. */
-export interface CreatedComputer {
+interface CreatedComputer {
   app: string;
   machineId: string;
   volumeId: string;

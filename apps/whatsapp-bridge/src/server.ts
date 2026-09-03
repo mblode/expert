@@ -113,7 +113,7 @@ export interface CreatedAccount {
  * `admin` is the hub. `account` is one Bot, and its `acct` is the credential's,
  * not the request's.
  */
-export type BridgePrincipal = { scope: "admin" } | { scope: "account"; acct: string };
+type BridgePrincipal = { scope: "admin" } | { scope: "account"; acct: string };
 
 export interface StartServerArgs {
   api: BridgeApi;

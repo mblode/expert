@@ -213,7 +213,10 @@ const sup = new Supervisor({
  * setup code or the bridge secret: Eve shares uid box with the model's `shell`,
  * so anything in its environ is the model's too. WhatsApp reaches Eve through
  * the hub's connector door with the Eve secret; a Bot that needs to call the
- * bridge back gets a per-account credential in Phase 4, not the admin secret.
+ * bridge back gets that account's own `bridge_secret`, which the bridge now
+ * mints per account, and never this admin one. Handing it to the Eve child is
+ * still to do, and the ordering is the catch: the bridge mints a missing
+ * secret at its own boot, which is after the Eve children below are planned.
  */
 const DENY = new Set(["COMPUTER_SETUP_CODE", "WHATSAPP_BRIDGE_SECRET", "FLY_API_TOKEN"]);
 function childEnv(extra: NodeJS.ProcessEnv, home: string): NodeJS.ProcessEnv {
