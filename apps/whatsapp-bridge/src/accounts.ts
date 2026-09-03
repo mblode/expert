@@ -338,7 +338,6 @@ export const saveAccountsFile = async (stateDir: string, file: AccountsFile): Pr
 /** In-memory registry over accounts.json; every mutation persists before it returns. */
 export interface AccountsRegistry {
   list: () => AccountRecord[];
-  get: (acct: string) => AccountRecord | undefined;
   /** Throws when the id is taken; the route maps that to 409. */
   add: (record: AccountRecord) => Promise<AccountRecord>;
   remove: (acct: string) => Promise<boolean>;
@@ -376,7 +375,6 @@ export const createAccountsRegistry = (
       await persist();
       return record;
     },
-    get: (acct) => accounts.get(acct),
     list: () => [...accounts.values()],
     async remove(acct) {
       const existed = accounts.delete(acct);
