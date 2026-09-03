@@ -5,23 +5,6 @@
 import { Agent, Seat } from "../gen/es/computer_pb.ts";
 
 export { Agent, Seat } from "../gen/es/computer_pb.ts";
-export * as pb from "../gen/es/computer_pb.ts";
-
-export {
-  DISPLAY,
-  WORKSPACE,
-  SPEC_ID,
-  SPEC_VERSION,
-  TOOLS,
-  type SeatState,
-  type ErrorCode,
-  type Action,
-  type ActionResult,
-  type PendingCheck,
-  type BoxStatus,
-  type Button,
-  type Point,
-} from "@computer/shared";
 
 function path(service: { typeName: string }, method: { name: string }): string {
   return `/${service.typeName}/${method.name}`;

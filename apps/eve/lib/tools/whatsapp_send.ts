@@ -30,7 +30,7 @@ import { outboundReply } from "../format-reply.ts";
 export const NO_QUOTE = "none";
 
 /** What the tool needs to know about the turn it is running in. */
-export interface ChatContext {
+interface ChatContext {
   jid: string;
   /** Short id of the message being answered, the default quote target. */
   messageId?: string;
@@ -38,14 +38,14 @@ export interface ChatContext {
   acct?: string;
 }
 
-export interface WhatsAppSendInput {
+interface WhatsAppSendInput {
   text?: string;
   react?: string;
   reply_to?: string;
   media?: EnvelopeMedia[];
 }
 
-export type WhatsAppSendResult =
+type WhatsAppSendResult =
   | { sent: true; message_ids: string[] }
   | { sent: false; problem: "malformed" | "refused"; reason: string; retry: boolean }
   | { available: false; note: string };

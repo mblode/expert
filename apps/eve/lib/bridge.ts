@@ -61,9 +61,9 @@ export interface SendEnvelope {
  * bridge, a timeout, a 5xx), which is the case that degrades rather than
  * telling the model to change anything.
  */
-export type EnvelopeFailure = "malformed" | "refused" | "unreachable";
+type EnvelopeFailure = "malformed" | "refused" | "unreachable";
 
-export type EnvelopeSendResult =
+type EnvelopeSendResult =
   | { ok: true; messageIds: string[] }
   | { ok: false; kind: EnvelopeFailure; reason: string };
 
@@ -77,7 +77,7 @@ const DEFAULT_BRIDGE_URL = "http://127.0.0.1:2100";
  */
 const TIMEOUT_MS = 20_000;
 
-export interface BridgeTarget {
+interface BridgeTarget {
   base: string;
   secret: string;
 }
