@@ -25,8 +25,76 @@ export interface ComputerChoice {
   label: string;
 }
 
-/** Seeded tenants. Hub URLs can be overridden per id; setup codes stay in env. */
+/**
+ * One catalog entry: `id|hubUrl|label|setupCodeEnv`, the last two optional.
+ *
+ * Pipes rather than the colons `COMPUTER_BINDINGS` uses, because a hub URL is
+ * full of colons. `label` defaults to the id with its first letter capitalised
+ * and `setupCodeEnv` to `COMPUTER_SETUP_CODE_<ID>`, so a tenant provisioned by
+ * `npm run machine -- create` is one field long here:
+ *
+ *   COMPUTER_CATALOG="acme|https://acme-computer.fly.dev"
+ *
+ * A malformed entry is skipped rather than thrown on. This value is read on
+ * every request that resolves a computer, including sign-in, and a typo in one
+ * tenant's row must not lock every other tenant out of their box.
+ */
+function parseCatalogEntry(raw: string): ComputerRecord | undefined {
+  const parts = raw.split("|").map((part) => part.trim());
+  const [id, hubUrl, label, setupCodeEnv] = parts;
+  if (!id || !hubUrl) {
+    return undefined;
+  }
+  return {
+    hubUrl: trimSlashes(hubUrl),
+    id,
+    label: label || id.charAt(0).toUpperCase() + id.slice(1),
+    setupCodeEnv: setupCodeEnv || `COMPUTER_SETUP_CODE_${id.toUpperCase().replaceAll("-", "_")}`,
+  };
+}
+
+/**
+ * `COMPUTER_CATALOG` as records, first entry per id winning. Empty when unset.
+ *
+ * This is what makes a tenant a configuration change rather than a code
+ * change. Until it existed the catalog was two entries written into the source
+ * below, so provisioning a third computer meant editing this file and
+ * redeploying the control plane, which is the step that kept self-serve out of
+ * reach no matter what the Machines API could do.
+ */
+function catalogFromEnv(env: EnvMap): ComputerRecord[] {
+  const out = new Map<string, ComputerRecord>();
+  for (const part of (env.COMPUTER_CATALOG ?? "").split(",")) {
+    const trimmed = part.trim();
+    if (!trimmed) {
+      continue;
+    }
+    const record = parseCatalogEntry(trimmed);
+    if (record && !out.has(record.id)) {
+      out.set(record.id, record);
+    }
+  }
+  return [...out.values()];
+}
+
+/**
+ * The tenants this control plane knows.
+ *
+ * `COMPUTER_CATALOG` when it is set, and the two seeded tenants otherwise.
+ * The fallback is deliberate rather than legacy: the deployed control plane
+ * carries neither the variable nor a migration for it, and a catalog that read
+ * empty would leave every account with no computer, which is what
+ * `boundComputerId` is supposed to mean for an unbound address and not for
+ * everyone at once. Setting the variable replaces the pair entirely, so a
+ * deployment that opts in must list Blode and Vibey itself.
+ *
+ * Hub URLs can be overridden per id; setup codes stay in env either way.
+ */
 export function computersFromEnv(env: EnvMap): ComputerRecord[] {
+  const configured = catalogFromEnv(env);
+  if (configured.length > 0) {
+    return configured;
+  }
   const blodeHub = trimSlashes(
     env.COMPUTER_HUB_URL_BLODE ??
       env.COMPUTER_HUB_URL_MATT ??
