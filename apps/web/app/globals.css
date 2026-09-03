@@ -99,7 +99,7 @@ body {
   list-style: revert;
 }
 .prose-chat li::marker {
-  color: var(--color-mute);
+  color: var(--color-muted-foreground);
 }
 .prose-chat h1,
 .prose-chat h2,
@@ -113,14 +113,14 @@ body {
 }
 .prose-chat code {
   border-radius: 0.25rem;
-  background: color-mix(in oklab, white 10%, transparent);
+  background: var(--color-muted);
   padding: 0.1em 0.35em;
   font-size: 0.9em;
 }
 .prose-chat pre {
   overflow-x: auto;
   border-radius: 0.5rem;
-  background: color-mix(in oklab, black 35%, transparent);
+  background: var(--color-muted);
   padding: 0.75rem;
 }
 .prose-chat pre code {

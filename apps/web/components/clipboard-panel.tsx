@@ -40,7 +40,7 @@ export function ClipboardPanel({
   };
 
   return (
-    <div className="flex flex-col gap-2 border-t border-edge p-3">
+    <div className="flex flex-col gap-2 border-t border-border p-3">
       <Field>
         <FieldLabel htmlFor="clip">Clipboard</FieldLabel>
         <Textarea
@@ -76,7 +76,7 @@ export function ClipboardPanel({
         >
           Send
         </Button>
-        {note && <span className="text-xs text-mute">{note}</span>}
+        {note && <span className="text-xs text-muted-foreground">{note}</span>}
       </div>
     </div>
   );

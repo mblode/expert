@@ -9,6 +9,12 @@ services:
     restart: unless-stopped
     environment:
       DISPLAY: ":1"
+      # The hub runs on the host here and reaches x11vnc through the published
+      # port below, so its peer address is the bridge gateway rather than
+      # loopback. x11vnc's `-localhost` accepts that connection and then drops
+      # it, which is a black screen and no error. Safe to relax: the ports are
+      # published on the host's loopback only and the stream is view-only.
+      COMPUTER_VNC_LISTEN: "any"
     volumes:
       # Grok's persistence boundary, matched: /workspace and ~/.config
       # survive a rebuild; ~/.local/state and apt packages do not.

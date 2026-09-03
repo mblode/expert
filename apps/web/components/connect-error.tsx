@@ -18,7 +18,7 @@ export function ConnectError({
       <div className="flex w-full max-w-sm flex-col gap-5">
         <div>
           <h1 className="text-xl font-semibold">{siteConfig.name}</h1>
-          <p className="mt-1 text-sm text-mute">
+          <p className="mt-1 text-sm text-muted-foreground">
             Signed in, but the web server could not attach to the box.
           </p>
         </div>

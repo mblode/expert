@@ -99,12 +99,26 @@ if ! alive; then
   exit 1
 fi
 
-# localhost RFB only. View-only: a viewer cannot inject input.
+# View-only: a viewer cannot inject input, whatever it connects from.
+#
+# `-localhost` is right when the hub shares this network namespace (the Fly
+# guest, COMPUTER_DESK=local) and wrong under compose: there the hub is on the
+# host and arrives through Docker's published port, so libvncserver sees the
+# bridge gateway as the peer and drops the connection after accepting it. That
+# is a black screen with no error anywhere, so the compose file opts out with
+# COMPUTER_VNC_LISTEN=any. Nothing is widened by it that RFB was protecting:
+# the port is published on the host's loopback only, the stream is view-only,
+# and the boundary has always been the hub's seat rather than RFB.
+VNC_LISTEN="${COMPUTER_VNC_LISTEN:-localhost}"
+LISTEN_ARGS=(-listen localhost -localhost)
+if [[ "$VNC_LISTEN" == "any" ]]; then
+  LISTEN_ARGS=()
+fi
+
 x11vnc \
   -display "$DISPLAY_NAME" \
   -rfbport "$RFB_PORT" \
-  -listen localhost \
-  -localhost \
+  "${LISTEN_ARGS[@]}" \
   -viewonly \
   -shared \
   -forever \

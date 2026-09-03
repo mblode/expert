@@ -79,6 +79,13 @@ export function toKeysym(key: string): string {
   return key.length === 1 ? key.toLowerCase() : key;
 }
 
+/**
+ * What `xdotool type` sends as real keystrokes: printable Latin-1, tab and
+ * newline. Anything outside it (emoji, CJK) has no keysym to synthesize and
+ * goes through the clipboard instead.
+ */
+const XDOTOOL_TYPEABLE = /^[\t\n\u0020-\u007E\u00A0-\u00FF]*$/u;
+
 /** Agent key names → X keysyms for xdotool. Unlisted names pass through. */
 const KEY_TO_KEYSYM: Record<string, string> = {
   alt: "alt",
@@ -181,12 +188,31 @@ export class DockerDesk implements Desk {
   }
 
   /**
-   * Unicode via clipboard + ctrl+v: XTEST keysyms cannot cover every
-   * codepoint. Two consequences the caller should know: the box clipboard is
-   * overwritten by whatever was typed, and ctrl+v is not paste in a terminal
-   * emulator (xterm wants shift+insert).
+   * Real keystrokes for anything XTEST can send, the clipboard only for what
+   * it cannot.
+   *
+   * This used to be clipboard + ctrl+v for everything, which was wrong three
+   * ways. It cost two round trips instead of one. It left whatever the human
+   * typed, passwords included, readable by any seat holder through
+   * `ClipboardGet` (AUDIT finding 7). And ctrl+v is not paste in a terminal
+   * emulator, so typing into xterm pasted nothing.
+   *
+   * The fallback stays because XTEST keysyms genuinely cannot cover every
+   * codepoint, and an emoji typed into a box that has no keysym for it should
+   * still arrive. Latin-1 plus tab and newline is the range `xdotool type`
+   * maps reliably, and is everything anyone types at a desktop.
    */
   async type(text: string): Promise<void> {
+    if (!text) {
+      return;
+    }
+    if (XDOTOOL_TYPEABLE.test(text)) {
+      // `--clearmodifiers` so a shift the human is still holding does not
+      // upper-case the whole string; `--delay 0` because the delay is per
+      // character and a pasted paragraph should not take a minute.
+      await this.xdotool("type", "--clearmodifiers", "--delay", "0", "--", text);
+      return;
+    }
     await this.clipboardSet(text);
     await this.sendKeys(["ctrl", "v"]);
   }
@@ -235,8 +261,17 @@ export class DockerDesk implements Desk {
     return r.stdout.toString();
   }
 
+  /**
+   * `>/dev/null 2>&1` is the whole cost of this call, not tidiness.
+   *
+   * An X selection belongs to a live client, so `xclip -i` forks and stays
+   * resident to serve it. The child inherits stdout and stderr, `docker exec`
+   * waits for every writer to close them, and the call took **2.1 seconds**
+   * measured against this container rather than the ~85ms the write actually
+   * costs. That was most of the "typing is slow": every `Seat.Type` paid it.
+   */
   async clipboardSet(text: string): Promise<void> {
-    const r = await this.exec(["bash", "-c", "xclip -selection clipboard -i"], {
+    const r = await this.exec(["bash", "-c", "xclip -selection clipboard -i >/dev/null 2>&1"], {
       stdin: text,
       timeoutMs: 5000,
     });

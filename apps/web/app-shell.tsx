@@ -1,15 +1,14 @@
 "use client";
 
-import Link from "next/link";
+import { ComputerUseIcon } from "blode-icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { Button } from "./components/ui/button";
-import { NativeSelect, NativeSelectOption } from "./components/ui/native-select";
-import { ConnectError } from "./components/connect-error";
+import { BotSidebar } from "./components/bot-sidebar";
 import { ChatPane } from "./components/chat-pane";
-import { DesktopPane } from "./components/desktop-pane";
+import { ConnectError } from "./components/connect-error";
+import { ScreenRail } from "./components/screen-rail";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./components/ui/dialog";
 import { authClient } from "./lib/auth-client";
-import { siteConfig } from "./lib/config";
 import { captureEvent, identifyUser, resetPostHog } from "./lib/posthog-client";
 import { reconnect, selectComputer } from "./lib/reconnect";
 import type { BoundSeat } from "./lib/reconnect";
@@ -60,7 +59,7 @@ export function App(): React.ReactElement {
       : null);
 
   if (isPending && !seat) {
-    return <div className="h-full bg-ink" />;
+    return <div className="h-full bg-background" />;
   }
 
   if (!seat) {
@@ -88,10 +87,23 @@ export function App(): React.ReactElement {
       onRecovered={setRecovered}
       onSignOut={() => signOut({ hubUrl: seat.hubUrl, seatToken: seat.seatToken })}
       seatToken={seat.seatToken}
+      userEmail={session?.user?.email}
     />
   );
 }
 
+/**
+ * Three panes: the Bots you can talk to, the conversation, and what the Bot is
+ * looking at.
+ *
+ * The conversation is the centre because that is where the work is asked for
+ * and reported; the screen is evidence beside it rather than the page itself,
+ * which is the one structural thing that separates a computer you delegate to
+ * from a remote desktop with a chat box bolted on.
+ *
+ * Below `lg` the rails are drawers: a phone gets the conversation full width
+ * and reaches the roster and the screen from the header.
+ */
 function Workspace({
   computerId,
   computers,
@@ -100,6 +112,7 @@ function Workspace({
   onRecovered,
   onSignOut,
   seatToken,
+  userEmail,
 }: {
   computerId: string;
   computers: { id: string; label: string }[];
@@ -108,11 +121,14 @@ function Workspace({
   onRecovered: (seat: BoundSeat) => void;
   onSignOut: () => void;
   seatToken: string;
+  userEmail?: string;
 }): React.ReactElement {
   const seat = useMemo(() => createSeat(hubUrl, seatToken), [hubUrl, seatToken]);
   const [status, setStatus] = useState<BoxStatus | undefined>();
   const [display, setDisplay] = useState(1);
   const [offline, setOffline] = useState<string | null>(null);
+  const [botsOpen, setBotsOpen] = useState(false);
+  const [screenOpen, setScreenOpen] = useState(false);
 
   useEffect(() => {
     captureEvent(connectEvent, { computer_id: computerId });
@@ -177,55 +193,81 @@ function Workspace({
     };
   }, [display, recoverSeat, seat]);
 
-  const botId = status?.screens.find((s) => s.display === display)?.bot_id ?? "main";
+  const screens = status?.screens ?? [];
+  const botId = screens.find((s) => s.display === display)?.bot_id ?? "main";
+  const waitingElsewhere = screens.some((s) => s.state === "WAITING" && s.display !== display);
+
+  const pickDisplay = useCallback((next: number) => {
+    setDisplay(next);
+    setBotsOpen(false);
+  }, []);
+
+  const sidebar = (
+    <BotSidebar
+      computerId={computerId}
+      computers={computers}
+      display={display}
+      onDisplayChange={pickDisplay}
+      onSignOut={onSignOut}
+      onSwitchComputer={switchComputer}
+      screens={screens}
+      userEmail={userEmail}
+    />
+  );
+
+  const rail = (
+    <ScreenRail
+      display={display}
+      onDisplayChange={setDisplay}
+      onStatus={setStatus}
+      seat={seat}
+      status={status}
+    />
+  );
 
   return (
-    <div className="grid h-full grid-rows-[auto_minmax(0,1fr)]">
-      <header className="flex items-center gap-3 border-b border-edge px-3 py-2">
-        <h1 className="text-sm font-semibold">{siteConfig.name}</h1>
-        {computers.length > 1 && (
-          <div className="w-36">
-            <NativeSelect
-              aria-label="Computer"
-              onChange={(event) => {
-                void switchComputer(event.target.value);
-              }}
-              size="sm"
-              value={computerId}
-            >
-              {computers.map((item) => (
-                <NativeSelectOption key={item.id} value={item.id}>
-                  {item.label}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
-          </div>
-        )}
-        {offline && <output className="truncate text-xs text-red-300">{offline}</output>}
-        {/* Channels is the first owner page beside the desk; WhatsApp is the only channel so far, so the link goes straight to it. */}
-        <Button
-          className="ml-auto"
-          render={<Link href="/channels/whatsapp" />}
-          size="xs"
-          variant="outline"
-        >
-          Channels
-        </Button>
-        <Button onClick={onSignOut} size="xs" type="button" variant="outline">
-          Sign out
-        </Button>
-      </header>
+    <div className="grid h-full min-h-0 lg:grid-cols-[17rem_minmax(0,1fr)_20rem] xl:grid-cols-[18rem_minmax(0,1fr)_22rem]">
+      <div className="hidden min-h-0 border-border border-r lg:block">{sidebar}</div>
 
-      <main className="grid min-h-0 grid-rows-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_420px] lg:grid-rows-1">
-        <DesktopPane
-          display={display}
-          onDisplayChange={setDisplay}
-          onStatus={setStatus}
-          seat={seat}
-          status={status}
-        />
-        <ChatPane botId={botId} key={botId} seat={seat} />
-      </main>
+      {/* The conversation owns the only header on a phone too: the drawers open
+          from its own bar rather than a second one that repeats the Bot's name. */}
+      <ChatPane
+        botId={botId}
+        key={botId}
+        onOpenBots={() => setBotsOpen(true)}
+        onOpenScreen={() => setScreenOpen(true)}
+        screenNeedsYou={waitingElsewhere}
+        seat={seat}
+      />
+
+      <div className="hidden min-h-0 border-border border-l lg:block">{rail}</div>
+
+      {offline && (
+        <output className="fixed inset-x-0 bottom-0 z-50 block bg-destructive/90 px-4 py-1.5 text-center text-destructive-foreground text-xs">
+          {offline}
+        </output>
+      )}
+
+      <Dialog onOpenChange={setBotsOpen} open={botsOpen}>
+        <DialogContent className="h-[85svh] max-w-sm gap-0 overflow-hidden p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>Bots</DialogTitle>
+          </DialogHeader>
+          {sidebar}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog onOpenChange={setScreenOpen} open={screenOpen}>
+        <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
+          <DialogHeader className="sr-only">
+            <DialogTitle>
+              <ComputerUseIcon className="sr-only" />
+              Screen
+            </DialogTitle>
+          </DialogHeader>
+          {rail}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

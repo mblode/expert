@@ -3,8 +3,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { BoxStatus, Screen, Seat, SeatState } from "../lib/seat";
-import { pixelUrlFresh } from "../lib/seat";
 import { useSeatInput } from "../lib/use-seat-input";
+import { useVncSrc } from "../lib/use-vnc-src";
 import { ClipboardPanel } from "./clipboard-panel";
 import { KeyboardBar } from "./keyboard-bar";
 
@@ -64,7 +64,7 @@ export function DesktopPane({
     handlers,
   } = useSeatInput(seat, display, controllable, desk);
   const screenId = screen ? `${screen.bot_id}:${screen.display}` : "";
-  const vncSrc = useStableVncSrc(screen?.vnc_url, screenId);
+  const vncSrc = useVncSrc(screen?.vnc_url, screenId);
 
   const presence = async (present: boolean) => {
     setBusy(true);
@@ -81,8 +81,8 @@ export function DesktopPane({
   const hit = phone ? "lg" : "xs";
 
   return (
-    <section className={`flex min-h-0 min-w-0 flex-col overscroll-none ${phone ? "h-full" : ""}`}>
-      <header className="flex flex-wrap items-center gap-2 border-b border-edge px-3 py-2">
+    <section className="flex h-full min-h-0 min-w-0 flex-col overscroll-none">
+      <header className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
         {status && status.screens.length > 1 ? (
           <div className="w-fit min-w-40">
             <NativeSelect
@@ -100,10 +100,10 @@ export function DesktopPane({
             </NativeSelect>
           </div>
         ) : (
-          <span className="text-xs text-mute">{screen?.bot_id ?? "box"}</span>
+          <span className="text-xs text-muted-foreground">{screen?.bot_id ?? "box"}</span>
         )}
 
-        <output className="flex items-center gap-1.5 text-xs text-mute">
+        <output className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className={`size-2 rounded-full ${STATE_DOT[state]}`} />
           {STATE_LABEL[state]}
         </output>
@@ -209,15 +209,25 @@ export function DesktopPane({
           {screen ? (
             <>
               {/* Cross-origin to the hub, with a 15-minute pixel token in the
-                  URL. Sandboxed to scripts only: noVNC needs no storage and
-                  no same-origin powers, and the frame cannot navigate this
-                  window or open popups. No referrer, so the token never
-                  leaks to anything the frame might load. */}
+                  URL. No referrer, so the token never leaks to anything the
+                  frame might load.
+
+                  `allow-same-origin` is required, not a relaxation: without
+                  it the frame gets an opaque origin, and the hub's page loads
+                  noVNC with `import("/novnc/core/rfb.js")`, which then counts
+                  as a cross-origin module fetch and fails CORS. The result is
+                  a black rectangle and no error anywhere on this side. It
+                  costs nothing here because the frame is already cross-origin
+                  to this app: the origin it gets back is the hub's, never
+                  ours, so it still cannot read this document, its storage or
+                  its cookies. Everything the sandbox was actually buying is
+                  still denied, since neither `allow-popups`,
+                  `allow-top-navigation` nor `allow-forms` is listed. */}
               <iframe
-                className="absolute inset-0 size-full rounded-lg border border-edge bg-black"
+                className="absolute inset-0 size-full rounded-lg border border-border bg-black"
                 key={screenId}
                 referrerPolicy="no-referrer"
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-same-origin"
                 src={vncSrc ?? screen.vnc_url}
                 title={`${screen.bot_id} screen`}
               />
@@ -264,7 +274,7 @@ export function DesktopPane({
               )}
             </>
           ) : (
-            <p className="absolute inset-0 grid place-items-center text-sm text-mute">
+            <p className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">
               Connecting…
             </p>
           )}
@@ -272,7 +282,7 @@ export function DesktopPane({
       </div>
 
       {!phone && (
-        <p className="px-3 pb-2 text-xs text-mute">
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
           {controllable
             ? "Point where you want the cursor and the box follows. Type here, or open Keyboard on a phone; Backspace and the arrow keys do not go through."
             : "View only while Eve is working. Take the seat to drive it yourself, or wait for it to ask."}
@@ -288,24 +298,4 @@ export function DesktopPane({
       )}
     </section>
   );
-}
-
-/**
- * Hold the current pixel URL until the grant is close to expiry or the
- * screen identity changes. Rewriting `src` (or keying on `vnc_url`) on
- * every Status poll tears down noVNC.
- *
- * Derived from the previous render with state, not a ref written during
- * render, so the React Compiler can still memoise this component.
- */
-function useStableVncSrc(incoming: string | undefined, identity: string): string | undefined {
-  const [held, setHeld] = useState<{ identity: string; url: string } | undefined>();
-  const stale = held === undefined || held.identity !== identity || !pixelUrlFresh(held.url);
-  // Set only when it changes: a URL the browser already judges stale would
-  // otherwise be re-set on every render, and React would refuse the loop.
-  if (incoming && stale && held?.url !== incoming) {
-    setHeld({ identity, url: incoming });
-    return incoming;
-  }
-  return held?.identity === identity ? held.url : undefined;
 }

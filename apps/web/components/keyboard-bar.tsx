@@ -32,7 +32,7 @@ export function KeyboardBar({
 
   return (
     <div
-      className={`flex items-center gap-2 border-t border-edge ${large ? "p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "p-3"}`}
+      className={`flex items-center gap-2 border-t border-border ${large ? "p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]" : "p-3"}`}
     >
       <div className="min-w-0 flex-1">
         <Input

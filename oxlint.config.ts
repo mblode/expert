@@ -53,6 +53,13 @@ export default defineConfig({
     "unicorn/filename-case": "off",
     // Screenshots arrive as base64 data URLs; next/image has nothing to optimise.
     "nextjs/no-img-element": "off",
+    // The two noVNC frames need `allow-scripts allow-same-origin` together, and
+    // the rule's premise does not hold for them: both are cross-origin to this
+    // app, so the origin the frame regains is the hub's and it still cannot
+    // reach this document. Without it the frame is opaque-origin and noVNC's
+    // own `import()` of rfb.js fails CORS, which renders as a black screen and
+    // no error. See the comment on the iframe in `components/desktop-pane.tsx`.
+    "react/iframe-missing-sandbox": "off",
     // Switches here are over closed unions; the compiler already refuses a missing arm.
     "default-case": "off",
     // React Compiler cannot lower try/finally yet; the component is skipped, not wrong.

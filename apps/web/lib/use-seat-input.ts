@@ -11,10 +11,16 @@ const LINE_PX = 16;
 const PAGE_PX = 800;
 const MAX_NOTCHES = 8;
 /**
- * `Seat.Type` pastes (clipboard + ctrl-v on the box), so a keystroke per RPC
- * would be one paste per character. Keys are buffered and sent as a run.
+ * Ceiling on how long a keystroke waits for company, not the normal wait.
+ *
+ * Typing used to be buffered for a flat 300ms because `Seat.Type` pasted
+ * through the clipboard and took two seconds a call, so batching hard was the
+ * only way to keep up. It is one `xdotool type` now (~65ms), so the buffer
+ * flushes as soon as the previous run lands and this only catches the case
+ * where nothing is in flight and the person is still typing: fast enough to
+ * feel direct, slow enough that a burst still travels as one run.
  */
-const TYPE_IDLE_MS = 300;
+const TYPE_IDLE_MS = 30;
 /**
  * CSS pixels a pointer may wander before the gesture counts as a drag. A mouse
  * does not move at all between press and release; a finger always does.
@@ -113,14 +119,41 @@ export function useSeatInput(
     }
   }, []);
 
+  // One `Seat.Type` in flight at a time, and whatever was typed meanwhile
+  // rides on the next one. This is the pointer path's rule applied to keys,
+  // and it is what makes the buffer self-tuning: with the box answering in
+  // ~65ms the first keystroke leaves immediately and only a genuinely faster
+  // typist ever batches, while a slow box coalesces more without a fixed
+  // delay guessed in advance.
+  const typing = useRef(false);
+  // The drain step calls the flush again, and a `useCallback` cannot name
+  // itself while it is still initializing. The ref is written in an effect,
+  // which is also what keeps this component compilable by the React Compiler.
+  const flushRef = useRef<() => void>(() => undefined);
+
   const flushTyped = useCallback(() => {
     window.clearTimeout(typeTimer.current);
+    if (typing.current) {
+      return;
+    }
     const text = typed.current;
     typed.current = "";
-    if (text) {
-      void run((current, screen) => current.type(text, screen));
+    if (!text) {
+      return;
     }
+    typing.current = true;
+    void run((current, screen) => current.type(text, screen)).finally(() => {
+      typing.current = false;
+      // Whatever was typed while that was in flight goes now, as one run.
+      if (typed.current) {
+        flushRef.current();
+      }
+    });
   }, [run]);
+
+  useEffect(() => {
+    flushRef.current = flushTyped;
+  }, [flushTyped]);
 
   const send = useCallback(
     (text: string) => {
@@ -303,6 +336,9 @@ export function useSeatInput(
         if (event.key.length !== 1) return;
         event.preventDefault();
         typed.current += event.key;
+        // Send now when the box is idle; the timer is only the backstop for
+        // the keystroke that arrives while a run is still in flight.
+        flushTyped();
         window.clearTimeout(typeTimer.current);
         typeTimer.current = window.setTimeout(flushTyped, TYPE_IDLE_MS);
       },

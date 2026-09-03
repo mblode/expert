@@ -1,3 +1,18 @@
+import {
+  BoltIcon,
+  ConsoleSparkleIcon,
+  CursorClickIcon,
+  FileEditIcon,
+  FileTextIcon,
+  Hand5FingerIcon,
+  KeyboardIcon,
+  KeyIcon,
+  MouseScrollDownIcon,
+  ScreenCaptureIcon,
+  SearchIcon,
+  ShieldCheckIcon,
+  SquareCursorIcon,
+} from "blode-icons-react";
 import type {
   EveDynamicToolPart,
   EveMessage,
@@ -5,7 +20,19 @@ import type {
   EveMessagePart,
 } from "eve/react";
 
+import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
+import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
+import { Message, MessageContent } from "@/components/ui/message";
+import {
+  ThinkingStep,
+  ThinkingStepDetails,
+  ThinkingStepImage,
+  ThinkingSteps,
+  ThinkingStepsContent,
+  ThinkingStepsHeader,
+} from "@/components/ui/thinking-steps";
+import type { StepStatus } from "@/components/ui/thinking-steps";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Markdown } from "./markdown";
 
@@ -47,6 +74,15 @@ function safeUrl(url: string | undefined, allowImage = false): string | undefine
   return undefined;
 }
 
+/** The first `computer` action in a batch, which is what the step is really doing. */
+function firstAction(input: unknown): Record<string, unknown> | null {
+  if (!isRecord(input) || !Array.isArray(input.actions)) {
+    return null;
+  }
+  const [first] = input.actions;
+  return isRecord(first) ? first : null;
+}
+
 /**
  * The one argument that tells two calls of the same tool apart. A turn calls
  * `computer` a dozen times; without this the chain reads as a dozen identical
@@ -80,16 +116,78 @@ function summarizeToolInput(input: unknown): string | null {
   return null;
 }
 
+/**
+ * The tool's own name, and for `computer` the action inside it. A run of
+ * `computer` calls is the normal shape of a turn here, so a chain that said
+ * "computer" twelve times would say nothing; the action is the verb a person
+ * is actually watching.
+ */
 const toolLabel = (part: EveDynamicToolPart): string => {
-  const name = part.toolMetadata?.eve?.name ?? part.toolName;
+  const name = toolNameOf(part);
   const summary = summarizeToolInput(part.input);
   return summary ? `${name} · ${summary}` : name;
 };
+
+/**
+ * Marker icon per step. The model's surface is five tools, and `computer` is
+ * a union of actions, so the icon is chosen from the action when there is one:
+ * a chain of clicks and keystrokes reads as what the agent did to the screen
+ * rather than a column of identical bolts.
+ */
+function iconForTool(part: EveDynamicToolPart): React.ElementType {
+  const name = toolNameOf(part);
+  const action = firstAction(part.input);
+  const type = typeof action?.type === "string" ? action.type : "";
+
+  switch (type) {
+    case "screenshot": {
+      return ScreenCaptureIcon;
+    }
+    case "click":
+    case "double_click":
+    case "right_click": {
+      return CursorClickIcon;
+    }
+    case "type": {
+      return KeyboardIcon;
+    }
+    case "key": {
+      return KeyIcon;
+    }
+    case "scroll": {
+      return MouseScrollDownIcon;
+    }
+    case "move":
+    case "drag": {
+      return SquareCursorIcon;
+    }
+    default: {
+      break;
+    }
+  }
+
+  if (name.includes("shell")) {
+    return ConsoleSparkleIcon;
+  }
+  if (name.includes("write")) {
+    return FileEditIcon;
+  }
+  if (name.includes("read")) {
+    return FileTextIcon;
+  }
+  if (name.includes("search")) {
+    return SearchIcon;
+  }
+  return BoltIcon;
+}
 
 const isRunning = (part: EveDynamicToolPart): boolean =>
   part.state === "input-streaming" ||
   part.state === "input-available" ||
   part.state === "approval-requested";
+
+const stepStatus = (part: EveDynamicToolPart): StepStatus =>
+  isRunning(part) ? "active" : "complete";
 
 /**
  * Screenshots the `computer` tool brings back. They ride inside the tool's own
@@ -118,49 +216,64 @@ function toolImages(part: EveDynamicToolPart): string[] {
   return images;
 }
 
+/** Text output worth reading under a step: what `shell` and `read_file` return. */
+function toolText(part: EveDynamicToolPart): string | null {
+  if (part.state === "output-error") {
+    return typeof part.errorText === "string" ? part.errorText : null;
+  }
+  if (part.state !== "output-available" || !isRecord(part.output)) {
+    return null;
+  }
+  for (const key of ["stdout", "text", "content", "stderr"]) {
+    const value = part.output[key];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return null;
+}
+
+const MAX_DETAIL_LINES = 12;
+
 /** A run of tool calls, collapsed into one chain rather than a row per call. */
 function ToolSteps({ parts }: { parts: EveDynamicToolPart[] }): React.ReactElement {
   const running = parts.some(isRunning);
   return (
-    <details className="rounded-lg border border-edge bg-panel/60 text-xs">
-      <summary className="cursor-pointer select-none px-3 py-2 text-mute marker:text-mute">
-        {running ? "Thinking…" : "Thinking"}
-        <span className="ml-1.5 opacity-70">
-          {parts.length} {parts.length === 1 ? "step" : "steps"}
-        </span>
-      </summary>
-      <ol className="space-y-2 border-t border-edge px-3 py-2">
-        {parts.map((part) => {
+    <ThinkingSteps defaultOpen={false}>
+      <ThinkingStepsHeader>
+        {running ? "Working" : `${parts.length} ${parts.length === 1 ? "step" : "steps"}`}
+      </ThinkingStepsHeader>
+      <ThinkingStepsContent>
+        {parts.map((part, index) => {
           const images = toolImages(part);
+          const text = toolText(part);
+          const failed = part.state === "output-error";
           return (
-            <li className="space-y-1.5" key={part.toolCallId}>
-              <div className="flex items-baseline gap-2">
-                <span
-                  className={`size-1.5 shrink-0 translate-y-[-1px] rounded-full ${
-                    part.state === "output-error"
-                      ? "bg-red-400"
-                      : isRunning(part)
-                        ? "animate-pulse bg-amber-400"
-                        : "bg-emerald-400"
-                  }`}
+            <ThinkingStep
+              icon={iconForTool(part)}
+              isLast={index === parts.length - 1}
+              key={part.toolCallId}
+              label={failed ? `Failed: ${toolLabel(part)}` : toolLabel(part)}
+              status={stepStatus(part)}
+            >
+              {text && (
+                <ThinkingStepDetails
+                  details={text.split("\n").slice(0, MAX_DETAIL_LINES)}
+                  summary={failed ? "Error" : "Output"}
                 />
-                <span className="min-w-0 break-words font-mono text-mute">
-                  {part.state === "output-error" ? `Failed: ${toolLabel(part)}` : toolLabel(part)}
-                </span>
-              </div>
-              {images.map((src, index) => (
-                <img
-                  alt="Screen"
-                  className="max-h-56 w-auto max-w-full rounded-md border border-edge"
-                  key={`${part.toolCallId}-${index}`}
+              )}
+              {images.map((src, imageIndex) => (
+                <ThinkingStepImage
+                  alt="What the agent saw"
+                  key={`${part.toolCallId}-${imageIndex}`}
                   src={src}
                 />
               ))}
-            </li>
+            </ThinkingStep>
           );
         })}
-      </ol>
-    </details>
+      </ThinkingStepsContent>
+    </ThinkingSteps>
   );
 }
 
@@ -178,6 +291,11 @@ const OPTION_VARIANT = {
  * The card for a parked turn: an approval before a tool changes something, or
  * a question the model is asking. Both arrive on the same `input.requested`
  * protocol and are told apart by `kind`.
+ *
+ * An approval shows the full input rather than a truncated summary. The calls
+ * the policy parks are the ones about to change something the person did not
+ * watch happen, and approving without being told what you are approving is not
+ * approval.
  */
 function InputRequestCard({
   disabled,
@@ -196,18 +314,21 @@ function InputRequestCard({
   return (
     <fieldset
       aria-label={isApproval ? "Approval required" : "Question"}
-      className={`rounded-lg border border-edge bg-panel p-3 ${disabled ? "pointer-events-none opacity-60" : ""}`}
+      className={`w-full rounded-xl border border-border bg-card p-3 ${
+        disabled ? "pointer-events-none opacity-60" : ""
+      }`}
       disabled={disabled}
     >
       {isApproval && (
-        <p className="pb-1 text-xs text-mute">
-          <span className="font-medium text-white">
+        <div className="flex items-center gap-1.5 pb-2 text-muted-foreground text-xs">
+          <ShieldCheckIcon className="size-3.5 shrink-0" />
+          <span className="font-medium text-foreground">
             {part.toolMetadata?.eve?.name ?? part.toolName}
           </span>
-        </p>
+        </div>
       )}
       {input && (
-        <pre className="mb-2 max-h-48 overflow-auto rounded-md border border-edge bg-ink/40 p-2 font-mono text-xs text-mute">
+        <pre className="mb-2.5 max-h-48 overflow-auto rounded-lg bg-muted p-2.5 font-mono text-muted-foreground text-xs">
           {input}
         </pre>
       )}
@@ -218,7 +339,7 @@ function InputRequestCard({
             <Button
               disabled={disabled}
               onClick={() => onAnswer({ optionId: option.id, requestId: request.requestId })}
-              size="xs"
+              size="sm"
               type="button"
               variant={OPTION_VARIANT[option.style ?? "default"]}
             >
@@ -261,9 +382,10 @@ function MessagePart({
     }
     if (role === "user") {
       return (
-        <p className="ml-auto max-w-[85%] whitespace-pre-wrap rounded-2xl bg-panel px-3 py-2 text-sm">
-          {part.text}
-        </p>
+        <Bubble align="end">
+          {/* leading-normal keeps the bubble on the same rhythm as the prose. */}
+          <BubbleContent className="whitespace-pre-wrap leading-normal">{part.text}</BubbleContent>
+        </Bubble>
       );
     }
     return <Markdown text={part.text} />;
@@ -278,12 +400,18 @@ function MessagePart({
     return isImage ? (
       <img
         alt={part.filename ?? "Attachment"}
-        className="max-h-64 w-auto max-w-full rounded-lg border border-edge"
+        className="max-h-64 w-auto max-w-full rounded-xl border border-border"
         src={url}
       />
     ) : (
-      <a className="text-sm text-foreground underline" href={url} rel="noreferrer" target="_blank">
-        {part.filename ?? "Attachment"}
+      <a
+        className="flex w-fit max-w-full items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2.5 hover:bg-muted"
+        href={url}
+        rel="noreferrer"
+        target="_blank"
+      >
+        <FileTextIcon className="size-5 shrink-0 text-muted-foreground" />
+        <span className="truncate font-medium text-sm">{part.filename ?? "Attachment"}</span>
       </a>
     );
   }
@@ -300,7 +428,14 @@ function MessagePart({
         request.options?.find((option) => option.id === response.optionId)?.label ??
         response.text ??
         "Answered";
-      return <p className="text-xs text-mute">You answered: {chosen}</p>;
+      return (
+        <Marker variant="border">
+          <MarkerIcon>
+            <Hand5FingerIcon />
+          </MarkerIcon>
+          <MarkerContent>You answered: {chosen}</MarkerContent>
+        </Marker>
+      );
     }
     return (
       <InputRequestCard disabled={disabled} onAnswer={onAnswer} part={part} request={request} />
@@ -312,28 +447,37 @@ function MessagePart({
       return null;
     }
     return (
-      <details className="rounded-lg border border-edge bg-panel/60 text-xs">
-        <summary className="cursor-pointer select-none px-3 py-2 text-mute marker:text-mute">
-          Reasoning
-        </summary>
-        <p className="whitespace-pre-wrap border-t border-edge px-3 py-2 text-mute">{part.text}</p>
-      </details>
+      <ThinkingSteps defaultOpen={false}>
+        <ThinkingStepsHeader>Reasoning</ThinkingStepsHeader>
+        <ThinkingStepsContent>
+          <ThinkingStep isLast label="Reasoning" showIcon={false}>
+            <p className="whitespace-pre-wrap text-[13px] text-muted-foreground leading-snug">
+              {part.text}
+            </p>
+          </ThinkingStep>
+        </ThinkingStepsContent>
+      </ThinkingSteps>
     );
   }
 
   if (part.type === "authorization") {
     const url = part.state === "required" ? safeUrl(part.authorization?.url) : undefined;
     return (
-      <p className="rounded-lg border border-edge bg-panel p-3 text-sm">
-        {part.state === "completed"
-          ? `${part.displayName} authorization ${part.outcome}`
-          : part.description}
-        {url && (
-          <a className="ml-2 text-foreground underline" href={url} rel="noreferrer" target="_blank">
-            Sign in
-          </a>
-        )}
-      </p>
+      <Marker variant="border">
+        <MarkerIcon>
+          <KeyIcon />
+        </MarkerIcon>
+        <MarkerContent>
+          {part.state === "completed"
+            ? `${part.displayName} authorization ${part.outcome}`
+            : part.description}
+          {url && (
+            <a className="ml-2" href={url} rel="noreferrer" target="_blank">
+              Sign in
+            </a>
+          )}
+        </MarkerContent>
+      </Marker>
     );
   }
 
@@ -343,6 +487,20 @@ function MessagePart({
 type Item =
   | { kind: "single"; key: string; part: EveMessagePart }
   | { kind: "tools"; key: string; parts: EveDynamicToolPart[] };
+
+const toolNameOf = (part: EveDynamicToolPart): string =>
+  part.toolMetadata?.eve?.name ?? part.toolName;
+
+/**
+ * `send_message` is the model's voice, not a step it took.
+ *
+ * It is one of the five tools, so it arrives as a tool call like any other and
+ * the chain listed it beside the clicks and keystrokes. But what it carries is
+ * the text already rendered as the message underneath, so the row said the
+ * same thing twice and made the plumbing look like work. The chain is what the
+ * Bot did to the computer; the message is what it said about it.
+ */
+const isVoice = (part: EveDynamicToolPart): boolean => toolNameOf(part) === "send_message";
 
 const isPlainTool = (part: EveMessagePart): part is EveDynamicToolPart =>
   part.type === "dynamic-tool" && !part.toolMetadata?.eve?.inputRequest;
@@ -370,6 +528,10 @@ function buildItems(parts: readonly EveMessagePart[]): Item[] {
 
   for (const [index, part] of parts.entries()) {
     if (isPlainTool(part)) {
+      // The voice renders nothing here, and must not break a run in two.
+      if (isVoice(part)) {
+        continue;
+      }
       if (run.length === 0) {
         runStart = index;
       }
@@ -386,6 +548,17 @@ function buildItems(parts: readonly EveMessagePart[]): Item[] {
   return items;
 }
 
+/**
+ * A person's attachments render above their text.
+ *
+ * The turn is sent text-first, because that is the order the model should read
+ * it in. On screen the opposite is true: every messaging client puts the image
+ * above its caption, and a bubble arriving before the thing it refers to reads
+ * backwards. Only the render order flips; the wire order stays as it is.
+ */
+const attachmentsFirst = (parts: readonly EveMessagePart[]): EveMessagePart[] =>
+  parts.toSorted((a, b) => Number(b.type === "file") - Number(a.type === "file"));
+
 export function ChatMessage({
   disabled,
   message,
@@ -395,21 +568,28 @@ export function ChatMessage({
   message: EveMessage;
   onAnswer: (answer: Answer) => void;
 }): React.ReactElement {
+  const align = message.role === "user" ? "end" : "start";
+  const items = buildItems(
+    message.role === "user" ? attachmentsFirst(message.parts) : message.parts,
+  );
+
   return (
-    <div className="flex flex-col gap-2">
-      {buildItems(message.parts).map((item) =>
-        item.kind === "tools" ? (
-          <ToolSteps key={item.key} parts={item.parts} />
-        ) : (
-          <MessagePart
-            disabled={disabled}
-            key={item.key}
-            onAnswer={onAnswer}
-            part={item.part}
-            role={message.role}
-          />
-        ),
-      )}
-    </div>
+    <Message align={align}>
+      <MessageContent>
+        {items.map((item) =>
+          item.kind === "tools" ? (
+            <ToolSteps key={item.key} parts={item.parts} />
+          ) : (
+            <MessagePart
+              disabled={disabled}
+              key={item.key}
+              onAnswer={onAnswer}
+              part={item.part}
+              role={message.role}
+            />
+          ),
+        )}
+      </MessageContent>
+    </Message>
   );
 }
