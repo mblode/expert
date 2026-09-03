@@ -16,6 +16,12 @@
  * guarantee is still worth having.
  */
 
+/**
+ * Exported because the doc comment above is the record of the ordering bug
+ * this queue was added for.
+ *
+ * @public
+ */
 export interface JidQueue {
   /** Run `task` after any pending work for `key`; different keys run concurrently. */
   run: <T>(key: string, task: () => Promise<T>) => Promise<T>;

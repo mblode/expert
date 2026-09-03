@@ -12,7 +12,14 @@
  * least-recently-touched entry instead of the oldest-inserted.
  */
 
-/** A bounded set: add/has with oldest-first eviction once `cap` is exceeded. */
+/**
+ * A bounded set: add/has with oldest-first eviction once `cap` is exceeded.
+ *
+ * Exported so a consumer can name the shape instead of writing
+ * `ReturnType<typeof boundedSet>`, as account.ts had to.
+ *
+ * @public
+ */
 export interface BoundedSet {
   add: (value: string) => void;
   delete: (value: string) => void;
@@ -21,7 +28,14 @@ export interface BoundedSet {
   values: () => IterableIterator<string>;
 }
 
-/** A bounded key->value map: set/get with oldest-first eviction past `cap`. */
+/**
+ * A bounded key->value map: set/get with oldest-first eviction past `cap`.
+ *
+ * Exported for the same reason as `BoundedSet`: a shared primitive whose
+ * shape a consumer needs to be able to name.
+ *
+ * @public
+ */
 export interface BoundedMap<V> {
   get: (key: string) => V | undefined;
   set: (key: string, value: V) => void;
