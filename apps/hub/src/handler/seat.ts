@@ -2,6 +2,7 @@ import { SeatMethods } from "@computer/proto";
 import { ComputerError, DISPLAY, PRIMARY_DISPLAY, parseDisplay } from "@computer/shared";
 import type { BoxStatus, Button } from "@computer/shared";
 import type { Bot, BotRegistry } from "../service/bots.ts";
+import type { ConversationRegistry } from "../service/conversations.ts";
 import type { ProvisionService } from "../service/provision.ts";
 import { asRole } from "../service/principals.ts";
 import type { PrincipalRecord } from "../service/principals.ts";
@@ -16,6 +17,7 @@ const MAX_TYPE_CHARS = 4000;
 export interface SeatDeps {
   auth: AuthRegistry;
   bots: BotRegistry;
+  conversations: ConversationRegistry;
   provision: ProvisionService;
   vncUrl: string;
 }
@@ -219,12 +221,28 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
 
   // The thread. Read-only, and deliberately NOT gated on requireHumanContact:
   // reading what was said is not taking the seat.
+  //
+  // `conversation_id` is additive: absent is the display's Bot thread, which
+  // is what every caller does today. Naming one is the same read through the
+  // conversation store, and it is still contained by the screen the seat was
+  // minted for: a conversation belongs to a Bot, a Bot is on a screen, and a
+  // seat bound to one screen must not read another one's thread by id.
   router.rpc(SeatMethods.Occurrences, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
-    const bot = botFor(o, ctx);
     const cursor = typeof o.cursor === "string" && o.cursor ? o.cursor : undefined;
     const limit = typeof o.limit === "number" ? o.limit : undefined;
-    return bot.voice.page(cursor, limit);
+    if (typeof o.conversation_id === "string" && o.conversation_id) {
+      const conversation = deps.conversations.byId(o.conversation_id);
+      const owner = deps.bots.byId(conversation.bot);
+      if (ctx.principal?.display !== undefined && ctx.principal.display !== owner.display) {
+        throw new ComputerError(
+          "UNAUTHENTICATED",
+          `this seat is for screen ${ctx.principal.display}`,
+        );
+      }
+      return deps.conversations.page(conversation.id, cursor, limit);
+    }
+    return botFor(o, ctx).voice.page(cursor, limit);
   });
 
   // A masked value for an open secret_request. It goes to the clipboard and

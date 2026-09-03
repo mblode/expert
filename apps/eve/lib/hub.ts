@@ -13,10 +13,18 @@ const paths = {
 
 export type HubPath = keyof typeof paths;
 
+/**
+ * The hub's turn binding. It arrives on the inbound channel request, rides
+ * the session's auth attributes, and goes back here. It is never in the
+ * model's context and no tool argument can set it: the hub decides which
+ * conversation a `send_message` lands in, not the model.
+ */
+export const TURN_HEADER = "x-computer-turn";
+
 /** Longer than the hub's own longest call (a 120 s shell, plus the exec round trip). */
 const TIMEOUT_MS = 150_000;
 
-export async function hubRpc<T>(path: HubPath, body: unknown): Promise<T> {
+export async function hubRpc<T>(path: HubPath, body: unknown, turn?: string): Promise<T> {
   const base = (process.env.COMPUTER_URL ?? "http://127.0.0.1:8080").replace(/\/$/, "");
   const token = process.env.COMPUTER_BOT_TOKEN;
   if (!token) {
@@ -31,6 +39,7 @@ export async function hubRpc<T>(path: HubPath, body: unknown): Promise<T> {
       headers: {
         authorization: `Bearer ${token}`,
         "content-type": "application/json",
+        ...(turn ? { [TURN_HEADER]: turn } : {}),
       },
       method: "POST",
       signal: AbortSignal.timeout(TIMEOUT_MS),

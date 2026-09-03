@@ -12,6 +12,9 @@ import { handleChannelIngress, isChannelPath } from "./handler/channels.ts";
 import { registerWhatsApp } from "./handler/whatsapp.ts";
 import { ChannelRegistry } from "./service/channels.ts";
 import type { ChannelStore } from "./service/channels.ts";
+import { ConversationRegistry } from "./service/conversations.ts";
+import type { ConversationStore, MessageLog } from "./service/conversations.ts";
+import { TurnService } from "./service/turns.ts";
 import type { BridgeClient } from "./service/whatsapp.ts";
 import { eveUrlForDisplay } from "./host/eve.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
@@ -54,6 +57,9 @@ export interface HubOptions {
   eveSecret?: string;
   /** Persists channel doors (the WhatsApp bridge, webhooks). Memory in tests. */
   channelStore?: ChannelStore;
+  /** The conversation index and its append-only logs. Memory in tests. */
+  conversationStore?: ConversationStore;
+  messageLog?: MessageLog;
   /** The WhatsApp bridge this hub supervises. Absent = the RPCs answer DAEMON_DOWN. */
   bridge?: BridgeClient;
   /** The supervisor's status file (init writes it). Absent = /healthz reports the hub alone. */
@@ -67,6 +73,9 @@ export interface Hub {
   bots: BotRegistry;
   provision: ProvisionService;
   channels: ChannelRegistry;
+  conversations: ConversationRegistry;
+  /** Mints and verifies the per-turn conversation binding the ingress hands to Eve. */
+  turns: TurnService;
   router: ConnectRouter;
   /** Mounts the stored roster (or provisions "main") and claims windows. */
   start: () => Promise<void>;
@@ -84,9 +93,14 @@ export function createHub(opts: HubOptions): Hub {
   });
   const router = new ConnectRouter(auth);
   const channels = new ChannelRegistry(opts.channelStore);
+  const conversations = new ConversationRegistry(opts.conversationStore, opts.messageLog);
+  // In-process: a turn is one inbound message long, so it has nothing to
+  // survive a restart for. A hub that died mid-turn has already dropped the
+  // reply the token was minted for.
+  const turns = new TurnService();
 
-  registerAgent(router, bots);
-  registerSeat(router, { auth, bots, provision, vncUrl: opts.vncUrl });
+  registerAgent(router, { bots, conversations, turns });
+  registerSeat(router, { auth, bots, conversations, provision, vncUrl: opts.vncUrl });
   registerWhatsApp(router, { bots, bridge: opts.bridge, channels });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
@@ -138,9 +152,11 @@ export function createHub(opts: HubOptions): Hub {
         await handleChannelIngress(req, res, {
           bots,
           channels,
+          conversations,
           cors: corsHeaders(),
           eveSecret,
           eveUrl,
+          turns,
         });
         return;
       }
@@ -186,6 +202,7 @@ export function createHub(opts: HubOptions): Hub {
     auth,
     bots,
     channels,
+    conversations,
     close: () =>
       new Promise((resolveClose) => {
         wss.close();
@@ -195,6 +212,7 @@ export function createHub(opts: HubOptions): Hub {
     router,
     server,
     start: () => provision.start(),
+    turns,
     wss,
   };
 }

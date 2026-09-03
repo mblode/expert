@@ -8,6 +8,7 @@ import type { PrincipalStore } from "../src/service/principals.ts";
 import type { PolicyService } from "../src/service/policy.ts";
 import type { BotConfig } from "../src/service/bots.ts";
 import type { ChannelStore } from "../src/service/channels.ts";
+import type { ConversationStore, MessageLog } from "../src/service/conversations.ts";
 import type { BridgeClient } from "../src/service/whatsapp.ts";
 
 const SETUP_CODE = "setup-code-test";
@@ -43,6 +44,8 @@ export async function startHub(
     eveUrls?: Record<string, string>;
     eveSecret?: string;
     channelStore?: ChannelStore;
+    conversationStore?: ConversationStore;
+    messageLog?: MessageLog;
     bridge?: BridgeClient;
   } = {},
 ): Promise<StartedHub> {
@@ -62,6 +65,8 @@ export async function startHub(
     },
     bridge: opts.bridge,
     channelStore: opts.channelStore,
+    conversationStore: opts.conversationStore,
+    messageLog: opts.messageLog,
     eveSecret: opts.eveSecret,
     eveUrls: opts.eveUrls,
     policy: opts.policy,
