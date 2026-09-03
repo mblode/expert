@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { faqs, howItWorks, whatYouGet } from "@/lib/content";
+import { faqs, howItWorks, surfaces, whatYouGet } from "@/lib/content";
 import { siteConfig } from "@/lib/config";
 
 import { CtaSection } from "../shared/cta-section";
@@ -34,7 +34,7 @@ export function MarketingHome(): React.ReactElement {
               <Reveal delay={0.35}>
                 <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-lg text-muted-foreground">
                   Always on, one per account. It works while you are away, and hands you the mouse
-                  when it gets stuck. From the web, the desktop app, or your phone.
+                  when it gets stuck. Reach it from the web, WhatsApp, or your own CLI.
                 </p>
               </Reveal>
               <Reveal delay={0.5}>
@@ -90,6 +90,28 @@ export function MarketingHome(): React.ReactElement {
               </Reveal>
               <ul className="mt-10 grid gap-6 sm:grid-cols-3">
                 {whatYouGet.map((item, index) => (
+                  <li className="rounded-2xl border border-white/[0.08] p-6" key={item.title}>
+                    <Reveal delay={0.1 * (index + 1)}>
+                      <h3 className="font-display text-xl font-light tracking-tight">
+                        {item.title}
+                      </h3>
+                      <p className="mt-3 text-pretty text-sm text-white/70">{item.description}</p>
+                    </Reveal>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+
+          <section className="py-12 sm:py-16" id="reach">
+            <div className="mx-auto max-w-4xl px-4 sm:px-6">
+              <Reveal>
+                <h2 className="font-display text-2xl font-light tracking-tight">
+                  Reach it from anywhere
+                </h2>
+              </Reveal>
+              <ul className="mt-10 grid gap-6 sm:grid-cols-2">
+                {surfaces.map((item, index) => (
                   <li className="rounded-2xl border border-white/[0.08] p-6" key={item.title}>
                     <Reveal delay={0.1 * (index + 1)}>
                       <h3 className="font-display text-xl font-light tracking-tight">

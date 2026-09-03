@@ -45,6 +45,39 @@ export const whatYouGet = [
   },
 ];
 
+/**
+ * The four doors, each described in the direction it actually points.
+ *
+ * Worth being exact about, because two of them are easy to state backwards.
+ * The CLI does not get its own credential: a person signs in here and their
+ * coding agent drives that seat (`skills/expert/SKILL.md`). MCP points
+ * outward, at servers the computer calls; nothing here serves the computer as
+ * MCP tools to somebody else's agent, so this says "it can use" rather than
+ * "you can drive it with".
+ */
+export const surfaces = [
+  {
+    description:
+      "hello.expert on a laptop or a phone: the conversation, the live screen, and the seat when you want it.",
+    title: "The web",
+  },
+  {
+    description:
+      "Message it like you would a person. When it needs hands it sends back a link that opens the screen on your phone.",
+    title: "WhatsApp",
+  },
+  {
+    description:
+      "Add the skill and Claude Code, Codex, OpenCode or Cursor drive the same computer you do, through the same seat.",
+    title: "Your CLI",
+  },
+  {
+    description:
+      "Connect an MCP server and the computer uses those tools beside its own browser and terminal.",
+    title: "MCP",
+  },
+];
+
 export const faqs = [
   {
     answer:
@@ -76,6 +109,6 @@ export const faqs = [
   },
   {
     answer: "Same sign-in, same computer, same conversation.",
-    question: "What about desktop and iOS?",
+    question: "What about the iPhone app?",
   },
 ];
