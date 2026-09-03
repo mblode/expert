@@ -191,7 +191,7 @@ export interface AccountRuntime {
   applyRecord: (next: AccountRecord) => Promise<void>;
 }
 
-export interface AccountRuntimeDeps {
+interface AccountRuntimeDeps {
   record: AccountRecord;
   env: BridgeEnv;
   logger: Logger;

@@ -72,7 +72,7 @@ export interface AccountRecord {
   config: AccountConfig;
 }
 
-export interface AccountsFile {
+interface AccountsFile {
   version: 1;
   accounts: AccountRecord[];
 }
@@ -96,7 +96,7 @@ export interface AccountSummary {
 }
 
 export const ACCT_ID_RE = /^[a-z0-9][a-z0-9-]{0,31}$/u;
-export const DEFAULT_CONNECTOR_ID = "whatsapp";
+const DEFAULT_CONNECTOR_ID = "whatsapp";
 
 const TRIGGER_MODES = new Set(["mention", "prefix", "all"]);
 const GROUP_POLICIES = new Set(["all", "listed"]);
@@ -336,7 +336,7 @@ export const saveAccountsFile = async (stateDir: string, file: AccountsFile): Pr
 };
 
 /** In-memory registry over accounts.json; every mutation persists before it returns. */
-export interface AccountsRegistry {
+interface AccountsRegistry {
   list: () => AccountRecord[];
   /** Throws when the id is taken; the route maps that to 409. */
   add: (record: AccountRecord) => Promise<AccountRecord>;

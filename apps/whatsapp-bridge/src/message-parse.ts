@@ -62,7 +62,7 @@ export const extractText = (message: proto.IMessage | null | undefined): string 
 };
 
 /** The fields we pull out of a shared contact's vCard. */
-export interface ParsedContact {
+interface ParsedContact {
   name: string;
   phones: string[];
   emails: string[];
@@ -267,7 +267,7 @@ export const quotedImageSource = (msg: WAMessage | null | undefined): WAMessage 
 };
 
 /** The text of a quoted (replied-to) message, plus who wrote it. */
-export interface QuotedTextInfo {
+interface QuotedTextInfo {
   /** User-part of contextInfo.participant (phone digits or lid). */
   sender: string;
   text: string;
@@ -300,7 +300,7 @@ export const quotedText = (msg: WAMessage | null | undefined): QuotedTextInfo | 
 };
 
 /** The classification of a message's JID. */
-export interface MessageClass {
+interface MessageClass {
   isDM: boolean;
   isGroup: boolean;
   /** True for the bridge account's own "message yourself" chat. */
@@ -363,7 +363,7 @@ export const classifyMessage = (
 };
 
 /** Sender identity fields resolved off a message key. */
-export interface SenderInfo {
+interface SenderInfo {
   sender: string;
   senderName: string | undefined;
   senderPhone: string | null;
