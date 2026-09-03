@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { describe, expect, it } from "vitest";
-import { channelIdFor, normalisePhone } from "../src/handler/whatsapp.ts";
+import { connectorIdFor, normalisePhone } from "../src/handler/whatsapp.ts";
 import { BridgeClient } from "../src/service/whatsapp.ts";
 import { rpc, startHub } from "./helper.ts";
 
@@ -14,14 +14,14 @@ async function fakeBridge(secret: string): Promise<{
   calls: { method: string; path: string; secret: string | undefined; body: unknown }[];
   accounts: Map<
     string,
-    { bot: string; channel_id: string; channel_secret: string; phone?: string }
+    { bot: string; connector_id: string; connector_secret: string; phone?: string }
   >;
   close: () => Promise<void>;
 }> {
   const calls: { method: string; path: string; secret: string | undefined; body: unknown }[] = [];
   const accounts = new Map<
     string,
-    { bot: string; channel_id: string; channel_secret: string; phone?: string }
+    { bot: string; connector_id: string; connector_secret: string; phone?: string }
   >();
   const json = (res: ServerResponse, status: number, body: unknown) => {
     res.writeHead(status, { "content-type": "application/json" });
@@ -50,7 +50,7 @@ async function fakeBridge(secret: string): Promise<{
           accounts: [...accounts].map(([acct, a]) => ({
             acct,
             bot: a.bot,
-            channel_id: a.channel_id,
+            connector_id: a.connector_id,
             phone: a.phone ?? null,
             status: "unlinked",
           })),
@@ -117,7 +117,7 @@ describe("phone normalisation", () => {
 });
 
 describe("WhatsApp seat RPCs", () => {
-  it("start creates the channel door and the bridge account, then links", async () => {
+  it("start creates the connector door and the bridge account, then links", async () => {
     const bridge = await fakeBridge("bridge-secret");
     const h = await startHub({
       bridge: new BridgeClient({ secret: "bridge-secret", url: bridge.url }),
@@ -133,18 +133,18 @@ describe("WhatsApp seat RPCs", () => {
       expect(started.status).toBe("linking");
       expect(started.pairing_code).toBe("ABCD-EFGH");
 
-      // The bridge got a channel id and the secret the hub minted for it.
+      // The bridge got a connector id and the secret the hub minted for it.
       const created = bridge.accounts.get("main")!;
-      expect(created.channel_id).toBe(channelIdFor("main"));
-      const record = h.hub.channels.byId(channelIdFor("main"))!;
-      expect(created.channel_secret).toBe(record.secret);
+      expect(created.connector_id).toBe(connectorIdFor("main"));
+      const record = h.hub.connectors.byId(connectorIdFor("main"))!;
+      expect(created.connector_secret).toBe(record.secret);
       expect(record.bot).toBe("main");
       expect(record.paths).toEqual(["/eve/v1/whatsapp/message"]);
       expect(created.phone).toBe("61400000000");
 
       // A second start on the same account does not mint again.
       await rpc(h.url, "/computer.v1.Seat/WhatsAppLink", { acct: "main", action: "start" }, owner);
-      expect(h.hub.channels.byId(channelIdFor("main"))!.secret).toBe(record.secret);
+      expect(h.hub.connectors.byId(connectorIdFor("main"))!.secret).toBe(record.secret);
       expect(
         bridge.calls.filter((c) => c.method === "POST" && c.path === "/accounts"),
       ).toHaveLength(1);
@@ -170,7 +170,7 @@ describe("WhatsApp seat RPCs", () => {
 
       // Unlink closes the door with the number.
       await rpc(h.url, "/computer.v1.Seat/WhatsAppLink", { acct: "main", action: "unlink" }, owner);
-      expect(h.hub.channels.byId(channelIdFor("main"))).toBeUndefined();
+      expect(h.hub.connectors.byId(connectorIdFor("main"))).toBeUndefined();
       expect(bridge.accounts.has("main")).toBe(false);
     } finally {
       await h.close();

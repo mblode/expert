@@ -2,14 +2,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { createChannelClient } from "./hub-client.ts";
+import { createConnectorClient } from "./hub-client.ts";
 import type { AskAgentArgs } from "./hub-client.ts";
 
 const noopLogger = {
   warn: () => {
     // silenced in tests
   },
-} as unknown as Parameters<typeof createChannelClient>[0]["logger"];
+} as unknown as Parameters<typeof createConnectorClient>[0]["logger"];
 
 const baseArgs: AskAgentArgs = {
   message: "hello",
@@ -51,10 +51,10 @@ const withStubbedFetch = async (
 };
 
 const makeClient = (maxAttempts?: number) =>
-  createChannelClient({
+  createConnectorClient({
     acct: "main",
-    channelSecret: "s3cret",
-    endpoint: "http://127.0.0.1:8080/channels/whatsapp-main/message",
+    connectorSecret: "s3cret",
+    endpoint: "http://127.0.0.1:8080/connectors/whatsapp-main/message",
     logger: noopLogger,
     maxAttempts,
     sleep: async () => {
@@ -63,15 +63,15 @@ const makeClient = (maxAttempts?: number) =>
     timeoutMs: 1000,
   });
 
-// The hub matches x-channel-secret against channels.json; the acct rides in
+// The hub matches x-connector-secret against connectors.json; the acct rides in
 // the body so one Bot on two numbers can tell them apart.
-test("askAgent posts to the channel ingress with the channel secret and acct", async () => {
+test("askAgent posts to the connector ingress with the connector secret and acct", async () => {
   await withStubbedFetch([() => Response.json({ reply: " hi there " })], async (captured) => {
     const ask = makeClient();
     const result = await ask(baseArgs);
     assert.equal(result.reply, "hi there");
-    assert.equal(captured[0]?.url, "http://127.0.0.1:8080/channels/whatsapp-main/message");
-    assert.equal(captured[0]?.headers["x-channel-secret"], "s3cret");
+    assert.equal(captured[0]?.url, "http://127.0.0.1:8080/connectors/whatsapp-main/message");
+    assert.equal(captured[0]?.headers["x-connector-secret"], "s3cret");
     assert.equal("x-bridge-secret" in (captured[0]?.headers ?? {}), false);
     assert.equal(captured[0]?.body.acct, "main");
     assert.equal(captured[0]?.body.token, baseArgs.token);

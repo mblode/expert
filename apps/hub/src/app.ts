@@ -8,10 +8,10 @@ import { ConnectRouter, corsHeaders, writeError, writeJson } from "./handler/rou
 import { registerAgent } from "./handler/agent.ts";
 import { registerSeat } from "./handler/seat.ts";
 import { handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
-import { handleChannelIngress, isChannelPath } from "./handler/channels.ts";
+import { handleConnectorIngress, isConnectorPath } from "./handler/connectors.ts";
 import { registerWhatsApp } from "./handler/whatsapp.ts";
-import { ChannelRegistry } from "./service/channels.ts";
-import type { ChannelStore } from "./service/channels.ts";
+import { ConnectorRegistry } from "./service/connectors.ts";
+import type { ConnectorStore } from "./service/connectors.ts";
 import { ConversationRegistry } from "./service/conversations.ts";
 import type { ConversationStore, MessageLog } from "./service/conversations.ts";
 import { TurnService } from "./service/turns.ts";
@@ -55,8 +55,8 @@ export interface HubOptions {
   eveUrls?: Record<string, string>;
   /** Shared secret injected on hub→Eve loopback requests (`eve start`). */
   eveSecret?: string;
-  /** Persists channel doors (the WhatsApp bridge, webhooks). Memory in tests. */
-  channelStore?: ChannelStore;
+  /** Persists connector doors (the WhatsApp bridge, webhooks). Memory in tests. */
+  connectorStore?: ConnectorStore;
   /** The conversation index and its append-only logs. Memory in tests. */
   conversationStore?: ConversationStore;
   messageLog?: MessageLog;
@@ -72,7 +72,7 @@ export interface Hub {
   auth: AuthRegistry;
   bots: BotRegistry;
   provision: ProvisionService;
-  channels: ChannelRegistry;
+  connectors: ConnectorRegistry;
   conversations: ConversationRegistry;
   /** Mints and verifies the per-turn conversation binding the ingress hands to Eve. */
   turns: TurnService;
@@ -95,7 +95,7 @@ export function createHub(opts: HubOptions): Hub {
     setupCode: opts.setupCode,
   });
   const router = new ConnectRouter(auth);
-  const channels = new ChannelRegistry(opts.channelStore);
+  const connectors = new ConnectorRegistry(opts.connectorStore);
   // In-process: a turn is one inbound message long, so it has nothing to
   // survive a restart for. A hub that died mid-turn has already dropped the
   // reply the token was minted for.
@@ -103,7 +103,7 @@ export function createHub(opts: HubOptions): Hub {
 
   registerAgent(router, { bots, conversations, turns });
   registerSeat(router, { auth, bots, conversations, provision, vncUrl: opts.vncUrl });
-  registerWhatsApp(router, { bots, bridge: opts.bridge, channels });
+  registerWhatsApp(router, { bots, bridge: opts.bridge, connectors });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
   // Honest health: the supervisor's view of desk, Eve and bridge beside the
@@ -149,11 +149,11 @@ export function createHub(opts: HubOptions): Hub {
         await handleEveProxy(req, res, { auth, bots, cors: corsHeaders(), eveSecret, eveUrl });
         return;
       }
-      // The other door: a channel secret, not a seat. Same Eve, same hub secret.
-      if (isChannelPath(url.pathname)) {
-        await handleChannelIngress(req, res, {
+      // The other door: a connector secret, not a seat. Same Eve, same hub secret.
+      if (isConnectorPath(url.pathname)) {
+        await handleConnectorIngress(req, res, {
           bots,
-          channels,
+          connectors,
           conversations,
           cors: corsHeaders(),
           eveSecret,
@@ -203,7 +203,7 @@ export function createHub(opts: HubOptions): Hub {
   return {
     auth,
     bots,
-    channels,
+    connectors,
     conversations,
     close: () =>
       new Promise((resolveClose) => {

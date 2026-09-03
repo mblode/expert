@@ -14,7 +14,7 @@ import { PixelRegistry } from "../service/pixels.ts";
 /**
  * One verify path for every door.
  *
- * A seat token, a bot token and a channel secret used to be three unrelated
+ * A seat token, a bot token and a connector secret used to be three unrelated
  * checks; they now resolve to one `PrincipalRecord`, so a handler asks what
  * this caller may do rather than which file its credential came from. Bots
  * are still stored with their display in the roster and adapted here, which
@@ -276,7 +276,7 @@ export class AuthRegistry {
       throw new ComputerError("DENIED", `an issuer may not issue the ${opts.role} role`);
     }
     if (opts.role === "bot" || opts.role === "ingress") {
-      // Those come from CreateBot and the channel registry, which own the
+      // Those come from CreateBot and the connector registry, which own the
       // rest of the record. Minting one here would make a token with no Bot.
       throw new ComputerError("VALIDATION", `the ${opts.role} role is not issued as a seat`);
     }

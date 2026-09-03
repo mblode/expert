@@ -40,7 +40,7 @@ flowchart TB
   catalog -->|"Seat.Pair with the setup code"| hub
   browser -->|"seat token: Seat RPCs, /eve/v1, /vnc"| hub
   wa <--> bridge
-  bridge -->|"POST /channels/:id/message, x-channel-secret"| hub
+  bridge -->|"POST /connectors/:id/message, x-connector-secret"| hub
   hub -->|"/eve/v1/:kind/..., x-computer-eve-secret"| eve
   eve -->|"Agent RPCs, bot token"| hub
   hub -->|"sudo -u box, XTEST"| desk
@@ -74,15 +74,15 @@ The useful way to hold this is that a Bot is an org-chart noun, not a security n
 
 Everything that reaches a tenant computer goes through the hub on `:8080`, and there are seven ways in. The router (`apps/hub/src/handler/router.ts`) refuses to register a method without an auth policy and `assertAllPolicies()` fails startup if any proto method is unregistered, so the list below is closed by construction rather than by review.
 
-| Door            | Path                          | Credential                                                   | Checked in                                            |
-| --------------- | ----------------------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
-| Pair            | `POST /computer.v1.Seat/Pair` | the computer's setup code                                    | `AuthRegistry.pair`, ten failures then a 60 s lockout |
-| Seat RPCs       | `POST /computer.v1.Seat/*`    | a seat token carrying a role                                 | `AuthRegistry.verify`, policy `seat`                  |
-| Agent RPCs      | `POST /computer.v1.Agent/*`   | a bot token from the roster                                  | `AuthRegistry.verify`, policy `agent`                 |
-| Eve proxy       | `/eve/v1/*`                   | an owner seat token; the hub injects the Eve secret          | `handler/eve-proxy.ts`, `auth.isOwner`                |
-| Channel ingress | `POST /channels/:id/:path`    | `x-channel-secret`                                           | `handler/channels.ts`, `ChannelRegistry.verify`       |
-| Pixels          | `GET /vnc*`, the WS upgrade   | a 15 minute pixel token bound to a display, or an owner seat | `app.ts`, `auth.canViewPixels`, `vnc-proxy.ts`        |
-| Public          | `GET /spec`, `GET /healthz`   | none                                                         | `router.extra`, policy `public`                       |
+| Door              | Path                          | Credential                                                   | Checked in                                            |
+| ----------------- | ----------------------------- | ------------------------------------------------------------ | ----------------------------------------------------- |
+| Pair              | `POST /computer.v1.Seat/Pair` | the computer's setup code                                    | `AuthRegistry.pair`, ten failures then a 60 s lockout |
+| Seat RPCs         | `POST /computer.v1.Seat/*`    | a seat token carrying a role                                 | `AuthRegistry.verify`, policy `seat`                  |
+| Agent RPCs        | `POST /computer.v1.Agent/*`   | a bot token from the roster                                  | `AuthRegistry.verify`, policy `agent`                 |
+| Eve proxy         | `/eve/v1/*`                   | an owner seat token; the hub injects the Eve secret          | `handler/eve-proxy.ts`, `auth.isOwner`                |
+| Connector ingress | `POST /connectors/:id/:path`  | `x-connector-secret` (`x-channel-secret` still accepted)     | `handler/connectors.ts`, `ConnectorRegistry.verify`   |
+| Pixels            | `GET /vnc*`, the WS upgrade   | a 15 minute pixel token bound to a display, or an owner seat | `app.ts`, `auth.canViewPixels`, `vnc-proxy.ts`        |
+| Public            | `GET /spec`, `GET /healthz`   | none                                                         | `router.extra`, policy `public`                       |
 
 A few properties of that table are worth stating outright because they were each paid for.
 
@@ -98,21 +98,29 @@ A few properties of that table are worth stating outright because they were each
 
 **A narrowed owner is not an owner at the doors an allowlist cannot name.** Authoring a connection file needs `CreateBot`, and no role but `owner` carries it, so a plugins invite mints an owner narrowed by `methods` to two RPCs for two minutes. `/eve/v1`, `/roster` and the pixel stream are HTTP routes rather than RPCs, so nothing in a `methods` list can describe them; `AuthRegistry.isOwner` therefore refuses any owner record carrying `methods`, or that grant would inherit all three. The cleaner fix, still open in `AUDIT.md`, is a role that may provision and nothing else.
 
-**The channel ingress deliberately has no lockout**, unlike Pair, and the comment in `service/channels.ts` explains why: channel ids are guessable (`whatsapp-<acct>`), the route is public, so a per-id lockout would let anyone on the internet block the real bridge for a minute at a time with ten junk requests. A 256-bit secret compared in constant time is the whole defence.
+**The connector ingress deliberately has no lockout**, unlike Pair, and the comment in `service/connectors.ts` explains why: connector ids are guessable (`whatsapp-<acct>`), the route is public, so a per-id lockout would let anyone on the internet block the real bridge for a minute at a time with ten junk requests. A 256-bit secret compared in constant time is the whole defence.
 
-**The two Eve doors end at the same place with the same header.** Both the seat-gated proxy and the channel ingress forward to the Bot's Eve on loopback with `x-computer-eve-secret`, so an Eve channel file cannot tell them apart and does not need to. They differ only in the question they ask on the way in: the proxy asks "is this the owner", the ingress asks "is this the door it claims to be".
+**The two Eve doors end at the same place with the same header.** Both the seat-gated proxy and the connector ingress forward to the Bot's Eve on loopback with `x-computer-eve-secret`, so an Eve channel file cannot tell them apart and does not need to. They differ only in the question they ask on the way in: the proxy asks "is this the owner", the ingress asks "is this the door it claims to be".
 
-## 5. `channel` names three things
+## 5. `connector` and the two senses of `channel`
 
-The word is overloaded in this repository, and the three senses are genuinely different objects:
+The word `channel` was overloaded across three genuinely different objects, and one of them has been renamed:
 
-1. **A credentialed door on the hub.** `apps/hub/src/service/channels.ts` and `channels.json`: a record with an id, a kind, a Bot, a secret and an optional path allowlist. `POST /channels/<id>/<rest>` with `x-channel-secret` forwards to that Bot's Eve at `/eve/v1/<kind>/<rest>`.
-2. **An eve route file.** `apps/eve/lib/channels/whatsapp.ts`, a `defineChannel` with routes, an auth check and a turn policy. The file stem is the channel id in eve's own sense, and the hub record's `kind` is what selects it.
-3. **The conversational sense.** "WhatsApp is just a channel", the way `WHATSAPP-PARITY.md` uses it in its noun table: a way messages reach a Bot and replies leave it.
+1. **A credentialed door on the hub, now a `connector`.** `apps/hub/src/service/connectors.ts` and `connectors.json`: a record with an id, a kind, a Bot, a secret and an optional path allowlist. `POST /connectors/<id>/<rest>` with `x-connector-secret` forwards to that Bot's Eve at `/eve/v1/<kind>/<rest>`.
+2. **An eve route file, still a `channel`.** `apps/eve/lib/channels/whatsapp.ts`, a `defineChannel` with routes, an auth check and a turn policy. The file stem is the channel id in eve's own sense, and the connector record's `kind` is what selects it. This is a framework concept from the eve dependency; renaming it would not compile.
+3. **The conversational sense, still a `channel`.** "WhatsApp is just a channel", the way `WHATSAPP-PARITY.md` uses it in its noun table: a way messages reach a Bot and replies leave it.
 
-The first two line up by convention (`kind: "whatsapp"` finds `channels/whatsapp.ts`) and nothing enforces the correspondence; a record naming a kind with no route file gets a 404 from Eve rather than a hub-side error. That is tolerable. What is not tolerable long-term is that sense 1 is a _credential_, and calling a credential a channel makes every sentence about revocation ambiguous.
+Senses 1 and 2 still line up by convention (`kind: "whatsapp"` finds `channels/whatsapp.ts`) and nothing enforces the correspondence; a record naming a kind with no route file gets a 404 from Eve rather than a hub-side error. That is tolerable. What was not tolerable long-term is that sense 1 is a _credential_, and calling a credential a channel made every sentence about revocation ambiguous. Senses 2 and 3 keep the word because they are the same idea at two altitudes.
 
-The intended rename is `connector` for sense 1, leaving `channel` to mean senses 2 and 3 only, which are the same idea at two altitudes. Nothing in the repository uses `connector` that way yet. Two things to get right when the rename happens. `WHATSAPP-PARITY.md` already spends the neighbouring word `plugin` on a remote MCP or OpenAPI connection with a human-consented credential, so `connector` must not quietly absorb that too: a connector is inbound and a plugin is outbound, and the credential points the opposite way in each. And `channels.json`, `x-channel-secret` and the `/channels/` prefix are all on deployed volumes and in the running bridge, so the rename is a migration and not a search-and-replace.
+`connector` does not absorb `plugin`. `WHATSAPP-PARITY.md` spends that neighbouring word on a remote MCP or OpenAPI connection with a human-consented credential: a connector is inbound and hub-minted, a plugin is outbound and human-consented, and the credential points the opposite way in each. Keeping them apart is why `service/connectors.ts` says so in its header comment rather than leaving it to a reader's memory.
+
+**The rename is a migration, and the compatibility aliases are the migration.** `channels.json` is on both deployed Fly volumes, and a bridge deployed before the rename posts `/channels/<id>/message` with `x-channel-secret`. Renaming outright would have cut WhatsApp off at the moment of deploy and left the volume's secret unread, which takes a tenant down until someone re-provisions the number by hand. So three aliases shipped with it:
+
+- The ingress answers `/connectors/` and `/channels/`, and takes `x-connector-secret` or `x-channel-secret`. Either half in either spelling opens the door, so a half-deployed pair works.
+- `FileConnectorStore` reads `connectors.json`, falling back to `channels.json` when there is none. It writes only the new name, so the first mutation migrates the content forward, and nothing deletes the old file: a destructive step on deploy is exactly what the fallback exists to avoid, and it leaves a rollback artifact.
+- The bridge's `accounts.json` still parses `channel_id` / `channel_secret` alongside `connector_id` / `connector_secret`, for the same reason: a parse error there is a bridge that will not start, which is every linked number down.
+
+The bridge itself sends only the new names, so once Blode and Vibey are both redeployed all three aliases are dead weight rather than load-bearing, and go. On the wire, `WhatsAppAccount.channel_id` became `connector_id`; no client in this repository read it.
 
 ## 6. The model's voice, and where it actually comes out
 
@@ -121,12 +129,12 @@ The intended contract, from `api/RESEARCH.md` and `api/DESIGN.md`, is that plain
 The product did not use it, and still does not. Grepping for consumers turns up none: `apps/web/components/chat-pane.tsx` renders Eve's own session stream through `useEveAgent` over the `/eve/v1` proxy, and `apps/ios/Computer/Models/EveClient.swift` speaks the same Eve protocol through the same proxy. Neither client calls `Seat.Occurrences`, neither answers a widget, neither calls `ProvideSecret`. So the model's voice has **two exits and one dead end**:
 
 - **The Eve session stream**, proxied at `/eve/v1` and gated on an owner seat, is what a human on hello.expert or iOS actually reads. It carries the model's raw assistant text, tool parts and reasoning, which is the opposite of the scratchpad contract.
-- **The WhatsApp channel's synchronous `{reply}`**, in `apps/eve/lib/channels/whatsapp.ts`: the bridge POSTs a message through the hub's channel ingress, the channel drains the session's event stream to the last `message.completed`, normalises it in `outboundReply` and returns it in the HTTP response the bridge posts back to the chat. One turn, one reply, no thread on the hub side at all. The session token is `<chat jid>#<uuid>`, deliberately unique per message, so there is no in-thread conversational memory either: the agent grounds itself in the bridge's recent-message context instead.
+- **The WhatsApp channel's synchronous `{reply}`**, in `apps/eve/lib/channels/whatsapp.ts`: the bridge POSTs a message through the hub's connector ingress, the channel drains the session's event stream to the last `message.completed`, normalises it in `outboundReply` and returns it in the HTTP response the bridge posts back to the chat. One turn, one reply, no thread on the hub side at all. The session token is `<chat jid>#<uuid>`, deliberately unique per message, so there is no in-thread conversational memory either: the agent grounds itself in the bridge's recent-message context instead.
 - **The occurrence log**, written by `send_message` (`apps/eve/lib/tools/send_message.ts`), persisted per Bot, read by nobody.
 
 This is `AUDIT` P1 #4 seen structurally rather than as a bug, and it is the reason a dead-end writer turned out to be cheap to repoint: with no client cursor, no polling loop and no UI, the only real migration is the `transcript.jsonl` sitting on two Fly volumes.
 
-[#34](https://github.com/mblode/expert/pull/34) took the first cut, following [`plans/conversations.md`](plans/conversations.md). A **conversation** is now a hub object with a route, participants and an ordered log: the index in `conversations.json`, one append-only JSONL per conversation, both under `/workspace/.computer` at 0700 where the model cannot write them, which is the other half of `AUDIT` P1 #9. The channel ingress resolves an inbound `{acct, jid}` to a conversation and mints a **turn token** bound to it; the token rides to Eve as `x-computer-turn`, comes back on `Agent.SendMessage`, and the hub appends where it says. The model never sees it and cannot mint one, so the conversation is addressed without widening the five tools. No turn token still means the Bot's `seat` log, byte for byte as before.
+[#34](https://github.com/mblode/expert/pull/34) took the first cut, following [`plans/conversations.md`](plans/conversations.md). A **conversation** is now a hub object with a route, participants and an ordered log: the index in `conversations.json`, one append-only JSONL per conversation, both under `/workspace/.computer` at 0700 where the model cannot write them, which is the other half of `AUDIT` P1 #9. The connector ingress resolves an inbound `{acct, jid}` to a conversation and mints a **turn token** bound to it; the token rides to Eve as `x-computer-turn`, comes back on `Agent.SendMessage`, and the hub appends where it says. The model never sees it and cannot mint one, so the conversation is addressed without widening the five tools. No turn token still means the Bot's `seat` log, byte for byte as before.
 
 Turn state moved with the log, which quietly fixed a real bug: a `widget` on hello.expert used to make the next WhatsApp `send_message` return `CONFLICT`, because one Bot had one `turnEnded` flag.
 
@@ -144,7 +152,7 @@ Each of these is an absence someone will propose filling. Each has a trigger tha
 
 **An adapter split.** `service/adapters.ts` (OpenAI, Claude and Gemini action shapes) was deleted in the audit pass because it had no route, and the mapping rules live in `api/RESEARCH.md` instead. The hub speaks exactly one action union and clients translate. _Trigger:_ a second first-party client with a shape the hub cannot serve. A harness that can be configured is not that trigger.
 
-**SQLite for hub state.** The hub's state is JSON files on the volume: `bots.json`, `seats.json`, `channels.json`, `policy.json`, each written through `writeTokenFile` at 0600 with a temp-file rename. There are a handful of records in each, they are edited by hand and by `npm run bot`, and `ChannelRegistry` reads its file per call precisely so an out-of-band edit is picked up by a running hub. _Trigger:_ concurrent writers, or a query that is not "read the whole file". Both arrive together with per-principal grants and an audit trail, which is why [#26](https://github.com/mblode/expert/pull/26) explicitly keeps the storage as it is and says so: folding the stores together is mechanical once every caller speaks `Principal`, and burying a storage migration inside an auth rewrite makes the diff unreviewable.
+**SQLite for hub state.** The hub's state is JSON files on the volume: `bots.json`, `seats.json`, `connectors.json`, `policy.json`, each written through `writeTokenFile` at 0600 with a temp-file rename. There are a handful of records in each, they are edited by hand and by `npm run bot`, and `ConnectorRegistry` reads its file per call precisely so an out-of-band edit is picked up by a running hub. _Trigger:_ concurrent writers, or a query that is not "read the whole file". Both arrive together with per-principal grants and an audit trail, which is why [#26](https://github.com/mblode/expert/pull/26) explicitly keeps the storage as it is and says so: folding the stores together is mechanical once every caller speaks `Principal`, and burying a storage migration inside an auth rewrite makes the diff unreviewable.
 
 ## 8. The target shape
 
@@ -161,7 +169,7 @@ flowchart TB
   subgraph machine["Tenant Machine"]
     principals["One PrincipalRecord, one verify()<br/>roles as method sets, #26"]
     convo["One conversation object<br/>one identity, one cursor"]
-    connectors["Connectors: inbound doors<br/>today service/channels.ts"]
+    connectors["Connectors: inbound doors<br/>service/connectors.ts"]
     plugins["Plugins: outbound credentials<br/>hub-owned, consented on the web"]
     hub2["hub: handler to service to desk"]
     eve2["Eve per Bot"]

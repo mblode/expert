@@ -541,7 +541,7 @@ message WhatsAppAccountsRequest {}
 message WhatsAppAccount {
   string acct = 1;          // account id on this computer, e.g. "main"
   string bot = 2;           // the Bot this number speaks for
-  string channel_id = 3;    // hub ingress id the bridge posts to
+  string connector_id = 3;  // hub connector id the bridge posts to
   string phone = 4;         // digits, no plus; empty until linked
   string status = 5;        // unlinked | linking | open | closed
 }

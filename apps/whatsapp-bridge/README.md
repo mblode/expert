@@ -9,14 +9,14 @@ WhatsApp group / DM
      │  one Baileys socket per account
      ▼
 whatsapp-bridge :2100  (this process; hub-supervised; hub UID; loopback)
-     │  POST ${COMPUTER_URL}/channels/<channel_id>/message   x-channel-secret
+     │  POST ${COMPUTER_URL}/connectors/<connector_id>/message   x-connector-secret
      ▼
 hub :8080  ── x-computer-eve-secret ──►  Bot's Eve  ── reply in the response
      ▲
      │  Bot tools call back: /messages, /resources, /send-envelope, /send ...   x-bridge-secret
 ```
 
-Inbound: a message that should get a reply is POSTed to the hub's channel ingress with the account's `channel_secret`. The body is bridge protocol v1 (`token`, `message`, `sender`, `senderPhone`, `senderName`, `context[]`, `surface`, `media[]`) plus `acct` and `messageId`, the short handle the Bot passes back to quote or react to that message. The hub answers `{ reply }`, which the bridge posts back into the chat. Transient failures (429, 5xx, timeouts) are retried three times with backoff; a final failure sends a short "something went wrong" note so the user who watched "typing" start is not left in silence.
+Inbound: a message that should get a reply is POSTed to the hub's connector ingress with the account's `connector_secret`. The body is bridge protocol v1 (`token`, `message`, `sender`, `senderPhone`, `senderName`, `context[]`, `surface`, `media[]`) plus `acct` and `messageId`, the short handle the Bot passes back to quote or react to that message. The hub answers `{ reply }`, which the bridge posts back into the chat. Transient failures (429, 5xx, timeouts) are retried three times with backoff; a final failure sends a short "something went wrong" note so the user who watched "typing" start is not left in silence.
 
 ## Run
 
@@ -40,7 +40,7 @@ WHATSAPP_BRIDGE_SECRET=dev WHATSAPP_STATE_DIR=./.wa-state WHATSAPP_DATA_DIR=./.w
 | `HOST`                   | `127.0.0.1`                     | Bind address. Keep it loopback: the hub is the only caller.                                                                                                       |
 | `PORT`                   | `2100`                          | HTTP API port.                                                                                                                                                    |
 | `WHATSAPP_BRIDGE_SECRET` | required                        | Every route except `GET /health` needs `x-bridge-secret` equal to it. The hub holds it; Eve tools get it from the hub, never from env.                            |
-| `COMPUTER_URL`           | `http://127.0.0.1:8080`         | The hub. Inbound messages go to `${COMPUTER_URL}/channels/<channel_id>/message`.                                                                                  |
+| `COMPUTER_URL`           | `http://127.0.0.1:8080`         | The hub. Inbound messages go to `${COMPUTER_URL}/connectors/<connector_id>/message`.                                                                              |
 | `WHATSAPP_STATE_DIR`     | `/workspace/.computer/whatsapp` | `accounts.json` and `<acct>/auth/` (Baileys creds and signal keys). Secret. See below.                                                                            |
 | `WHATSAPP_DATA_DIR`      | `/workspace/whatsapp`           | Per-account store under `<acct>/`: messages, resources, reactions, participants, lid map. Readable, no secrets.                                                   |
 | `AI_GATEWAY_API_KEY`     | unset                           | Enables voice-note transcription through the Vercel AI Gateway (`TRANSCRIBE_MODEL`, default `openai/gpt-4o-mini-transcribe`). Unset = voice notes stay `[audio]`. |
@@ -50,7 +50,7 @@ Process-wide tuning knobs, all optional: `AGENT_TIMEOUT_MS` (40000), `MESSAGES_C
 
 ## The state dir is hub-owned. The model must never read it.
 
-`WHATSAPP_STATE_DIR` holds two kinds of credential: each account's `channel_secret` (whoever has it can forge inbound messages to that Bot through the hub) and each account's Baileys auth state (whoever has it _is_ the WhatsApp account). The bridge creates the directory at `0700` and writes `accounts.json` at `0600`, and the hub runs it as the hub UID, so the `box` user the model's `shell`, `read_file` and `write_file` run as cannot open it. Do not relax those modes, do not copy the directory anywhere the model can reach, and do not add a route that returns a secret: `GET /accounts` deliberately omits `channel_secret`, and the QR and pairing code are served only on the authenticated link route, held in memory, and cleared the moment the socket opens. `WHATSAPP_DATA_DIR` is the other half of the split: chat data with no secrets in it, which is why it lives outside `.computer`.
+`WHATSAPP_STATE_DIR` holds two kinds of credential: each account's `connector_secret` (whoever has it can forge inbound messages to that Bot through the hub) and each account's Baileys auth state (whoever has it _is_ the WhatsApp account). The bridge creates the directory at `0700` and writes `accounts.json` at `0600`, and the hub runs it as the hub UID, so the `box` user the model's `shell`, `read_file` and `write_file` run as cannot open it. Do not relax those modes, do not copy the directory anywhere the model can reach, and do not add a route that returns a secret: `GET /accounts` deliberately omits `connector_secret`, and the QR and pairing code are served only on the authenticated link route, held in memory, and cleared the moment the socket opens. `WHATSAPP_DATA_DIR` is the other half of the split: chat data with no secrets in it, which is why it lives outside `.computer`.
 
 ## accounts.json
 
@@ -62,8 +62,8 @@ Process-wide tuning knobs, all optional: `AGENT_TIMEOUT_MS` (40000), `MESSAGES_C
       "acct": "main",
       "bot": "main",
       "phone": "61400000000",
-      "channel_id": "whatsapp-main",
-      "channel_secret": "…",
+      "connector_id": "whatsapp-main",
+      "connector_secret": "…",
       "config": {
         "group_policy": "all",
         "allowed_groups": [],
@@ -86,7 +86,7 @@ Process-wide tuning knobs, all optional: `AGENT_TIMEOUT_MS` (40000), `MESSAGES_C
 ```
 
 - `acct` matches `^[a-z0-9][a-z0-9-]{0,31}$` and names the auth and data directories.
-- `bot` is the hub Bot id. `channel_id` (default `whatsapp`) is the hub channel the bridge posts to; the hub sets it when it creates the account. `phone` is digits only, no `+`, `null` until a link; a QR link fills it in from the socket.
+- `bot` is the hub Bot id. `connector_id` (default `whatsapp`) is the hub connector the bridge posts to; the hub sets it when it creates the account. The pre-rename `channel_id` / `channel_secret` are still read from an existing file, and a write replaces them with the new names. `phone` is digits only, no `+`, `null` until a link; a QR link fills it in from the socket.
 - `config` is validated on load and on `PUT`; every omitted field takes its default, a wrong type is a `400` naming the field, unknown keys are dropped. Changes apply live: the allowlist, trigger, DM policy, image cap and bot name are read on every message, and a change to the group policy re-seeds the live participant set.
 
 Config fields:
@@ -116,18 +116,18 @@ JSON in and out. Every route except `GET /health` requires `x-bridge-secret`.
 
 ### Accounts
 
-| Method   | Route                         | Body / query                                         | Returns                                                                                                                                                                                                              |
-| -------- | ----------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`    | `/health`                     |                                                      | `{ ok: true, accounts: [{ acct, whatsapp, lastCloseCode, failingSince, attempts }] }`. `whatsapp` is `open`, `connecting`, `close` or `unlinked`. No auth. Always 200: a socket still pairing is not a dead process. |
-| `GET`    | `/accounts`                   |                                                      | `{ accounts: [{ acct, bot, phone, channel_id, status, display_name? }] }`. Never the secret.                                                                                                                         |
-| `POST`   | `/accounts`                   | `{ acct, bot, channel_secret, channel_id?, phone? }` | `201 { acct }` and the socket starts. `409` if the id exists, `400` on a bad body.                                                                                                                                   |
-| `DELETE` | `/accounts/:acct`             |                                                      | Logs the device out, deletes the auth dir, removes the entry. The data store stays.                                                                                                                                  |
-| `POST`   | `/accounts/:acct/link`        | `{ phone? }`                                         | (Re)starts linking. With `phone` (digits, no `+`) the bridge calls `requestPairingCode` and holds the code; without it, it holds the latest QR. Returns the link state.                                              |
-| `GET`    | `/accounts/:acct/link`        |                                                      | `{ acct, status, qr, pairing_code, age_ms, phone }`. `status` is `unlinked`, `linking`, `open` or `closed` (linked, socket reconnecting). A linked socket never serves a QR or code.                                 |
-| `GET`    | `/accounts/:acct/groups`      |                                                      | `{ groups: [{ jid, subject, size, enabled }] }` from `groupFetchAllParticipating()`; `enabled` follows the group policy.                                                                                             |
-| `POST`   | `/accounts/:acct/groups/join` | `{ invite }`                                         | A `chat.whatsapp.com` link or a bare code → `{ jid }`. The new group is seeded at once.                                                                                                                              |
-| `GET`    | `/accounts/:acct/config`      |                                                      | `{ config }`, every field populated.                                                                                                                                                                                 |
-| `PUT`    | `/accounts/:acct/config`      | `{ config }`                                         | Validated, persisted, applied live → `{ config }`.                                                                                                                                                                   |
+| Method   | Route                         | Body / query                                             | Returns                                                                                                                                                                                                              |
+| -------- | ----------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/health`                     |                                                          | `{ ok: true, accounts: [{ acct, whatsapp, lastCloseCode, failingSince, attempts }] }`. `whatsapp` is `open`, `connecting`, `close` or `unlinked`. No auth. Always 200: a socket still pairing is not a dead process. |
+| `GET`    | `/accounts`                   |                                                          | `{ accounts: [{ acct, bot, phone, connector_id, status, display_name? }] }`. Never the secret.                                                                                                                       |
+| `POST`   | `/accounts`                   | `{ acct, bot, connector_secret, connector_id?, phone? }` | `201 { acct }` and the socket starts. `409` if the id exists, `400` on a bad body.                                                                                                                                   |
+| `DELETE` | `/accounts/:acct`             |                                                          | Logs the device out, deletes the auth dir, removes the entry. The data store stays.                                                                                                                                  |
+| `POST`   | `/accounts/:acct/link`        | `{ phone? }`                                             | (Re)starts linking. With `phone` (digits, no `+`) the bridge calls `requestPairingCode` and holds the code; without it, it holds the latest QR. Returns the link state.                                              |
+| `GET`    | `/accounts/:acct/link`        |                                                          | `{ acct, status, qr, pairing_code, age_ms, phone }`. `status` is `unlinked`, `linking`, `open` or `closed` (linked, socket reconnecting). A linked socket never serves a QR or code.                                 |
+| `GET`    | `/accounts/:acct/groups`      |                                                          | `{ groups: [{ jid, subject, size, enabled }] }` from `groupFetchAllParticipating()`; `enabled` follows the group policy.                                                                                             |
+| `POST`   | `/accounts/:acct/groups/join` | `{ invite }`                                             | A `chat.whatsapp.com` link or a bare code → `{ jid }`. The new group is seeded at once.                                                                                                                              |
+| `GET`    | `/accounts/:acct/config`      |                                                          | `{ config }`, every field populated.                                                                                                                                                                                 |
+| `PUT`    | `/accounts/:acct/config`      | `{ config }`                                             | Validated, persisted, applied live → `{ config }`.                                                                                                                                                                   |
 
 Routes that need a live socket (`groups`, `groups/join`, `backfill`, the sends) answer `503` while it is down.
 

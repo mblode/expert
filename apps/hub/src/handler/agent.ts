@@ -40,7 +40,7 @@ export function registerAgent(router: ConnectRouter, deps: AgentDeps): void {
     // No turn token is the Bot's seat thread, byte for byte as before: the
     // seat surface, the eve TUI and the `/eve/v1` proxy all arrive this way
     // and none of them has a conversation yet. A turn token is the hub's own
-    // binding, minted at the channel ingress, so it is trusted over anything
+    // binding, minted at the connector ingress, so it is trusted over anything
     // in the body, which is the model's.
     if (!ctx.turn) {
       return b.voice.send(body);

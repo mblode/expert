@@ -61,10 +61,10 @@ service Seat {
 }
 ```
 
-`POST /channels/<id>/<path>` is the third door, beside the seat and the
-agent token: a channel secret. It is how the WhatsApp bridge on this
+`POST /connectors/<id>/<path>` is the third door, beside the seat and the
+agent token: a connector secret. It is how the WhatsApp bridge on this
 computer, and later a webhook or Slack, reaches a Bot's Eve (see
-**Channels**).
+**Connectors**).
 
 `GET /spec` is the HTTP view of `Agent.Spec`. An agent that can fetch
 JSON does not need the proto. `GET /roster` (seat) lists Bots and their
@@ -157,7 +157,7 @@ A principal carries a **role**, and a role is a set of methods.
 | `installer` | service | `CreateBot`, `DeleteBot`, `Revoke`, always expiring, at most ten minutes                             |
 | `issuer`    | service | `Issue`, `Revoke`                                                                                    |
 | `bot`       | bot     | the Agent service                                                                                    |
-| `ingress`   | service | the channel door only, no RPC                                                                        |
+| `ingress`   | service | the connector door only, no RPC                                                                      |
 
 `owner` is unrestricted inside the Seat service, which is what a paired
 seat has always been: an RPC added tomorrow works for the owner the moment
@@ -265,7 +265,7 @@ at 0600 in a 0700 directory: the model runs as `box` and cannot read or
 rewrite what a bot-to-bot hop will be audited from.
 
 **Which conversation a `send_message` lands in is the hub's answer, never
-the model's.** The channel ingress resolves the inbound to a conversation
+the model's.** The connector ingress resolves the inbound to a conversation
 and mints a **turn token** bound to `{ conversation_id, bot, hops_left,
 deadline_at }`, forwarded to Eve as `x-computer-turn` beside the hub secret.
 Eve puts it on the session's auth attributes, where tool code reads it and a
@@ -297,29 +297,44 @@ rather than a second copy if it is interrupted. That file is then read no
 more and written never again; it is not deleted, for the same reason
 deleting a Bot leaves its box state alone. It is the human's record.
 
-## Channels
+## Connectors
 
 A Bot is reached by its owner through the seat, by the model through its
-agent token, and by everything else through a **channel**: a record
-`{ id, kind, bot, secret, paths? }` in the hub's `channels.json` with its
+agent token, and by everything else through a **connector**: a record
+`{ id, kind, bot, secret, paths? }` in the hub's `connectors.json` with its
 own secret, minted once and rotated or removed on its own. The ingress
-maps `POST /channels/<id>/<rest>` with header `x-channel-secret` onto that
-Bot's Eve at `/eve/v1/<kind>/<rest>`, adding the hub's loopback secret;
+maps `POST /connectors/<id>/<rest>` with header `x-connector-secret` onto
+that Bot's Eve at `/eve/v1/<kind>/<rest>`, adding the hub's loopback secret;
 `paths` narrows which Eve routes the door may reach. There is no lockout
 on this door, unlike `Pair`: it is public and its ids are guessable, so a
 lockout would let a stranger block the real bridge; the 256-bit secret and
 a constant-time compare are the defence. Bodies are capped at 12 MiB (two
-bridge images as data URLs). A seat token is not a channel secret and a
-channel secret opens nothing else.
+bridge images as data URLs). A seat token is not a connector secret and a
+connector secret opens nothing else.
+
+A connector points **inward** and carries a credential this hub minted. A
+plugin, the neighbouring word, points **outward** at a remote MCP or
+OpenAPI service and carries a credential a human consented to hand over.
+The credential faces the opposite way in each, so the two names never
+collapse into one. `kind` names an Eve channel file (`whatsapp` finds
+`apps/eve/lib/channels/whatsapp.ts`), and a channel is still what eve calls
+that file: the door in front of it is the connector.
+
+The rename landed with two compatibility aliases, because both tenants have
+a `channels.json` on the volume and a deployed bridge posting the old
+spelling. The ingress also answers `POST /channels/<id>/<rest>` and also
+accepts `x-channel-secret`, and the store reads `channels.json` when there
+is no `connectors.json`, writing only the new name. Both aliases go once
+Blode and Vibey run a bridge that sends the new names.
 
 The WhatsApp bridge is a hub-supervised process on the same Machine, one
 Baileys socket per linked number. Linking is an owner's job on
 hello.expert through the `WhatsApp*` Seat RPCs: `WhatsAppLink { acct,
-action: "start", phone? }` creates the account's channel record
+action: "start", phone? }` creates the account's connector record
 (`whatsapp-<acct>`, kind `whatsapp`, path `/eve/v1/whatsapp/message`), tells
 the bridge about it, and returns a pairing code (with `phone`) or a raw QR
 string (without) to render; `action: "status"` polls; `action: "unlink"`
-logs the device out and removes the channel record with it. `WhatsAppConfig`
+logs the device out and removes the connector record with it. `WhatsAppConfig`
 holds which groups the number serves (`group_policy: "all" | "listed"`,
 `allowed_groups`), how it is triggered, who may DM it, and the image cap.
 The bridge's own credentials live under the hub's user, which the model's
@@ -491,7 +506,7 @@ enforce the seat. A pixel token opens only the display it was minted for.
 Two users. `box` is the desk and the model: X, Chromium, Eve, the model's
 `shell`, everything the Bot works on under `/workspace`. `hub` is the hub
 and the WhatsApp bridge: it owns `/workspace/.computer` (roster, seat
-tokens, channel secrets, the Eve secret, Baileys credentials) at 0700.
+tokens, connector secrets, the Eve secret, Baileys credentials) at 0700.
 Under one uid there is no boundary, so the hub is not `box`; when it needs
 the desk it runs the command through `sudo -u box`, the one sudoers line
 in the image. Bots are still not security boundaries

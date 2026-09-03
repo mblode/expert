@@ -55,7 +55,7 @@ export const SEAT_GUEST_METHODS = [
  * Who is calling. Every bearer the hub accepts resolves to one of these, so
  * there is one verify path rather than one per door: a human at a seat, a
  * Bot's Eve holding an agent token, and a service like the WhatsApp bridge or
- * the control plane. Before this, a seat token, a bot token and a channel
+ * the control plane. Before this, a seat token, a bot token and a connector
  * secret were three unrelated checks over three files, and none of them knew
  * which human was behind a seat.
  */
@@ -130,7 +130,9 @@ export const ROLE_METHODS: Record<Role, readonly string[] | undefined> = {
   // The control plane: it exists to hand seats to people it has authenticated.
   issuer: [SEAT_ISSUE, SEAT_REVOKE],
   bot: undefined,
-  // A door, not a caller: the channel ingress is its whole surface.
+  // A door, not a caller: the connector ingress is its whole surface. The
+  // role keeps its name through the connector rename: it says what shape of
+  // principal this is (an inbound door), not which object opened it.
   ingress: [],
 };
 

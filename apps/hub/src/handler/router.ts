@@ -22,7 +22,7 @@ export interface RpcContext {
   principal?: PrincipalRecord;
   /**
    * `x-computer-turn`, when the caller presented one. The model never sees
-   * this header and cannot mint one: the hub mints it at the channel ingress
+   * this header and cannot mint one: the hub mints it at the connector ingress
    * and Eve carries it back on the session's auth, so it is the hub's own
    * answer to "which conversation is this send for", not the model's.
    */

@@ -357,16 +357,16 @@ describe("Connect HTTP", () => {
     opened.push(h);
     ({ url } = h);
     const token = await h.pair();
-    const channel = h.hub.channels.add({ bot: "main", id: "whatsapp-main", kind: "whatsapp" });
+    const connector = h.hub.connectors.add({ bot: "main", id: "whatsapp-main", kind: "whatsapp" });
 
-    const inbound = await fetch(`${h.url}/channels/whatsapp-main/message`, {
+    const inbound = await fetch(`${h.url}/connectors/whatsapp-main/message`, {
       body: JSON.stringify({
         acct: "main",
         message: "hello",
         sender: "1@s.whatsapp.net",
         token: "g@g.us",
       }),
-      headers: { "content-type": "application/json", "x-channel-secret": channel.secret },
+      headers: { "content-type": "application/json", "x-connector-secret": connector.secret },
       method: "POST",
     });
     // The bridge's contract is unchanged: one POST, one `{ reply }`, built

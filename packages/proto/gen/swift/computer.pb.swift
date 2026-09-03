@@ -1620,8 +1620,8 @@ public nonisolated struct Computer_V1_WhatsAppAccount: Sendable {
   /// the Bot this number speaks for
   public var bot: String = String()
 
-  /// hub ingress id the bridge posts to
-  public var channelID: String = String()
+  /// hub connector id the bridge posts to
+  public var connectorID: String = String()
 
   /// digits, no plus; empty until linked
   public var phone: String = String()
@@ -4880,7 +4880,7 @@ nonisolated extension Computer_V1_WhatsAppAccountsRequest: SwiftProtobuf.Message
 
 nonisolated extension Computer_V1_WhatsAppAccount: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".WhatsAppAccount"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0\u{1}bot\0\u{3}channel_id\0\u{1}phone\0\u{1}status\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0\u{1}bot\0\u{3}connector_id\0\u{1}phone\0\u{1}status\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4890,7 +4890,7 @@ nonisolated extension Computer_V1_WhatsAppAccount: SwiftProtobuf.Message, SwiftP
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.acct) }()
       case 2: try { try decoder.decodeSingularStringField(value: &self.bot) }()
-      case 3: try { try decoder.decodeSingularStringField(value: &self.channelID) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.connectorID) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.phone) }()
       case 5: try { try decoder.decodeSingularStringField(value: &self.status) }()
       default: break
@@ -4905,8 +4905,8 @@ nonisolated extension Computer_V1_WhatsAppAccount: SwiftProtobuf.Message, SwiftP
     if !self.bot.isEmpty {
       try visitor.visitSingularStringField(value: self.bot, fieldNumber: 2)
     }
-    if !self.channelID.isEmpty {
-      try visitor.visitSingularStringField(value: self.channelID, fieldNumber: 3)
+    if !self.connectorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.connectorID, fieldNumber: 3)
     }
     if !self.phone.isEmpty {
       try visitor.visitSingularStringField(value: self.phone, fieldNumber: 4)
@@ -4920,7 +4920,7 @@ nonisolated extension Computer_V1_WhatsAppAccount: SwiftProtobuf.Message, SwiftP
   public static func ==(lhs: Computer_V1_WhatsAppAccount, rhs: Computer_V1_WhatsAppAccount) -> Bool {
     if lhs.acct != rhs.acct {return false}
     if lhs.bot != rhs.bot {return false}
-    if lhs.channelID != rhs.channelID {return false}
+    if lhs.connectorID != rhs.connectorID {return false}
     if lhs.phone != rhs.phone {return false}
     if lhs.status != rhs.status {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}

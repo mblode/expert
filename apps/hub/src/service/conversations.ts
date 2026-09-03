@@ -19,7 +19,7 @@ import type { Occurrence } from "./state.ts";
  *
  * Storage is split by shape because the two halves have different ones. The
  * index is a handful of bounded records with the same lifecycle as
- * `channels.json`, so it gets the `readTokenFile` / `writeTokenFile`
+ * `connectors.json`, so it gets the `readTokenFile` / `writeTokenFile`
  * discipline from `provision.ts`: atomic rename, and a file that will not
  * read is an error rather than "empty". The log is append-heavy and
  * unbounded, so it is JSONL, one file per conversation, with the same
@@ -237,7 +237,7 @@ interface AppendMeta {
 }
 
 /**
- * Stateless over its store, like `ChannelRegistry` and for the same reason:
+ * Stateless over its store, like `ConnectorRegistry` and for the same reason:
  * the file is a handful of records and something else may edit it.
  *
  * The two pieces of process state are caches of what the files already say,

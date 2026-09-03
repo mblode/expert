@@ -16,7 +16,7 @@ import type { BridgeMedia, BridgePayload } from "./bridge-protocol.ts";
  * listens, and POSTs each message here; the agent runs and the reply goes back
  * synchronously in the response so the bridge can post it into the chat.
  *
- * Two doors, one route. In production the bridge posts to the hub's channel
+ * Two doors, one route. In production the bridge posts to the hub's connector
  * ingress on loopback, and the hub forwards here with `x-computer-eve-secret`,
  * the same header it uses for the `/eve/v1` proxy. `x-bridge-secret` is the
  * direct path: an eve TUI, a Vercel fallback, or a bridge with no hub in front.
@@ -145,7 +145,7 @@ export const neutraliseFence = (block: string): string =>
  * DM it is the DM JID). Tools and memory key on it, so it must be the real
  * chat and not the per-message continuation token.
  *
- * `turn` is the hub's binding for this turn, minted by the channel ingress
+ * `turn` is the hub's binding for this turn, minted by the connector ingress
  * and bound there to a conversation and to this Bot. It rides auth
  * attributes rather than the prompt or a tool argument because that is the
  * one place the model cannot reach: `send_message` reads it back off
