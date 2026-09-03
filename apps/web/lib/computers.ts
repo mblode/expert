@@ -3,7 +3,6 @@ import { DEFAULT_HUB_URL, trimSlashes } from "./config";
 /** Process env or a test fixture. Avoids requiring NODE_ENV on every call. */
 export type EnvMap = Record<string, string | undefined>;
 
-export const DEFAULT_COMPUTER_ID = "blode";
 export const VIBEY_HUB_URL = "https://vcmc-computer.fly.dev";
 
 /** Live COMPUTER_BINDINGS and stored seats may still say matt/vcmc. */
@@ -79,37 +78,50 @@ export function parseEmailList(raw: string | undefined): Set<string> {
   );
 }
 
-export function defaultComputerId(email: string, env: EnvMap): string {
+/**
+ * The computer this account is bound to, or nothing.
+ *
+ * Fail closed. This used to fall back to the hardcoded "blode" when an email
+ * had no binding, which was harmless while one person had one computer and is
+ * not harmless now: an account is the tenant boundary here, so an allowed
+ * email nobody remembered to bind would land on someone else's machine and
+ * `Pair` an owner seat there with that machine's setup code.
+ *
+ * `DEFAULT_COMPUTER_ID` stays as an explicit opt-in, because a single-computer
+ * deployment should not have to list every address. Setting it is a decision
+ * to bind every unbound account to that computer.
+ */
+export function boundComputerId(email: string, env: EnvMap): string | undefined {
   const bound = parseComputerBindings(env.COMPUTER_BINDINGS).get(email.trim().toLowerCase());
   const fromBinding = bound ? computerById(bound, env) : undefined;
   if (fromBinding) {
     return fromBinding.id;
   }
   const fallback = env.DEFAULT_COMPUTER_ID?.trim();
-  const fromFallback = fallback ? computerById(fallback, env) : undefined;
-  if (fromFallback) {
-    return fromFallback.id;
-  }
-  return DEFAULT_COMPUTER_ID;
+  return fallback ? computerById(fallback, env)?.id : undefined;
 }
 
 /**
- * Who may open every computer. Unset means every signed-in user may switch:
- * AUTH_ALLOWED_EMAILS is still the sign-in gate.
+ * Who may open every computer, and mint invites on one.
+ *
+ * Listed addresses only. An unset list used to mean everyone, which made the
+ * binding above unreachable: every signed-in account was an operator and saw
+ * every computer. Unset now means nobody, so an account still reaches the
+ * computer it is bound to and simply loses the switcher until it is listed.
  */
 export function isComputerOperator(email: string, env: EnvMap): boolean {
-  const operators = parseEmailList(env.COMPUTER_OPERATOR_EMAILS);
-  return operators.size === 0 || operators.has(email.trim().toLowerCase());
+  return parseEmailList(env.COMPUTER_OPERATOR_EMAILS).has(email.trim().toLowerCase());
 }
 
+/** Every computer for an operator, the bound one for anyone else, none when unbound. */
 export function accessibleComputers(email: string, env: EnvMap): ComputerRecord[] {
   const all = computersFromEnv(env);
   if (isComputerOperator(email, env)) {
     return all;
   }
-  const id = defaultComputerId(email, env);
-  const one = all.find((computer) => computer.id === id);
-  return one ? [one] : all.slice(0, 1);
+  const id = boundComputerId(email, env);
+  const one = id ? all.find((computer) => computer.id === id) : undefined;
+  return one ? [one] : [];
 }
 
 export function choicesOf(computers: readonly ComputerRecord[]): ComputerChoice[] {
