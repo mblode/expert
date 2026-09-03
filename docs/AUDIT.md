@@ -73,6 +73,13 @@ Categories 1 and 2 are fixed in this pass. Category 3 is partly mitigated (email
 
 ## Open findings, ranked
 
+### Opened by the scoped-invite pass, 2026-09-03
+
+These two were found while moving the invite path off owner seats (`apps/web/lib/invite.ts`). Both fixes land in `apps/hub`, in the code PR #26 introduced, so they were reported rather than folded into a web change.
+
+- **`Seat.Issue` does not hold a guest to `GUEST_MAX_TTL_MS`.** The 15 minute cap is applied by `AuthRegistry.mintGuest`, which no wire path reaches; `issue()` caps every role at `ISSUED_MAX_TTL_MS` (30 days). So a desk invite's guest seat is bounded by the link, at most 4 hours, not by the constant that documents itself as the ceiling. Fix: clamp the guest role in `issue()`, or route it through `mintGuest`. Pinned by "records the gap" in `apps/hub/test/principals.test.ts`, which fails the moment the clamp lands.
+- **A plugins invite still holds an owner, narrowed but not contained.** Authoring a connection file needs `CreateBot` + `Agent.WriteFile` + `DeleteBot`, and `owner` is the only role in `ROLE_METHODS` carrying `CreateBot`. The seat is narrowed with `methods`, lives two minutes and is revoked when the write returns, but `AuthRegistry.isOwner` reads the role and not the methods, so the token still opens the Eve proxy and the pixel stream. Fix: either a role that may provision and nothing else, or a Seat RPC that writes a connection file so no agent token is minted at all; `isOwner` should consult `methods` either way.
+
 ### P0, product security
 
 1. **One computer for every account (partial).** hello.expert now binds a session to a seeded computer (`blode` → `mblode-computer`, `vibey` → `vcmc-computer`) with a per-computer setup code. There is still no self-serve Fly provisioning: extra tenants are a Fly app + volume from this repo, not a Machines API call on sign-in. Every seat on a guest is still a box owner (`CreateBot`, `DeleteBot`, clipboard read, `ProvideSecret`, the Eve thread). `AUTH_ALLOWED_EMAILS` remains the sign-in gate. See the roadmap in `docs/GROK-BOT.md`.

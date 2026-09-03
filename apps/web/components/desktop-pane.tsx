@@ -280,7 +280,12 @@ export function DesktopPane({
       )}
 
       {controllable && showKeyboard && <KeyboardBar large={phone} onSend={send} />}
-      {showClipboard && <ClipboardPanel display={display} seat={seat} />}
+      {showClipboard && (
+        // The phone layout is the invite, and an invite holds a guest seat:
+        // ClipboardGet is not in its method set, because reading the box
+        // clipboard exfiltrates whatever the last person copied.
+        <ClipboardPanel display={display} readable={layout !== "phone"} seat={seat} />
+      )}
     </section>
   );
 }

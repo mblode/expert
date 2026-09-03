@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AuthRegistry, ISSUED_MAX_TTL_MS } from "../src/handler/auth.ts";
+import { AuthRegistry, GUEST_MAX_TTL_MS, ISSUED_MAX_TTL_MS } from "../src/handler/auth.ts";
 import { FilePrincipalStore, MemoryPrincipalStore } from "../src/service/principals.ts";
 import type { PrincipalRecord } from "../src/service/principals.ts";
 import { rpc, startHub } from "./helper.ts";
@@ -18,6 +18,7 @@ const CREATE_BOT = "/computer.v1.Seat/CreateBot";
 const CLIPBOARD_GET = "/computer.v1.Seat/ClipboardGet";
 const WHATSAPP_LINK = "/computer.v1.Seat/WhatsAppLink";
 const ISSUE = "/computer.v1.Seat/Issue";
+const DELETE_BOT = "/computer.v1.Seat/DeleteBot";
 
 describe("every door resolves to one principal", () => {
   it("a bot token verifies as a bot principal, not as a seat", () => {
@@ -214,5 +215,133 @@ describe("issue over the wire", () => {
     } finally {
       await h.close();
     }
+  });
+});
+
+/**
+ * What hello.expert asks for when someone opens an invite link. Until this,
+ * a redeemed invite was handed a token from `Pair`: an owner, on any screen,
+ * with no expiry. These pin the shape the control plane sends now.
+ */
+describe("a redeemed invite is a scoped seat", () => {
+  const hour = 3600;
+
+  it("a desk invite drives its screen and nothing else on the box", async () => {
+    const h = await startHub({
+      bots: [
+        { display: 1, id: "main", token: "t1" },
+        { display: 2, id: "night", token: "t2" },
+      ],
+    });
+    try {
+      const owner = await h.pair();
+      const invite = (await rpc(
+        h.url,
+        ISSUE,
+        {
+          display: 1,
+          label: "hello.expert desk invite",
+          role: "guest",
+          subject: "invite:0f1e2d3c4b5a",
+          ttl_sec: 1800,
+        },
+        owner,
+      )) as { expires_at: string; role: string; token: string };
+      expect(invite.role).toBe("guest");
+      expect(invite.expires_at).not.toBe("");
+
+      // The three the old owner seat could do, and the reason this matters:
+      // provisioning, linking a phone number, and reading whatever the last
+      // person copied on the box.
+      for (const method of [CREATE_BOT, DELETE_BOT, WHATSAPP_LINK, CLIPBOARD_GET, ISSUE]) {
+        await expect(rpc(h.url, method, { id: "x" }, invite.token)).rejects.toMatchObject({
+          code: "UNAUTHENTICATED",
+        });
+      }
+
+      // What it can do: its own screen. SEAT_HELD is the seat FSM refusing a
+      // guest who has not been offered the mouse, which is proof the call got
+      // past auth rather than being denied as a method.
+      const status = (await rpc(h.url, STATUS, {}, invite.token)) as {
+        screens: { display: number }[];
+      };
+      expect(status.screens.map((s) => s.display)).toEqual([1]);
+      await expect(rpc(h.url, POINTER, { type: "click" }, invite.token)).rejects.toMatchObject({
+        code: "SEAT_HELD",
+      });
+      await expect(rpc(h.url, STATUS, { display: 2 }, invite.token)).rejects.toMatchObject({
+        code: "UNAUTHENTICATED",
+      });
+
+      // And it cannot outlive its TTL. Expiry is enforced on read, so asking
+      // the registry for the record one millisecond late is what a call after
+      // that instant does.
+      const expiry = Date.parse(invite.expires_at);
+      expect(h.hub.auth.principalFor(invite.token, expiry - 1)).toBeTruthy();
+      expect(h.hub.auth.principalFor(invite.token, expiry + 1)).toBeUndefined();
+      await expect(rpc(h.url, STATUS, {}, invite.token)).rejects.toMatchObject({
+        code: "UNAUTHENTICATED",
+      });
+    } finally {
+      await h.close();
+    }
+  });
+
+  it("a plugins invite may provision and nothing else, but is still an owner underneath", async () => {
+    const h = await startHub();
+    try {
+      const owner = await h.pair();
+      const plugins = (await rpc(
+        h.url,
+        ISSUE,
+        {
+          label: "hello.expert plugins invite",
+          methods: [CREATE_BOT, DELETE_BOT, "/computer.v1.Seat/Revoke"],
+          role: "owner",
+          ttl_sec: 120,
+        },
+        owner,
+      )) as { token: string };
+
+      // The write path: CreateBot, Agent.WriteFile with the Bot's token,
+      // DeleteBot. There is no seat-shaped way to author a connection file.
+      const bot = (await rpc(h.url, CREATE_BOT, { id: "xw01" }, plugins.token)) as {
+        token: string;
+      };
+      expect(bot.token).toBeTruthy();
+      await rpc(h.url, DELETE_BOT, { id: "xw01" }, plugins.token);
+
+      for (const method of [POINTER, CLIPBOARD_GET, WHATSAPP_LINK, ISSUE]) {
+        await expect(rpc(h.url, method, {}, plugins.token)).rejects.toMatchObject({
+          code: "UNAUTHENTICATED",
+        });
+      }
+
+      // The open finding, pinned so it cannot be forgotten: `methods` narrows
+      // the RPC router, and `isOwner` does not consult it, so this token still
+      // opens the Eve proxy and the pixel stream. Containing that needs a
+      // hub-side change, which this PR deliberately does not make.
+      expect(h.hub.auth.isOwner(plugins.token)).toBe(true);
+    } finally {
+      await h.close();
+    }
+  });
+
+  it("records the gap: an issued guest is not held to GUEST_MAX_TTL_MS", () => {
+    const auth = registry();
+    const now = Date.parse("2026-09-03T00:00:00.000Z");
+    const owner = auth.principalFor(auth.pair("code"), now)!;
+    const guest = auth.issue({ role: "guest", ttlMs: hour * 1000 }, owner, now);
+
+    // GUEST_MAX_TTL_MS is applied by `mintGuest`, which no wire path reaches;
+    // `issue` caps at ISSUED_MAX_TTL_MS like every other role. So a desk
+    // invite's seat is bounded by the link (four hours at most), not by the
+    // fifteen minutes this constant promises. The clamp belongs in `issue`,
+    // which is PR #26's code, so it is reported rather than changed here.
+    expect(Date.parse(guest.expires_at!) - now).toBe(hour * 1000);
+    expect(hour * 1000).toBeGreaterThan(GUEST_MAX_TTL_MS);
+    expect(
+      Date.parse(auth.mintGuest({ display: 1, ttlMs: hour * 1000 }, now).expires_at!) - now,
+    ).toBe(GUEST_MAX_TTL_MS);
   });
 });
