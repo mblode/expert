@@ -35,8 +35,13 @@ export interface AccountConfig {
   dm_policy: "members" | "allowlist" | "anyone";
   /** Phones (any format) or full JIDs, used by the `allowlist` policy. */
   dm_allowlist: string[];
-  /** Per-chat daily cap on POST /send-media. */
+  /** Per-chat daily cap on media items (POST /send-media and envelope media). */
   image_sends_per_day: number;
+  /**
+   * Per-chat daily cap on outbound envelopes of any verb, media included, so a
+   * reaction loop or a runaway tool cannot write into a chat all day.
+   */
+  sends_per_day: number;
   /** Download shared images and forward them so the Bot can see them. */
   vision_enabled: boolean;
   /** Where /report and /invite DMs land. Empty = accepted but not delivered. */
@@ -103,6 +108,7 @@ export const defaultAccountConfig = (): AccountConfig => ({
   maintainer_jid: "",
   members_overlay_file: "",
   owner_jids: [],
+  sends_per_day: 200,
   trigger_mode: "mention",
   trigger_prefix: "!bot",
   vision_enabled: true,
@@ -165,6 +171,10 @@ export const parseAccountConfig = (raw: unknown): AccountConfig => {
   ) {
     throw new Error("image_sends_per_day must be a non-negative integer");
   }
+  const sends_per_day = o.sends_per_day ?? def.sends_per_day;
+  if (typeof sends_per_day !== "number" || !Number.isInteger(sends_per_day) || sends_per_day < 0) {
+    throw new Error("sends_per_day must be a non-negative integer");
+  }
   const vision_enabled = o.vision_enabled ?? def.vision_enabled;
   if (typeof vision_enabled !== "boolean") {
     throw new TypeError("vision_enabled must be a boolean");
@@ -188,6 +198,7 @@ export const parseAccountConfig = (raw: unknown): AccountConfig => {
     maintainer_jid: optionalString(o.maintainer_jid, "maintainer_jid"),
     members_overlay_file: optionalString(o.members_overlay_file, "members_overlay_file"),
     owner_jids: stringList(o.owner_jids, "owner_jids"),
+    sends_per_day,
     trigger_mode: trigger_mode as AccountConfig["trigger_mode"],
     trigger_prefix: trigger_prefix.trim(),
     vision_enabled,

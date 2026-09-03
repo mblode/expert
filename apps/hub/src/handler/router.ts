@@ -5,9 +5,12 @@ import { ALL_METHODS } from "@computer/proto";
 import type { AuthPolicy } from "@computer/proto";
 import type { AuthRegistry } from "./auth.ts";
 import { bearerFromHeader } from "./auth.ts";
-import type { SeatRecord } from "../service/provision.ts";
+import type { PrincipalRecord } from "../service/principals.ts";
 
 type Handler = (ctx: RpcContext) => Promise<unknown>;
+
+/** The turn binding, hub to Eve and back. Never a browser header, see RpcContext. */
+export const TURN_HEADER = "x-computer-turn";
 
 export interface RpcContext {
   body: unknown;
@@ -15,8 +18,15 @@ export interface RpcContext {
   kind: "agent" | "seat" | "public";
   /** Set for agent calls: the Bot the bearer token belongs to. */
   botId?: string;
-  /** Set for seat calls: the token's scope. Handlers bind a guest to its display. */
-  seat?: SeatRecord;
+  /** Set for anything authenticated. Handlers bind a display-bound principal to its screen. */
+  principal?: PrincipalRecord;
+  /**
+   * `x-computer-turn`, when the caller presented one. The model never sees
+   * this header and cannot mint one: the hub mints it at the channel ingress
+   * and Eve carries it back on the session's auth, so it is the hub's own
+   * answer to "which conversation is this send for", not the model's.
+   */
+  turn?: string;
 }
 
 interface Route {
@@ -98,7 +108,8 @@ export class ConnectRouter {
         body,
         botId: verified.botId,
         kind: verified.kind,
-        seat: verified.seat,
+        principal: verified.principal,
+        turn: header(req, TURN_HEADER),
       });
       writeJson(res, 200, result ?? {});
     } catch (error) {

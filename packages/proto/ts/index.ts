@@ -47,6 +47,7 @@ export const SeatMethods = {
   ProvideSecret: path(Seat, Seat.method.provideSecret),
   SetPresence: path(Seat, Seat.method.setPresence),
   Revoke: path(Seat, Seat.method.revoke),
+  Issue: path(Seat, Seat.method.issue),
   Status: path(Seat, Seat.method.status),
   Type: path(Seat, Seat.method.type),
   WhatsAppAccounts: path(Seat, Seat.method.whatsAppAccounts),

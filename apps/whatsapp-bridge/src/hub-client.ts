@@ -9,7 +9,8 @@ import type { Logger } from "pino";
  * The payload is bridge protocol v1, the shape `vcmc-agent`'s channel already
  * speaks (`token`, `message`, `sender`, `senderPhone`, `senderName`,
  * `context[]`, `surface`, `media[]`), plus `acct` so a Bot served by two
- * numbers can tell them apart. Auth is the account's channel secret in
+ * numbers can tell them apart and `messageId` so it can quote or react to what
+ * it is answering. Auth is the account's channel secret in
  * `x-channel-secret`; the hub matches it against channels.json and forwards to
  * that Bot's Eve on loopback. The endpoint, secret, timeout, logger and sleep
  * are injected so this module owns no env or global state and the retry
@@ -27,6 +28,12 @@ export interface AskAgentArgs {
   context?: string[];
   media?: Media[];
   message: string;
+  /**
+   * Short id of the message being answered, the handle a Bot passes back as
+   * `reply_to` or `react.to` on the send envelope. Absent when the bridge had
+   * no addressable key for it (an edit, a synthesised prompt).
+   */
+  messageId?: string;
   sender: string;
   senderName: string | undefined;
   /** The sender's phone-based identity (from senderPn), used for admin checks. */
@@ -78,6 +85,7 @@ export const createChannelClient =
     context,
     media,
     message,
+    messageId,
     sender,
     senderName,
     senderPhone,
@@ -94,6 +102,7 @@ export const createChannelClient =
             context,
             media,
             message,
+            messageId,
             sender,
             senderName,
             senderPhone,

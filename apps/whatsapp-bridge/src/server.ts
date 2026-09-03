@@ -8,6 +8,7 @@ import { NotConnectedError } from "./account.ts";
 import type { AccountHandle, AccountHealth, GroupSummary, LinkState } from "./account.ts";
 import type { AccountConfig, AccountSummary } from "./accounts.ts";
 import { parseSendMediaBody } from "./media-send.ts";
+import { parseSendEnvelope } from "./send-envelope.ts";
 
 /**
  * The bridge's authenticated JSON HTTP API, loopback only.
@@ -29,8 +30,8 @@ import { parseSendMediaBody } from "./media-send.ts";
  * straight into a system prompt.
  */
 
-// 1MB cap on POST bodies. /send-media carries a base64 image, so it gets its
-// own larger cap (maxMediaBody, default 8MB) instead of this one.
+// 1MB cap on POST bodies. /send-media and /send-envelope carry base64 files, so
+// they get their own larger cap (maxMediaBody, default 8MB) instead of this one.
 const MAX_BODY = 1024 * 1024;
 const DEFAULT_MAX_MEDIA_BODY = 8 * 1024 * 1024;
 
@@ -70,7 +71,7 @@ export interface StartServerArgs {
   host: string;
   port: number;
   logger: Logger;
-  /** Body cap for POST /send-media (base64 image + envelope). Default 8MB. */
+  /** Body cap for the routes that carry base64 files (/send-media, /send-envelope). Default 8MB. */
   maxMediaBody?: number;
 }
 
@@ -253,7 +254,7 @@ const handleAccountRoutes = async (
   return send(res, 404, { error: "not found" });
 };
 
-// ---- legacy data routes ---------------------------------------------------
+// ---- data routes (what a Bot's tools call) --------------------------------
 
 /** GET routes that return a list of records (messages, resources, reactions, members). */
 const handleGetRecords = async (
@@ -440,9 +441,51 @@ const handleSendMedia = async (
   }
 };
 
-const LEGACY_POSTS = new Set(["/backfill", "/report", "/invite", "/send", "/send-media"]);
+/** POST /send-envelope: the one outbound envelope (reply, reaction, text, media). */
+const handleSendEnvelope = async (
+  body: Record<string, unknown>,
+  handle: AccountHandle,
+  logger: Logger,
+  res: ServerResponse,
+): Promise<ServerResponse> => {
+  const parsed = parseSendEnvelope(body);
+  if ("error" in parsed) {
+    return send(res, 400, { error: parsed.error });
+  }
+  try {
+    const result = await handle.onSendEnvelope(parsed.envelope);
+    if (!result.sent) {
+      // Every refusal is a policy refusal (allowlist, an unresolvable message
+      // id, a spent daily budget), so they share one status and the caller
+      // reads `error` for which one it was.
+      return send(res, 403, {
+        error: result.reason ?? "jid not allowlisted for sends",
+        ...(result.messageIds?.length ? { message_ids: result.messageIds } : {}),
+      });
+    }
+    logger.info(
+      { acct: handle.acct, jid: parsed.envelope.jid, parts: result.messageIds?.length ?? 0 },
+      "send envelope delivered",
+    );
+    return send(res, 200, { message_ids: result.messageIds ?? [], sent: true });
+  } catch (error) {
+    return send(res, 502, { error: errorMessage(error) });
+  }
+};
 
-const handleLegacyPost = async (
+const POST_ROUTES = new Set([
+  "/backfill",
+  "/report",
+  "/invite",
+  "/send",
+  "/send-media",
+  "/send-envelope",
+]);
+
+/** The routes whose body carries base64 files and needs the larger cap. */
+const MEDIA_BODY_ROUTES = new Set(["/send-media", "/send-envelope"]);
+
+const handlePost = async (
   req: IncomingMessage,
   url: URL,
   api: BridgeApi,
@@ -451,11 +494,11 @@ const handleLegacyPost = async (
   res: ServerResponse,
 ): Promise<ServerResponse | null> => {
   const { pathname } = url;
-  if (req.method !== "POST" || !LEGACY_POSTS.has(pathname)) {
+  if (req.method !== "POST" || !POST_ROUTES.has(pathname)) {
     return null;
   }
   // The body carries `acct`, so it is read before the account is resolved.
-  const body = await readJson(req, pathname === "/send-media" ? maxMediaBody : MAX_BODY);
+  const body = await readJson(req, MEDIA_BODY_ROUTES.has(pathname) ? maxMediaBody : MAX_BODY);
   const handle = resolveHandle(api, optionalString(body.acct));
   switch (pathname) {
     case "/backfill": {
@@ -470,8 +513,11 @@ const handleLegacyPost = async (
     case "/send": {
       return handleSend(body, handle, logger, res);
     }
-    default: {
+    case "/send-media": {
       return handleSendMedia(body, handle, logger, res);
+    }
+    default: {
+      return handleSendEnvelope(body, handle, logger, res);
     }
   }
 };
@@ -516,7 +562,7 @@ export const startServer = ({
           return recordsResult;
         }
       }
-      const postResult = await handleLegacyPost(req, url, api, logger, maxMediaBody, res);
+      const postResult = await handlePost(req, url, api, logger, maxMediaBody, res);
       if (postResult !== null) {
         return postResult;
       }

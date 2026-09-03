@@ -4,6 +4,7 @@ import {
   BRIDGE_SECRET_HEADER,
   bridgeAuthConfigured,
   bridgeRequestAuthorised,
+  buildAuth,
   buildContext,
   buildUserMessage,
   drainStream,
@@ -36,6 +37,7 @@ describe("parseBridgePayload", () => {
       context: ["recent: hello"],
       media: [{ dataUrl: "data:image/png;base64,AA==", mime: "image/png" }],
       message: "hi",
+      messageId: "m0123456789",
       sender: "1@s.whatsapp.net",
       senderName: "Sam",
       senderPhone: "+61400000000",
@@ -47,6 +49,7 @@ describe("parseBridgePayload", () => {
       context: ["recent: hello"],
       media: [{ dataUrl: "data:image/png;base64,AA==", mime: "image/png" }],
       message: "hi",
+      messageId: "m0123456789",
       sender: "1@s.whatsapp.net",
       senderName: "Sam",
       senderPhone: "+61400000000",
@@ -163,6 +166,19 @@ describe("buildContext", () => {
       "hello.expert link is only for taking the mouse or OAuth plugin consent",
     );
     expect(block).not.toContain("account:");
+    // No id from the bridge means no line, so a tool cannot quote a handle the
+    // bridge would not resolve.
+    expect(block).not.toContain("message_id:");
+  });
+
+  it("carries the message id the send envelope quotes and reacts to", () => {
+    const [block] = buildContext({
+      message: "hi",
+      messageId: "m0123456789",
+      surface: "group",
+      token: "123@g.us",
+    });
+    expect(block).toContain("message_id: m0123456789");
   });
 
   it("labels a DM, and defaults an absent surface to the group", () => {
@@ -270,5 +286,64 @@ describe("drainStream", () => {
     );
     expect(reply).toBe("");
     expect(reply || EMPTY_REPLY_FALLBACK).toBe(EMPTY_REPLY_FALLBACK);
+  });
+});
+
+describe("buildAuth", () => {
+  const payload = {
+    acct: "main",
+    message: "hi",
+    sender: "1@s.whatsapp.net",
+    senderName: "Sam",
+    senderPhone: "+61400000000",
+    token: "g@g.us",
+  } as const;
+
+  it("carries the hub's turn binding on the session's auth attributes", () => {
+    const auth = buildAuth(payload, "hub", "turn_abc");
+    // Auth attributes, not the prompt and not a tool argument: `send_message`
+    // reads it back off `ctx.session.auth.current`, which route auth sets and
+    // a prompt cannot change.
+    expect(auth.attributes).toEqual({
+      acct: "main",
+      groupJid: "g@g.us",
+      senderName: "Sam",
+      senderPhone: "+61400000000",
+      turn: "turn_abc",
+      via: "hub",
+    });
+    expect(auth.principalId).toBe("1@s.whatsapp.net");
+    // The chat JID stays the real chat, which memory and tools key on.
+    expect(auth.attributes.groupJid).toBe(payload.token);
+  });
+
+  it("carries the message id the bridge issued, so a send cannot quote an invented one", () => {
+    // `whatsapp_send` quotes and reacts against this id. Taking it from the
+    // session rather than the model's copy of the context block means the only
+    // id a send can carry is one the bridge actually issued.
+    const auth = buildAuth({ ...payload, messageId: "m0123456789" }, "hub", "turn_abc");
+    expect(auth.attributes.messageId).toBe("m0123456789");
+  });
+
+  it("omits the message id when the bridge did not send one", () => {
+    expect(buildAuth(payload, "hub", "turn_abc").attributes).not.toHaveProperty("messageId");
+  });
+
+  it("omits the turn entirely when the request carried none", () => {
+    // The direct bridge path and the eve TUI. No turn means the Bot's seat
+    // thread hub-side, which is the behaviour that predates conversations.
+    const auth = buildAuth(payload, "bridge", undefined);
+    expect(auth.attributes).not.toHaveProperty("turn");
+    expect(auth.attributes.via).toBe("bridge");
+  });
+
+  it("falls back to the chat JID as the principal when no sender is named", () => {
+    const auth = buildAuth({ message: "hi", token: "1@s.whatsapp.net" }, "hub", "turn_abc");
+    expect(auth.principalId).toBe("1@s.whatsapp.net");
+    expect(auth.attributes).toEqual({
+      groupJid: "1@s.whatsapp.net",
+      turn: "turn_abc",
+      via: "hub",
+    });
   });
 });
