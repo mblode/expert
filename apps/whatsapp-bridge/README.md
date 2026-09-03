@@ -13,10 +13,10 @@ whatsapp-bridge :2100  (this process; hub-supervised; hub UID; loopback)
      ▼
 hub :8080  ── x-computer-eve-secret ──►  Bot's Eve  ── reply in the response
      ▲
-     │  Bot tools call back: /messages, /resources, /send, /send-media ...   x-bridge-secret
+     │  Bot tools call back: /messages, /resources, /send-envelope, /send ...   x-bridge-secret
 ```
 
-Inbound: a message that should get a reply is POSTed to the hub's channel ingress with the account's `channel_secret`. The body is bridge protocol v1 (`token`, `message`, `sender`, `senderPhone`, `senderName`, `context[]`, `surface`, `media[]`) plus `acct`. The hub answers `{ reply }`, which the bridge posts back into the chat. Transient failures (429, 5xx, timeouts) are retried three times with backoff; a final failure sends a short "something went wrong" note so the user who watched "typing" start is not left in silence.
+Inbound: a message that should get a reply is POSTed to the hub's channel ingress with the account's `channel_secret`. The body is bridge protocol v1 (`token`, `message`, `sender`, `senderPhone`, `senderName`, `context[]`, `surface`, `media[]`) plus `acct` and `messageId`, the short handle the Bot passes back to quote or react to that message. The hub answers `{ reply }`, which the bridge posts back into the chat. Transient failures (429, 5xx, timeouts) are retried three times with backoff; a final failure sends a short "something went wrong" note so the user who watched "typing" start is not left in silence.
 
 ## Run
 
@@ -72,6 +72,7 @@ Process-wide tuning knobs, all optional: `AGENT_TIMEOUT_MS` (40000), `MESSAGES_C
         "dm_policy": "members",
         "dm_allowlist": [],
         "image_sends_per_day": 20,
+        "sends_per_day": 200,
         "vision_enabled": true,
         "maintainer_jid": "",
         "owner_jids": [],
@@ -98,7 +99,8 @@ Config fields:
 | `trigger_prefix`        | `!bot`    |                                                                                                                                                                     |
 | `dm_policy`             | `members` | `members`: live participants of an allowed group (fails open until seeded). `allowlist`: `dm_allowlist` only. `anyone`: every DM. The self-chat is always answered. |
 | `dm_allowlist`          | `[]`      | Phones in any format or full JIDs (`…@s.whatsapp.net`, `…@lid`).                                                                                                    |
-| `image_sends_per_day`   | `20`      | Per-chat daily cap on `POST /send-media`.                                                                                                                           |
+| `image_sends_per_day`   | `20`      | Per-chat daily cap on media items: `POST /send-media` and each file in an envelope.                                                                                 |
+| `sends_per_day`         | `200`     | Per-chat daily cap on outbound envelopes of any verb, reactions included.                                                                                           |
 | `vision_enabled`        | `true`    | Download shared images (and a quoted image) and forward them so the Bot can see them.                                                                               |
 | `maintainer_jid`        | `""`      | Where `/report` and `/invite` DMs land. Empty = accepted, not delivered.                                                                                            |
 | `owner_jids`            | `[]`      | Who may _receive_ a proactive `POST /send`. Has no effect on inbound routing.                                                                                       |
@@ -145,6 +147,29 @@ These keep the shapes `vcmc-agent` already speaks. `acct` is a query param on `G
 | `POST` | `/invite`                   | `{ fullName, phone, email?, linkedIn?, note?, requestedBy?, source? }`: DM the maintainer a member referral. Deduped.                                                                                                                                        |
 | `POST` | `/send`                     | `{ jid, text, idempotencyKey? }`: a proactive DM. **DM only**: a group JID is refused with `403` in code, before any allowlist. Target must be the maintainer, an owner or a digest recipient. A replayed `idempotencyKey` collapses onto the original send. |
 | `POST` | `/send-media`               | `{ jid, mime, base64, caption? }`: an image into a chat. Groups allowed (a requested image is a reply, not a broadcast), target allowlisted to anywhere the bot already replies, capped by `image_sends_per_day` per chat.                                   |
+| `POST` | `/send-envelope`            | The one outbound envelope: a quoted reply, a reaction, text and up to four images or documents in one validated request. See below.                                                                                                                          |
+
+## The send envelope
+
+One route, every verb the Bot can write into a chat, so a second network later implements one interface instead of four:
+
+```json
+{
+  "jid": "1234@g.us",
+  "reply_to": "m3f9a2b7c1",
+  "text": "on it",
+  "react": { "to": "m3f9a2b7c1", "emoji": "🔥" },
+  "media": [{ "kind": "image", "mime": "image/png", "base64": "…", "caption": "the chart" }]
+}
+```
+
+Every field but `jid` is optional and an envelope must carry at least one of `text`, `react` and `media`. A media item is `{ kind: "image" | "document", mime, base64, filename?, caption? }`; `filename` is required for a document, sanitised, and images must carry an `image/*` mime. The reaction is one emoji, never a sentence, and an empty one (WhatsApp's "remove the reaction") is refused rather than treated as a no-op. Success is `200 { sent: true, message_ids: [...] }`, the ids of what landed; any policy refusal is one `403` whose `error` says which rule refused. A send that fails part-way still reports the ids that did land, because WhatsApp has no multi-message transaction.
+
+`reply_to` and `react.to` are **short message ids**, not WhatsApp keys. The bridge hands one out with every inbound message (`messageId` in the payload, `message_id:` in the Bot's context block) and keeps a bounded in-memory map from it back to the real `{id, remoteJid, fromMe, participant}` key (`src/message-ids.ts`, 2000 entries, oldest evicted). So the Bot can only address a message it was actually shown, a raw key never reaches a model, and an id for a message from last week has fallen off and is refused. That is the intended trade: a stale reply failing is fine, a map that grows for the life of the process is not.
+
+Gating is the same for every verb (`src/send-envelope.ts`): one target allowlist (anywhere the bot already replies), one rate decision (one write per envelope against `sends_per_day`, plus one image slot per file against `image_sends_per_day`), both checked before anything is spent so a refusal never costs the chat a slot. **Text into a group must quote a message in that group.** `POST /send` refuses group JIDs in code so a Bot can never post to a group on a timer, and an envelope that accepted bare text into a group would be a one-word way around that; requiring the quote keeps a group write a reply to something a member actually said. Media into a group keeps the exemption `/send-media` already had.
+
+Not implemented on purpose: sending voice notes (needs TTS plus an Opus encoder), group subject and description writes (needs an approval gate of its own), and starring a message (account-local, invisible to everyone else, and really a memory concern).
 
 ## Behaviour worth knowing
 
@@ -158,4 +183,4 @@ These keep the shapes `vcmc-agent` already speaks. `acct` is a query param on `G
 
 ## Layout
 
-`src/index.ts` wires env, the accounts registry and the HTTP server. `src/account.ts` is one linked number: socket lifecycle, linking, the inbound pipeline and the proactive sends. `src/server.ts` is the API. `src/accounts.ts` is the file and its validation. The rest are pure modules with their own tests (`node --test`): `trigger`, `message-parse`, `mentions`, `live-members`, `whitelist`, `routing`, `groups`, `media-send`, `document`, `store`, `transcribe`, `wa-version`, `jid-queue`, `bounded-set`, `baileys-cache`, `report`, `invite`, `members`, `hub-client`.
+`src/index.ts` wires env, the accounts registry and the HTTP server. `src/account.ts` is one linked number: socket lifecycle, linking, the inbound pipeline and the proactive sends. `src/server.ts` is the API. `src/accounts.ts` is the file and its validation. The rest are pure modules with their own tests (`node --test`): `trigger`, `message-parse`, `mentions`, `live-members`, `whitelist`, `routing`, `groups`, `media-send`, `send-envelope`, `message-ids`, `document`, `store`, `transcribe`, `wa-version`, `jid-queue`, `bounded-set`, `baileys-cache`, `report`, `invite`, `members`, `hub-client`.

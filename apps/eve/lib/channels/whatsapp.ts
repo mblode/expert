@@ -83,7 +83,7 @@ const RESPONSE_RULE =
   "Reply in plain text suitable for WhatsApp. Keep it concise, avoid Markdown tables/headings/code fences, and ask at most one short follow-up question. When they ask you to change how you work (instructions, skills, routines, plugins, computer-use), edit those files on disk and say you did. A hello.expert link is only for taking the mouse or OAuth plugin consent, never for an edit, never tokens, never VNC.";
 
 const buildContextBlock = (payload: BridgePayload): string => {
-  const { surface, token, senderName, sender, acct } = payload;
+  const { surface, token, senderName, sender, acct, messageId } = payload;
   const lines =
     surface === "dm"
       ? [
@@ -102,6 +102,9 @@ const buildContextBlock = (payload: BridgePayload): string => {
     ...(acct ? [`account: ${acct}`] : []),
     ...(senderName ? [`sender_name: ${senderName}`] : []),
     ...(sender ? [`sender_jid: ${sender}`] : []),
+    // The handle for quoting or reacting to this message on the send envelope.
+    // Absent on an older bridge, so a tool must treat it as optional.
+    ...(messageId ? [`message_id: ${messageId}`] : []),
     "</whatsapp_context>",
   ].join("\n");
 };
