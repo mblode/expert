@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import type { Supervisor } from "./supervisor.ts";
 import type { BotConfig } from "../service/bots.ts";
 
 /** Volume-hosted Eve tree. When populated, it replaces the image bots. */
@@ -96,6 +97,65 @@ export function planEveLaunches(
     });
   }
   return launches;
+}
+
+export interface EveChildOptions {
+  hubUrl: string;
+  eveSecret: string;
+  /** Per-Bot logs land here as `eve-<botId>.log`. */
+  logDir: string;
+  /** Base environment for the child. The guest hands in a filtered one. */
+  env?: NodeJS.ProcessEnv;
+  /** Run each Eve as this user. The supervisor only honours it as root. */
+  uid?: number;
+  gid?: number;
+}
+
+/**
+ * A Bot's Eve gets its own token and the shared hub secret; the rest of the
+ * environment is whatever the caller decided a child may see. The guest
+ * filters out the setup code and the bridge secret before it gets here,
+ * because Eve shares uid box with the model's `shell`.
+ */
+export function eveChildEnv(
+  launch: EveLaunch,
+  opts: Pick<EveChildOptions, "hubUrl" | "eveSecret" | "env">,
+): NodeJS.ProcessEnv {
+  return {
+    ...opts.env,
+    COMPUTER_BOT_TOKEN: launch.token,
+    COMPUTER_EVE_SECRET: opts.eveSecret,
+    COMPUTER_URL: opts.hubUrl,
+    HOST: "127.0.0.1",
+    PORT: String(launch.port),
+  };
+}
+
+/**
+ * Register one supervised `eve start` per launch, loopback only. The single
+ * place a Bot's Eve is started: the guest's PID 1 (`init.ts`) and the local
+ * `npm run up` (`eves.ts`) both come through here, so a dev gets the same
+ * restart backoff, the same `/eve/v1/health` probe and the same child
+ * environment as production instead of a detached process nobody watches.
+ */
+export function superviseEves(
+  sup: Pick<Supervisor, "start">,
+  launches: readonly EveLaunch[],
+  opts: EveChildOptions,
+): void {
+  for (const launch of launches) {
+    sup.start({
+      args: ["eve", "start", "--host", "127.0.0.1", "--port", String(launch.port)],
+      cmd: "npx",
+      cwd: launch.cwd,
+      env: eveChildEnv(launch, opts),
+      gid: opts.gid,
+      healthUrl: `http://127.0.0.1:${launch.port}/eve/v1/health`,
+      id: `eve-${launch.botId}`,
+      log: join(opts.logDir, `eve-${launch.botId}.log`),
+      uid: opts.uid,
+    });
+  }
 }
 
 export function pickEveBotId(

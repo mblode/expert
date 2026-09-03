@@ -8,7 +8,7 @@
     },
     "apps/hub": {
       "entry": [
-        "src/host/boot-eves.ts",
+        "src/host/eves.ts",
         "src/host/init.ts",
         "src/host/machine-cli.ts",
         "test/**/*.test.ts"

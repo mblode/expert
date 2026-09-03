@@ -250,11 +250,14 @@ export class Supervisor {
     this.log(
       `${m.spec.id}: exited (code ${code ?? "null"}, signal ${signal ?? "none"}), restart in ${delay}ms`,
     );
+    // Deliberately ref'd: a pending restart is the only thing this process
+    // still owes, and an unref'd timer let the loop empty and the supervisor
+    // exit mid-backoff. `npm run up` is where that showed: the Eve supervisor
+    // holds nothing else, so one crash ended supervision without a word.
     m.restartTimer = setTimeout(() => {
       m.restartTimer = null;
       this.launch(m);
     }, delay);
-    m.restartTimer.unref?.();
   }
 
   private scheduleHealth(m: Managed, inMs: number): void {
