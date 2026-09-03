@@ -368,31 +368,32 @@ describe("a redeemed invite is a scoped seat", () => {
         });
       }
 
-      // The open finding, pinned so it cannot be forgotten: `methods` narrows
-      // the RPC router, and `isOwner` does not consult it, so this token still
-      // opens the Eve proxy and the pixel stream. Containing that needs a
-      // hub-side change, which this PR deliberately does not make.
-      expect(h.hub.auth.isOwner(plugins.token)).toBe(true);
+      // Narrowing reaches the doors an allowlist cannot name. `/eve/v1`, the
+      // roster and the pixel stream gate on `isOwner`, which now refuses an
+      // owner carrying `methods`, so this grant is contained to the two RPCs
+      // it was issued for and nothing else.
+      expect(h.hub.auth.isOwner(plugins.token)).toBe(false);
     } finally {
       await h.close();
     }
   });
 
-  it("records the gap: an issued guest is not held to GUEST_MAX_TTL_MS", () => {
+  it("an issued guest is held to GUEST_MAX_TTL_MS on both minters", () => {
     const auth = registry();
     const now = Date.parse("2026-09-03T00:00:00.000Z");
     const owner = auth.principalFor(auth.pair("code"), now)!;
-    const guest = auth.issue({ role: "guest", ttlMs: hour * 1000 }, owner, now);
 
-    // GUEST_MAX_TTL_MS is applied by `mintGuest`, which no wire path reaches;
-    // `issue` caps at ISSUED_MAX_TTL_MS like every other role. So a desk
-    // invite's seat is bounded by the link (four hours at most), not by the
-    // fifteen minutes this constant promises. The clamp belongs in `issue`,
-    // which is PR #26's code, so it is reported rather than changed here.
-    expect(Date.parse(guest.expires_at!) - now).toBe(hour * 1000);
-    expect(hour * 1000).toBeGreaterThan(GUEST_MAX_TTL_MS);
+    // What a desk link actually asks for, an hour, passes through untouched:
+    // the ceiling bounds a greedy caller, it does not shorten an honest one.
+    const asked = auth.issue({ display: 1, role: "guest", ttlMs: hour * 1000 }, owner, now);
+    expect(Date.parse(asked.expires_at!) - now).toBe(hour * 1000);
+
+    // Past the ceiling both minters clamp to the same number, which is the
+    // link's own maximum, so a seat cannot outlive the link that granted it.
+    const greedy = auth.issue({ display: 1, role: "guest", ttlMs: 30 * hour * 1000 }, owner, now);
+    expect(Date.parse(greedy.expires_at!) - now).toBe(GUEST_MAX_TTL_MS);
     expect(
-      Date.parse(auth.mintGuest({ display: 1, ttlMs: hour * 1000 }, now).expires_at!) - now,
+      Date.parse(auth.mintGuest({ display: 1, ttlMs: 30 * hour * 1000 }, now).expires_at!) - now,
     ).toBe(GUEST_MAX_TTL_MS);
   });
 });
