@@ -7,7 +7,7 @@ import { useMemo, useState } from "react";
 import { BotMark } from "@/components/bot-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { Screen, SeatState } from "@/lib/seat";
+import type { BotProfile, Screen, SeatState } from "@/lib/seat";
 import { cn } from "@/lib/utils";
 
 /**
@@ -36,6 +36,7 @@ export function BotSidebar({
   onDisplayChange,
   onSignOut,
   onSwitchComputer,
+  profiles,
   screens,
   userEmail,
 }: {
@@ -45,6 +46,8 @@ export function BotSidebar({
   onDisplayChange: (display: number) => void;
   onSignOut: () => void;
   onSwitchComputer: (id: string) => void;
+  /** By Bot id, from the roster. Empty until it answers. */
+  profiles: Record<string, BotProfile>;
   screens: Screen[];
   userEmail?: string;
 }): React.ReactElement {
@@ -52,8 +55,15 @@ export function BotSidebar({
 
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
-    return needle ? screens.filter((s) => s.bot_id.toLowerCase().includes(needle)) : screens;
-  }, [query, screens]);
+    if (!needle) {
+      return screens;
+    }
+    // The name is what the row says, so it is what a search has to match; the
+    // id still does too, because that is what the computer calls the Bot.
+    return screens.filter((s) =>
+      `${s.bot_id} ${profiles[s.bot_id]?.name ?? ""}`.toLowerCase().includes(needle),
+    );
+  }, [profiles, query, screens]);
 
   const current = computers.find((c) => c.id === computerId);
 
@@ -114,10 +124,12 @@ export function BotSidebar({
                   onClick={() => onDisplayChange(screen.display)}
                   type="button"
                 >
-                  <BotMark botId={screen.bot_id} size="lg" />
+                  <BotMark botId={screen.bot_id} profile={profiles[screen.bot_id]} size="lg" />
                   <span className="grid min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
-                      <span className="truncate font-medium text-sm">{screen.bot_id}</span>
+                      <span className="truncate font-medium text-sm">
+                        {profiles[screen.bot_id]?.name || screen.bot_id}
+                      </span>
                       <span className="shrink-0 text-muted-foreground text-xs">
                         screen {screen.display}
                       </span>

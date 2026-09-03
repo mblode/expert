@@ -32,6 +32,12 @@ const nextConfig: NextConfig = {
         rewrites: async () => [
           { destination: `${HUB}/computer.v1.Seat/:path*`, source: "/computer.v1.Seat/:path*" },
           { destination: `${HUB}/eve/:path*`, source: "/eve/:path*" },
+          // `/roster` is the one owner route that is a plain GET rather than an
+          // RPC under the Seat prefix, so it needs its own line. Without it the
+          // Bot profiles 404 against Next in `next dev` and every Bot silently
+          // falls back to its id and a hashed mark, which looks like the
+          // settings never saved rather than like a missing proxy rule.
+          { destination: `${HUB}/roster`, source: "/roster" },
         ],
       }
     : {}),

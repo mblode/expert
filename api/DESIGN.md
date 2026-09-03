@@ -102,6 +102,18 @@ Grok's shape: the machine is shared, the screen is not.
   exactly once on the wire), claims the window, and persists the
   roster. `Seat.DeleteBot` frees the screen and revokes the token. A
   paired seat is the box owner; the model cannot provision.
+- **A Bot's profile is the human's to edit.** `GET /roster` carries
+  `profile { id, name, title, description, avatar_shape, avatar_color }`
+  beside each Bot's id and screen, and `Seat.SetBotProfile { id, ... }`
+  writes it back, returning the stored profile. The hub folds the profile
+  into that Bot's system prompt, so it is identity rather than decoration:
+  an owner's edit, not an `operator`'s, who drives the box without
+  reshaping it. The request is the whole profile, `title` and `description`
+  are cleared by an empty string, and the mark is two closed sets (four
+  shapes, six colours) rather than free text, because the file lives on the
+  box at `/workspace/.bots/<id>/profile.json` where the model's `write_file`
+  reaches it and the colour lands in a client's inline style. The read
+  clamps the same way the write validates, for the same reason.
 - Claims live on the box in `/workspace/.window-assignments.json` with
   sha256 owner hashes, written by `start-window`/`stop-window`. Window
   N serves RFB on port `5900 + N`.

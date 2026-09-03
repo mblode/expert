@@ -35,6 +35,45 @@ export interface BoxStatus {
   screens: Screen[];
 }
 
+/**
+ * A Bot's profile, as the hub stores it on the box.
+ *
+ * The mark is two closed sets and the client checks them too: the colour
+ * lands in an inline style, and the file the hub reads it from is one the
+ * model can rewrite with `write_file`. The hub clamps on the way out; this
+ * is the same check at the other end, not a second opinion about the value.
+ */
+export const AVATAR_SHAPES = ["circle", "square", "hexagon", "diamond"] as const;
+export type AvatarShape = (typeof AVATAR_SHAPES)[number];
+
+export const AVATAR_COLORS = [
+  "#e5484d",
+  "#f76b15",
+  "#f5d90a",
+  "#46a758",
+  "#0091ff",
+  "#8e4ec6",
+] as const;
+export type AvatarColor = (typeof AVATAR_COLORS)[number];
+
+export interface BotProfile {
+  id: string;
+  name: string;
+  /** The one-line label under the name. "Label" in the UI; `title` on the wire. */
+  title: string;
+  description: string;
+  avatar_shape: AvatarShape;
+  avatar_color: AvatarColor;
+}
+
+/** What the roster route reports per Bot. Owner seats only. */
+interface RosterBot {
+  id: string;
+  display: number;
+  state: SeatState;
+  profile: BotProfile;
+}
+
 /** The buttons `Seat.click` accepts. @public */
 export type Button = "left" | "right" | "middle" | "back" | "forward";
 
@@ -144,13 +183,18 @@ function sameOrigin(a: string, b: string): boolean {
   }
 }
 
-async function rpc<T>(hubUrl: string, method: string, body: unknown, token: string): Promise<T> {
+/**
+ * One call to the hub, RPC or plain route. The roster is a GET rather than a
+ * Seat method, and it reports the same error envelope, so it wants the same
+ * error handling rather than its own.
+ */
+async function send<T>(hubUrl: string, path: string, token: string, body?: unknown): Promise<T> {
   let res: Response;
   try {
-    res = await fetch(`${apiBase(hubUrl)}/computer.v1.Seat/${method}`, {
-      body: JSON.stringify(body),
+    res = await fetch(`${apiBase(hubUrl)}${path}`, {
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      method: "POST",
+      method: body === undefined ? "GET" : "POST",
     });
   } catch {
     throw new SeatError(
@@ -162,9 +206,13 @@ async function rpc<T>(hubUrl: string, method: string, body: unknown, token: stri
   const payload: unknown = await res.json().catch(() => null);
   if (!res.ok) {
     const envelope = (payload as { error?: { code?: string; message?: string } } | null)?.error;
-    throw new SeatError(envelope?.message ?? `${method} failed (${res.status})`, envelope?.code);
+    throw new SeatError(envelope?.message ?? `${path} failed (${res.status})`, envelope?.code);
   }
   return payload as T;
+}
+
+function rpc<T>(hubUrl: string, method: string, body: unknown, token: string): Promise<T> {
+  return send<T>(hubUrl, `/computer.v1.Seat/${method}`, token, body);
 }
 
 export type Seat = ReturnType<typeof createSeat>;
@@ -194,6 +242,13 @@ export function createSeat(hubUrl: string, token: string) {
     type: (text: string, display?: number) => call<unknown>("Type", { text, display }),
     /** Sign-out: end this seat on the hub. No argument revokes the caller's own token. */
     revoke: () => call<{ revoked: boolean }>("Revoke", {}),
+    /**
+     * Every Bot with its profile. Owner-only, and a box read per Bot, so it
+     * is what a client calls when the roster changes rather than on a poll.
+     */
+    roster: () => send<{ bots: RosterBot[] }>(hubUrl, "/roster", token),
+    /** The whole profile, not a patch: an empty title or description clears it. */
+    setBotProfile: (profile: BotProfile) => call<BotProfile>("SetBotProfile", { ...profile }),
     whatsappAccounts: () => call<{ accounts: WhatsAppAccount[] }>("WhatsAppAccounts", {}),
     /** Get when `config` is absent, set when present; either way the stored config comes back. */
     whatsappConfig: (acct: string) => call<{ config: WhatsAppConfig }>("WhatsAppConfig", { acct }),

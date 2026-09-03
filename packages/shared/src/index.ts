@@ -19,6 +19,46 @@ export function asBotId(s: string): BotId {
   return s as BotId;
 }
 
+/**
+ * A Bot's profile: the name it answers to, its one-line label, what it is
+ * for, and the mark a human recognises it by. It lives on the box at
+ * `/workspace/.bots/<id>/profile.json` and the hub folds it into that Bot's
+ * system prompt, so it is identity rather than decoration.
+ *
+ * The mark is two closed sets rather than free text. The model can rewrite
+ * the file itself with `write_file`, and a colour reaches a client as an
+ * inline style, so the palette is the boundary that keeps a colour a colour.
+ */
+export const AVATAR_SHAPES = ["circle", "square", "hexagon", "diamond"] as const;
+export type AvatarShape = (typeof AVATAR_SHAPES)[number];
+
+export const AVATAR_COLORS = [
+  "#e5484d",
+  "#f76b15",
+  "#f5d90a",
+  "#46a758",
+  "#0091ff",
+  "#8e4ec6",
+] as const;
+export type AvatarColor = (typeof AVATAR_COLORS)[number];
+
+/** Snake_cased like the rest of the on-box JSON: the file is the wire shape. */
+export interface BotProfile {
+  id: string;
+  name: string;
+  title: string;
+  description: string;
+  avatar_shape: AvatarShape;
+  avatar_color: AvatarColor;
+}
+
+/**
+ * Length caps, applied on the way in and again on the way out. The file is
+ * the model's to rewrite, so a hub that only validated writes would still
+ * hand a client whatever the agent left there.
+ */
+export const BOT_PROFILE_MAX = { description: 500, name: 48, title: 64 } as const;
+
 export const WORKSPACE = "/workspace" as const;
 export const SPEC_ID = "computer.v1" as const;
 export const SPEC_VERSION = "1.0.0" as const;

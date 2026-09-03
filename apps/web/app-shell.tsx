@@ -3,17 +3,24 @@
 import { ComputerUseIcon } from "blode-icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { BotSettings } from "./components/bot-settings";
 import { BotSidebar } from "./components/bot-sidebar";
 import { ChatPane } from "./components/chat-pane";
 import { ConnectError } from "./components/connect-error";
 import { ScreenRail } from "./components/screen-rail";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "./components/ui/dialog";
 import { authClient } from "./lib/auth-client";
 import { captureEvent, identifyUser, resetPostHog } from "./lib/posthog-client";
 import { reconnect, selectComputer } from "./lib/reconnect";
 import type { BoundSeat } from "./lib/reconnect";
 import { createSeat, SeatError } from "./lib/seat";
-import type { BoxStatus } from "./lib/seat";
+import type { BotProfile, BoxStatus } from "./lib/seat";
 import { clearSessions } from "./lib/storage";
 
 const POLL_MS = 2000;
@@ -129,6 +136,8 @@ function Workspace({
   const [offline, setOffline] = useState<string | null>(null);
   const [botsOpen, setBotsOpen] = useState(false);
   const [screenOpen, setScreenOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [profiles, setProfiles] = useState<Record<string, BotProfile>>({});
 
   useEffect(() => {
     captureEvent(connectEvent, { computer_id: computerId });
@@ -142,6 +151,33 @@ function Workspace({
     }
     onRecovered(next);
   }, [onRecovered]);
+
+  /**
+   * Who the Bots are, beside what their screens are doing.
+   *
+   * A separate read from `Status` on purpose: a profile is a file on the box,
+   * so the roster costs a read per Bot and the two-second poll is for seat
+   * state alone. Read once per seat; a save puts what the hub stored straight
+   * into this map, so there is nothing to re-read after one.
+   */
+  useEffect(() => {
+    let live = true;
+    const load = async () => {
+      try {
+        const { bots } = await seat.roster();
+        if (live) {
+          setProfiles(Object.fromEntries(bots.map((bot) => [bot.id, bot.profile])));
+        }
+      } catch {
+        // A mark falls back to the id's own colour and every name to its id,
+        // so a roster that will not answer costs polish, not the workspace.
+      }
+    };
+    void load();
+    return () => {
+      live = false;
+    };
+  }, [seat]);
 
   const switchComputer = useCallback(
     async (nextId: string) => {
@@ -210,6 +246,7 @@ function Workspace({
       onDisplayChange={pickDisplay}
       onSignOut={onSignOut}
       onSwitchComputer={switchComputer}
+      profiles={profiles}
       screens={screens}
       userEmail={userEmail}
     />
@@ -220,6 +257,7 @@ function Workspace({
       display={display}
       onDisplayChange={setDisplay}
       onStatus={setStatus}
+      profiles={profiles}
       seat={seat}
       status={status}
     />
@@ -237,7 +275,9 @@ function Workspace({
         offline={offline}
         onOpenBots={() => setBotsOpen(true)}
         onOpenScreen={() => setScreenOpen(true)}
+        onOpenSettings={() => setSettingsOpen(true)}
         onRetry={() => void recoverSeat()}
+        profile={profiles[botId]}
         screenNeedsYou={waitingElsewhere}
         seat={seat}
       />
@@ -250,6 +290,24 @@ function Workspace({
             <DialogTitle>Bots</DialogTitle>
           </DialogHeader>
           {sidebar}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog onOpenChange={setSettingsOpen} open={settingsOpen}>
+        <DialogContent className="max-h-[90svh] max-w-md gap-0 overflow-hidden p-0">
+          <DialogHeader className="px-5 pt-5 pb-4">
+            <DialogTitle>{profiles[botId]?.name ?? botId}</DialogTitle>
+            <DialogDescription>
+              Who this Bot is on {computerId}. It reads this as its own instructions.
+            </DialogDescription>
+          </DialogHeader>
+          <BotSettings
+            botId={botId}
+            key={botId}
+            onSaved={(profile) => setProfiles((prev) => ({ ...prev, [botId]: profile }))}
+            profile={profiles[botId]}
+            seat={seat}
+          />
         </DialogContent>
       </Dialog>
 

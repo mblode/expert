@@ -41,6 +41,12 @@ service Seat {
   // file, which needs an agent token and so needs a Bot.
   rpc CreateBot(CreateBotRequest) returns (BotCredentials);
   rpc DeleteBot(DeleteBotRequest) returns (BoxStatus);
+  // Who a Bot is: the name it answers to, its label, what it is for, and the
+  // mark a human recognises it by. The hub folds the profile into that Bot's
+  // system prompt, so editing it changes how the agent behaves; it is an
+  // owner's edit rather than an operator's, who drives the box without
+  // reshaping it. The request is the whole profile, not a patch.
+  rpc SetBotProfile(SetBotProfileRequest) returns (BotProfile);
   // Drop a seat token: the caller's own (sign-out), any other from an owner
   // seat, or any unprivileged one from an issuer replacing a grant it made.
   // Guest seats from invites expire on their own; this is early.
@@ -508,6 +514,32 @@ message BotCredentials {
 
 message DeleteBotRequest {
   string id = 1;
+}
+
+message SetBotProfileRequest {
+  string id = 1;
+  // Required, 1-48 chars. proto3 cannot tell an absent string from an empty
+  // one, and none of the three required fields has a meaningful empty value.
+  string name = 2;
+  // Cleared by an empty string, unlike the three above.
+  string title = 3;
+  string description = 4;
+  // circle | square | hexagon | diamond. Anything else is VALIDATION.
+  string avatar_shape = 5;
+  // One of the six colours the hub allows. A closed set because the model can
+  // rewrite this file itself and the value lands in a client's inline style.
+  string avatar_color = 6;
+}
+
+// As stored on the box at /workspace/.bots/<id>/profile.json, and as carried
+// per Bot on GET /roster.
+message BotProfile {
+  string id = 1;
+  string name = 2;
+  string title = 3;
+  string description = 4;
+  string avatar_shape = 5;
+  string avatar_color = 6;
 }
 
 message RevokeRequest {

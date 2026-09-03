@@ -1,4 +1,9 @@
-import { ComputerUseIcon, DotGrid1x3VerticalIcon, ShareScreenIcon } from "blode-icons-react";
+import {
+  ComputerUseIcon,
+  DotGrid1x3VerticalIcon,
+  SettingsGear1Icon,
+  ShareScreenIcon,
+} from "blode-icons-react";
 import { useEveAgent } from "eve/react";
 import type { EveMessage } from "eve/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -24,7 +29,7 @@ import {
 } from "@/components/ui/message-scroller";
 import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
 import { apiBase } from "../lib/seat";
-import type { Seat } from "../lib/seat";
+import type { BotProfile, Seat } from "../lib/seat";
 import { loadSession, saveSession } from "../lib/storage";
 import { ChatComposer } from "./chat-composer";
 import { ChatMessage } from "./chat-message";
@@ -59,7 +64,9 @@ export function ChatPane({
   offline,
   onOpenBots,
   onOpenScreen,
+  onOpenSettings,
   onRetry,
+  profile,
   screenNeedsYou = false,
   seat,
 }: {
@@ -69,7 +76,11 @@ export function ChatPane({
   /** Phone only: the roster and the screen are drawers rather than rails. */
   onOpenBots?: () => void;
   onOpenScreen?: () => void;
+  /** Who this Bot is, edited from the header beside its name. */
+  onOpenSettings?: () => void;
   onRetry?: () => void;
+  /** From the roster; absent until it answers. */
+  profile?: BotProfile;
   screenNeedsYou?: boolean;
   seat: Seat;
 }): React.ReactElement {
@@ -130,8 +141,20 @@ export function ChatPane({
             <DotGrid1x3VerticalIcon />
           </Button>
         )}
-        <BotMark botId={botId} size="md" />
-        <h2 className="min-w-0 truncate font-semibold text-sm">{botId}</h2>
+        <BotMark botId={botId} profile={profile} size="md" />
+        <h2 className="min-w-0 truncate font-semibold text-sm">{profile?.name || botId}</h2>
+        {onOpenSettings && (
+          <Button
+            aria-label={`${profile?.name || botId} settings`}
+            className="-ml-1 size-8 shrink-0 pointer-coarse:size-11"
+            onClick={onOpenSettings}
+            size="icon-xs"
+            type="button"
+            variant="ghost"
+          >
+            <SettingsGear1Icon />
+          </Button>
+        )}
         {/* The connection error belongs beside the Bot it is about. It used to
             be a viewport-fixed banner, which landed on the composer: the one
             control you reach for when the computer stops answering. */}
@@ -189,7 +212,7 @@ export function ChatPane({
           <MessageScrollerViewport>
             <MessageScrollerContent
               aria-busy={agent.status === "streaming"}
-              aria-label={`Conversation with ${botId}`}
+              aria-label={`Conversation with ${profile?.name || botId}`}
               className="mx-auto w-full max-w-3xl gap-5 px-4 py-6"
               // `role="log"` over `aria-live` on the same element: both are
               // polite, but a live region re-reads its whole subtree and this
@@ -205,7 +228,9 @@ export function ChatPane({
                       <ComputerUseIcon />
                     </EmptyMedia>
                     <EmptyTitle>
-                      {down ? `Eve is not running for ${botId}` : `Message ${botId}`}
+                      {down
+                        ? `Eve is not running for ${profile?.name || botId}`
+                        : `Message ${profile?.name || botId}`}
                     </EmptyTitle>
                     <EmptyDescription>
                       {down
@@ -273,7 +298,7 @@ export function ChatPane({
       </MessageScrollerProvider>
 
       <ChatComposer
-        botId={botId}
+        botName={profile?.name || botId}
         busy={busy}
         disabled={resuming}
         onSend={send}

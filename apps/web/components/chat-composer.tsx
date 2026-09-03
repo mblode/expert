@@ -15,13 +15,14 @@ const MAX_ROWS_PX = 200;
  * the affordance and a second frame around it is one divide too many.
  */
 export function ChatComposer({
-  botId,
+  botName,
   busy,
   disabled,
   onSend,
   onStop,
 }: {
-  botId: string;
+  /** What the Bot calls itself. Its id is plumbing and never shown here. */
+  botName: string;
   busy: boolean;
   disabled: boolean;
   onSend: (text: string) => void;
@@ -54,7 +55,7 @@ export function ChatComposer({
     <div className="px-3 pt-1 pb-3 sm:px-4 sm:pb-4">
       <div className="mx-auto flex w-full max-w-3xl items-end gap-2 rounded-3xl border border-border bg-card py-2 pr-2 pl-4 shadow-xs transition-colors focus-within:border-ring">
         <label className="sr-only" htmlFor="chat-composer">
-          Message {botId}
+          Message {botName}
         </label>
         <textarea
           className="max-h-[200px] min-h-9 flex-1 resize-none self-center bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
@@ -70,7 +71,7 @@ export function ChatComposer({
               send();
             }
           }}
-          placeholder={`Message ${botId}`}
+          placeholder={`Message ${botName}`}
           ref={field}
           rows={1}
           value={text}

@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import type { BoxStatus, Screen, Seat, SeatState } from "@/lib/seat";
+import type { BotProfile, BoxStatus, Screen, Seat, SeatState } from "@/lib/seat";
 import { useVncSrc } from "@/lib/use-vnc-src";
 import { cn } from "@/lib/utils";
 import { DesktopPane } from "./desktop-pane";
@@ -42,12 +42,15 @@ export function ScreenRail({
   display,
   onDisplayChange,
   onStatus,
+  profiles,
   seat,
   status,
 }: {
   display: number;
   onDisplayChange: (display: number) => void;
   onStatus: (status: BoxStatus) => void;
+  /** By Bot id, from the roster: the rail says the Bot's name, not its id. */
+  profiles: Record<string, BotProfile>;
   seat: Seat;
   status: BoxStatus | undefined;
 }): React.ReactElement {
@@ -62,6 +65,7 @@ export function ScreenRail({
     (candidate) => candidate.state === "WAITING" && candidate.display !== screen?.display,
   );
   const screenId = screen ? `${screen.bot_id}:${screen.display}` : "";
+  const name = screen ? profiles[screen.bot_id]?.name || screen.bot_id : "";
   const vncSrc = useVncSrc(screen?.vnc_url, screenId);
 
   const presence = async (present: boolean) => {
@@ -79,14 +83,14 @@ export function ScreenRail({
     <aside className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4">
       <section className="flex flex-col gap-2">
         <h2 className="px-0.5 font-medium text-muted-foreground text-xs">
-          {screen ? `${screen.bot_id}’s screen` : "Screen"}
+          {screen ? `${name}’s screen` : "Screen"}
         </h2>
 
         <Dialog onOpenChange={setOpen} open={open}>
           <DialogTrigger
             render={
               <button
-                aria-label={screen ? `Open ${screen.bot_id}’s screen` : "Open the screen"}
+                aria-label={screen ? `Open ${name}’s screen` : "Open the screen"}
                 className="group relative block w-full overflow-hidden rounded-xl border border-border bg-black outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 style={{ aspectRatio: `${desk.width} / ${desk.height}` }}
                 type="button"
@@ -106,7 +110,7 @@ export function ScreenRail({
                   sandbox="allow-scripts allow-same-origin"
                   src={vncSrc ?? screen.vnc_url}
                   tabIndex={-1}
-                  title={`${screen.bot_id} screen`}
+                  title={`${name} screen`}
                 />
                 <span className="absolute inset-0 grid place-items-center bg-black/45 opacity-0 transition-opacity group-hover:opacity-100">
                   <span className="flex items-center gap-1.5 rounded-lg bg-background/90 px-2.5 py-1.5 font-medium text-xs">
@@ -124,7 +128,7 @@ export function ScreenRail({
 
           <DialogContent className="flex h-[92svh] max-w-[calc(100%-2rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-[min(96vw,1400px)] [&_header]:pr-12">
             <DialogHeader className="sr-only">
-              <DialogTitle>{screen ? `${screen.bot_id} screen` : "Screen"}</DialogTitle>
+              <DialogTitle>{screen ? `${name} screen` : "Screen"}</DialogTitle>
             </DialogHeader>
             <DesktopPane
               display={display}
@@ -171,7 +175,8 @@ export function ScreenRail({
         >
           <span className="size-1.5 shrink-0 rounded-full bg-amber-400" />
           <span className="min-w-0 flex-1 truncate">
-            {elsewhereWaiting.bot_id} needs you on screen {elsewhereWaiting.display}
+            {profiles[elsewhereWaiting.bot_id]?.name || elsewhereWaiting.bot_id} needs you on screen{" "}
+            {elsewhereWaiting.display}
           </span>
         </button>
       )}

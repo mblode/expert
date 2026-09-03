@@ -307,6 +307,35 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     return { display: bot.display, id: bot.id, token: bot.token };
   });
 
+  /**
+   * Who a Bot is, edited by the human at the seat.
+   *
+   * Owner only, and for free, the way `Conversations` is: `owner` is the one
+   * role with no method allowlist. That is the right default here rather
+   * than an oversight, because the profile is folded into the Bot's system
+   * prompt, so renaming one reshapes the box rather than driving it, which
+   * is exactly what an `operator` is not for.
+   *
+   * The rules and the writing are `BotState`'s; this parses. A seat bound to
+   * one screen may only edit that screen's Bot, the containment
+   * `Occurrences` and `Conversations` already apply by id.
+   */
+  router.rpc(SeatMethods.SetBotProfile, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    if (typeof o.id !== "string" || o.id.length === 0) {
+      throw new ComputerError("VALIDATION", 'id is required, e.g. {"id":"main"}');
+    }
+    const bot = deps.bots.byId(o.id);
+    if (ctx.principal?.display !== undefined && ctx.principal.display !== bot.display) {
+      throw new ComputerError(
+        "UNAUTHENTICATED",
+        `this seat is for screen ${ctx.principal.display}`,
+      );
+    }
+    await bot.desk.ping();
+    return bot.state.setProfile(o);
+  });
+
   router.rpc(SeatMethods.DeleteBot, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
     if (typeof o.id !== "string" || o.id.length === 0) {

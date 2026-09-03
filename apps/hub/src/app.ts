@@ -111,9 +111,18 @@ export function createHub(opts: HubOptions): Hub {
   // not make the platform restart the whole Machine; `ok` and `children`
   // carry the detail for the owner page and for a person reading it.
   router.extra("GET", "/healthz", "public", async () => readHealth(opts.statusFile));
-  // bot.roster equivalent: ids and screens, never tokens. Cold on the edge.
+  // bot.roster equivalent: ids, screens and profiles, never tokens. Cold on
+  // the edge, and one box read per Bot for the profile, so it is the call a
+  // client makes when the roster changes rather than the one it polls.
   router.extra("GET", "/roster", "seat", async () => ({
-    bots: bots.all().map((b) => ({ display: b.display, id: b.id, state: b.seat.getState() })),
+    bots: await Promise.all(
+      bots.all().map(async (b) => ({
+        display: b.display,
+        id: b.id,
+        profile: await b.state.profile(),
+        state: b.seat.getState(),
+      })),
+    ),
   }));
 
   router.assertAllPolicies();

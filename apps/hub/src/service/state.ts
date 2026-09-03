@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import type { MessageBody } from "@computer/shared";
+import { AVATAR_COLORS, AVATAR_SHAPES, BOT_PROFILE_MAX, ComputerError } from "@computer/shared";
+import type { BotProfile, MessageBody } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 
 /**
@@ -39,16 +40,6 @@ export type Occurrence = Flat<MessageBody>;
  */
 const BOX_STATE_ROOT = "/workspace/.bots";
 
-/** Grok's profile fields, snake_cased like the rest of our on-box JSON. */
-interface BotProfile {
-  id: string;
-  name: string;
-  description: string;
-  title: string;
-  avatar_shape: string;
-  avatar_color: string;
-}
-
 type MemoryKind = "note" | "episode";
 
 interface MemoryEntry {
@@ -58,9 +49,6 @@ interface MemoryEntry {
   kind: MemoryKind;
   text: string;
 }
-
-const AVATAR_SHAPES = ["circle", "square", "hexagon", "diamond"] as const;
-const AVATAR_COLORS = ["#e5484d", "#f76b15", "#f5d90a", "#46a758", "#0091ff", "#8e4ec6"] as const;
 
 /** One fact per line. Grok caps entries around here; longer lines are truncated, not dropped. */
 const MEMORY_MAX_CHARS = 500;
@@ -168,6 +156,16 @@ export class BotState {
     }
   }
 
+  /**
+   * Who this Bot is, clamped.
+   *
+   * The agent can edit this file (it is under `/workspace`, so `write_file`
+   * reaches it), and this is where the profile leaves the box: for the
+   * prompt, for `/roster`, and from there into a client that renders the
+   * colour as an inline style. So every field is untrusted on the way out,
+   * not only on the way in: an unknown shape or colour falls back to the
+   * seeded one and the strings are truncated rather than dropped.
+   */
   async profile(): Promise<BotProfile> {
     const raw = await this.read(this.profilePath);
     const fallback = defaultProfile(this.botId);
@@ -175,20 +173,42 @@ export class BotState {
       return fallback;
     }
     try {
-      // The agent can edit this file, so treat every field as untrusted and
-      // fall back per-field: a hand-broken profile must not break the prompt.
       const o = JSON.parse(raw) as Partial<BotProfile>;
       return {
-        avatar_color: str(o.avatar_color) ?? fallback.avatar_color,
-        avatar_shape: str(o.avatar_shape) ?? fallback.avatar_shape,
-        description: str(o.description) ?? fallback.description,
+        avatar_color: oneOf(AVATAR_COLORS, o.avatar_color) ?? fallback.avatar_color,
+        avatar_shape: oneOf(AVATAR_SHAPES, o.avatar_shape) ?? fallback.avatar_shape,
+        description: clamp(o.description, BOT_PROFILE_MAX.description) ?? fallback.description,
         id: this.botId,
-        name: str(o.name) ?? fallback.name,
-        title: str(o.title) ?? fallback.title,
+        name: clamp(o.name, BOT_PROFILE_MAX.name) ?? fallback.name,
+        title: clamp(o.title, BOT_PROFILE_MAX.title) ?? fallback.title,
       };
     } catch {
       return fallback;
     }
+  }
+
+  /**
+   * The human at the seat edits who this Bot is. Validated here rather than
+   * in the handler, because this is the rule and the handler is the parsing.
+   *
+   * The request carries the whole profile, not a patch: `title` and
+   * `description` are cleared by an empty string, and `name`, `avatar_shape`
+   * and `avatar_color` must each be given, because proto3 cannot tell an
+   * absent string from an empty one and none of the three has a meaningful
+   * empty value. Writing the whole file also drops whatever else the agent
+   * left in it, which is the point: the profile is a closed shape.
+   */
+  async setProfile(input: Record<string, unknown>): Promise<BotProfile> {
+    const profile: BotProfile = {
+      avatar_color: required(AVATAR_COLORS, input.avatar_color, "avatar_color"),
+      avatar_shape: required(AVATAR_SHAPES, input.avatar_shape, "avatar_shape"),
+      description: field(input.description, "description", BOT_PROFILE_MAX.description),
+      id: this.botId,
+      name: field(input.name, "name", BOT_PROFILE_MAX.name, { required: true }),
+      title: field(input.title, "title", BOT_PROFILE_MAX.title),
+    };
+    await this.desk.writeFile(this.profilePath, `${JSON.stringify(profile, null, 2)}\n`);
+    return profile;
   }
 
   async memory(): Promise<MemoryEntry[]> {
@@ -272,6 +292,49 @@ function defaultProfile(id: string): BotProfile {
   };
 }
 
-function str(v: unknown): string | undefined {
-  return typeof v === "string" && v.length > 0 ? v : undefined;
+/** A member of a closed set, or nothing. The read side never throws. */
+function oneOf<T extends string>(allowed: readonly T[], v: unknown): T | undefined {
+  return typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : undefined;
+}
+
+/** Trimmed and truncated, or nothing when there is no string there. */
+function clamp(v: unknown, max: number): string | undefined {
+  if (typeof v !== "string") {
+    return undefined;
+  }
+  const trimmed = v.trim().slice(0, max);
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+/** The write side: a caller who asks for something outside the set is told so. */
+function required<T extends string>(allowed: readonly T[], v: unknown, name: string): T {
+  const picked = oneOf(allowed, v);
+  if (!picked) {
+    throw new ComputerError("VALIDATION", `${name} must be one of ${allowed.join(", ")}`);
+  }
+  return picked;
+}
+
+/**
+ * One editable string. Over-long is refused rather than truncated: a human
+ * typing into a form should be told, not quietly edited.
+ */
+function field(v: unknown, name: string, max: number, opts: { required?: boolean } = {}): string {
+  if (v === undefined || v === null) {
+    if (opts.required) {
+      throw new ComputerError("VALIDATION", `${name} is required`);
+    }
+    return "";
+  }
+  if (typeof v !== "string") {
+    throw new ComputerError("VALIDATION", `${name} must be a string`);
+  }
+  const trimmed = v.trim();
+  if (trimmed.length > max) {
+    throw new ComputerError("VALIDATION", `${name} must be at most ${max} characters`);
+  }
+  if (opts.required && trimmed.length === 0) {
+    throw new ComputerError("VALIDATION", `${name} is required`);
+  }
+  return trimmed;
 }

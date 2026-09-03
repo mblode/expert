@@ -29,6 +29,7 @@ export const SeatMethods = {
   Pair: path(Seat, Seat.method.pair),
   Pointer: path(Seat, Seat.method.pointer),
   ProvideSecret: path(Seat, Seat.method.provideSecret),
+  SetBotProfile: path(Seat, Seat.method.setBotProfile),
   SetPresence: path(Seat, Seat.method.setPresence),
   Revoke: path(Seat, Seat.method.revoke),
   Issue: path(Seat, Seat.method.issue),
