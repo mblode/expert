@@ -1,11 +1,26 @@
+import {
+  ClipboardIcon,
+  CrosshairIcon,
+  DotGrid1x3HorizontalIcon,
+  HelpCircleIcon,
+  KeyboardIcon,
+  SquareCursorIcon,
+  ZoomOutIcon,
+} from "blode-icons-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
+import { captureEvent } from "@/lib/posthog-client";
+import { Switch } from "@/components/ui/switch";
 import type { BoxStatus, Screen, Seat, SeatState } from "../lib/seat";
+import type { DeskMode } from "../lib/use-desk-touch";
+import { useDeskView } from "../lib/use-desk-view";
 import { useSeatInput } from "../lib/use-seat-input";
 import { useVncSrc } from "../lib/use-vnc-src";
 import { ClipboardPanel } from "./clipboard-panel";
+import { ComputerHelp } from "./computer-help";
 import { KeyboardBar } from "./keyboard-bar";
 
 const STATE_LABEL: Record<SeatState, string> = {
@@ -27,25 +42,41 @@ const STATE_DOT: Record<SeatState, string> = {
  * overlay over the iframe translates real input into Seat RPCs. It is live only
  * while the seat is `WAITING` or `HUMAN`; while the agent holds the seat the
  * hub rejects human input outright, and this shows pixels only.
+ *
+ * On a phone the pane is the whole page: the controls a thumb needs (type,
+ * clipboard, hand it back) sit in a bar at the bottom where a thumb reaches,
+ * the gestures are `useDeskTouch`'s, and what they are is written down in
+ * `ComputerHelp` rather than left to be discovered on someone's real desktop.
  */
 export function DesktopPane({
   display,
   layout = "workspace",
   onDisplayChange,
   onStatus,
+  readable,
   seat,
   status,
 }: {
   display: number;
-  /** Phone invite: large hit targets, take/yield, no hover chrome. */
+  /** Phone: full-bleed screen, a thumb bar, and the touch gestures. */
   layout?: "workspace" | "phone";
   onDisplayChange: (display: number) => void;
   onStatus: (status: BoxStatus) => void;
+  /**
+   * Whether this seat may read the box clipboard. An invite holds a guest
+   * seat, and `ClipboardGet` is not in its method set because reading the box
+   * clipboard exfiltrates whatever the last person copied; an owner on the
+   * same phone layout may read it.
+   */
+  readable?: boolean;
   seat: Seat;
   status: BoxStatus | undefined;
 }): React.ReactElement {
   const [showClipboard, setShowClipboard] = useState(false);
   const [showKeyboard, setShowKeyboard] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [mode, setMode] = useState<DeskMode>("direct");
   const [busy, setBusy] = useState(false);
 
   const screen: Screen | undefined =
@@ -57,12 +88,16 @@ export function DesktopPane({
     (candidate) => candidate.state === "WAITING" && candidate.display !== screen?.display,
   );
 
+  const view = useDeskView();
+  const { containerRef: deskRef, stageRef, zoomed, reset: resetZoom } = view;
   const {
     error: inputError,
     cursorRef,
+    recenter,
     send,
+    surfaceRef,
     handlers,
-  } = useSeatInput(seat, display, controllable, desk);
+  } = useSeatInput(seat, display, controllable, desk, { mode, view });
   const screenId = screen ? `${screen.bot_id}:${screen.display}` : "";
   const vncSrc = useVncSrc(screen?.vnc_url, screenId);
 
@@ -70,6 +105,12 @@ export function DesktopPane({
     setBusy(true);
     try {
       onStatus(await seat.setPresence(present, display));
+      // The two ends of a takeover, and the only two events this pane sends:
+      // what a person did on the screen is the screen's business.
+      captureEvent(present ? "seat_taken" : "seat_returned", {
+        layout,
+        waiting: state === "WAITING",
+      });
     } catch {
       // The next poll re-reads the truth; a failed toggle needs no banner.
     } finally {
@@ -78,11 +119,11 @@ export function DesktopPane({
   };
 
   const phone = layout === "phone";
-  const hit = phone ? "lg" : "xs";
+  const canRead = readable ?? !phone;
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col overscroll-none">
-      <header className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2">
+      <header className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border px-3 py-2">
         {status && status.screens.length > 1 ? (
           <div className="w-fit min-w-40">
             <NativeSelect
@@ -100,80 +141,111 @@ export function DesktopPane({
             </NativeSelect>
           </div>
         ) : (
-          <span className="text-xs text-muted-foreground">{screen?.bot_id ?? "box"}</span>
+          <span className="text-muted-foreground text-xs">{screen?.bot_id ?? "box"}</span>
         )}
 
-        <output className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <output className="flex items-center gap-1.5 text-muted-foreground text-xs">
           <span className={`size-2 rounded-full ${STATE_DOT[state]}`} />
           {STATE_LABEL[state]}
         </output>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* Only offered while the seat is yours: the hub refuses typing
-              otherwise, so the bar would be a field that eats what you write. */}
-          {controllable && (
-            <Button
-              aria-expanded={showKeyboard}
-              onClick={() => setShowKeyboard((open) => !open)}
-              size={hit}
-              type="button"
-              variant="outline"
-            >
-              Keyboard
-            </Button>
-          )}
-          <Button
-            aria-expanded={showClipboard}
-            onClick={() => setShowClipboard((open) => !open)}
-            size={hit}
-            type="button"
-            variant="outline"
-          >
-            Clipboard
-          </Button>
-          {controllable ? (
-            <Button disabled={busy} onClick={() => void presence(false)} size={hit} type="button">
-              {phone ? "Yield seat" : "I'm done"}
-            </Button>
+          {phone ? (
+            <>
+              <Button
+                aria-label="Using the computer"
+                onClick={() => setShowHelp(true)}
+                size="icon-lg"
+                type="button"
+                variant="ghost"
+              >
+                <HelpCircleIcon />
+              </Button>
+              <Button
+                aria-label="More"
+                aria-expanded={showMore}
+                onClick={() => setShowMore(true)}
+                size="icon-lg"
+                type="button"
+                variant="ghost"
+              >
+                <DotGrid1x3HorizontalIcon />
+              </Button>
+            </>
           ) : (
-            // Without this the pane is silently dead: you move the mouse over
-            // someone else's desktop and nothing happens, with no way to ask
-            // for it. Waiting to be offered the seat is not how a person
-            // takes over a machine that is going wrong.
-            <Button
-              disabled={busy}
-              onClick={() => void presence(true)}
-              size={hit}
-              type="button"
-              variant="outline"
-            >
-              {phone ? "Take seat" : "Take the seat"}
-            </Button>
+            <>
+              {/* Only offered while the seat is yours: the hub refuses typing
+                  otherwise, so the bar would be a field that eats what you write. */}
+              {controllable && (
+                <Button
+                  aria-expanded={showKeyboard}
+                  onClick={() => setShowKeyboard((open) => !open)}
+                  size="xs"
+                  type="button"
+                  variant="outline"
+                >
+                  Keyboard
+                </Button>
+              )}
+              <Button
+                aria-expanded={showClipboard}
+                onClick={() => setShowClipboard((open) => !open)}
+                size="xs"
+                type="button"
+                variant="outline"
+              >
+                Clipboard
+              </Button>
+              {controllable ? (
+                <Button
+                  disabled={busy}
+                  onClick={() => void presence(false)}
+                  size="xs"
+                  type="button"
+                >
+                  I’m done
+                </Button>
+              ) : (
+                // Without this the pane is silently dead: you move the mouse over
+                // someone else's desktop and nothing happens, with no way to ask
+                // for it. Waiting to be offered the seat is not how a person
+                // takes over a machine that is going wrong.
+                <Button
+                  disabled={busy}
+                  onClick={() => void presence(true)}
+                  size="xs"
+                  type="button"
+                  variant="outline"
+                >
+                  Take the seat
+                </Button>
+              )}
+            </>
           )}
         </div>
       </header>
 
-      {state === "WAITING" && (
+      {state === "WAITING" && !phone && (
         <div
-          className="flex flex-wrap items-center gap-3 border-b border-amber-500/40 bg-amber-500/15 px-3 py-2 text-sm"
+          className="flex flex-wrap items-center gap-3 border-amber-500/40 border-b bg-amber-500/15 px-3 py-2 text-sm"
           role="alert"
         >
           <span className="font-medium text-amber-200">Eve needs you: take the seat</span>
           <Button
             disabled={busy}
             onClick={() => void presence(true)}
-            size={hit}
+            size="xs"
             type="button"
             variant="warning"
           >
-            {phone ? "Take seat" : "Take the seat"}
+            Take the seat
           </Button>
         </div>
       )}
 
       {/* A screen you are not looking at can be the one asking for you. */}
       {elsewhereWaiting && (
-        <div className="flex flex-wrap items-center gap-3 border-b border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
+        <div className="flex flex-wrap items-center gap-3 border-amber-500/40 border-b bg-amber-500/10 px-3 py-2 text-sm">
           <span className="text-amber-200">
             {elsewhereWaiting.bot_id} needs you on screen {elsewhereWaiting.display}
           </span>
@@ -190,7 +262,7 @@ export function DesktopPane({
 
       {inputError && (
         <p
-          className="border-b border-red-900/60 bg-red-950/40 px-3 py-1.5 text-xs text-red-200"
+          className="border-red-900/60 border-b bg-red-950/40 px-3 py-1.5 text-red-200 text-xs"
           role="alert"
         >
           {inputError}
@@ -198,13 +270,21 @@ export function DesktopPane({
       )}
 
       <div
-        className={`flex min-h-0 flex-1 items-center justify-center bg-black ${phone ? "p-1" : "p-3"}`}
+        className={`relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-black ${phone ? "p-1" : "p-3"}`}
+        ref={deskRef}
       >
         {/* Letterboxed to the box's own aspect so the overlay's CSS pixels map
-            cleanly onto its screen. */}
+            cleanly onto its screen. The pinch zoom transforms this element,
+            and every coordinate is read back off its rect, so magnifying costs
+            the mapping nothing. */}
         <div
           className="relative w-full max-w-full"
-          style={{ aspectRatio: `${desk.width} / ${desk.height}`, maxHeight: "100%" }}
+          ref={stageRef}
+          style={{
+            aspectRatio: `${desk.width} / ${desk.height}`,
+            maxHeight: "100%",
+            transformOrigin: "0 0",
+          }}
         >
           {screen ? (
             <>
@@ -233,15 +313,18 @@ export function DesktopPane({
               />
               <div
                 aria-label="Take over the screen"
-                // `touch-pinch-zoom` keeps one finger for the box: no pan, no
-                // double-tap zoom, while leaving two fingers to magnify a
-                // 1280×800 desk squeezed onto a phone. `select-none` stops the
-                // long-press selection callout from eating a held click.
-                className={`absolute inset-0 touch-pinch-zoom select-none rounded-lg outline-none ${
+                // `touch-none` hands every finger to `useDeskTouch`: the
+                // browser's own pan, pinch and double-tap zoom would fight the
+                // desk's, and on the invite page the viewport has scaling off
+                // anyway, so the gestures are the pane's or they are nobody's.
+                // `select-none` stops the long-press selection callout from
+                // eating a held click.
+                className={`absolute inset-0 touch-none select-none rounded-lg outline-none ${
                   controllable
                     ? "cursor-none focus-visible:ring-2 focus-visible:ring-ring"
                     : "pointer-events-none"
                 }`}
+                ref={surfaceRef}
                 role="application"
                 tabIndex={controllable ? 0 : -1}
                 {...handlers}
@@ -274,7 +357,7 @@ export function DesktopPane({
               )}
             </>
           ) : (
-            <p className="absolute inset-0 grid place-items-center text-sm text-muted-foreground">
+            <p className="absolute inset-0 grid place-items-center text-muted-foreground text-sm">
               Connecting…
             </p>
           )}
@@ -282,7 +365,7 @@ export function DesktopPane({
       </div>
 
       {!phone && (
-        <p className="px-3 pb-2 text-xs text-muted-foreground">
+        <p className="px-3 pb-2 text-muted-foreground text-xs">
           {controllable
             ? "Point where you want the cursor and the box follows. Type here, or open Keyboard on a phone; Backspace and the arrow keys do not go through."
             : "View only while Eve is working. Take the seat to drive it yourself, or wait for it to ask."}
@@ -290,12 +373,170 @@ export function DesktopPane({
       )}
 
       {controllable && showKeyboard && <KeyboardBar large={phone} onSend={send} />}
-      {showClipboard && (
-        // The phone layout is the invite, and an invite holds a guest seat:
-        // ClipboardGet is not in its method set, because reading the box
-        // clipboard exfiltrates whatever the last person copied.
-        <ClipboardPanel display={display} readable={layout !== "phone"} seat={seat} />
+
+      {phone ? (
+        <DeskBar
+          busy={busy}
+          controllable={controllable}
+          keyboardOpen={showKeyboard}
+          onClipboard={() => setShowClipboard(true)}
+          onKeyboard={() => setShowKeyboard((open) => !open)}
+          onPresence={(present) => void presence(present)}
+          waiting={state === "WAITING"}
+        />
+      ) : (
+        showClipboard && <ClipboardPanel display={display} readable={canRead} seat={seat} />
       )}
+
+      {phone && (
+        <Dialog onOpenChange={setShowClipboard} open={showClipboard}>
+          <DialogContent className="gap-0 p-0">
+            <DialogHeader className="px-5 pt-5 pb-1">
+              <DialogTitle>Clipboard</DialogTitle>
+            </DialogHeader>
+            <ClipboardPanel display={display} readable={canRead} seat={seat} />
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {phone && (
+        <Dialog onOpenChange={setShowMore} open={showMore}>
+          <DialogContent className="gap-0 p-0">
+            <DialogHeader className="px-5 pt-5 pb-1">
+              <DialogTitle>Options</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col gap-1 p-3">
+              <label
+                className="flex items-center gap-3 rounded-xl p-3 text-sm"
+                htmlFor="trackpad-mode"
+              >
+                <SquareCursorIcon className="size-4 shrink-0 text-muted-foreground" />
+                <span className="min-w-0 flex-1">
+                  <span className="block font-medium">Trackpad mode</span>
+                  <span className="block text-muted-foreground text-xs leading-5">
+                    Your finger moves the pointer instead of pointing at a place.
+                  </span>
+                </span>
+                <Switch
+                  checked={mode === "trackpad"}
+                  id="trackpad-mode"
+                  onCheckedChange={(checked) => setMode(checked ? "trackpad" : "direct")}
+                />
+              </label>
+              <Button
+                className="justify-start"
+                disabled={!controllable}
+                onClick={() => {
+                  recenter();
+                  setShowMore(false);
+                }}
+                size="lg"
+                type="button"
+                variant="ghost"
+              >
+                <CrosshairIcon />
+                Recenter pointer
+              </Button>
+              <Button
+                className="justify-start"
+                disabled={!zoomed}
+                onClick={() => {
+                  resetZoom();
+                  setShowMore(false);
+                }}
+                size="lg"
+                type="button"
+                variant="ghost"
+              >
+                <ZoomOutIcon />
+                Reset zoom
+              </Button>
+              <Button
+                className="justify-start"
+                onClick={() => {
+                  setShowMore(false);
+                  setShowHelp(true);
+                }}
+                size="lg"
+                type="button"
+                variant="ghost"
+              >
+                <HelpCircleIcon />
+                Using the computer
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      <ComputerHelp onOpenChange={setShowHelp} open={showHelp} readable={canRead} />
     </section>
+  );
+}
+
+/**
+ * The bar a thumb reaches: the clipboard, the seat, and the keyboard.
+ *
+ * Taking and handing back the seat is the one control that is always here
+ * rather than in the header, because it is the only one that changes what the
+ * Bot is allowed to do while you hold the phone.
+ */
+function DeskBar({
+  busy,
+  controllable,
+  keyboardOpen,
+  onClipboard,
+  onKeyboard,
+  onPresence,
+  waiting,
+}: {
+  busy: boolean;
+  controllable: boolean;
+  keyboardOpen: boolean;
+  onClipboard: () => void;
+  onKeyboard: () => void;
+  onPresence: (present: boolean) => void;
+  waiting: boolean;
+}): React.ReactElement {
+  return (
+    <div className="flex shrink-0 items-center gap-2 border-border border-t px-3 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+      <Button
+        aria-label="Clipboard"
+        onClick={onClipboard}
+        size="icon-lg"
+        type="button"
+        variant="ghost"
+      >
+        <ClipboardIcon />
+      </Button>
+      <div className="flex min-w-0 flex-1 justify-center">
+        {controllable ? (
+          <Button disabled={busy} onClick={() => onPresence(false)} size="lg" type="button">
+            I’m done, continue
+          </Button>
+        ) : (
+          <Button
+            disabled={busy}
+            onClick={() => onPresence(true)}
+            size="lg"
+            type="button"
+            variant={waiting ? "warning" : "outline"}
+          >
+            {waiting ? "It needs you: take over" : "Take over"}
+          </Button>
+        )}
+      </div>
+      <Button
+        aria-expanded={keyboardOpen}
+        aria-label="Keyboard"
+        disabled={!controllable}
+        onClick={onKeyboard}
+        size="icon-lg"
+        type="button"
+        variant="ghost"
+      >
+        <KeyboardIcon />
+      </Button>
+    </div>
   );
 }

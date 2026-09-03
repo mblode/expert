@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/message-scroller";
 import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
 import { apiBase } from "../lib/seat";
-import type { BotProfile, Seat } from "../lib/seat";
+import type { BotProfile, Seat, SeatState } from "../lib/seat";
 import { loadSession, saveSession } from "../lib/storage";
 import { ChatComposer } from "./chat-composer";
 import { ChatMessage } from "./chat-message";
@@ -68,6 +68,7 @@ export function ChatPane({
   onRetry,
   profile,
   screenNeedsYou = false,
+  seatState,
   seat,
 }: {
   botId: string;
@@ -82,6 +83,8 @@ export function ChatPane({
   /** From the roster; absent until it answers. */
   profile?: BotProfile;
   screenNeedsYou?: boolean;
+  /** This Bot's own screen, so the conversation can say when it is stuck. */
+  seatState?: SeatState;
   seat: Seat;
 }): React.ReactElement {
   // Read once: the hook builds its store on first render and keeps it.
@@ -296,6 +299,27 @@ export function ChatPane({
           <MessageScrollerButton />
         </MessageScroller>
       </MessageScrollerProvider>
+
+      {/* What the iOS client shows as a Computer card in the thread: the Bot
+          has stopped and is waiting for a person on its screen. On a phone the
+          screen is a drawer, so the card is how you know to open it; on a wide
+          screen the rail is already showing the same thing beside this. */}
+      {seatState === "WAITING" && onOpenScreen && (
+        <div className="mx-auto w-full max-w-3xl px-4 pb-3 lg:hidden">
+          <div className="flex items-center gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3">
+            <ShareScreenIcon className="size-5 shrink-0 text-amber-200" />
+            <div className="min-w-0 flex-1">
+              <p className="font-medium text-sm">Computer</p>
+              <p className="text-muted-foreground text-xs">
+                {profile?.name || botId} is stuck and needs you on its screen.
+              </p>
+            </div>
+            <Button onClick={onOpenScreen} size="sm" type="button" variant="warning">
+              Take over
+            </Button>
+          </div>
+        </div>
+      )}
 
       <ChatComposer
         botName={profile?.name || botId}

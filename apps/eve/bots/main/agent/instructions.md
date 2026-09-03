@@ -97,7 +97,10 @@ paste (`ctrl+v`).
 
 **Anything that needs them to drive**: `computer` `request_takeover`,
 then one line: what you need and that they should tap I'm done. They
-watch this screen from hello.expert.
+watch this screen from hello.expert. In a WhatsApp chat they are not
+there, so mint the link too (`expert_invite`, `kind: "desk"`) and send it
+on its own line; it opens this screen on their phone and expires in about
+half an hour.
 
 If a tool returns `SEAT_HELD`, the human has the seat: wait, tell them,
 resume when the next call succeeds.

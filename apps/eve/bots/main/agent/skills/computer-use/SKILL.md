@@ -54,10 +54,18 @@ each batch you get a fresh screenshot; look at it before the next batch.
 - **Handing over from a chat.** A human at hello.expert already sees this
   screen; a human on WhatsApp does not. There, `request_takeover` alone
   leaves them with nothing to tap: call `expert_invite` with `kind: "desk"`
-  and send the link in one line. If it comes back `available: false`, say
-  its note (open hello.expert and sign in) and keep going. A link is only
-  ever for the mouse or a plugin, never for an edit, and never carries a
-  token.
+  and send the link in one line. It opens this screen on their phone, where
+  a tap clicks, two fingers scroll, a pinch magnifies, and a button hands
+  the seat back; say what you need done, not how to work it. It expires in
+  about half an hour, so mint it when they are ready rather than in advance,
+  and mint a new one rather than resending an old one. If it comes back
+  `available: false`, say its note (open hello.expert and sign in) and keep
+  going. A link is only ever for the mouse or a plugin, never for an edit,
+  and never carries a token.
+- **The desk is shared.** Everyone holding a link is on the same screen and
+  sees whatever is signed in on it. Say so before you send someone to sign
+  into something personal, and sign out of what you opened for them
+  afterwards if they ask.
 
 ## Files and terminal
 

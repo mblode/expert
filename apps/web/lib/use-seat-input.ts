@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import type { Seat } from "./seat";
+import type { Point } from "./desk-view";
+import { useDeskTouch } from "./use-desk-touch";
+import type { DeskMode, DeskPointer } from "./use-desk-touch";
+import type { DeskViewController } from "./use-desk-view";
+import type { Button, Seat } from "./seat";
 
 /** Pointer deltas are batched into one RPC per tick rather than per mousemove. */
 const POINTER_TICK_MS = 40;
@@ -32,6 +36,8 @@ export interface SeatInput {
   error: string | null;
   /** Attach to the drawn cursor; it is moved directly, not through React. */
   cursorRef: React.RefObject<HTMLDivElement | null>;
+  /** Put the pointer back in the middle of the desk, when trackpad mode has lost it. */
+  recenter: () => void;
   /**
    * Type a run of text at the box. The touch keyboard composes a line and
    * sends it whole rather than forwarding keystrokes, because `Seat.Type` is a
@@ -39,13 +45,15 @@ export interface SeatInput {
    * to land.
    */
   send: (text: string) => void;
+  /** Attach to the input surface: the gestures measure and capture against it. */
+  surfaceRef: React.RefObject<HTMLDivElement | null>;
   handlers: {
     onPointerMove: (event: React.PointerEvent) => void;
     onPointerDown: (event: React.PointerEvent) => void;
     onPointerUp: (event: React.PointerEvent) => void;
-    onPointerCancel: () => void;
-    onPointerLeave: () => void;
-    onClick: () => void;
+    onPointerCancel: (event: React.PointerEvent) => void;
+    onPointerLeave: (event: React.PointerEvent) => void;
+    onClick: (event: React.MouseEvent) => void;
     onAuxClick: (event: React.MouseEvent) => void;
     onContextMenu: (event: React.MouseEvent) => void;
     onWheel: (event: React.WheelEvent) => void;
@@ -71,13 +79,15 @@ export interface SeatInput {
  *
  * A touch screen has no hover, so the aim arrives with the press and the box
  * is still somewhere else when the tap ends. Pressing and clicking therefore
- * wait for the box to arrive; only steering happens on every tick.
+ * wait for the box to arrive; only steering happens on every tick. Fingers are
+ * classified in `useDeskTouch` and reach the box through the same queue.
  */
 export function useSeatInput(
   seat: Seat,
   display: number,
   active: boolean,
   desk: { width: number; height: number },
+  opts: { mode?: DeskMode; view?: DeskViewController } = {},
 ): SeatInput {
   const [rejection, setRejection] = useState<string | null>(null);
 
@@ -87,18 +97,22 @@ export function useSeatInput(
   const boxCursor = useRef<{ x: number; y: number } | null>(null);
   /** The drawn cursor element, moved directly so a mousemove costs no render. */
   const cursorRef = useRef<HTMLDivElement | null>(null);
+  /** The surface the pointer is aimed over: gestures measure against its rect. */
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const inFlight = useRef(false);
   const dragging = useRef(false);
   const dragged = useRef(false);
   /** Where the press landed, in CSS pixels, to measure the slop against. */
   const downAt = useRef<{ x: number; y: number } | null>(null);
   /** A click the box owes, once it has been steered to where you tapped. */
-  const clicking = useRef(false);
+  const pendingClick = useRef<Button | null>(null);
   /** What the box last confirmed about the left button, so `grab` is edge-driven. */
   const held = useRef(false);
   const wheel = useRef({ dx: 0, dy: 0 });
   const typed = useRef("");
   const typeTimer = useRef<number | undefined>(undefined);
+  /** A touch tap synthesizes a mouse click and a long press a context menu; both are already handled. */
+  const lastPointerType = useRef<string>("mouse");
 
   // Latest props for the timer and handlers, updated after commit rather than
   // during render so the React Compiler can memoise the caller.
@@ -191,7 +205,7 @@ export function useSeatInput(
       // Same reason the click waits: sent before the box arrives it lands
       // wherever the pointer was last left, which on a touch screen is the
       // previous tap.
-      const click = settled && clicking.current;
+      const click = settled ? pendingClick.current : null;
       // Nothing to say when the box is already under the drawn cursor and the
       // button has not changed.
       if (settled && grab === held.current && !click) {
@@ -212,8 +226,8 @@ export function useSeatInput(
           boxCursor.current = result?.cursor ?? boxCursor.current ?? { x: 0, y: 0 };
         }
         if (click) {
-          clicking.current = false;
-          await current.click("left", screen);
+          pendingClick.current = null;
+          await current.click(click, screen);
         }
       })
         .catch(() => {})
@@ -226,24 +240,117 @@ export function useSeatInput(
 
   useEffect(() => () => window.clearTimeout(typeTimer.current), []);
 
-  /** Aim at where the pointer is, and paint the drawn cursor there. */
-  const aimAt = (event: { clientX: number; clientY: number; currentTarget: Element }) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
+  /** Paint the drawn cursor wherever the aim now is. Outside React: a move must not cost a render. */
+  const paint = useCallback(() => {
+    const spot = aim.current;
+    const element = cursorRef.current;
+    if (!(spot && element)) {
       return;
     }
     const { desk: size } = targetRef.current;
-    const x = clamp(((event.clientX - rect.left) / rect.width) * size.width, size.width);
-    const y = clamp(((event.clientY - rect.top) / rect.height) * size.height, size.height);
-    aim.current = { x, y };
-    // Paint immediately, outside React: a mousemove must not cost a render.
-    const el = cursorRef.current;
-    if (el) {
-      el.style.left = `${(x / size.width) * 100}%`;
-      el.style.top = `${(y / size.height) * 100}%`;
-      el.style.opacity = "1";
+    element.style.left = `${(spot.x / size.width) * 100}%`;
+    element.style.top = `${(spot.y / size.height) * 100}%`;
+    element.style.opacity = "1";
+  }, []);
+
+  /** Aim at a client point over the surface, and paint the drawn cursor there. */
+  const aimAt = useCallback(
+    (client: Point) => {
+      const rect = surfaceRef.current?.getBoundingClientRect();
+      if (!rect || rect.width === 0 || rect.height === 0) {
+        return;
+      }
+      const { desk: size } = targetRef.current;
+      aim.current = {
+        x: clamp(((client.x - rect.left) / rect.width) * size.width, size.width),
+        y: clamp(((client.y - rect.top) / rect.height) * size.height, size.height),
+      };
+      paint();
+    },
+    [paint],
+  );
+
+  /**
+   * Surface pixels to desk pixels. The surface is the stage's own rect, so it
+   * already carries whatever the pinch zoom did to it: a drag across a
+   * magnified desk covers less of it, which is the point of magnifying.
+   */
+  const toDesk = useCallback((dx: number, dy: number): Point | null => {
+    const rect = surfaceRef.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0 || rect.height === 0) {
+      return null;
     }
-  };
+    const { desk: size } = targetRef.current;
+    return { x: (dx / rect.width) * size.width, y: (dy / rect.height) * size.height };
+  }, []);
+
+  const recenter = useCallback(() => {
+    const { desk: size } = targetRef.current;
+    aim.current = { x: Math.round(size.width / 2), y: Math.round(size.height / 2) };
+    paint();
+  }, [paint]);
+
+  const scrollBy = useCallback(
+    (dx: number, dy: number) => {
+      const delta = toDesk(dx, dy);
+      if (!delta) {
+        return;
+      }
+      wheel.current.dx += delta.x;
+      wheel.current.dy += delta.y;
+      const notchX = clampNotches(wheel.current.dx);
+      const notchY = clampNotches(wheel.current.dy);
+      if (notchX === 0 && notchY === 0) {
+        return;
+      }
+      wheel.current.dx -= notchX * WHEEL_NOTCH;
+      wheel.current.dy -= notchY * WHEEL_NOTCH;
+      void run((current, screen) => current.scroll(notchX, notchY, screen));
+    },
+    [run, toDesk],
+  );
+
+  const pointer: DeskPointer = useMemo(
+    () => ({
+      aimAt,
+      click: (button) => {
+        pendingClick.current = button;
+      },
+      nudge: (dx, dy) => {
+        const delta = toDesk(dx, dy);
+        if (!delta) {
+          return;
+        }
+        const { desk: size } = targetRef.current;
+        const from = aim.current ?? boxCursor.current ?? { x: size.width / 2, y: size.height / 2 };
+        aim.current = {
+          x: clamp(from.x + delta.x, size.width),
+          y: clamp(from.y + delta.y, size.height),
+        };
+        paint();
+      },
+      scrollBy,
+      setDragging: (down) => {
+        dragging.current = down;
+      },
+      surfaceRef,
+    }),
+    [aimAt, paint, scrollBy, toDesk],
+  );
+
+  const { mode = "direct", view } = opts;
+  const touch = useDeskTouch(pointer, view ?? NO_VIEW, { active, mode });
+
+  // Trackpad mode has no place to point at, so the pointer has to already be
+  // somewhere when it is switched on, or the first flick moves a cursor nobody
+  // can see from a position nobody chose.
+  useEffect(() => {
+    if (mode === "trackpad" && !aim.current) {
+      recenter();
+    }
+  }, [mode, recenter]);
+
+  const isTouch = (event: { pointerType?: string }): boolean => event.pointerType === "touch";
 
   return {
     cursorRef,
@@ -251,8 +358,13 @@ export function useSeatInput(
     handlers: {
       // A second finger belongs to a pinch, not to the aim.
       onPointerMove: (event) => {
-        if (!activeRef.current || !event.isPrimary) return;
-        aimAt(event);
+        if (!activeRef.current) return;
+        if (isTouch(event)) {
+          touch.move(event);
+          return;
+        }
+        if (!event.isPrimary) return;
+        aimAt({ x: event.clientX, y: event.clientY });
         // `movementX` is the obvious test and the wrong one: it is absent on
         // touch, and finger jitter would call every tap a drag anyway.
         const from = downAt.current;
@@ -265,11 +377,14 @@ export function useSeatInput(
         }
       },
       onPointerDown: (event) => {
-        if (!activeRef.current || !event.isPrimary || event.button !== 0) return;
-        // Touch has no hover, so the press is the first the pane hears of
-        // where the finger is pointing. Without this a tap clicks wherever the
-        // last one left the cursor.
-        aimAt(event);
+        lastPointerType.current = event.pointerType;
+        if (!activeRef.current) return;
+        if (isTouch(event)) {
+          touch.down(event);
+          return;
+        }
+        if (!event.isPrimary || event.button !== 0) return;
+        aimAt({ x: event.clientX, y: event.clientY });
         downAt.current = { x: event.clientX, y: event.clientY };
         dragging.current = true;
         dragged.current = false;
@@ -278,19 +393,33 @@ export function useSeatInput(
       // with `grab` off, which is what releases the button on the box. Only
       // the left button's release ends a left drag.
       onPointerUp: (event) => {
+        if (isTouch(event)) {
+          touch.up(event);
+          return;
+        }
         if (!event.isPrimary || event.button !== 0) return;
         dragging.current = false;
       },
       // A pinch steals the gesture mid-press. Without this the box is left
       // holding a mouse button nothing will ever release.
-      onPointerCancel: () => {
+      onPointerCancel: (event) => {
+        if (isTouch(event)) {
+          touch.cancel(event);
+          return;
+        }
         dragging.current = false;
       },
-      onPointerLeave: () => {
-        dragging.current = false;
+      onPointerLeave: (event) => {
+        // A captured finger does not leave; a mouse that does has let go.
+        if (!isTouch(event)) {
+          dragging.current = false;
+        }
       },
       onClick: () => {
         if (!activeRef.current) return;
+        // The browser synthesizes a click after a touch tap, which the touch
+        // layer has already answered with a click of its own.
+        if (lastPointerType.current === "touch") return;
         // A drag already pressed and released; the browser's click is a
         // duplicate. So is a click after any press the box saw at all: the
         // release the loop is about to send is itself that click.
@@ -298,7 +427,7 @@ export function useSeatInput(
           dragged.current = false;
           return;
         }
-        clicking.current = true;
+        pendingClick.current = "left";
       },
       onAuxClick: (event) => {
         if (!activeRef.current || event.button !== 1) return;
@@ -308,6 +437,9 @@ export function useSeatInput(
       onContextMenu: (event) => {
         event.preventDefault();
         if (!activeRef.current) return;
+        // A long press raises this too, and the touch layer has already sent
+        // the right click it stands for.
+        if (lastPointerType.current === "touch") return;
         void run((current, screen) => current.click("right", screen));
       },
       onWheel: (event) => {
@@ -352,9 +484,25 @@ export function useSeatInput(
       },
       onBlur: flushTyped,
     },
+    recenter,
     send,
+    surfaceRef,
   };
 }
+
+/**
+ * A pane with no magnification (the desktop one) still has fingers on a
+ * touchscreen laptop; they aim and click, they just have nothing to pinch.
+ */
+const NO_VIEW: DeskViewController = {
+  containerRef: { current: null },
+  pan: () => undefined,
+  pinch: () => undefined,
+  reset: () => undefined,
+  scaleRef: { current: 1 },
+  stageRef: { current: null },
+  zoomed: false,
+};
 
 function clamp(value: number, size: number): number {
   return Math.max(0, Math.min(size - 1, value));

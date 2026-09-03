@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { canMintInvite, INVITE_SECRET_HEADER } from "./invite-access";
 import { mintInviteWithoutStore, respondToInviteMint } from "./invite-mint";
+import type { InviteMintFn } from "./invite-mint";
 import { invitePath } from "./invite-origin";
 
 const secret = "eve-invite-secret";
@@ -184,6 +185,28 @@ describe("what a mint secret may open", () => {
     });
     expect(res.status).toBe(200);
     expect(res.body.computerId).toBe("blode");
+  });
+
+  it("caps a Bot and not an operator, and reports the cap as 429", async () => {
+    const seen: boolean[] = [];
+    const capped: InviteMintFn = (input, request, mintEnv, at, limited) => {
+      seen.push(limited);
+      return limited
+        ? Promise.resolve({ error: "Too many links.", status: 429 as const })
+        : mintInviteWithoutStore(input, request, mintEnv, at);
+    };
+    const call = (headers: Record<string, string>, email?: string): Promise<Response> =>
+      respondToInviteMint(mintRequest({ kind: "desk" }, headers), email, {
+        env: env({ COMPUTER_OPERATOR_EMAILS: "m@blode.co" }),
+        mint: capped,
+        now,
+      });
+
+    const bot = await call({ [INVITE_SECRET_HEADER]: secret });
+    expect(bot.status).toBe(429);
+    const operator = await call({}, "m@blode.co");
+    expect(operator.status).toBe(200);
+    expect(seen).toEqual([true, false]);
   });
 
   it("leaves an operator free to mint on any computer they can open", async () => {
