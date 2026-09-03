@@ -322,6 +322,33 @@ export class ConversationRegistry {
   }
 
   /**
+   * Record what a transport delivered, unless this turn already spoke.
+   *
+   * Two things can write a Bot's answer: `send_message`, which is the model
+   * choosing to speak, and the connector ingress, which sees the reply the
+   * transport actually posted. A turn that used the tool has already written
+   * the better record, with the model's own framing, so the transport's copy
+   * would be a duplicate. A turn that answered straight out of the channel
+   * response has written nothing, and without this the conversation keeps the
+   * route and loses the exchange.
+   *
+   * The check is per turn rather than per conversation: a chat has many turns
+   * and only this one is being recorded.
+   */
+  recordDelivery(
+    conversationId: string,
+    author: Author,
+    body: MessageBody,
+    turnId: string,
+  ): Message | undefined {
+    const record = this.byId(conversationId);
+    const spoken = this.log
+      .load(record.id)
+      .some((m) => m.turn_id === turnId && m.author.kind === "bot");
+    return spoken ? undefined : this.append(conversationId, author, body, { turn_id: turnId });
+  }
+
+  /**
    * Append one message and return it. The line lands before the index moves,
    * so the log is never behind what a caller was told.
    */

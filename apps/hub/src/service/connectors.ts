@@ -53,34 +53,15 @@ export class MemoryConnectorStore implements ConnectorStore {
 
 /**
  * `connectors.json` beside the roster: same 0600 file discipline, same reason.
- *
- * `legacyPath` is the pre-rename `channels.json`, which is what is actually
- * sitting on both deployed Fly volumes. Read falls back to it so a hub that
- * deploys onto an unmigrated volume still finds the tenant's WhatsApp secret;
- * without that the door would authenticate nobody and WhatsApp would stay
- * down until someone re-provisioned the number by hand. Write always goes to
- * the new name, so the first mutation migrates the content forward and the
- * old file stays put as a rollback artifact. Nothing deletes it here: a
- * destructive step on deploy is the one thing this fallback exists to avoid.
- * Drop `legacyPath` once both tenants have written a `connectors.json`.
  */
 export class FileConnectorStore implements ConnectorStore {
-  constructor(
-    private readonly path: string,
-    private readonly legacyPath?: string,
-  ) {}
+  constructor(private readonly path: string) {}
 
   load(): ConnectorRecord[] {
     const current = readTokenFile(this.path, "connectors");
-    if (current !== undefined) {
-      return current.map((entry) => connectorRecordFrom(entry, this.path));
-    }
-    const legacy = this.legacyPath;
-    if (legacy === undefined) {
-      return [];
-    }
-    const parsed = readTokenFile(legacy, "connectors");
-    return parsed === undefined ? [] : parsed.map((entry) => connectorRecordFrom(entry, legacy));
+    return current === undefined
+      ? []
+      : current.map((entry) => connectorRecordFrom(entry, this.path));
   }
 
   save(records: ConnectorRecord[]): void {

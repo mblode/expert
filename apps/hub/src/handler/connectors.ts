@@ -13,13 +13,6 @@ import { TURN_HEADER, writeError } from "./router.ts";
 
 const PREFIX = "/connectors/";
 /**
- * Compatibility alias. The WhatsApp bridge deployed on both tenants posts to
- * `/channels/<id>/<rest>`, and a hub that only answered the new prefix would
- * cut it off the moment it deployed. Remove this, and the header alias below,
- * once Blode and Vibey are both running a bridge that sends the new names.
- */
-const LEGACY_PREFIX = "/channels/";
-/**
  * Wider than the seat router's 1 MiB: the bridge attaches up to two 4 MB
  * images or a 3 MB PDF as base64 data URLs (4/3 growth), so a real photo is
  * ~5.5 MB on the wire. The bridge's own caps are the real limit; this only
@@ -28,8 +21,6 @@ const LEGACY_PREFIX = "/channels/";
 const MAX_BODY = 12 * 1024 * 1024;
 /** The header a connector presents. Never the seat token, never the Eve secret. */
 const CONNECTOR_SECRET_HEADER = "x-connector-secret";
-/** Compatibility alias, retired with `LEGACY_PREFIX` above. */
-const LEGACY_CONNECTOR_SECRET_HEADER = "x-channel-secret";
 
 interface ConnectorIngressDeps {
   connectors: ConnectorRegistry;
@@ -44,7 +35,7 @@ interface ConnectorIngressDeps {
 }
 
 export function isConnectorPath(pathname: string): boolean {
-  return pathname.startsWith(PREFIX) || pathname.startsWith(LEGACY_PREFIX);
+  return pathname.startsWith(PREFIX);
 }
 
 /**
@@ -71,11 +62,7 @@ export async function handleConnectorIngress(
     if (req.method !== "POST") {
       throw new ComputerError("VALIDATION", "connectors take POST");
     }
-    // Either header opens the door; a bridge sends one or the other, never
-    // both, so there is nothing to reconcile when the alias goes.
-    const secret =
-      firstHeader(req.headers[CONNECTOR_SECRET_HEADER]) ??
-      firstHeader(req.headers[LEGACY_CONNECTOR_SECRET_HEADER]);
+    const secret = firstHeader(req.headers[CONNECTOR_SECRET_HEADER]);
     const record = deps.connectors.verify(parsed.id, secret);
     const target = `/eve/v1/${record.kind}/${parsed.rest}`;
     if (record.paths && record.paths.length > 0 && !record.paths.includes(target)) {
@@ -99,7 +86,25 @@ export async function handleConnectorIngress(
       throw new ComputerError("VALIDATION", `body over ${MAX_BODY} bytes`);
     }
     const body = await readBody(req);
-    const turn = bindTurn(deps, record, bot.id, target, body);
+    const bound = bindTurn(deps, record, bot.id, target, body);
+    // What the person said, recorded before the Bot is asked anything. The
+    // conversation was resolved and then left empty until now: it held the
+    // route and the participants but never a word of the exchange, so a
+    // WhatsApp thread was invisible to every client on purpose-built
+    // plumbing. Best effort, like the binding above: a chat that cannot be
+    // written to must not stop the message reaching the Bot.
+    if (bound?.human) {
+      try {
+        deps.conversations.append(
+          bound.conversationId,
+          { kind: "human", ref: bound.speaker },
+          { kind: "human", text: bound.human },
+          { turn_id: bound.turnId },
+        );
+      } catch {
+        // Recording is not the delivery path.
+      }
+    }
 
     const abort = new AbortController();
     res.on("close", () => {
@@ -114,7 +119,7 @@ export async function handleConnectorIngress(
         headers: {
           "content-type": firstHeader(req.headers["content-type"]) ?? "application/json",
           ...(deps.eveSecret ? { [EVE_HUB_SECRET_HEADER]: deps.eveSecret } : {}),
-          ...(turn ? { [TURN_HEADER]: turn } : {}),
+          ...(bound ? { [TURN_HEADER]: bound.turnId } : {}),
         },
         method: "POST",
         redirect: "manual",
@@ -134,12 +139,77 @@ export async function handleConnectorIngress(
     }
     const stream = Readable.fromWeb(upstream.body as unknown as WebReadableStream<Uint8Array>);
     stream.on("error", () => res.destroy());
+    // Tee, do not buffer-then-forward: the reply reaches the bridge at the
+    // same moment it always did, and the record is written from a copy once
+    // the body is complete. `REPLY_CAPTURE_MAX` bounds what is held, because
+    // this path is generic over connector kinds and only WhatsApp's reply is
+    // small by construction.
+    if (bound && upstream.ok) {
+      recordReply(deps, bound, bot.id, stream);
+    }
     stream.pipe(res);
   } catch (error) {
     if (!res.headersSent) {
       writeError(res, error);
     }
   }
+}
+
+/** Enough for any chat reply; a webhook that answers with a payload is not a message. */
+const REPLY_CAPTURE_MAX = 64 * 1024;
+
+/**
+ * Write the Bot's answer into the conversation once the response is complete.
+ *
+ * The reply is the occurrence here, not a scratchpad leaking: `{ reply }` is
+ * literally the text the bridge posts into the chat, so recording it is
+ * recording what the human was told. `recordDelivery` is what keeps a turn
+ * that already used `send_message` from being written twice.
+ */
+function recordReply(
+  deps: ConnectorIngressDeps,
+  bound: Bound,
+  botId: string,
+  stream: Readable,
+): void {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  let over = false;
+  stream.on("data", (chunk: Buffer) => {
+    size += chunk.length;
+    if (size > REPLY_CAPTURE_MAX) {
+      over = true;
+      chunks.length = 0;
+      return;
+    }
+    chunks.push(chunk);
+  });
+  stream.on("end", () => {
+    if (over) {
+      return;
+    }
+    let reply: unknown;
+    try {
+      ({ reply } = JSON.parse(Buffer.concat(chunks).toString("utf-8")) as { reply?: unknown });
+    } catch {
+      return;
+    }
+    if (typeof reply !== "string" || !reply.trim()) {
+      return;
+    }
+    try {
+      // No-ops when the turn already spoke through `send_message`, which owns
+      // the better record.
+      deps.conversations.recordDelivery(
+        bound.conversationId,
+        { bot: botId, kind: "bot" },
+        { images: [], kind: "text", text: reply },
+        bound.turnId,
+      );
+    } catch {
+      // Recording is not the delivery path.
+    }
+  });
 }
 
 /**
@@ -158,13 +228,28 @@ function bindTurn(
   botId: string,
   target: string,
   body: Uint8Array,
-): string | undefined {
+): Bound | undefined {
   const route = routeFor(record, target, body, botId);
   if (!route) {
     return undefined;
   }
   const conversation = deps.conversations.resolve(botId, route.route, route.participants);
-  return deps.turns.mint({ bot: botId, conversation_id: conversation.id }).id;
+  return {
+    conversationId: conversation.id,
+    human: route.human,
+    speaker: route.speaker,
+    turnId: deps.turns.mint({ bot: botId, conversation_id: conversation.id }).id,
+  };
+}
+
+/** What the ingress needs after the route is known: where to write, and from whom. */
+interface Bound {
+  conversationId: string;
+  /** The inbound text, so the record holds what was said and not only that it happened. */
+  human?: string;
+  /** The sender's ref, for the message's author. */
+  speaker: string;
+  turnId: string;
 }
 
 /** The bridge payload's two identifying fields. Anything else is not a route. */
@@ -172,6 +257,7 @@ interface WhatsAppInbound {
   token?: unknown;
   sender?: unknown;
   acct?: unknown;
+  message?: unknown;
 }
 
 function routeFor(
@@ -179,7 +265,7 @@ function routeFor(
   target: string,
   body: Uint8Array,
   botId: string,
-): { route: Route; participants: Participant[] } | undefined {
+): { route: Route; participants: Participant[]; human?: string; speaker: string } | undefined {
   // One kind has a route today. A webhook has no chat to be a conversation
   // with, so it keeps forwarding untouched.
   if (record.kind !== "whatsapp" || target !== "/eve/v1/whatsapp/message") {
@@ -207,24 +293,21 @@ function routeFor(
   // with and is never rewritten from a later inbound, see `resolve`.
   const ref = typeof parsed.sender === "string" && parsed.sender ? parsed.sender : jid;
   return {
+    human: typeof parsed.message === "string" ? parsed.message : undefined,
     participants: [
       { bot: botId, kind: "bot" },
       { kind: "human", ref },
     ],
     route: { acct, jid, kind: "whatsapp" },
+    speaker: ref,
   };
 }
 
 export function parseConnectorPath(pathname: string): { id: string; rest: string } | undefined {
-  const prefix = pathname.startsWith(PREFIX)
-    ? PREFIX
-    : pathname.startsWith(LEGACY_PREFIX)
-      ? LEGACY_PREFIX
-      : undefined;
-  if (prefix === undefined) {
+  if (!pathname.startsWith(PREFIX)) {
     return undefined;
   }
-  const tail = pathname.slice(prefix.length);
+  const tail = pathname.slice(PREFIX.length);
   const slash = tail.indexOf("/");
   if (slash <= 0 || slash === tail.length - 1) {
     return undefined;

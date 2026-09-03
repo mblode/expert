@@ -1,9 +1,9 @@
 import { createServer } from "node:http";
 import type { Server } from "node:http";
-import { existsSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseConnectorPath } from "../src/handler/connectors.ts";
 import {
   ConnectorRegistry,
@@ -140,46 +140,9 @@ describe("connector registry", () => {
     expect(parseConnectorPath("/connectors/hook")).toBeUndefined();
     expect(parseConnectorPath("/connectors/hook/")).toBeUndefined();
     expect(parseConnectorPath("/connectors/hook/../x")).toBeUndefined();
-    // The pre-rename prefix parses the same way, traversal included.
-    expect(parseConnectorPath("/channels/whatsapp-main/message")).toEqual({
-      id: "whatsapp-main",
-      rest: "message",
-    });
-    expect(parseConnectorPath("/channels/hook/../x")).toBeUndefined();
+    // The pre-rename prefix is gone, not merely unused.
+    expect(parseConnectorPath("/channels/whatsapp-main/message")).toBeUndefined();
     expect(parseConnectorPath("/elsewhere/hook/x")).toBeUndefined();
-  });
-
-  /**
-   * The migration, from the volume's side. Both deployed volumes hold a
-   * `channels.json` and no `connectors.json`, so a hub that only looked at
-   * the new name would find no doors and refuse the bridge's every message.
-   */
-  it("loads a volume that still has only channels.json, and writes the new name", () => {
-    const dir = mkdtempSync(join(tmpdir(), "hub-connectors-"));
-    dirs.push(dir);
-    const legacy = join(dir, "channels.json");
-    const current = join(dir, "connectors.json");
-    // A volume from before the rename: one door, under the old file name.
-    const rec = new ConnectorRegistry(new FileConnectorStore(legacy)).add({
-      bot: "main",
-      id: "whatsapp-main",
-      kind: "whatsapp",
-    });
-    const store = new FileConnectorStore(current, legacy);
-    const reg = new ConnectorRegistry(store);
-    expect(reg.verify("whatsapp-main", rec.secret).bot).toBe("main");
-    expect(existsSync(current)).toBe(false);
-
-    // The first write migrates it forward, and the old file is left alone so
-    // a rollback to the previous hub still finds its doors.
-    reg.add({ bot: "main", id: "hooks", kind: "webhook" });
-    expect(existsSync(current)).toBe(true);
-    // The migrated record keeps its place; the new one lands after it.
-    expect(reg.list().map((r) => r.id)).toEqual(["whatsapp-main", "hooks"]);
-    expect(existsSync(legacy)).toBe(true);
-    // And from here the new file wins: the legacy one is inert.
-    new ConnectorRegistry(new FileConnectorStore(legacy)).remove("whatsapp-main");
-    expect(reg.byId("whatsapp-main")?.secret).toBe(rec.secret);
   });
 });
 
@@ -344,12 +307,13 @@ describe("connector ingress", () => {
   });
 
   /**
-   * The rename is a migration, not a search and replace. A bridge deployed
-   * before it posts `/channels/<id>/message` with `x-channel-secret`, and it
-   * has to keep reaching the Bot until both tenants are redeployed. Either
-   * spelling of either half opens the door, so a half-deployed pair works too.
+   * The conversation is the record of the exchange, not a note that one
+   * happened. It used to be resolved and then left at `seq: 0` forever: the
+   * route and the participants were right, and a WhatsApp thread held not one
+   * word of what was said, so no client could ever render it however well it
+   * read the object.
    */
-  it("still takes the pre-rename path and header, in any combination", async () => {
+  it("records the inbound message and the Bot's reply in the conversation", async () => {
     const eve = await fakeEve();
     const h = await startHub({ eveSecret: "hub-secret", eveUrls: { main: eve.url } });
     try {
@@ -359,39 +323,80 @@ describe("connector ingress", () => {
         kind: "whatsapp",
         paths: ["/eve/v1/whatsapp/message"],
       });
-      const post = (prefix: string, header: string) =>
-        fetch(`${h.url}/${prefix}/whatsapp-main/message`, {
-          body: JSON.stringify({ message: "hello", sender: "1@s.whatsapp.net", token: "g@g.us" }),
-          headers: { "content-type": "application/json", [header]: rec.secret },
-          method: "POST",
-        });
-      for (const prefix of ["channels", "connectors"]) {
-        for (const header of ["x-channel-secret", "x-connector-secret"]) {
-          const res = await post(prefix, header);
-          expect([prefix, header, res.status]).toEqual([prefix, header, 200]);
-          await expect(res.json()).resolves.toEqual({ reply: "hi" });
-        }
-      }
-      // All four landed on the same Eve route, and the old path is a full
-      // door: the turn binding is minted there too, not only on the new one.
-      expect(eve.seen).toHaveLength(4);
-      expect(eve.seen.every((x) => x.path === "/eve/v1/whatsapp/message")).toBe(true);
-      expect(eve.seen.every((x) => x.turn?.startsWith("turn_"))).toBe(true);
-      // One chat, one conversation, whichever spelling reached it.
-      expect(routed(h)).toHaveLength(1);
+      const res = await fetch(`${h.url}/connectors/whatsapp-main/message`, {
+        body: JSON.stringify({
+          message: "what is on the screen?",
+          sender: "61400000000@s.whatsapp.net",
+          token: "g@g.us",
+        }),
+        headers: { "content-type": "application/json", "x-connector-secret": rec.secret },
+        method: "POST",
+      });
+      expect(res.status).toBe(200);
+      // The bridge still gets its reply unchanged: the record is a copy.
+      await expect(res.json()).resolves.toEqual({ reply: "hi" });
 
-      // The aliases are spelling, not a way past the secret.
-      const wrong = await fetch(`${h.url}/channels/whatsapp-main/message`, {
-        body: "{}",
-        headers: { "x-channel-secret": "nope" },
+      const [conv] = routed(h);
+      expect(conv).toBeDefined();
+      // The reply is written when the response body completes, which is after
+      // the fetch above resolves for the caller.
+      await vi.waitFor(() => {
+        expect(h.hub.conversations.page(conv?.id ?? "").entries).toHaveLength(2);
+      });
+      const { entries } = h.hub.conversations.page(conv?.id ?? "");
+      expect(entries.map((e) => e.kind)).toEqual(["human", "text"]);
+      expect(entries.map((e) => ("text" in e ? e.text : ""))).toEqual([
+        "what is on the screen?",
+        "hi",
+      ]);
+      // `seq` is per conversation and monotonic.
+      expect(entries.map((e) => e.seq)).toEqual([1, 2]);
+    } finally {
+      await h.close();
+      await eve.close();
+    }
+  });
+
+  /**
+   * The aliases are gone, and a retired door has to answer like a door that
+   * never existed. Anything still posting the old spelling should get a 404
+   * it can see, not a 401 that reads as a bad secret and sends someone
+   * hunting through `connectors.json`.
+   */
+  it("no longer answers the pre-rename path or header", async () => {
+    const eve = await fakeEve();
+    const h = await startHub({ eveSecret: "hub-secret", eveUrls: { main: eve.url } });
+    try {
+      const rec = h.hub.connectors.add({
+        bot: "main",
+        id: "whatsapp-main",
+        kind: "whatsapp",
+        paths: ["/eve/v1/whatsapp/message"],
+      });
+      const body = JSON.stringify({
+        message: "hello",
+        sender: "1@s.whatsapp.net",
+        token: "g@g.us",
+      });
+
+      // The old path is not a connector path at all any more.
+      const oldPath = await fetch(`${h.url}/channels/whatsapp-main/message`, {
+        body,
+        headers: { "content-type": "application/json", "x-connector-secret": rec.secret },
         method: "POST",
       });
-      expect(wrong.status).toBe(401);
-      const none = await fetch(`${h.url}/channels/whatsapp-main/message`, {
-        body: "{}",
+      expect(oldPath.status).toBe(404);
+
+      // The old header carries a valid secret and still does not open it.
+      const oldHeader = await fetch(`${h.url}/connectors/whatsapp-main/message`, {
+        body,
+        headers: { "content-type": "application/json", "x-channel-secret": rec.secret },
         method: "POST",
       });
-      expect(none.status).toBe(401);
+      expect(oldHeader.status).toBe(401);
+
+      // Nothing reached Eve by either route.
+      expect(eve.seen).toHaveLength(0);
     } finally {
       await h.close();
       await eve.close();

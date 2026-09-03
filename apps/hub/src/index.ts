@@ -57,12 +57,7 @@ const hub = createHub({
     ttlMs: Number(process.env.COMPUTER_VNC_TTL_SEC ?? 900) * 1000,
   }),
   policy: loadPolicy(join(dataDir, "policy.json")),
-  // The second path is the pre-rename file, still sitting on both deployed
-  // volumes. Read falls back to it, write always lands on `connectors.json`.
-  connectorStore: new FileConnectorStore(
-    join(dataDir, "connectors.json"),
-    join(dataDir, "channels.json"),
-  ),
+  connectorStore: new FileConnectorStore(join(dataDir, "connectors.json")),
   // Hub-owned, beside the roster. Deliberately not `/workspace/.bots`, which
   // the model's `shell` and `write_file` run as `box` can rewrite.
   conversationStore: new FileConversationStore(join(dataDir, "conversations.json")),

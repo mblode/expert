@@ -142,9 +142,6 @@ for (const f of [
   "bots.json",
   "seats.json",
   "connectors.json",
-  // The pre-rename name, still on both deployed volumes until a write
-  // migrates it. Owned here so an unmigrated tenant keeps its door.
-  "channels.json",
   "policy.json",
   "whatsapp/bridge-secret",
 ]) {

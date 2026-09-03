@@ -378,19 +378,28 @@ describe("Connect HTTP", () => {
     const conversation = h.hub.conversations.list().find((c) => c.route.kind === "whatsapp")!;
     expect(answered.sent.conversation_id).toBe(conversation.id);
 
-    // The additive field: the turn's messages, oldest first, each authored
-    // by the Bot, with the reply text on the last one.
+    // The turn's messages, oldest first: what the person said, then what the
+    // Bot answered. The inbound half is what makes this a conversation a
+    // client can render rather than a log of the Bot talking to itself.
     const page = (await rpc(
       h.url,
       "/computer.v1.Seat/Occurrences",
       { conversation_id: conversation.id },
       token,
     )) as { entries: { author: { kind: string }; kind: string; text?: string; seq: number }[] };
-    expect(page.entries).toHaveLength(1);
+    expect(page.entries).toHaveLength(2);
     expect(page.entries[0]).toMatchObject({
+      author: { kind: "human", ref: "1@s.whatsapp.net" },
+      kind: "human",
+      seq: 1,
+      text: "hello",
+    });
+    // This Eve answers with `send_message`, so the tool's record is the one
+    // kept and the transport's copy of the same text is not written again.
+    expect(page.entries[1]).toMatchObject({
       author: { bot: "main", kind: "bot" },
       kind: "text",
-      seq: 1,
+      seq: 2,
       text: "on it",
     });
 
