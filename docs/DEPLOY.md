@@ -123,15 +123,37 @@ A connector is the third door: `POST /connectors/<id>/<path>` with
 It is how anything that is not a seat reaches a Bot, because Eve is loopback on
 the Machine and deliberately not public.
 
-The secret prints once and is never recoverable. Run it on the Machine, where
-`connectors.json` lives beside the roster:
+`npm run bot -- connector add` is the local command and does **not** work on a
+Machine: `scripts/` is not in the guest image, and `loadEnv()` reads a `.env`
+file rather than the environment, so `COMPUTER_DATA=...` in front of it changes
+nothing. Write the record instead. It is the same shape the CLI writes, and the
+secret is `randomBytes(32).toString("base64url")`:
 
 ```bash
-fly ssh console -a mblode-computer
-cd /opt/computer
-COMPUTER_DATA=/workspace/.computer/bots.json \
-  npm run bot -- connector add whatsapp whatsapp main
-#                              ^id      ^kind    ^bot
+fly ssh console -a mblode-computer -C 'node -e "
+const fs=require(\"node:fs\"), {randomBytes}=require(\"node:crypto\");
+const p=\"/workspace/.computer/connectors.json\";
+const cur=fs.existsSync(p)?JSON.parse(fs.readFileSync(p,\"utf-8\")):[];
+if(cur.some(r=>r.id===\"whatsapp\")){console.log(\"exists, rotate instead\");process.exit(0)}
+const rec={bot:\"main\",created_at:new Date().toISOString(),id:\"whatsapp\",
+  kind:\"whatsapp\",paths:[\"/eve/v1/whatsapp/message\"],
+  secret:randomBytes(32).toString(\"base64url\")};
+fs.writeFileSync(p,JSON.stringify([...cur,rec],null,2)+\"\n\",{mode:0o600});
+fs.chownSync(p,1001,1001);
+console.log(\"SECRET=\"+rec.secret);
+"'
+```
+
+uid 1001 is `hub`, which owns `/workspace/.computer` at 0700; the model's
+`shell` runs as `box` and must never read it. Prove the door opens before
+touching any config, because a wrong secret here looks identical to a bridge
+misconfiguration later:
+
+```bash
+curl -s -X POST https://mblode-computer.fly.dev/connectors/whatsapp/message \
+  -H 'content-type: application/json' -H "x-connector-secret: $SECRET" \
+  -d '{"token":"…@s.whatsapp.net","message":"Reply with the word connected.","surface":"dm"}'
+# {"reply":"connected"}
 ```
 
 `kind` picks the Eve route: `whatsapp` reaches `/eve/v1/whatsapp/message`, and
@@ -142,6 +164,20 @@ that only exists if the Bot re-exports the channel at
 
 In `vcmc-agent`, on Railway. All three or none: a half-configured bridge falls
 back to @vibey rather than posting into a 404.
+
+`railway variables --set A --set B --set-from-stdin C` silently applies only
+the stdin one. Set the plain values in one call and the secret in its own:
+
+```bash
+railway variables --set "EXPERT_URL=…" --set "EXPERT_CONNECTOR_ID=whatsapp" \
+  --set "EXPERT_DM_JIDS=+61…"
+railway variables --set-from-stdin EXPERT_CONNECTOR_SECRET <<< "$SECRET"
+railway variables | grep EXPERT   # confirm all four
+```
+
+Production `EVE_URL` is `https://vcmc-agent.vercel.app`, not the value in
+`.env.example`: @vibey runs on Vercel behind this bridge. Leave it alone. The
+Expert route is additive and touches nothing @vibey uses.
 
 | Variable                  | Value                                            |
 | ------------------------- | ------------------------------------------------ |
