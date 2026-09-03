@@ -166,7 +166,15 @@ function Workspace({
       try {
         const { bots } = await seat.roster();
         if (live) {
-          setProfiles(Object.fromEntries(bots.map((bot) => [bot.id, bot.profile])));
+          // `bot.profile` is absent on a hub older than `Seat.SetBotProfile`.
+          // Keeping only the entries that arrived is what makes the settings
+          // gate below honest: a hub that cannot answer the read cannot serve
+          // the write either.
+          setProfiles(
+            Object.fromEntries(
+              bots.filter((bot) => bot.profile).map((bot) => [bot.id, bot.profile]),
+            ),
+          );
         }
       } catch {
         // A mark falls back to the id's own colour and every name to its id,
@@ -275,7 +283,12 @@ function Workspace({
         offline={offline}
         onOpenBots={() => setBotsOpen(true)}
         onOpenScreen={() => setScreenOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        // Only when this hub actually serves profiles. hello.expert is
+        // deployed ahead of the Machines it talks to, so a browser on the new
+        // web app routinely meets an older hub; offering a settings gear there
+        // would open a form whose Save is a 404. No gear is the honest answer,
+        // and the workspace is unchanged otherwise.
+        onOpenSettings={profiles[botId] ? () => setSettingsOpen(true) : undefined}
         onRetry={() => void recoverSeat()}
         profile={profiles[botId]}
         screenNeedsYou={waitingElsewhere}
