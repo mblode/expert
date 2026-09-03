@@ -10,6 +10,8 @@ export const invite = sqliteTable(
     hubUrl: text("hub_url"),
     id: text("id").primaryKey(),
     purpose: text("purpose").notNull(),
+    /** The role `seat_token` carries. Null on rows written before scoped seats. */
+    seatRole: text("seat_role"),
     seatToken: text("seat_token"),
     senderHash: text("sender_hash"),
     tokenHash: text("token_hash").notNull(),

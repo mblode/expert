@@ -121,6 +121,48 @@ export function setupCodeFor(computer: ComputerRecord, env: EnvMap): string | un
   return typeof code === "string" && code.length > 0 ? code : undefined;
 }
 
+/**
+ * One POST to a Seat RPC on a computer's hub.
+ *
+ * Pair is the one call with no bearer; everything else carries the token it
+ * was minted with. Errors come back as `{ error }` rather than thrown, so a
+ * page renders a sentence instead of a stack.
+ */
+async function hubPost<T>(
+  call: {
+    body: Record<string, unknown>;
+    computer: ComputerRecord;
+    method: string;
+    /** What to say when the hub answers with a status but no error envelope. */
+    whenFailed: (status: number) => string;
+    /** Absent for Pair, which is the hub's one unauthenticated write. */
+    token?: string;
+  },
+  fetchImpl: typeof fetch,
+): Promise<T | { error: string }> {
+  const { body, computer, method, token, whenFailed } = call;
+  try {
+    const res = await fetchImpl(`${computer.hubUrl}/computer.v1.Seat/${method}`, {
+      body: JSON.stringify(body),
+      headers: {
+        "content-type": "application/json",
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(15_000),
+    });
+    const payload: unknown = await res.json().catch(() => null);
+    if (!res.ok) {
+      const envelope = (payload as { error?: { message?: string } } | null)?.error;
+      return { error: envelope?.message ?? whenFailed(res.status) };
+    }
+    return (payload ?? {}) as T;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not reach the computer.";
+    return { error: `Could not reach the computer at ${computer.hubUrl}: ${message}` };
+  }
+}
+
 export async function pairComputer(
   computer: ComputerRecord,
   env: EnvMap,
@@ -132,25 +174,134 @@ export async function pairComputer(
       error: `The web server is missing ${computer.setupCodeEnv}, so it cannot attach to the ${computer.label} computer.`,
     };
   }
-  try {
-    const res = await fetchImpl(`${computer.hubUrl}/computer.v1.Seat/Pair`, {
-      body: JSON.stringify({ code }),
-      headers: { "content-type": "application/json" },
-      method: "POST",
-      signal: AbortSignal.timeout(15_000),
-    });
-    const payload: unknown = await res.json().catch(() => null);
-    if (!res.ok) {
-      const envelope = (payload as { error?: { message?: string } } | null)?.error;
-      return { error: envelope?.message ?? `Could not pair with the computer (${res.status}).` };
-    }
-    const token = (payload as { token?: unknown } | null)?.token;
-    if (typeof token !== "string" || !token) {
-      return { error: "The computer accepted pairing but did not return a seat token." };
-    }
-    return { token };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not reach the computer.";
-    return { error: `Could not reach the computer at ${computer.hubUrl}: ${message}` };
+  const payload = await hubPost<{ token?: unknown }>(
+    {
+      body: { code },
+      computer,
+      method: "Pair",
+      whenFailed: (status) => `Could not pair with the computer (${status}).`,
+    },
+    fetchImpl,
+  );
+  if ("error" in payload) {
+    return payload;
   }
+  const { token } = payload;
+  if (typeof token !== "string" || !token) {
+    return { error: "The computer accepted pairing but did not return a seat token." };
+  }
+  return { token };
+}
+
+/** What the control plane asks a hub to mint. Mirrors `IssueRequest` in api/computer.proto. */
+export interface SeatRequest {
+  /** A role from `ROLE_METHODS`, spelled as the hub spells it. */
+  role: string;
+  /** How long the seat may live. The hub caps it; this never raises that cap. */
+  ttlMs: number;
+  /** Bind the seat to one screen. Absent = any screen, which an invite never wants. */
+  display?: number;
+  /** Shown in the owner's seat list. Never a secret. */
+  label?: string;
+  /** Narrows the role's method set. The hub is what enforces it. */
+  methods?: readonly string[];
+  /** A token this grant replaces, revoked while an owner is still in hand. */
+  replaces?: string;
+  /** Who the seat is for, as this control plane names them. */
+  subject?: string;
+}
+
+export interface IssuedSeat {
+  /** ISO, or empty when the hub minted something that never expires. */
+  expiresAt: string;
+  role: string;
+  token: string;
+}
+
+/** `ttl_sec` is an integer, and 0 on the wire means "never expires". */
+function ttlSeconds(ttlMs: number): number {
+  return Math.max(1, Math.floor(ttlMs / 1000));
+}
+
+/**
+ * Mint a scoped seat on a computer without leaving an owner behind.
+ *
+ * `Pair` is still the only way in, because the web holds a setup code rather
+ * than an `issuer`. So this spends a paired owner on one `Issue` and revokes
+ * it in the same request: the token that survives is the narrow one, and no
+ * owner token is ever written to the invite table. A crash between the two
+ * leaves an unexpiring owner in the hub's seats.json, which is the strongest
+ * argument for the control plane holding a stored issuer instead.
+ */
+export async function issueSeat(
+  computer: ComputerRecord,
+  env: EnvMap,
+  request: SeatRequest,
+  fetchImpl: typeof fetch = fetch,
+): Promise<IssuedSeat | { error: string }> {
+  const paired = await pairComputer(computer, env, fetchImpl);
+  if ("error" in paired) {
+    return paired;
+  }
+  try {
+    if (request.replaces) {
+      // Naming another token is an owner's call, so it happens here or not at
+      // all: after the finally below this request holds nothing that can.
+      await hubPost(
+        {
+          body: { token: request.replaces },
+          computer,
+          method: "Revoke",
+          token: paired.token,
+          whenFailed: () => "",
+        },
+        fetchImpl,
+      );
+    }
+    const issued = await hubPost<{ expires_at?: unknown; role?: unknown; token?: unknown }>(
+      {
+        // Empty fields are omitted, not sent empty: the hub reads `display: 0`
+        // as any screen and `methods: []` as a seat that may call nothing.
+        body: {
+          role: request.role,
+          ttl_sec: ttlSeconds(request.ttlMs),
+          ...(request.display === undefined ? {} : { display: request.display }),
+          ...(request.label === undefined ? {} : { label: request.label }),
+          ...(request.methods?.length ? { methods: [...request.methods] } : {}),
+          ...(request.subject === undefined ? {} : { subject: request.subject }),
+        },
+        computer,
+        method: "Issue",
+        token: paired.token,
+        whenFailed: (status) => `Could not issue a seat on the computer (${status}).`,
+      },
+      fetchImpl,
+    );
+    if ("error" in issued) {
+      return issued;
+    }
+    const { token } = issued;
+    if (typeof token !== "string" || !token) {
+      return { error: "The computer accepted the grant but did not return a seat token." };
+    }
+    return {
+      expiresAt: typeof issued.expires_at === "string" ? issued.expires_at : "",
+      role: typeof issued.role === "string" && issued.role ? issued.role : request.role,
+      token,
+    };
+  } finally {
+    await hubPost(
+      { body: {}, computer, method: "Revoke", token: paired.token, whenFailed: () => "" },
+      fetchImpl,
+    );
+  }
+}
+
+/** End a seat early. A seat may always revoke itself, whatever its role. */
+export async function revokeSeat(
+  computer: ComputerRecord,
+  token: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<void> {
+  await hubPost({ body: {}, computer, method: "Revoke", token, whenFailed: () => "" }, fetchImpl);
 }

@@ -965,6 +965,10 @@ public nonisolated struct Computer_V1_SendMessageResponse: Sendable {
   /// True when this send ended the turn (widget, secret_request).
   public var turnEnded: Bool = false
 
+  /// The conversation this send landed in. Empty when the caller presented
+  /// no turn binding, which is the Bot's own seat thread.
+  public var conversationID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1262,6 +1266,31 @@ public nonisolated struct Computer_V1_OccurrencesRequest: Sendable {
 
   public var display: Int32 = 0
 
+  /// Additive. Absent = the display's Bot seat thread, which is what this
+  /// RPC has always returned. A conversation belongs to a Bot, and a seat
+  /// bound to one screen may not read another screen's Bot by id.
+  public var conversationID: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+/// Who wrote a message. `system` carries hop notices and route failures.
+public nonisolated struct Computer_V1_MessageAuthor: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// bot | human | system
+  public var kind: String = String()
+
+  /// kind = bot
+  public var bot: String = String()
+
+  /// kind = human: the identity on the route, e.g. a WA JID
+  public var ref: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
@@ -1293,9 +1322,25 @@ public nonisolated struct Computer_V1_Occurrence: Sendable {
 
   public var provided: Bool = false
 
+  /// Set when the entry came from a conversation rather than the seat log.
+  public var conversationID: String = String()
+
+  public var author: Computer_V1_MessageAuthor {
+    get {_author ?? Computer_V1_MessageAuthor()}
+    set {_author = newValue}
+  }
+  /// Returns true if `author` has been explicitly set.
+  public var hasAuthor: Bool {self._author != nil}
+  /// Clears the value of `author`. Subsequent reads from it will return its default value.
+  public mutating func clearAuthor() {self._author = nil}
+
+  public var turnID: String = String()
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _author: Computer_V1_MessageAuthor? = nil
 }
 
 public nonisolated struct Computer_V1_OccurrencesResponse: Sendable {
@@ -1401,6 +1446,54 @@ public nonisolated struct Computer_V1_RevokeResponse: Sendable {
   // methods supported on all messages.
 
   public var revoked: Bool = false
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_IssueRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// owner | operator | viewer | guest | issuer
+  public var role: String = String()
+
+  /// who this is for, as the caller names them
+  public var subject: String = String()
+
+  /// 0 = no expiry, allowed only for an owner-issued seat
+  public var ttlSec: UInt32 = 0
+
+  /// 0 = any screen
+  public var display: UInt32 = 0
+
+  /// narrows the role, never widens it
+  public var methods: [String] = []
+
+  /// shown in the owner's seat list
+  public var label: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_IssueResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// shown once
+  public var token: String = String()
+
+  public var role: String = String()
+
+  public var subject: String = String()
+
+  /// ISO, empty when it never expires
+  public var expiresAt: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -3286,7 +3379,7 @@ nonisolated extension Computer_V1_MessageSecretRequest: SwiftProtobuf.Message, S
 
 nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendMessageResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}occurrence_id\0\u{3}turn_ended\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}occurrence_id\0\u{3}turn_ended\0\u{3}conversation_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3296,6 +3389,7 @@ nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, Sw
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.occurrenceID) }()
       case 2: try { try decoder.decodeSingularBoolField(value: &self.turnEnded) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.conversationID) }()
       default: break
       }
     }
@@ -3308,12 +3402,16 @@ nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, Sw
     if self.turnEnded != false {
       try visitor.visitSingularBoolField(value: self.turnEnded, fieldNumber: 2)
     }
+    if !self.conversationID.isEmpty {
+      try visitor.visitSingularStringField(value: self.conversationID, fieldNumber: 3)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Computer_V1_SendMessageResponse, rhs: Computer_V1_SendMessageResponse) -> Bool {
     if lhs.occurrenceID != rhs.occurrenceID {return false}
     if lhs.turnEnded != rhs.turnEnded {return false}
+    if lhs.conversationID != rhs.conversationID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3916,7 +4014,7 @@ nonisolated extension Computer_V1_Clipboard: SwiftProtobuf.Message, SwiftProtobu
 
 nonisolated extension Computer_V1_OccurrencesRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".OccurrencesRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}cursor\0\u{1}limit\0\u{1}display\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}cursor\0\u{1}limit\0\u{1}display\0\u{3}conversation_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3927,6 +4025,7 @@ nonisolated extension Computer_V1_OccurrencesRequest: SwiftProtobuf.Message, Swi
       case 1: try { try decoder.decodeSingularStringField(value: &self.cursor) }()
       case 2: try { try decoder.decodeSingularInt32Field(value: &self.limit) }()
       case 3: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.conversationID) }()
       default: break
       }
     }
@@ -3942,6 +4041,9 @@ nonisolated extension Computer_V1_OccurrencesRequest: SwiftProtobuf.Message, Swi
     if self.display != 0 {
       try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 3)
     }
+    if !self.conversationID.isEmpty {
+      try visitor.visitSingularStringField(value: self.conversationID, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -3949,6 +4051,47 @@ nonisolated extension Computer_V1_OccurrencesRequest: SwiftProtobuf.Message, Swi
     if lhs.cursor != rhs.cursor {return false}
     if lhs.limit != rhs.limit {return false}
     if lhs.display != rhs.display {return false}
+    if lhs.conversationID != rhs.conversationID {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_MessageAuthor: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".MessageAuthor"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}kind\0\u{1}bot\0\u{1}ref\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.kind) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.bot) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.ref) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.kind.isEmpty {
+      try visitor.visitSingularStringField(value: self.kind, fieldNumber: 1)
+    }
+    if !self.bot.isEmpty {
+      try visitor.visitSingularStringField(value: self.bot, fieldNumber: 2)
+    }
+    if !self.ref.isEmpty {
+      try visitor.visitSingularStringField(value: self.ref, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_MessageAuthor, rhs: Computer_V1_MessageAuthor) -> Bool {
+    if lhs.kind != rhs.kind {return false}
+    if lhs.bot != rhs.bot {return false}
+    if lhs.ref != rhs.ref {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -3956,7 +4099,7 @@ nonisolated extension Computer_V1_OccurrencesRequest: SwiftProtobuf.Message, Swi
 
 nonisolated extension Computer_V1_Occurrence: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Occurrence"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}seq\0\u{1}at\0\u{1}kind\0\u{1}text\0\u{1}prompt\0\u{1}options\0\u{1}answer\0\u{1}label\0\u{1}provided\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}seq\0\u{1}at\0\u{1}kind\0\u{1}text\0\u{1}prompt\0\u{1}options\0\u{1}answer\0\u{1}label\0\u{1}provided\0\u{3}conversation_id\0\u{1}author\0\u{3}turn_id\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -3974,12 +4117,19 @@ nonisolated extension Computer_V1_Occurrence: SwiftProtobuf.Message, SwiftProtob
       case 8: try { try decoder.decodeSingularStringField(value: &self.answer) }()
       case 9: try { try decoder.decodeSingularStringField(value: &self.label) }()
       case 10: try { try decoder.decodeSingularBoolField(value: &self.provided) }()
+      case 11: try { try decoder.decodeSingularStringField(value: &self.conversationID) }()
+      case 12: try { try decoder.decodeSingularMessageField(value: &self._author) }()
+      case 13: try { try decoder.decodeSingularStringField(value: &self.turnID) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.id.isEmpty {
       try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
     }
@@ -4010,6 +4160,15 @@ nonisolated extension Computer_V1_Occurrence: SwiftProtobuf.Message, SwiftProtob
     if self.provided != false {
       try visitor.visitSingularBoolField(value: self.provided, fieldNumber: 10)
     }
+    if !self.conversationID.isEmpty {
+      try visitor.visitSingularStringField(value: self.conversationID, fieldNumber: 11)
+    }
+    try { if let v = self._author {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 12)
+    } }()
+    if !self.turnID.isEmpty {
+      try visitor.visitSingularStringField(value: self.turnID, fieldNumber: 13)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -4024,6 +4183,9 @@ nonisolated extension Computer_V1_Occurrence: SwiftProtobuf.Message, SwiftProtob
     if lhs.answer != rhs.answer {return false}
     if lhs.label != rhs.label {return false}
     if lhs.provided != rhs.provided {return false}
+    if lhs.conversationID != rhs.conversationID {return false}
+    if lhs._author != rhs._author {return false}
+    if lhs.turnID != rhs.turnID {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -4289,6 +4451,106 @@ nonisolated extension Computer_V1_RevokeResponse: SwiftProtobuf.Message, SwiftPr
 
   public static func ==(lhs: Computer_V1_RevokeResponse, rhs: Computer_V1_RevokeResponse) -> Bool {
     if lhs.revoked != rhs.revoked {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_IssueRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IssueRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}role\0\u{1}subject\0\u{3}ttl_sec\0\u{1}display\0\u{1}methods\0\u{1}label\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.subject) }()
+      case 3: try { try decoder.decodeSingularUInt32Field(value: &self.ttlSec) }()
+      case 4: try { try decoder.decodeSingularUInt32Field(value: &self.display) }()
+      case 5: try { try decoder.decodeRepeatedStringField(value: &self.methods) }()
+      case 6: try { try decoder.decodeSingularStringField(value: &self.label) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 1)
+    }
+    if !self.subject.isEmpty {
+      try visitor.visitSingularStringField(value: self.subject, fieldNumber: 2)
+    }
+    if self.ttlSec != 0 {
+      try visitor.visitSingularUInt32Field(value: self.ttlSec, fieldNumber: 3)
+    }
+    if self.display != 0 {
+      try visitor.visitSingularUInt32Field(value: self.display, fieldNumber: 4)
+    }
+    if !self.methods.isEmpty {
+      try visitor.visitRepeatedStringField(value: self.methods, fieldNumber: 5)
+    }
+    if !self.label.isEmpty {
+      try visitor.visitSingularStringField(value: self.label, fieldNumber: 6)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_IssueRequest, rhs: Computer_V1_IssueRequest) -> Bool {
+    if lhs.role != rhs.role {return false}
+    if lhs.subject != rhs.subject {return false}
+    if lhs.ttlSec != rhs.ttlSec {return false}
+    if lhs.display != rhs.display {return false}
+    if lhs.methods != rhs.methods {return false}
+    if lhs.label != rhs.label {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_IssueResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".IssueResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}token\0\u{1}role\0\u{1}subject\0\u{3}expires_at\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.token) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.role) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.subject) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.expiresAt) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.token.isEmpty {
+      try visitor.visitSingularStringField(value: self.token, fieldNumber: 1)
+    }
+    if !self.role.isEmpty {
+      try visitor.visitSingularStringField(value: self.role, fieldNumber: 2)
+    }
+    if !self.subject.isEmpty {
+      try visitor.visitSingularStringField(value: self.subject, fieldNumber: 3)
+    }
+    if !self.expiresAt.isEmpty {
+      try visitor.visitSingularStringField(value: self.expiresAt, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_IssueResponse, rhs: Computer_V1_IssueResponse) -> Bool {
+    if lhs.token != rhs.token {return false}
+    if lhs.role != rhs.role {return false}
+    if lhs.subject != rhs.subject {return false}
+    if lhs.expiresAt != rhs.expiresAt {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

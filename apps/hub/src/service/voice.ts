@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { ComputerError, MAX_WIDGET_OPTIONS } from "@computer/shared";
-import type { OccurrenceKind } from "@computer/shared";
+import type { MessageBody, OccurrenceKind } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 
 /**
@@ -135,7 +135,7 @@ export class VoiceService {
         "the turn ended, a widget or secret_request is waiting on the human",
       );
     }
-    const o = this.append(this.build(body));
+    const o = this.append(buildBody(body));
     if (o.kind === "widget" || o.kind === "secret_request") {
       this.turnEnded = true;
       if (o.kind === "secret_request") {
@@ -277,39 +277,6 @@ export class VoiceService {
     this.clearTimer = null;
   }
 
-  private build(body: SendBody): Draft<Occurrence> {
-    switch (body.kind) {
-      case "text": {
-        if (!body.text) {
-          throw new ComputerError("VALIDATION", "text is required");
-        }
-        return { images: body.images ?? [], kind: "text", text: body.text };
-      }
-      case "widget": {
-        if (!body.prompt) {
-          throw new ComputerError("VALIDATION", "widget prompt is required");
-        }
-        const options = body.options ?? [];
-        if (options.length < 1 || options.length > MAX_WIDGET_OPTIONS) {
-          throw new ComputerError("VALIDATION", `widget needs 1..${MAX_WIDGET_OPTIONS} options`);
-        }
-        if (options.some((o) => !o)) {
-          throw new ComputerError("VALIDATION", "widget options must be non-empty");
-        }
-        return { answer: null, kind: "widget", options, prompt: body.prompt };
-      }
-      case "secret_request": {
-        if (!body.prompt) {
-          throw new ComputerError("VALIDATION", "secret prompt is required");
-        }
-        if (!body.label) {
-          throw new ComputerError("VALIDATION", "secret label is required");
-        }
-        return { kind: "secret_request", label: body.label, prompt: body.prompt, provided: false };
-      }
-    }
-  }
-
   private append(partial: Draft<Occurrence>): Occurrence {
     const o = {
       ...partial,
@@ -323,6 +290,47 @@ export class VoiceService {
     }
     this.persist(o);
     return o;
+  }
+}
+
+/**
+ * Validate a send and normalise it into the stored body.
+ *
+ * Module-level rather than a method because both logs need it: the seat
+ * thread through `VoiceService.send`, and a conversation through
+ * `ConversationRegistry.send`. The rules are the wire contract, so there is
+ * one copy of them and the two paths cannot drift.
+ */
+export function buildBody(body: SendBody): MessageBody {
+  switch (body.kind) {
+    case "text": {
+      if (!body.text) {
+        throw new ComputerError("VALIDATION", "text is required");
+      }
+      return { images: body.images ?? [], kind: "text", text: body.text };
+    }
+    case "widget": {
+      if (!body.prompt) {
+        throw new ComputerError("VALIDATION", "widget prompt is required");
+      }
+      const options = body.options ?? [];
+      if (options.length < 1 || options.length > MAX_WIDGET_OPTIONS) {
+        throw new ComputerError("VALIDATION", `widget needs 1..${MAX_WIDGET_OPTIONS} options`);
+      }
+      if (options.some((o) => !o)) {
+        throw new ComputerError("VALIDATION", "widget options must be non-empty");
+      }
+      return { answer: null, kind: "widget", options, prompt: body.prompt };
+    }
+    case "secret_request": {
+      if (!body.prompt) {
+        throw new ComputerError("VALIDATION", "secret prompt is required");
+      }
+      if (!body.label) {
+        throw new ComputerError("VALIDATION", "secret label is required");
+      }
+      return { kind: "secret_request", label: body.label, prompt: body.prompt, provided: false };
+    }
   }
 }
 

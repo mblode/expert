@@ -4,8 +4,8 @@ import {
   BRIDGE_SECRET_HEADER,
   bridgeAuthConfigured,
   bridgeRequestAuthorised,
+  buildAuth,
   buildContext,
-  buildSessionAuth,
   buildUserMessage,
   drainStream,
   EMPTY_REPLY_FALLBACK,
@@ -289,42 +289,61 @@ describe("drainStream", () => {
   });
 });
 
-describe("buildSessionAuth", () => {
-  it("puts the chat, the account and the message id on the session for tools", () => {
-    expect(
-      buildSessionAuth(
-        {
-          acct: "main",
-          message: "hi",
-          messageId: "m0123456789",
-          sender: "1@s.whatsapp.net",
-          senderName: "Sam",
-          senderPhone: "+61400000000",
-          token: "123@g.us",
-        },
-        "hub",
-      ),
-    ).toEqual({
-      attributes: {
-        acct: "main",
-        groupJid: "123@g.us",
-        messageId: "m0123456789",
-        senderName: "Sam",
-        senderPhone: "+61400000000",
-        via: "hub",
-      },
-      authenticator: "whatsapp-bridge",
-      principalId: "1@s.whatsapp.net",
-      principalType: "user",
+describe("buildAuth", () => {
+  const payload = {
+    acct: "main",
+    message: "hi",
+    sender: "1@s.whatsapp.net",
+    senderName: "Sam",
+    senderPhone: "+61400000000",
+    token: "g@g.us",
+  } as const;
+
+  it("carries the hub's turn binding on the session's auth attributes", () => {
+    const auth = buildAuth(payload, "hub", "turn_abc");
+    // Auth attributes, not the prompt and not a tool argument: `send_message`
+    // reads it back off `ctx.session.auth.current`, which route auth sets and
+    // a prompt cannot change.
+    expect(auth.attributes).toEqual({
+      acct: "main",
+      groupJid: "g@g.us",
+      senderName: "Sam",
+      senderPhone: "+61400000000",
+      turn: "turn_abc",
+      via: "hub",
     });
+    expect(auth.principalId).toBe("1@s.whatsapp.net");
+    // The chat JID stays the real chat, which memory and tools key on.
+    expect(auth.attributes.groupJid).toBe(payload.token);
   });
 
-  it("omits what the bridge did not send and falls back to the chat as the principal", () => {
-    expect(buildSessionAuth({ message: "hi", token: "1@s.whatsapp.net" }, "bridge")).toEqual({
-      attributes: { groupJid: "1@s.whatsapp.net", via: "bridge" },
-      authenticator: "whatsapp-bridge",
-      principalId: "1@s.whatsapp.net",
-      principalType: "user",
+  it("carries the message id the bridge issued, so a send cannot quote an invented one", () => {
+    // `whatsapp_send` quotes and reacts against this id. Taking it from the
+    // session rather than the model's copy of the context block means the only
+    // id a send can carry is one the bridge actually issued.
+    const auth = buildAuth({ ...payload, messageId: "m0123456789" }, "hub", "turn_abc");
+    expect(auth.attributes.messageId).toBe("m0123456789");
+  });
+
+  it("omits the message id when the bridge did not send one", () => {
+    expect(buildAuth(payload, "hub", "turn_abc").attributes).not.toHaveProperty("messageId");
+  });
+
+  it("omits the turn entirely when the request carried none", () => {
+    // The direct bridge path and the eve TUI. No turn means the Bot's seat
+    // thread hub-side, which is the behaviour that predates conversations.
+    const auth = buildAuth(payload, "bridge", undefined);
+    expect(auth.attributes).not.toHaveProperty("turn");
+    expect(auth.attributes.via).toBe("bridge");
+  });
+
+  it("falls back to the chat JID as the principal when no sender is named", () => {
+    const auth = buildAuth({ message: "hi", token: "1@s.whatsapp.net" }, "hub", "turn_abc");
+    expect(auth.principalId).toBe("1@s.whatsapp.net");
+    expect(auth.attributes).toEqual({
+      groupJid: "1@s.whatsapp.net",
+      turn: "turn_abc",
+      via: "hub",
     });
   });
 });

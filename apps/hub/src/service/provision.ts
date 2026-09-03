@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
 import { ComputerError } from "@computer/shared";
-import type { SeatKind } from "@computer/shared";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { WindowManager } from "../desk/windows.ts";
@@ -45,89 +44,6 @@ export class FileBotStore implements BotStore {
   save(configs: BotConfig[]): void {
     writeTokenFile(this.path, configs);
   }
-}
-
-/**
- * Paired seats. Same file discipline as the roster, and for the same reason:
- * these tokens are the only thing standing between a phone and the box, and
- * losing them silently unpairs every device with no way back but the setup
- * code. They were in-memory, so every hub restart did exactly that.
- */
-export interface SeatRecord {
-  token: string;
-  kind: SeatKind;
-  /** ISO time. Absent = never, which is what an owner seat gets. */
-  expires_at?: string;
-  /** Guests are bound to one screen; owners may pick any. */
-  display?: number;
-  /** Guests: full method paths they may call. Absent = SEAT_GUEST_METHODS. */
-  methods?: string[];
-  /** Where the token came from, for the owner's audit view. Never a secret. */
-  label?: string;
-  created_at: string;
-}
-
-export interface SeatTokenStore {
-  load(): SeatRecord[];
-  save(records: SeatRecord[]): void;
-}
-
-export class MemorySeatTokenStore implements SeatTokenStore {
-  private records: SeatRecord[] = [];
-
-  load(): SeatRecord[] {
-    return this.records;
-  }
-
-  save(records: SeatRecord[]): void {
-    this.records = records;
-  }
-}
-
-export class FileSeatTokenStore implements SeatTokenStore {
-  constructor(private readonly path: string) {}
-
-  load(): SeatRecord[] {
-    const parsed = readTokenFile(this.path, "seat tokens");
-    if (parsed === undefined) {
-      return [];
-    }
-    return parsed.map((entry) => seatRecordFrom(entry, this.path));
-  }
-
-  save(records: SeatRecord[]): void {
-    writeTokenFile(this.path, records);
-  }
-}
-
-/**
- * Before scopes, `seats.json` was a bare array of token strings, and those
- * files are live on both Fly volumes. A string is an owner seat that never
- * expires, exactly what it meant then, so a redeploy does not unpair anyone.
- */
-function seatRecordFrom(entry: unknown, path: string): SeatRecord {
-  if (typeof entry === "string") {
-    return { created_at: "1970-01-01T00:00:00.000Z", kind: "owner", token: entry };
-  }
-  if (!entry || typeof entry !== "object") {
-    throw new Error(`seat tokens ${path} must be a JSON array of strings or seat records`);
-  }
-  const r = entry as Partial<SeatRecord>;
-  if (typeof r.token !== "string" || !r.token) {
-    throw new Error(`seat tokens ${path}: a record has no token`);
-  }
-  if (r.kind !== "owner" && r.kind !== "guest") {
-    throw new Error(`seat tokens ${path}: kind must be owner or guest`);
-  }
-  return {
-    created_at: typeof r.created_at === "string" ? r.created_at : "1970-01-01T00:00:00.000Z",
-    display: typeof r.display === "number" ? r.display : undefined,
-    expires_at: typeof r.expires_at === "string" ? r.expires_at : undefined,
-    kind: r.kind,
-    label: typeof r.label === "string" ? r.label : undefined,
-    methods: Array.isArray(r.methods) ? r.methods.filter((m) => typeof m === "string") : undefined,
-    token: r.token,
-  };
 }
 
 /**

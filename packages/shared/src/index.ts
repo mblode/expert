@@ -34,14 +34,12 @@ export type OccurrenceKind = (typeof OCCURRENCE_KINDS)[number];
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
 /**
- * Who holds a seat token. An `owner` paired with the setup code (hello.expert
- * sign-in, the phone) and may do anything a seat can. A `guest` came from an
- * invite the Bot handed out in a chat: bound to one display, limited to the
- * methods below, and expiring, so a WhatsApp member can take the mouse for a
- * few minutes without becoming the box owner.
+ * A seat is held by a principal with a role (see `ROLES` below). An `owner`
+ * paired with the setup code and may do anything a seat can. A `guest` came
+ * from an invite the Bot handed out in a chat: bound to one display, limited
+ * to the methods below, and expiring, so a WhatsApp member can take the mouse
+ * for a few minutes without becoming the box owner.
  */
-export type SeatKind = "owner" | "guest";
-
 /** What a guest seat may call unless the invite narrows it further. Never provisioning, the thread, or clipboard read. */
 export const SEAT_GUEST_METHODS = [
   "/computer.v1.Seat/Status",
@@ -52,6 +50,88 @@ export const SEAT_GUEST_METHODS = [
   "/computer.v1.Seat/ProvideSecret",
   "/computer.v1.Seat/Revoke",
 ] as const;
+
+/**
+ * Who is calling. Every bearer the hub accepts resolves to one of these, so
+ * there is one verify path rather than one per door: a human at a seat, a
+ * Bot's Eve holding an agent token, and a service like the WhatsApp bridge or
+ * the control plane. Before this, a seat token, a bot token and a channel
+ * secret were three unrelated checks over three files, and none of them knew
+ * which human was behind a seat.
+ */
+export type PrincipalKind = "user" | "bot" | "service";
+
+/**
+ * What a principal may do, as a named bundle of methods.
+ *
+ * `owner` is unrestricted inside the Seat service, which is what a paired
+ * seat has always been: a new RPC is available to owners the moment it is
+ * registered. Every other role is an explicit allowlist, so a new RPC is
+ * denied to them until someone decides otherwise. That asymmetry is the
+ * point: adding a method must never quietly widen a narrow role.
+ */
+export const ROLES = ["owner", "operator", "viewer", "guest", "bot", "issuer", "ingress"] as const;
+export type Role = (typeof ROLES)[number];
+
+/** Roles that can mint other principals. An issuer may never hand out one of these. */
+export const PRIVILEGED_ROLES: readonly Role[] = ["owner", "issuer"];
+
+const SEAT_OCCURRENCES = "/computer.v1.Seat/Occurrences";
+const SEAT_STATUS = "/computer.v1.Seat/Status";
+const SEAT_REVOKE = "/computer.v1.Seat/Revoke";
+const SEAT_ISSUE = "/computer.v1.Seat/Issue";
+
+/**
+ * Methods per role. `undefined` means unrestricted within the service the
+ * principal's policy already gates, never "every method on the hub": an
+ * agent token is still refused by a seat-policy route and vice versa.
+ *
+ * Revoke is in every human role deliberately. Ending your own seat is not a
+ * privilege, and sign-out calls it.
+ */
+export const ROLE_METHODS: Record<Role, readonly string[] | undefined> = {
+  guest: SEAT_GUEST_METHODS,
+  // A person who may drive the box but not reshape it: no CreateBot, no
+  // WhatsApp linking, no clipboard read (it exfiltrates whatever is copied).
+  operator: [...SEAT_GUEST_METHODS, SEAT_OCCURRENCES],
+  owner: undefined,
+  viewer: [SEAT_STATUS, SEAT_OCCURRENCES, SEAT_REVOKE],
+  // The control plane: it exists to hand seats to people it has authenticated.
+  issuer: [SEAT_ISSUE, SEAT_REVOKE],
+  bot: undefined,
+  // A door, not a caller: the channel ingress is its whole surface.
+  ingress: [],
+};
+
+/**
+ * Does this role, narrowed by `methods` if the grant narrows it, allow `method`?
+ *
+ * Both lists have to say yes. `methods` narrows and never widens: naming a
+ * method the role does not carry refuses it rather than promoting it. An
+ * earlier version read `methods ?? ROLE_METHODS[role]`, so a grant replaced
+ * the role's allowlist instead of intersecting with it, and every role with
+ * a finite list could be widened by the grant that was supposed to shrink
+ * it. An issuer, which may not hand out `owner`, could mint
+ * `role: "operator", methods: ["/computer.v1.Provision/CreateBot"]` and get
+ * a bot token, and a bot token is `shell` on the box.
+ *
+ * Unrestricted therefore means both are absent, which is a bare owner.
+ */
+export function principalAllows(
+  role: Role,
+  methods: readonly string[] | undefined,
+  method: string | undefined,
+): boolean {
+  for (const allowed of [ROLE_METHODS[role], methods]) {
+    if (allowed === undefined) {
+      continue;
+    }
+    if (method === undefined || !allowed.includes(method)) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * Closed on the way in, additive on the way out.
@@ -280,3 +360,75 @@ export const ACTION_TYPES = [
 ] as const;
 
 export type ActionType = (typeof ACTION_TYPES)[number];
+
+/**
+ * Conversations: one record per place the Bot's voice speaks.
+ *
+ * A conversation is the durable half of a route. `send_message` appends to
+ * the conversation the hub bound the current turn to, and a transport
+ * delivers from it, so the seat thread, a WhatsApp chat and (later) a peer
+ * hop are one object with three routes rather than three code paths.
+ *
+ * The route kinds are a const in the style of `OCCURRENCE_KINDS`: the union
+ * is derived from it, so a new kind is one edit and a file on disk carrying
+ * an unknown one is rejected on read rather than silently mounted.
+ */
+export const CONVERSATION_ROUTE_KINDS = ["seat", "whatsapp", "peer"] as const;
+export type ConversationRouteKind = (typeof CONVERSATION_ROUTE_KINDS)[number];
+
+/** Where messages leave for. `peer` is bot-to-bot and has no writer yet. */
+export type Route =
+  | { kind: "seat" }
+  | { kind: "whatsapp"; acct: string; jid: string }
+  | { kind: "peer"; bot: string };
+
+/**
+ * Who is in the conversation. `ref` is the human's identity on the route: a
+ * WhatsApp JID here, a seat subject once the seat route lands.
+ */
+export type Participant =
+  | { kind: "bot"; bot: string }
+  | { kind: "human"; ref: string; display_name?: string };
+
+/** Who wrote a message. `system` carries hop notices and route failures. */
+export type Author =
+  | { kind: "bot"; bot: string }
+  | { kind: "human"; ref: string }
+  | { kind: "system" };
+
+/**
+ * Exactly today's occurrence bodies with `id`, `seq` and `at` lifted out.
+ * Not one new kind: the turn rules that hang off `widget` and
+ * `secret_request` are unchanged, they just become per conversation.
+ */
+export type MessageBody =
+  | { kind: "human"; text: string }
+  | { kind: "text"; text: string; images: string[] }
+  | { kind: "widget"; prompt: string; options: string[]; answer: string | null }
+  | { kind: "secret_request"; prompt: string; label: string; provided: boolean };
+
+export interface Message {
+  /** The existing `occ_<...>` shape, unchanged. */
+  id: string;
+  conversation_id: string;
+  /** Per conversation, monotonic, survives restart. */
+  seq: number;
+  at: number;
+  author: Author;
+  body: MessageBody;
+  /** Set for anything a turn produced. */
+  turn_id?: string;
+}
+
+export interface Conversation {
+  /** `conv_<base64url>`. */
+  id: string;
+  /** Whose voice speaks here. */
+  bot: string;
+  route: Route;
+  participants: Participant[];
+  /** Mirrors the log tail, so a list needs no file read. */
+  last_seq: number;
+  created_at: string;
+  updated_at: string;
+}
