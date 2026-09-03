@@ -234,19 +234,15 @@ function Workspace({
       <ChatPane
         botId={botId}
         key={botId}
+        offline={offline}
         onOpenBots={() => setBotsOpen(true)}
         onOpenScreen={() => setScreenOpen(true)}
+        onRetry={() => void recoverSeat()}
         screenNeedsYou={waitingElsewhere}
         seat={seat}
       />
 
       <div className="hidden min-h-0 border-border border-l lg:block">{rail}</div>
-
-      {offline && (
-        <output className="fixed inset-x-0 bottom-0 z-50 block bg-destructive/90 px-4 py-1.5 text-center text-destructive-foreground text-xs">
-          {offline}
-        </output>
-      )}
 
       <Dialog onOpenChange={setBotsOpen} open={botsOpen}>
         <DialogContent className="h-[85svh] max-w-sm gap-0 overflow-hidden p-0">

@@ -7,6 +7,7 @@ import { BotMark } from "@/components/bot-mark";
 import { Button } from "@/components/ui/button";
 import {
   Empty,
+  EmptyContent,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
@@ -55,15 +56,20 @@ function eveIsDown(message: string | undefined): boolean {
  */
 export function ChatPane({
   botId,
+  offline,
   onOpenBots,
   onOpenScreen,
+  onRetry,
   screenNeedsYou = false,
   seat,
 }: {
   botId: string;
+  /** The hub is unreachable. Reported here, not over the composer. */
+  offline?: string | null;
   /** Phone only: the roster and the screen are drawers rather than rails. */
   onOpenBots?: () => void;
   onOpenScreen?: () => void;
+  onRetry?: () => void;
   screenNeedsYou?: boolean;
   seat: Seat;
 }): React.ReactElement {
@@ -115,7 +121,7 @@ export function ChatPane({
         {onOpenBots && (
           <Button
             aria-label="Bots"
-            className="-ml-1 lg:hidden"
+            className="-ml-1 size-11 lg:hidden"
             onClick={onOpenBots}
             size="icon-sm"
             type="button"
@@ -126,9 +132,31 @@ export function ChatPane({
         )}
         <BotMark botId={botId} size="md" />
         <h2 className="min-w-0 truncate font-semibold text-sm">{botId}</h2>
-        {down && <output className="shrink-0 text-amber-300 text-xs">not running</output>}
+        {/* The connection error belongs beside the Bot it is about. It used to
+            be a viewport-fixed banner, which landed on the composer: the one
+            control you reach for when the computer stops answering. */}
+        {offline ? (
+          <output className="flex min-w-0 items-center gap-2 text-destructive text-xs">
+            <span className="truncate" title={offline}>
+              {offline}
+            </span>
+            {onRetry && (
+              <Button
+                className="pointer-coarse:h-11"
+                onClick={onRetry}
+                size="xs"
+                type="button"
+                variant="outline"
+              >
+                Retry
+              </Button>
+            )}
+          </output>
+        ) : (
+          down && <output className="shrink-0 text-amber-300 text-xs">not running</output>
+        )}
         <Button
-          className="ml-auto"
+          className="ml-auto pointer-coarse:h-11"
           onClick={() => {
             agent.reset();
             saveSession(undefined, botId);
@@ -142,7 +170,7 @@ export function ChatPane({
         {onOpenScreen && (
           <Button
             aria-label="Screen"
-            className="relative -mr-1 lg:hidden"
+            className="relative -mr-1 size-11 lg:hidden"
             onClick={onOpenScreen}
             size="icon-sm"
             type="button"
@@ -161,8 +189,14 @@ export function ChatPane({
           <MessageScrollerViewport>
             <MessageScrollerContent
               aria-busy={agent.status === "streaming"}
-              aria-live="polite"
+              aria-label={`Conversation with ${botId}`}
               className="mx-auto w-full max-w-3xl gap-5 px-4 py-6"
+              // `role="log"` over `aria-live` on the same element: both are
+              // polite, but a live region re-reads its whole subtree and this
+              // one is the entire transcript, so every streamed token
+              // announced the conversation again from the top. A log
+              // announces only what was appended.
+              role="log"
             >
               {messages.length === 0 && !resuming && (
                 <Empty className="py-16">
@@ -175,10 +209,26 @@ export function ChatPane({
                     </EmptyTitle>
                     <EmptyDescription>
                       {down
-                        ? "The computer starts one Eve process per Bot on the roster. Check that it came up."
+                        ? "The computer starts one Eve process per Bot on the roster. This one is not answering yet."
                         : "It drives its own screen, and asks for the seat when it gets stuck."}
                     </EmptyDescription>
                   </EmptyHeader>
+                  {/* One action, and only where one is real. On the `down`
+                      branch the Eve process is not running on the box and
+                      nothing the browser can offer restarts it, so a button
+                      there would be an affordance that does not work. */}
+                  {!down && (
+                    <EmptyContent>
+                      <Button
+                        onClick={() => send("Take a screenshot and tell me what is on the screen.")}
+                        size="sm"
+                        type="button"
+                        variant="outline"
+                      >
+                        Show me the screen
+                      </Button>
+                    </EmptyContent>
+                  )}
                 </Empty>
               )}
 

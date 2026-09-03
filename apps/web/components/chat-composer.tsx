@@ -78,7 +78,7 @@ export function ChatComposer({
         {busy ? (
           <Button
             aria-label="Stop"
-            className="rounded-full"
+            className="rounded-full pointer-coarse:size-11"
             onClick={onStop}
             size="icon-sm"
             type="button"
@@ -89,7 +89,7 @@ export function ChatComposer({
         ) : (
           <Button
             aria-label="Send"
-            className="rounded-full"
+            className="rounded-full pointer-coarse:size-11"
             disabled={disabled || !text.trim()}
             onClick={send}
             size="icon-sm"
