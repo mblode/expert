@@ -140,3 +140,57 @@ describe("Eve mint client", () => {
     expect(unknown.status).toBe(400);
   });
 });
+
+describe("what a mint secret may open", () => {
+  const mint = async (
+    body: Record<string, unknown>,
+    headers: Record<string, string>,
+    email?: string,
+    extraEnv: Record<string, string | undefined> = {},
+  ): Promise<{ status: number; body: Record<string, unknown> }> => {
+    const res = await respondToInviteMint(mintRequest(body, headers), email, {
+      env: env(extraEnv),
+      mint: mintInviteWithoutStore,
+      now,
+    });
+    return { body: (await res.json()) as Record<string, unknown>, status: res.status };
+  };
+
+  it("refuses a secret-minted link for another tenant's computer", async () => {
+    // The secret lives on Vibey's Eve. Before this it could name any id in the
+    // catalog, and redeeming that link is a seat on someone else's machine.
+    const res = await mint(
+      { computerId: "blode", kind: "desk" },
+      { [INVITE_SECRET_HEADER]: secret },
+    );
+    expect(res.status).toBe(403);
+    expect(res.body.computerId).toBeUndefined();
+  });
+
+  it("still mints for the computer the secret is pinned to, under either spelling", async () => {
+    for (const computerId of [undefined, "vibey", "vcmc"]) {
+      const res = await mint(
+        { kind: "desk", ...(computerId ? { computerId } : {}) },
+        { [INVITE_SECRET_HEADER]: secret },
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.computerId).toBe("vibey");
+    }
+  });
+
+  it("follows INVITE_MINT_COMPUTER_ID when the deployment moves the secret", async () => {
+    const res = await mint({ kind: "desk" }, { [INVITE_SECRET_HEADER]: secret }, undefined, {
+      INVITE_MINT_COMPUTER_ID: "blode",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.computerId).toBe("blode");
+  });
+
+  it("leaves an operator free to mint on any computer they can open", async () => {
+    const res = await mint({ computerId: "blode", kind: "desk" }, {}, "m@blode.co", {
+      COMPUTER_OPERATOR_EMAILS: "m@blode.co",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.computerId).toBe("blode");
+  });
+});

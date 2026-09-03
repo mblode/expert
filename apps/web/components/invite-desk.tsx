@@ -56,7 +56,15 @@ export function InviteDesk({
 
   useEffect(() => {
     let live = true;
+    // Same guard as the workspace: a phone on a slow link, or a Machine still
+    // waking, would otherwise stack one Status per tick and let a stale answer
+    // land last. See app-shell.tsx.
+    let inFlight = false;
     const tick = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
       try {
         const next = await seat.status(display);
         if (!live) {
@@ -73,6 +81,8 @@ export function InviteDesk({
           return;
         }
         setOffline(error instanceof Error ? error.message : "computer unreachable");
+      } finally {
+        inFlight = false;
       }
     };
     void tick();
