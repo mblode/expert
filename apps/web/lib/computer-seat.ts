@@ -8,7 +8,7 @@ import {
   choicesOf,
   computerById,
   computersFromEnv,
-  defaultComputerId,
+  boundComputerId,
   pairComputer,
 } from "./computers";
 import { db } from "./db";
@@ -100,7 +100,7 @@ function pickBound(email: string, storedId: string | undefined): ComputerRecord 
       return kept;
     }
   }
-  const fallbackId = defaultComputerId(email, process.env);
+  const fallbackId = boundComputerId(email, process.env);
   return allowed.find((row) => row.id === fallbackId) ?? allowed[0];
 }
 

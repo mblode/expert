@@ -5,7 +5,7 @@ import {
   accessibleComputers,
   computerById,
   computersFromEnv,
-  defaultComputerId,
+  boundComputerId,
   isComputerOperator,
   pairComputer,
   parseComputerBindings,
@@ -89,39 +89,52 @@ describe("computer binding", () => {
     expect(map.size).toBe(2);
   });
 
-  it("binds an email to its mapped computer, else blode", () => {
+  it("binds an email to its mapped computer, and nothing otherwise", () => {
     const bindings = env({ COMPUTER_BINDINGS: "ops@vcmc.org:vibey" });
-    expect(defaultComputerId("ops@vcmc.org", bindings)).toBe("vibey");
-    expect(defaultComputerId("m@blode.co", bindings)).toBe("blode");
-    expect(defaultComputerId("OPS@vcmc.org", bindings)).toBe("vibey");
+    expect(boundComputerId("ops@vcmc.org", bindings)).toBe("vibey");
+    expect(boundComputerId("OPS@vcmc.org", bindings)).toBe("vibey");
+    // An account is the tenant boundary: an unbound one gets no computer
+    // rather than whoever happens to be first in the catalog.
+    expect(boundComputerId("m@blode.co", bindings)).toBeUndefined();
   });
 
   it("does not bind to an id that is not in the catalog", () => {
-    expect(defaultComputerId("a@b.co", env({ COMPUTER_BINDINGS: "a@b.co:ghost" }))).toBe("blode");
+    expect(boundComputerId("a@b.co", env({ COMPUTER_BINDINGS: "a@b.co:ghost" }))).toBeUndefined();
+  });
+
+  it("takes DEFAULT_COMPUTER_ID as an explicit opt-in for unbound accounts", () => {
+    expect(boundComputerId("a@b.co", env({ DEFAULT_COMPUTER_ID: "vibey" }))).toBe("vibey");
+    expect(boundComputerId("a@b.co", env({ DEFAULT_COMPUTER_ID: "ghost" }))).toBeUndefined();
   });
 
   it("maps leftover matt/vcmc bindings onto blode/vibey", () => {
-    expect(defaultComputerId("a@b.co", env({ COMPUTER_BINDINGS: "a@b.co:matt" }))).toBe("blode");
-    expect(defaultComputerId("ops@vcmc.org", env({ COMPUTER_BINDINGS: "ops@vcmc.org:vcmc" }))).toBe(
+    expect(boundComputerId("a@b.co", env({ COMPUTER_BINDINGS: "a@b.co:matt" }))).toBe("blode");
+    expect(boundComputerId("ops@vcmc.org", env({ COMPUTER_BINDINGS: "ops@vcmc.org:vcmc" }))).toBe(
       "vibey",
     );
     expect(computerById("matt", {})?.id).toBe("blode");
     expect(computerById("vcmc", {})?.id).toBe("vibey");
   });
 
-  it("treats an unset operator list as every signed-in user", () => {
-    expect(isComputerOperator("m@blode.co", env())).toBe(true);
-    expect(accessibleComputers("anyone@example.com", env()).map((c) => c.id)).toEqual([
-      "blode",
-      "vibey",
-    ]);
+  it("treats an unset operator list as nobody, not everybody", () => {
+    // Unset used to mean every signed-in user, which made the binding above
+    // unreachable and let one account open another account's computer.
+    expect(isComputerOperator("m@blode.co", env())).toBe(false);
+    expect(accessibleComputers("anyone@example.com", env())).toEqual([]);
+    // A bound account still reaches its own computer without being an operator.
+    expect(
+      accessibleComputers("ops@vcmc.org", env({ COMPUTER_BINDINGS: "ops@vcmc.org:vibey" })).map(
+        (c) => c.id,
+      ),
+    ).toEqual(["vibey"]);
   });
 
   it("restricts a non-operator to their bound computer", () => {
     const locked = env({ COMPUTER_OPERATOR_EMAILS: "m@blode.co" });
     expect(isComputerOperator("m@blode.co", locked)).toBe(true);
+    expect(accessibleComputers("m@blode.co", locked).map((c) => c.id)).toEqual(["blode", "vibey"]);
     expect(isComputerOperator("other@example.com", locked)).toBe(false);
-    expect(accessibleComputers("other@example.com", locked).map((c) => c.id)).toEqual(["blode"]);
+    expect(accessibleComputers("other@example.com", locked)).toEqual([]);
     expect(
       accessibleComputers("ops@vcmc.org", {
         ...locked,
