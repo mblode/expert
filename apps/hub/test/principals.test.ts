@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { AuthRegistry, ISSUED_MAX_TTL_MS } from "../src/handler/auth.ts";
+import { AuthRegistry, GUEST_MAX_TTL_MS, ISSUED_MAX_TTL_MS } from "../src/handler/auth.ts";
 import { FilePrincipalStore, MemoryPrincipalStore } from "../src/service/principals.ts";
 import type { PrincipalRecord } from "../src/service/principals.ts";
 import { rpc, startHub } from "./helper.ts";
@@ -105,6 +105,57 @@ describe("issuing a seat", () => {
 
     const greedy = auth.issue({ role: "viewer", ttlMs: ISSUED_MAX_TTL_MS * 10 }, owner, now);
     expect(Date.parse(greedy.expires_at!)).toBe(now + ISSUED_MAX_TTL_MS);
+  });
+
+  it("a guest gets its own ceiling and can never be unexpiring", () => {
+    const auth = registry();
+    const now = Date.parse("2026-09-02T00:00:00.000Z");
+    const owner = auth.principalFor(auth.pair("code"), now)!;
+
+    // The 30 day cap is for named people the owner meant to keep. A guest is
+    // a stranger holding a link, so it is bounded by the link's own ceiling.
+    const greedy = auth.issue({ display: 1, role: "guest", ttlMs: ISSUED_MAX_TTL_MS }, owner, now);
+    expect(Date.parse(greedy.expires_at!)).toBe(now + GUEST_MAX_TTL_MS);
+
+    // No ttl means no expiry for every other role. For a guest it is refused,
+    // because a permanent guest is the hole the invite path just closed.
+    expect(() => auth.issue({ display: 1, role: "guest" }, owner, now)).toThrow(/needs a ttl/);
+    expect(auth.issue({ role: "viewer" }, owner, now).expires_at).toBeUndefined();
+  });
+
+  it("methods narrow a role and never widen it", () => {
+    const auth = registry();
+    const owner = auth.principalFor(auth.pair("code"))!;
+    const issuer = auth.issue({ role: "issuer", subject: "hello.expert" }, owner);
+
+    // The escalation this closes: an issuer may not hand out an owner, so it
+    // asks for a role it may hand out and names a method that role does not
+    // carry. CreateBot returns a bot token, and a bot token is shell on the box.
+    const smuggled = auth.issue(
+      { methods: [CREATE_BOT, STATUS], role: "operator", subject: "ada" },
+      issuer,
+    );
+    expect(() => auth.verify("seat", smuggled.token, CREATE_BOT)).toThrow(/cannot do that/);
+    expect(auth.verify("seat", smuggled.token, STATUS).principal?.role).toBe("operator");
+    // Narrowing still works in the direction it was meant to: Pointer is an
+    // operator method, and this grant did not ask for it.
+    expect(() => auth.verify("seat", smuggled.token, POINTER)).toThrow(/cannot do that/);
+  });
+
+  it("an owner narrowed to a few methods stops being an owner at the other doors", () => {
+    const auth = registry();
+    const bare = auth.pair("code");
+    const owner = auth.principalFor(bare)!;
+    // What the plugins invite mints: owner, because no role carries CreateBot,
+    // narrowed to the two RPCs the connection-file write needs.
+    const scoped = auth.issue({ methods: [CREATE_BOT], role: "owner", ttlMs: 120_000 }, owner);
+
+    expect(auth.verify("seat", scoped.token, CREATE_BOT).principal?.role).toBe("owner");
+    expect(() => auth.verify("seat", scoped.token, WHATSAPP_LINK)).toThrow(/cannot do that/);
+    // The Eve proxy, /roster and the pixel stream are HTTP routes, so no
+    // allowlist names them. isOwner is the gate, and a narrowed owner is not one.
+    expect(auth.isOwner(scoped.token)).toBe(false);
+    expect(auth.isOwner(bare)).toBe(true);
   });
 });
 

@@ -152,7 +152,7 @@ A principal carries a **role**, and a role is a set of methods.
 | `owner`    | user    | every Seat RPC, any display, no expiry                                                               |
 | `operator` | user    | `Status`, `SetPresence`, `Pointer`, `Type`, `ClipboardSet`, `ProvideSecret`, `Occurrences`, `Revoke` |
 | `viewer`   | user    | `Status`, `Occurrences`, `Revoke`                                                                    |
-| `guest`    | user    | the operator set minus `Occurrences`, bound to one display, expiring within fifteen minutes          |
+| `guest`    | user    | the operator set minus `Occurrences`, bound to one display, always expiring, at most four hours      |
 | `issuer`   | service | `Issue`, `Revoke`                                                                                    |
 | `bot`      | bot     | the Agent service                                                                                    |
 | `ingress`  | service | the channel door only, no RPC                                                                        |
@@ -178,7 +178,10 @@ A principal with a `display` is bound to that screen whatever its role:
 naming another is `UNAUTHENTICATED`. `methods` narrows a role further and
 can never widen it. `Revoke {}` ends the caller's own seat, which is what
 sign-out does; naming another token is an owner's call. `/eve/v1` (the
-thread) and `/roster` remain owner-only.
+thread), `/roster` and the pixel stream remain owner-only, and an owner
+carrying `methods` is not one of them: those doors are HTTP routes, so no
+allowlist can name them, and a grant narrowed to a couple of RPCs must not
+inherit the three that were never narrowed. A `guest` always expires.
 
 Seats on disk from before this predate roles: a bare token string is an
 owner that never expires, and a record whose `kind` is `owner` or `guest`

@@ -103,17 +103,34 @@ export const ROLE_METHODS: Record<Role, readonly string[] | undefined> = {
   ingress: [],
 };
 
-/** Does this role, narrowed by `methods` if the grant narrows it, allow `method`? */
+/**
+ * Does this role, narrowed by `methods` if the grant narrows it, allow `method`?
+ *
+ * Both lists have to say yes. `methods` narrows and never widens: naming a
+ * method the role does not carry refuses it rather than promoting it. An
+ * earlier version read `methods ?? ROLE_METHODS[role]`, so a grant replaced
+ * the role's allowlist instead of intersecting with it, and every role with
+ * a finite list could be widened by the grant that was supposed to shrink
+ * it. An issuer, which may not hand out `owner`, could mint
+ * `role: "operator", methods: ["/computer.v1.Provision/CreateBot"]` and get
+ * a bot token, and a bot token is `shell` on the box.
+ *
+ * Unrestricted therefore means both are absent, which is a bare owner.
+ */
 export function principalAllows(
   role: Role,
   methods: readonly string[] | undefined,
   method: string | undefined,
 ): boolean {
-  const allowed = methods ?? ROLE_METHODS[role];
-  if (allowed === undefined) {
-    return true;
+  for (const allowed of [ROLE_METHODS[role], methods]) {
+    if (allowed === undefined) {
+      continue;
+    }
+    if (method === undefined || !allowed.includes(method)) {
+      return false;
+    }
   }
-  return method !== undefined && allowed.includes(method);
+  return true;
 }
 
 /**
