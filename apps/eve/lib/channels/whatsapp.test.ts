@@ -317,6 +317,18 @@ describe("buildAuth", () => {
     expect(auth.attributes.groupJid).toBe(payload.token);
   });
 
+  it("carries the message id the bridge issued, so a send cannot quote an invented one", () => {
+    // `whatsapp_send` quotes and reacts against this id. Taking it from the
+    // session rather than the model's copy of the context block means the only
+    // id a send can carry is one the bridge actually issued.
+    const auth = buildAuth({ ...payload, messageId: "m0123456789" }, "hub", "turn_abc");
+    expect(auth.attributes.messageId).toBe("m0123456789");
+  });
+
+  it("omits the message id when the bridge did not send one", () => {
+    expect(buildAuth(payload, "hub", "turn_abc").attributes).not.toHaveProperty("messageId");
+  });
+
   it("omits the turn entirely when the request carried none", () => {
     // The direct bridge path and the eve TUI. No turn means the Bot's seat
     // thread hub-side, which is the behaviour that predates conversations.

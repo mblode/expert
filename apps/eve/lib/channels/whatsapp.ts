@@ -153,18 +153,24 @@ export const neutraliseFence = (block: string): string =>
  * which conversation the reply lands in. Absent (the direct bridge path, an
  * eve TUI) means the Bot's seat thread, which is the behaviour that predates
  * conversations.
+ *
+ * `messageId` rides along for the same reason the context block shows it: it
+ * is what `whatsapp_send` quotes or reacts to, and taking it from here rather
+ * than from the model's copy of that block means an id the bridge issued is
+ * the only id a send can carry.
  */
 export const buildAuth = (
   payload: BridgePayload,
   via: BridgeAuthPath,
   turn: string | undefined,
 ) => {
-  const { token, sender, senderName, senderPhone, acct } = payload;
+  const { token, sender, senderName, senderPhone, acct, messageId } = payload;
   return {
     attributes: {
       groupJid: token,
       via,
       ...(acct ? { acct } : {}),
+      ...(messageId ? { messageId } : {}),
       ...(senderName ? { senderName } : {}),
       ...(senderPhone ? { senderPhone } : {}),
       ...(turn ? { turn } : {}),
