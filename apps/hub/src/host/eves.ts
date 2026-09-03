@@ -20,10 +20,7 @@ import { Supervisor } from "./supervisor.ts";
 // so `imageBots` resolved to <root>/apps/apps/eve/bots, no roster Bot had a
 // project there, and the local path this replaces started zero Eves without
 // saying so. The guest never noticed because fly.toml sets COMPUTER_EVE_BOTS.
-// init.ts still counts three, which is why its `bridgeDir` misses and the
-// WhatsApp bridge child never starts there: a live bug, left for its own
-// change because turning that child on moves what /healthz reports and Fly
-// health-checks the guest on it.
+// `init.ts` counts four now too, and checks it rather than trusting it.
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const { env } = process;
 

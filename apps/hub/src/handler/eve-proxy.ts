@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
 import type { AuthRegistry } from "./auth.ts";
-import { tokenFromRequest } from "./auth.ts";
+import { firstHeader, tokenFromRequest } from "./auth.ts";
 import { writeJson } from "./router.ts";
 import type { BotRegistry } from "../service/bots.ts";
 import { EVE_HUB_SECRET_HEADER, pickEveBotId } from "../host/eve.ts";
@@ -121,8 +121,7 @@ function daemonDown(res: ServerResponse, botId?: string): void {
 function forwardHeaders(req: IncomingMessage, eveSecret?: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of ["content-type", "accept"]) {
-    const v = req.headers[name];
-    const first = Array.isArray(v) ? v[0] : v;
+    const first = firstHeader(req.headers[name]);
     if (first) {
       out[name] = first;
     }

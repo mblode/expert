@@ -175,21 +175,36 @@ if (botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS) {
     own(target, box, 0o755);
     mkdirSync(dirname(link), { recursive: true });
     own(dirname(link), box);
+    let existing;
     try {
-      if (!lstatSync(link).isSymbolicLink()) {
-        // A real directory from an earlier boot: leave it, say so, move on.
-        console.warn(`computer init: ${link} is a directory, not linking it to the volume`);
-        continue;
-      }
+      existing = lstatSync(link);
     } catch {
-      symlinkSync(target, link);
+      try {
+        symlinkSync(target, link);
+      } catch (error) {
+        // Parking Eve state on the volume is a convenience. Letting the
+        // symlink throw out of here is PID 1 refusing to boot the computer
+        // over it, so it warns like every other degradation in this block.
+        console.warn(
+          `computer init: could not link ${link} to the volume (${(error as Error).message})`,
+        );
+      }
+      continue;
+    }
+    if (!existing.isSymbolicLink()) {
+      // A real directory from an earlier boot: leave it, say so, move on.
+      console.warn(`computer init: ${link} is a directory, not linking it to the volume`);
     }
   }
 }
 
-// 5. Children.
+// 5. Children. Both hub-owned children below run with HOME here, and
+//    `sup.start` forks and execs synchronously, so the directory has to exist
+//    and belong to `hub` before the first of them is spawned, not after.
 mkdirSync(logDir, { mode: 0o700, recursive: true });
 own(logDir, hub, 0o700);
+mkdirSync(join(dataDir, "home"), { mode: 0o700, recursive: true });
+own(join(dataDir, "home"), hub, 0o700);
 
 const sup = new Supervisor({
   onEvent: (line) => console.log(`computer ${line}`),
@@ -293,8 +308,6 @@ sup.start({
   log: join(logDir, "hub.log"),
   uid: hub.uid,
 });
-mkdirSync(join(dataDir, "home"), { mode: 0o700, recursive: true });
-own(join(dataDir, "home"), hub, 0o700);
 
 console.log(
   `computer init: desk, ${eves.length} eve, bridge and hub under supervision; status at ${statusFile}`,

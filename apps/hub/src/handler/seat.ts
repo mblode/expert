@@ -138,8 +138,9 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
           : undefined,
         role: asRole(o.role),
         subject: typeof o.subject === "string" && o.subject ? o.subject : undefined,
-        // 0 means "no expiry"; only an owner may ask for it, which `issue`
-        // enforces by refusing a privileged role to an issuer anyway.
+        // 0 is the proto default for an absent int32, so it reads as "no ttl
+        // asked for". `issue` is what decides whether that is allowed: the
+        // roles that must always expire are refused without one.
         ttlMs: ttlSec === undefined || ttlSec === 0 ? undefined : ttlSec * 1000,
       },
       by,
@@ -282,13 +283,15 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   router.rpc(SeatMethods.ProvideSecret, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
     const bot = botFor(o, ctx);
-    await bot.desk.ping();
+    // Validate before touching the box, like every sibling RPC: a malformed
+    // request is the caller's problem whether or not the desk is answering.
     if (typeof o.occurrence_id !== "string" || !o.occurrence_id) {
       throw new ComputerError("VALIDATION", "occurrence_id is required");
     }
     if (typeof o.value !== "string") {
       throw new ComputerError("VALIDATION", "value is required");
     }
+    await bot.desk.ping();
     await bot.voice.provideSecret(o.occurrence_id, o.value);
     return { provided: true };
   });
@@ -310,7 +313,12 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
       throw new ComputerError("VALIDATION", "id is required");
     }
     await deps.provision.remove(o.id);
-    return status(PRIMARY_DISPLAY, ctx.principal);
+    // The caller's own screen, not the primary. `status` mints a pixel grant
+    // for every screen it reports, so hardcoding the primary here handed a
+    // seat bound to display N a live grant for display 1, which the VNC proxy
+    // then honours: the one Seat RPC that walked around the binding every
+    // other one enforces. An unbound seat still resolves to the primary.
+    return status(displayFor(o, ctx.principal), ctx.principal);
   });
 }
 

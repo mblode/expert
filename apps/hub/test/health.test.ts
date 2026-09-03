@@ -41,6 +41,32 @@ describe("healthz reads the supervisor", () => {
     expect(h.supervisor?.children.map((c) => c.id)).toEqual(["eve-main", "desk"]);
   });
 
+  it("an unparseable timestamp is stale, not fresh", () => {
+    // `NaN > STALE_MS` is false, so comparing without a finite check read a
+    // garbage `at` as "written just now" and a stopped supervisor kept
+    // reporting ok on the route Fly health-checks the guest with.
+    const h = readHealth(
+      file(JSON.stringify({ at: "not-a-date", children: [], ok: true })),
+      Date.parse("2026-09-02T10:00:00Z"),
+    );
+    expect(h.ok).toBe(false);
+    expect(h.supervisor?.stale).toBe(true);
+  });
+
+  it("a status file that is valid JSON but not a record answers, it does not throw", () => {
+    // `JSON.parse` accepts `null` and a bare number; reading `.at` off either
+    // throws, and a throw here is a 500 from /healthz, which fails the Fly
+    // health check and restarts the Machine. Every bad file is one answer.
+    const now = Date.parse("2026-09-02T10:00:00Z");
+    for (const body of ["null", "42", '"up"', "[]"]) {
+      expect(readHealth(file(body), now)).toMatchObject({
+        hub: true,
+        ok: false,
+        supervisor: { stale: true },
+      });
+    }
+  });
+
   it("a stale or unreadable status file is not ok, but the hub still answers", () => {
     const now = Date.parse("2026-09-02T10:00:00Z");
     const stale = readHealth(

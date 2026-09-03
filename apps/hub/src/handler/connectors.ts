@@ -8,6 +8,7 @@ import type { ConnectorRecord, ConnectorRegistry } from "../service/connectors.t
 import type { ConversationRegistry } from "../service/conversations.ts";
 import type { TurnService } from "../service/turns.ts";
 import { EVE_HUB_SECRET_HEADER } from "../host/eve.ts";
+import { firstHeader } from "./auth.ts";
 import { TURN_HEADER, writeError } from "./router.ts";
 
 const PREFIX = "/connectors/";
@@ -241,10 +242,6 @@ function daemonDown(botId: string): ComputerError {
     "DAEMON_DOWN",
     `the agent is not running for bot ${botId}: the guest starts it with eve start`,
   );
-}
-
-function firstHeader(v: string | string[] | undefined): string | undefined {
-  return Array.isArray(v) ? v[0] : v;
 }
 
 async function readBody(req: IncomingMessage): Promise<Uint8Array<ArrayBuffer>> {

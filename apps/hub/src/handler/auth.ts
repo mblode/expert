@@ -195,10 +195,6 @@ export class AuthRegistry {
     return this.principalFor(token) !== undefined;
   }
 
-  roleOf(token: string | undefined): Role | undefined {
-    return this.principalFor(token)?.role;
-  }
-
   /**
    * Owner seats only: the thread, provisioning, and the Eve proxy are theirs.
    *
@@ -408,6 +404,15 @@ function botPrincipal(token: string, botId: string): PrincipalRecord {
   };
 }
 
+/**
+ * Node hands a repeated header as an array. One copy of that rule, beside the
+ * two header readers built on it: the router, the connector ingress and the
+ * Eve proxy each had their own, and a fourth would have been written next.
+ */
+export function firstHeader(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
 export function bearerFromHeader(header: string | undefined): string | undefined {
   if (!header) {
     return undefined;
@@ -421,10 +426,7 @@ export function tokenFromRequest(req: {
   url?: string;
   headers: { authorization?: string | string[] };
 }): string | undefined {
-  const auth = Array.isArray(req.headers.authorization)
-    ? req.headers.authorization[0]
-    : req.headers.authorization;
-  const fromHeader = bearerFromHeader(auth);
+  const fromHeader = bearerFromHeader(firstHeader(req.headers.authorization));
   if (fromHeader) {
     return fromHeader;
   }

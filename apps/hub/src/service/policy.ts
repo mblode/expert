@@ -61,14 +61,20 @@ export type PolicyRequest =
 
 const ALLOWED: PolicyVerdict = { decision: "allow", reason: "", rule: "" };
 const CHECK_TIMEOUT_MS = 5000;
+/** Most a check may print before it is treated as broken. A verdict is ~60 bytes. */
+const CHECK_OUTPUT_CAP = 64 * 1024;
 
 export class PolicyService {
-  private readonly rules: PolicyRule[];
+  /** Each rule beside its compiled `argv` pattern, so the gate compiles none. */
+  private readonly rules: CompiledRule[];
   private readonly checkTimeoutMs: number;
 
   /** No rules is the shipped state: a box with no policy allows everything. */
   constructor(rules: PolicyRule[] = [], opts: { checkTimeoutMs?: number } = {}) {
-    this.rules = rules.map(validateRule);
+    // `validateRule` already compiles `argv` to prove it is a valid regex.
+    // Keeping what it built is the difference between compiling every rule
+    // once at load and compiling every rule again for every action in a batch.
+    this.rules = rules.map(compileRule);
     this.checkTimeoutMs = opts.checkTimeoutMs ?? CHECK_TIMEOUT_MS;
   }
 
@@ -94,7 +100,7 @@ export class PolicyService {
     return asked ?? ALLOWED;
   }
 
-  private async decide(rule: PolicyRule, req: PolicyRequest): Promise<PolicyVerdict> {
+  private async decide(rule: CompiledRule, req: PolicyRequest): Promise<PolicyVerdict> {
     const reason = rule.reason ?? rule.id;
     if (!rule.check) {
       return { decision: rule.decision ?? "deny", reason, rule: rule.id };
@@ -188,6 +194,18 @@ export function loadPolicy(path: string): PolicyService {
   return new PolicyService(parsed as PolicyRule[]);
 }
 
+/** A validated rule with its `argv` pattern compiled once. */
+interface CompiledRule extends PolicyRule {
+  pattern?: RegExp;
+}
+
+function compileRule(rule: PolicyRule, i: number): CompiledRule {
+  const validated = validateRule(rule, i);
+  return validated.argv === undefined
+    ? validated
+    : { ...validated, pattern: argvPattern(`policy rule ${validated.id}`, validated.argv) };
+}
+
 function validateRule(rule: PolicyRule, i: number): PolicyRule {
   const at = `policy rule ${rule?.id ?? `#${i}`}`;
   if (!rule || typeof rule.id !== "string" || !rule.id) {
@@ -225,14 +243,15 @@ function argvPattern(at: string, argv: string): RegExp {
   }
 }
 
-function matches(rule: PolicyRule, req: PolicyRequest): boolean {
+function matches(rule: CompiledRule, req: PolicyRequest): boolean {
   if (rule.tool !== req.tool) {
     return false;
   }
   if (req.tool === "computer") {
     return !rule.action || rule.action === req.action.type;
   }
-  return !rule.argv || new RegExp(rule.argv).test(req.argv.join(" "));
+  // No `g` flag, so the compiled pattern carries no lastIndex between calls.
+  return !rule.pattern || rule.pattern.test(req.argv.join(" "));
 }
 
 interface CheckOutput {
@@ -256,6 +275,7 @@ function runCheck(argv: string[], req: PolicyRequest, timeoutMs: number): Promis
       return;
     }
     const out: Buffer[] = [];
+    let outBytes = 0;
     let settled = false;
     const done = (result: CheckOutput) => {
       if (settled) {
@@ -270,7 +290,18 @@ function runCheck(argv: string[], req: PolicyRequest, timeoutMs: number): Promis
       done({ error: `timed out after ${timeoutMs}ms` });
     }, timeoutMs);
 
-    child.stdout.on("data", (c: Buffer) => out.push(c));
+    child.stdout.on("data", (c: Buffer) => {
+      // A verdict is one small JSON object. A check that streams instead is
+      // broken, and a broken check denies, so stopping here stays fail-closed
+      // rather than holding an unbounded buffer in the hub for it.
+      outBytes += c.length;
+      if (outBytes > CHECK_OUTPUT_CAP) {
+        child.kill("SIGKILL");
+        done({ error: `output over ${CHECK_OUTPUT_CAP} bytes` });
+        return;
+      }
+      out.push(c);
+    });
     child.stderr.resume();
     // ENOENT (missing command) and EPIPE both land here.
     child.on("error", (err) => done({ error: err.message }));
