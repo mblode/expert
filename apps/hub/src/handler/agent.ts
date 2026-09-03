@@ -43,7 +43,7 @@ export function registerAgent(router: ConnectRouter, deps: AgentDeps): void {
     // binding, minted at the channel ingress, so it is trusted over anything
     // in the body, which is the model's.
     if (!ctx.turn) {
-      return await b.voice.send(body);
+      return b.voice.send(body);
     }
     const turn = deps.turns.verify(ctx.turn, b.id);
     return deps.conversations.send(

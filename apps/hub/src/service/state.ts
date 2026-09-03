@@ -1,6 +1,17 @@
 import { createHash } from "node:crypto";
+import type { MessageBody } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
-import type { Occurrence } from "./voice.ts";
+
+/**
+ * One line of `transcript.jsonl`: a `MessageBody` with `id`, `seq` and `at`
+ * on the outside.
+ *
+ * This is the shape the hub wrote before conversations existed, and the only
+ * thing that still reads it is the one-shot import. It lives here rather
+ * than in `voice.ts` because the file it describes lives here.
+ */
+type Flat<T> = T extends unknown ? T & { id: string; seq: number; at: number } : never;
+export type Occurrence = Flat<MessageBody>;
 
 /**
  * Per-Bot state on the box: who this Bot is, what it remembers, what was said.
@@ -13,8 +24,10 @@ import type { Occurrence } from "./voice.ts";
  * state living there, for the same reason: a rebuild must not cost a Bot its
  * screen, and it must not cost a human their transcript either.
  *
- * **What is here and what is not.** Profile, memory and transcript are on the
- * box. The Bot's token never is. `/workspace` is shared by every Bot and read
+ * **What is here and what is not.** Profile and memory are on the box, and
+ * so is the transcript this hub wrote before conversations existed, now read
+ * once at boot and never written again (see `transcriptPath`). The Bot's
+ * token never is. `/workspace` is shared by every Bot and read
  * by every agent on the machine, so a per-Bot directory is *organisation, not
  * isolation*, one `box` user, no boundary, and everything written here is
  * readable by every other Bot. Identity and credentials stay host-side in
@@ -125,7 +138,15 @@ export class BotState {
     return `${this.dir}/memory/profile.md`;
   }
 
-  /** JSONL, like Grok's. Append-only: a bubble must not be able to corrupt the log before it. */
+  /**
+   * JSONL, like Grok's, and now read once and never written again.
+   *
+   * The hub appended a line here per bubble until conversations landed. The
+   * file stays where it is: it is the human's record of what their computer
+   * said, it is the only copy, and it is on a volume. `ConversationRegistry`
+   * imports it into the Bot's seat conversation at boot and the log moves to
+   * the hub's own directory, which the model cannot rewrite.
+   */
   get transcriptPath(): string {
     return `${this.dir}/transcript.jsonl`;
   }
@@ -174,20 +195,21 @@ export class BotState {
     return parseMemory((await this.read(this.memoryPath)) ?? "");
   }
 
-  /** One occurrence, one line. Append so a write cannot lose the log before it. */
-  async appendOccurrence(o: Occurrence): Promise<void> {
-    await this.desk.appendFile(this.transcriptPath, `${JSON.stringify(o)}\n`);
-  }
-
   /**
-   * The transcript as the hub left it. Oldest first, and `seq` is carried
-   * through untouched: cursors the phone holds across a hub restart still
-   * mean what they meant. The caller caps what it keeps.
+   * The transcript as the hub left it, or `undefined` when it could not be
+   * read at all. Oldest first, and `seq` is carried through untouched.
+   *
+   * The two answers are not the same and the caller must not conflate them.
+   * The import marks itself done, so a box that will not answer, or a file
+   * this hub may not read, has to come back as "unknown" and be tried again
+   * next boot. Reading it as "no transcript" would retire the only copy of
+   * the log unread, which is exactly the failure this whole move exists to
+   * avoid.
    */
-  async loadTranscript(): Promise<Occurrence[]> {
+  async readTranscript(): Promise<Occurrence[] | undefined> {
     const raw = await this.read(this.transcriptPath);
-    if (!raw) {
-      return [];
+    if (raw === undefined) {
+      return undefined;
     }
     const out: Occurrence[] = [];
     for (const line of raw.split("\n")) {

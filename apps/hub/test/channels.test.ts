@@ -7,6 +7,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import { parseChannelPath } from "../src/handler/channels.ts";
 import { ChannelRegistry, FileChannelStore, MemoryChannelStore } from "../src/service/channels.ts";
 import { startHub } from "./helper.ts";
+import type { StartedHub } from "./helper.ts";
+
+/**
+ * The conversations an inbound created. Every Bot also has a `seat` one from
+ * provisioning, which is not what these tests are about.
+ */
+const routed = (h: StartedHub) => h.hub.conversations.list().filter((c) => c.route.kind !== "seat");
 
 /** A stand-in Eve that records what reached it. */
 function fakeEve(): Promise<{
@@ -219,7 +226,8 @@ describe("channel ingress", () => {
       expect(second.status).toBe(200);
 
       // One conversation for the route, participants from the first sight.
-      expect(h.hub.conversations.list()).toEqual([
+      // Beside it, every Bot's `seat` conversation, which provisioning makes.
+      expect(routed(h)).toEqual([
         expect.objectContaining({
           bot: "main",
           participants: [
@@ -241,7 +249,7 @@ describe("channel ingress", () => {
 
       // A second chat on the same number is its own conversation.
       await post({ ...inbound, token: "other@g.us" });
-      expect(h.hub.conversations.list()).toHaveLength(2);
+      expect(routed(h)).toHaveLength(2);
     } finally {
       await h.close();
       await eve.close();
@@ -268,7 +276,7 @@ describe("channel ingress", () => {
       await post("whatsapp-main", wa.secret, "not json");
       await post("whatsapp-main", wa.secret, JSON.stringify({ message: "hi" }));
       expect(eve.seen.map((s) => s.turn)).toEqual([undefined, undefined, undefined]);
-      expect(h.hub.conversations.list()).toEqual([]);
+      expect(routed(h)).toEqual([]);
     } finally {
       await h.close();
       await eve.close();

@@ -11,6 +11,10 @@ import {
   MemoryConversationStore,
   MemoryMessageLog,
 } from "../src/service/conversations.ts";
+import type { Occurrence } from "../src/service/state.ts";
+
+/** Where the pre-conversations log lived, and still lives. */
+const TRANSCRIPT = "/workspace/.bots/main/transcript.jsonl";
 
 const chat = (jid: string): Route => ({ acct: "main", jid, kind: "whatsapp" });
 const HUMAN = { kind: "human", ref: "1@s.whatsapp.net" } as const;
@@ -76,7 +80,14 @@ describe("conversations", () => {
     const conv = registry();
     const record = conv.resolve("main", chat("g@g.us"), [BOT, HUMAN]);
     conv.append(record.id, HUMAN, { kind: "human", text: "hello" });
-    const said = conv.append(record.id, BOT, { images: [], kind: "text", text: "hi" }, "turn_x");
+    const said = conv.append(
+      record.id,
+      BOT,
+      { images: [], kind: "text", text: "hi" },
+      {
+        turn_id: "turn_x",
+      },
+    );
 
     const page = conv.page(record.id);
     expect(page.next_cursor).toBeNull();
@@ -119,6 +130,91 @@ describe("conversations", () => {
     // And a person speaking re-opens the turn that ended.
     conv.append(a.id, HUMAN, { kind: "human", text: "yes" });
     expect(conv.send(a.id, BOT, { images: [], kind: "text", text: "ok" }).turn_ended).toBe(false);
+  });
+
+  it("resolves one seat conversation per Bot, and the same one every time", () => {
+    const conv = registry();
+    const seat = conv.resolveSeat("main");
+    expect(seat.route).toEqual({ kind: "seat" });
+    expect(conv.resolveSeat("main").id).toBe(seat.id);
+    // A Bot re-created under a name it had before adopts what it left
+    // behind, because a conversation is resolved by route, not by roster row.
+    expect(conv.resolveSeat("night").id).not.toBe(seat.id);
+  });
+
+  it("imports the old occurrence log once, at its own seq numbers", () => {
+    const conv = registry();
+    const seat = conv.resolveSeat("main");
+    const written = conv.importSeatLog(seat.id, TRANSCRIPT, [
+      { at: 1, id: "occ_1", images: [], kind: "text", seq: 1, text: "one" },
+      { at: 2, id: "occ_2", kind: "human", seq: 2, text: "two" },
+    ]);
+    expect(written).toBe(2);
+    const page = conv.page(seat.id);
+    // seq and id are carried through untouched: a cursor held across the
+    // deploy has to keep meaning what it meant.
+    expect(page.entries.map((e) => [e.seq, e.id])).toEqual([
+      [1, "occ_1"],
+      [2, "occ_2"],
+    ]);
+    // The log recorded no author, so it is derived from the kind.
+    expect(page.entries.map((e) => e.author)).toEqual([
+      { bot: "main", kind: "bot" },
+      { kind: "human", ref: "seat" },
+    ]);
+    // The next send continues the numbering rather than restarting it.
+    expect(conv.append(seat.id, BOT, { images: [], kind: "text", text: "three" }).seq).toBe(3);
+    expect(conv.byId(seat.id).imported_from).toBe(TRANSCRIPT);
+
+    // Marked, so it never reads the file again.
+    expect(
+      conv.importSeatLog(seat.id, TRANSCRIPT, [
+        { at: 4, id: "occ_4", images: [], kind: "text", seq: 4, text: "four" },
+      ]),
+    ).toBe(0);
+    expect(conv.page(seat.id).entries).toHaveLength(3);
+  });
+
+  it("resumes a half-written import instead of duplicating it", () => {
+    const store = new MemoryConversationStore();
+    const log = new MemoryMessageLog();
+    const lines: Occurrence[] = [
+      { at: 1, id: "occ_1", images: [], kind: "text", seq: 1, text: "one" },
+      { at: 2, id: "occ_2", images: [], kind: "text", seq: 2, text: "two" },
+      { at: 3, id: "occ_3", images: [], kind: "text", seq: 3, text: "three" },
+    ];
+    // A crash partway through the import: two lines landed and the marker
+    // never did. The two Fly volumes hold the only copy of this file, so a
+    // second attempt has to be a resume and never a second copy.
+    const crashed = new ConversationRegistry(store, log);
+    const seat = crashed.resolveSeat("main");
+    crashed.importSeatLog(seat.id, TRANSCRIPT, lines.slice(0, 2));
+    store.save(store.load().map((c) => ({ ...c, imported_from: undefined })));
+
+    const retried = new ConversationRegistry(store, log);
+    expect(retried.importSeatLog(seat.id, TRANSCRIPT, lines)).toBe(1);
+    expect(retried.page(seat.id).entries.map((e) => e.seq)).toEqual([1, 2, 3]);
+  });
+
+  it("carries a turn that ended in the imported log", () => {
+    const conv = registry();
+    const seat = conv.resolveSeat("main");
+    conv.importSeatLog(seat.id, TRANSCRIPT, [
+      {
+        answer: null,
+        at: 1,
+        id: "occ_w",
+        kind: "widget",
+        options: ["a"],
+        prompt: "Which?",
+        seq: 1,
+      },
+    ]);
+    // The human was being waited on before the deploy and still is: a
+    // restart is not a way for the agent to talk again.
+    expect(() => conv.send(seat.id, BOT, { images: [], kind: "text", text: "hi" })).toThrow(
+      /turn ended/,
+    );
   });
 
   it("refuses an unknown conversation rather than inventing one", () => {

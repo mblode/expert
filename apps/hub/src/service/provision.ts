@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { WindowManager } from "../desk/windows.ts";
 import type { Bot, BotConfig, BotRegistry } from "./bots.ts";
+import type { ConversationRegistry } from "./conversations.ts";
 
 /**
  * Computer-as-a-service: Bots are provisioned at runtime, not configured.
@@ -93,6 +94,7 @@ export class ProvisionService {
     private readonly bots: BotRegistry,
     private readonly windows: WindowManager,
     private readonly store: BotStore,
+    private readonly conversations: ConversationRegistry,
   ) {}
 
   /** Boot: mount the roster, ensure a primary bot exists, claim every window. */
@@ -116,20 +118,53 @@ export class ProvisionService {
   }
 
   /**
-   * Bring up a Bot's directory on the box and read its transcript back, so a
-   * hub restart is not an amnesia event for the human.
+   * Bring up a Bot's thread and its directory on the box.
    *
-   * Never fatal. Box state is not required to serve: a hub whose desk is not
-   * answering yet must still pair, stream and hold the roster. A Bot that
-   * failed to restore also does not persist for the rest of the run, see
-   * VoiceService.restore, so a half-read log is never appended to.
+   * The seat conversation is resolved outside the try, and deliberately: it
+   * is the hub's own file, an index that will not parse is an error rather
+   * than an empty list (`readTokenFile`), and a Bot whose thread could not
+   * be mounted has no voice. Everything after it is best effort. Box state is
+   * not required to serve: a hub whose desk is not answering yet must still
+   * pair, stream and hold the roster.
    */
   private async mountState(bot: Bot): Promise<void> {
+    const seat = this.conversations.resolveSeat(bot.id);
     try {
       await bot.state.init();
-      bot.voice.restore(await bot.state.loadTranscript());
+      await this.importTranscript(bot, seat.id);
     } catch (error) {
       console.warn(`bot ${bot.id}: box state unavailable (${(error as Error).message})`);
+    }
+  }
+
+  /**
+   * Seed the seat conversation from the Bot's pre-conversations
+   * `transcript.jsonl`, once, so a deploy is not an amnesia event for the
+   * human. `seq` is preserved, see `ConversationRegistry.importSeatLog`.
+   *
+   * The marker is checked before the read, so a boot after the import costs
+   * nothing on the box. A transcript that could not be read is `undefined`,
+   * not `[]`, and nothing is marked: the file is on a volume and it is the
+   * only copy, so the import would rather run again next boot than mark
+   * itself done over a box that was not answering.
+   */
+  private async importTranscript(bot: Bot, conversationId: string): Promise<void> {
+    if (this.conversations.byId(conversationId).imported_from) {
+      return;
+    }
+    const entries = await bot.state.readTranscript();
+    if (entries === undefined) {
+      return;
+    }
+    const written = this.conversations.importSeatLog(
+      conversationId,
+      bot.state.transcriptPath,
+      entries,
+    );
+    if (written > 0) {
+      console.log(
+        `bot ${bot.id}: imported ${written} occurrences from ${bot.state.transcriptPath}`,
+      );
     }
   }
 
@@ -149,12 +184,13 @@ export class ProvisionService {
   }
 
   /**
-   * Free the screen and the roster entry. The Bot's directory on the box is
-   * deliberately left where it is: the transcript and the memory file are a
-   * human's record of what happened on their computer, and `/workspace` is
-   * theirs: deleting a roster row must not silently take those with it. Grok
+   * Free the screen and the roster entry. The Bot's directory on the box and
+   * its conversations are deliberately left where they are: the thread and
+   * the memory file are a human's record of what happened on their computer,
+   * and deleting a roster row must not silently take those with it. Grok
    * draws the same line (deleting a Bot does not remove shared-computer
-   * files). Re-creating a Bot under the same name adopts what it left behind;
+   * files). Re-creating a Bot under the same name adopts what it left behind,
+   * because a conversation is resolved by route and not by roster row;
    * `rm -rf` from the desk is the way to actually be rid of it.
    */
   async remove(id: string): Promise<void> {
