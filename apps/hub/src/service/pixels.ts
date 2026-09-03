@@ -8,7 +8,7 @@ const DEFAULT_PIXEL_TTL_MS = 15 * 60 * 1000;
 /** Remint only when the current grant has this little time left. */
 export const PIXEL_REFRESH_MS = 60 * 1000;
 
-export interface PixelGrant {
+interface PixelGrant {
   token: string;
   display: number;
   expires: number;

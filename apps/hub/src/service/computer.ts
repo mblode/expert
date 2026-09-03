@@ -23,7 +23,7 @@ import { PolicyService } from "./policy.ts";
 import type { PolicyVerdict } from "./policy.ts";
 import type { SeatService } from "./seat.ts";
 
-export interface ComputerOk {
+interface ComputerOk {
   results: ActionResult[];
   screenshot_b64?: string;
   display: typeof DISPLAY;

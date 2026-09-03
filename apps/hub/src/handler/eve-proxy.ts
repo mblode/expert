@@ -9,7 +9,7 @@ import { EVE_HUB_SECRET_HEADER, pickEveBotId } from "../host/eve.ts";
 
 const PREFIX = "/eve/v1/";
 
-export interface EveProxyDeps {
+interface EveProxyDeps {
   auth: AuthRegistry;
   bots: BotRegistry;
   /** Where this Bot's Eve listens. Empty string means it has no Eve. */

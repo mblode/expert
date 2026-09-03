@@ -62,6 +62,11 @@ export interface ConversationPage {
  * screen is one seat at a time by construction, so there is nothing more
  * specific to import and nothing more specific to invent. A WhatsApp
  * participant carries its JID here; this is the seat's equivalent.
+ *
+ * Stays exported with no importer because `api/computer.proto` documents it as
+ * the one non-JID `ConversationParticipant.ref` and `Seat.Conversations` already
+ * puts it on the wire, so it is a contract rather than an internal.
+ * @public
  */
 export const SEAT_HUMAN_REF = "seat";
 

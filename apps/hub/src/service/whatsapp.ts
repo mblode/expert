@@ -10,9 +10,9 @@ import { ComputerError } from "@computer/shared";
  * the hub uses for a box it cannot reach, so the web page shows one plain
  * state instead of a stack of fetch errors.
  */
-export type WhatsAppStatus = "unlinked" | "linking" | "open" | "closed";
+type WhatsAppStatus = "unlinked" | "linking" | "open" | "closed";
 
-export interface WhatsAppAccount {
+interface WhatsAppAccount {
   acct: string;
   bot: string;
   connector_id: string;
@@ -20,7 +20,7 @@ export interface WhatsAppAccount {
   status: WhatsAppStatus;
 }
 
-export interface WhatsAppLinkState {
+interface WhatsAppLinkState {
   acct: string;
   status: WhatsAppStatus;
   qr: string | null;
@@ -29,7 +29,7 @@ export interface WhatsAppLinkState {
   phone: string | null;
 }
 
-export interface WhatsAppGroup {
+interface WhatsAppGroup {
   jid: string;
   subject: string;
   size: number;
@@ -50,7 +50,7 @@ export interface WhatsAppAccountConfig {
   bot_name?: string;
 }
 
-export interface BridgeClientOptions {
+interface BridgeClientOptions {
   url: string;
   secret: string;
   fetchImpl?: typeof fetch;
@@ -58,7 +58,7 @@ export interface BridgeClientOptions {
 }
 
 export const DEFAULT_BRIDGE_URL = "http://127.0.0.1:2100";
-export const BRIDGE_SECRET_HEADER = "x-bridge-secret";
+const BRIDGE_SECRET_HEADER = "x-bridge-secret";
 
 export class BridgeClient {
   private readonly base: string;

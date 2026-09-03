@@ -16,9 +16,9 @@ const DEFAULT_FLY_API = "https://api.machines.dev";
 /** Inside a Fly Machine, no API token is needed. */
 const FLY_SOCKET = "/.fly/api";
 
-export type FlyAction = "list" | "get" | "status" | "wake" | "start" | "sleep" | "stop" | "suspend";
+type FlyAction = "list" | "get" | "status" | "wake" | "start" | "sleep" | "stop" | "suspend";
 
-export interface FlyConfig {
+interface FlyConfig {
   token: string;
   app: string;
   machine: string;
@@ -103,7 +103,7 @@ export function guestState(flyState: unknown): string {
   return s || "unknown";
 }
 
-export type FlyFetch = (
+type FlyFetch = (
   url: string,
   init?: { method?: string; headers?: Record<string, string> },
 ) => Promise<{

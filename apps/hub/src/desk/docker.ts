@@ -39,9 +39,9 @@ function deskDown(message: string): ComputerError {
   return new ComputerError("DAEMON_DOWN", message, classifyDeskFailure(message));
 }
 
-export type DeskTransport = "docker" | "local";
+type DeskTransport = "docker" | "local";
 
-export interface DockerDeskOptions {
+interface DockerDeskOptions {
   /** Required when transport is docker (compose host → desk container). */
   container?: string;
   user?: string;

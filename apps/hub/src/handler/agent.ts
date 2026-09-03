@@ -8,7 +8,7 @@ import type { TurnService } from "../service/turns.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
 
-export interface AgentDeps {
+interface AgentDeps {
   bots: BotRegistry;
   conversations: ConversationRegistry;
   turns: TurnService;

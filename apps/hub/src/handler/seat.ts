@@ -14,7 +14,7 @@ import { requireObject } from "./router.ts";
 /** Same cap as the model's `type` action. */
 const MAX_TYPE_CHARS = 4000;
 
-export interface SeatDeps {
+interface SeatDeps {
   auth: AuthRegistry;
   bots: BotRegistry;
   conversations: ConversationRegistry;
