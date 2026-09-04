@@ -102,6 +102,14 @@ Grok's shape: the machine is shared, the screen is not.
   exactly once on the wire), claims the window, and persists the
   roster. `Seat.DeleteBot` frees the screen and revokes the token. A
   paired seat is the box owner; the model cannot provision.
+- **A Bot that ships with the build provisions itself at boot.** Every
+  eve.dev project under the guest's bots root with no roster row gets one,
+  on the lowest free screen, with a minted token, exactly as `main` always
+  has. Nothing is minted over an existing row and nothing is ever removed,
+  so a token stays issued once and a Bot whose project is gone keeps its
+  screen and its thread until a person deletes it. The inverse holds too:
+  `DeleteBot` on a Bot the image still ships frees its screen only until
+  the next boot.
 - **A Bot's profile is the human's to edit.** `GET /roster` carries
   `profile { id, name, title, description, avatar_shape, avatar_color }`
   beside each Bot's id and screen, and `Seat.SetBotProfile { id, ... }`
@@ -109,11 +117,16 @@ Grok's shape: the machine is shared, the screen is not.
   into that Bot's system prompt, so it is identity rather than decoration:
   an owner's edit, not an `operator`'s, who drives the box without
   reshaping it. The request is the whole profile, `title` and `description`
-  are cleared by an empty string, and the mark is two closed sets (four
-  shapes, six colours) rather than free text, because the file lives on the
-  box at `/workspace/.bots/<id>/profile.json` where the model's `write_file`
-  reaches it and the colour lands in a client's inline style. The read
-  clamps the same way the write validates, for the same reason.
+  are cleared by an empty string, and the mark is two closed sets (eight
+  shapes, twelve colours) rather than free text, because the file lives on
+  the box at `/workspace/.bots/<id>/profile.json` where the model's
+  `write_file` reaches it and the colour lands in a client's inline style.
+  The read clamps the same way the write validates, for the same reason.
+  A Bot that ships with the build carries `agent/profile.json` in its
+  project, and the hub seeds that file once, into an empty profile, so a
+  Bot introduces itself correctly the first time the roster is read. It is
+  a seed and not a default: after the first boot the file on the volume is
+  the human's and the Bot's, and a deploy must not undo a rename.
 - Claims live on the box in `/workspace/.window-assignments.json` with
   sha256 owner hashes, written by `start-window`/`stop-window`. Window
   N serves RFB on port `5900 + N`.

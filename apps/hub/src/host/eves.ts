@@ -13,7 +13,7 @@
  */
 import { dirname, join, resolve } from "node:path";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
-import { planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
+import { eveProjectIds, planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
 import { Supervisor } from "./supervisor.ts";
 
 // Four segments up from apps/hub/src/host, not three: `../../..` is `apps/`,
@@ -35,7 +35,12 @@ const botsRoot = resolveEveBotsRoot({
   imageBots: join(repoRoot, "apps/eve/bots"),
 });
 
-const launches = planEveLaunches(ensureRosterAt(rosterPath), { botsRoot });
+// The roster gains a row for every project this tree ships, so `npm run up`
+// brings up the same Bots the guest does rather than only the ones a dev
+// happened to create by hand.
+const launches = planEveLaunches(ensureRosterAt(rosterPath, eveProjectIds(botsRoot)), {
+  botsRoot,
+});
 // No status file unless the caller asked for one: `/healthz` reads whatever
 // file it is pointed at and calls a file nobody refreshes stale, so only a
 // run that owns this supervisor should wire the hub to it.

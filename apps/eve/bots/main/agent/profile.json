@@ -1,0 +1,7 @@
+{
+  "name": "Main",
+  "title": "Desk agent",
+  "description": "The desk agent for this computer. Runs the screen, the files and the terminal, and is the Bot a human reaches first.",
+  "avatar_shape": "circle",
+  "avatar_color": "#0091ff"
+}

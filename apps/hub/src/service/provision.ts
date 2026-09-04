@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { ComputerError } from "@computer/shared";
+import type { BotProfile } from "@computer/shared";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { WindowManager } from "../desk/windows.ts";
@@ -95,6 +96,13 @@ export class ProvisionService {
     private readonly windows: WindowManager,
     private readonly store: BotStore,
     private readonly conversations: ConversationRegistry,
+    /**
+     * Who a Bot ships as, from its Eve project (`host/bot-seed.ts`). Used
+     * once, when the box has no profile for that Bot yet. Absent means every
+     * Bot starts under the hashed default, which is what a hub with no Eve
+     * projects beside it should do.
+     */
+    private readonly profileSeed?: (botId: string) => Partial<BotProfile> | undefined,
   ) {}
 
   /** Boot: mount the roster, ensure a primary bot exists, claim every window. */
@@ -130,7 +138,7 @@ export class ProvisionService {
   private async mountState(bot: Bot): Promise<void> {
     const seat = this.conversations.resolveSeat(bot.id);
     try {
-      await bot.state.init();
+      await bot.state.init(this.profileSeed?.(bot.id));
       await this.importTranscript(bot, seat.id);
     } catch (error) {
       console.warn(`bot ${bot.id}: box state unavailable (${(error as Error).message})`);

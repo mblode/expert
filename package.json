@@ -8,7 +8,7 @@
     "apps/web",
     "apps/whatsapp-bridge",
     "apps/eve",
-    "apps/eve/bots/main"
+    "apps/eve/bots/*"
   ],
   "type": "module",
   "scripts": {

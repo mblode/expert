@@ -8,6 +8,8 @@ import {
   NoopWindowManager,
 } from "./desk/index.ts";
 import { allowedBind, refuseBindMessage } from "./host/bind.ts";
+import { profileSeeds } from "./host/bot-seed.ts";
+import { resolveEveBotsRoot } from "./host/eve.ts";
 import { loadPolicy } from "./service/policy.ts";
 import { FileBotStore } from "./service/provision.ts";
 import { FilePrincipalStore } from "./service/principals.ts";
@@ -15,6 +17,14 @@ import { FileConnectorStore } from "./service/connectors.ts";
 import { FileConversationStore, FileMessageLog } from "./service/conversations.ts";
 import { BridgeClient, DEFAULT_BRIDGE_URL } from "./service/whatsapp.ts";
 import { PixelRegistry } from "./service/pixels.ts";
+
+// Where the Bots' Eve projects are, resolved exactly as the supervisor does
+// it: the hub reads `agent/profile.json` from the same tree, so a Bot's name,
+// label and mark come from the directory that is the agent.
+const botsRoot = resolveEveBotsRoot({
+  envBots: process.env.COMPUTER_EVE_BOTS,
+  imageBots: resolve(import.meta.dirname, "../../eve/bots"),
+});
 
 const bind = process.env.COMPUTER_BIND ?? "127.0.0.1";
 if (!allowedBind(bind)) {
@@ -66,6 +76,7 @@ const hub = createHub({
     secret: bridgeSecret,
     url: process.env.COMPUTER_BRIDGE_URL ?? DEFAULT_BRIDGE_URL,
   }),
+  profileSeed: profileSeeds(botsRoot),
   statusFile: process.env.COMPUTER_STATUS_FILE,
   vncUrl,
   vncHost: process.env.COMPUTER_VNC_HOST ?? "127.0.0.1",

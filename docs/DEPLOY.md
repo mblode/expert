@@ -96,6 +96,31 @@ Fly does not restart the Machine over a crash-looping Eve. Read the JSON, not
 the status code: `ok:false` with `eve-main` in `starting` right after a deploy
 is normal, and `state: "up"` is what you are waiting for.
 
+### A deploy that adds Bots
+
+A build that ships new projects under `apps/eve/bots` provisions them on the
+next boot: init mints a roster row and a token for each one, on the lowest
+free screen, and the supervisor starts an Eve per Bot. Nothing is minted over
+an existing row, so this is safe to run against a volume that already has a
+roster. Confirm the roster and the children after the wake:
+
+```bash
+# Every shipped Bot has a screen and a profile. Owner seat token required.
+curl -s https://mblode-computer.fly.dev/roster -H "authorization: Bearer $SEAT" \
+  | node -e 'const b=JSON.parse(require("fs").readFileSync(0)).bots; console.table(b.map(x=>({id:x.id,display:x.display,name:x.profile.name})))'
+
+# One `eve-<id>` child per Bot, each `up`.
+curl -s https://mblode-computer.fly.dev/healthz
+```
+
+**Size the guest first.** Every screen is an Xvfb, an openbox, an x11vnc and
+a Chromium, and every Bot is also a node process, so a roster of eight needs
+several gigabytes where one Bot needed 2. Fly's ceiling for a _suspendable_
+Machine is 2 GB, so a full roster means editing `[[vm]]` upward and giving up
+suspend-to-zero (`auto_stop_machines = "stop"`, a cold start on the next
+request), or shipping fewer Bots. A Machine that OOMs mid-boot restarts, and
+`/healthz` will show Eves flapping between `starting` and `backoff`.
+
 ## 3. The Vibey computer
 
 Same image, different app and volume.

@@ -17,6 +17,7 @@ import type { ConversationStore, MessageLog } from "./service/conversations.ts";
 import { TurnService } from "./service/turns.ts";
 import type { BridgeClient } from "./service/whatsapp.ts";
 import { eveUrlForDisplay } from "./host/eve.ts";
+import type { ProfileSeedReader } from "./host/bot-seed.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
 import type { PolicyService } from "./service/policy.ts";
@@ -64,6 +65,11 @@ interface HubOptions {
   bridge?: BridgeClient;
   /** The supervisor's status file (init writes it). Absent = /healthz reports the hub alone. */
   statusFile?: string;
+  /**
+   * Who a Bot ships as, read from its Eve project by `host/bot-seed.ts`.
+   * Seeded into an empty profile once, never over one the box already has.
+   */
+  profileSeed?: ProfileSeedReader;
 }
 
 export interface Hub {
@@ -87,7 +93,13 @@ export function createHub(opts: HubOptions): Hub {
   // store has to exist before a Bot can be mounted over it.
   const conversations = new ConversationRegistry(opts.conversationStore, opts.messageLog);
   const bots = new BotRegistry(opts.deskFactory, opts.store.load(), opts.policy, conversations);
-  const provision = new ProvisionService(bots, opts.windows, opts.store, conversations);
+  const provision = new ProvisionService(
+    bots,
+    opts.windows,
+    opts.store,
+    conversations,
+    opts.profileSeed,
+  );
   const auth = new AuthRegistry({
     agentTokens: () => bots.tokenEntries(),
     pixels: opts.pixels,

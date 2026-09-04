@@ -55,7 +55,17 @@ WORKDIR /opt/computer
 COPY --chown=box:box package.json package-lock.json ./
 COPY --chown=box:box apps/hub/package.json apps/hub/
 COPY --chown=box:box apps/eve/package.json apps/eve/
+# One line per Bot, not a wildcard: `COPY apps/eve/bots/*/package.json` flattens
+# every match onto one destination path, so the last one wins and npm ci
+# installs a workspace tree that is missing the rest.
 COPY --chown=box:box apps/eve/bots/main/package.json apps/eve/bots/main/
+COPY --chown=box:box apps/eve/bots/chief-of-staff/package.json apps/eve/bots/chief-of-staff/
+COPY --chown=box:box apps/eve/bots/software-engineer/package.json apps/eve/bots/software-engineer/
+COPY --chown=box:box apps/eve/bots/qa/package.json apps/eve/bots/qa/
+COPY --chown=box:box apps/eve/bots/pm/package.json apps/eve/bots/pm/
+COPY --chown=box:box apps/eve/bots/seo/package.json apps/eve/bots/seo/
+COPY --chown=box:box apps/eve/bots/gtm/package.json apps/eve/bots/gtm/
+COPY --chown=box:box apps/eve/bots/designer/package.json apps/eve/bots/designer/
 COPY --chown=box:box apps/whatsapp-bridge/package.json apps/whatsapp-bridge/
 COPY --chown=box:box packages/shared/package.json packages/shared/
 COPY --chown=box:box packages/proto/package.json packages/proto/
@@ -76,8 +86,14 @@ COPY --chown=box:box apps/eve apps/eve
 COPY --chown=box:box apps/whatsapp-bridge apps/whatsapp-bridge
 COPY --chown=box:box packages packages
 COPY --chown=box:box api api
-# `eve build` here so guest start only runs `eve start`.
-RUN npm run build --workspace=@computer/eve-main
+# `eve build` per Bot here so guest start only runs `eve start`. Every
+# directory under apps/eve/bots is a Bot, and init mints it a roster row on
+# the next boot, so building the list rather than naming it keeps the image
+# and the roster from drifting apart.
+# `|| exit 1` because the loop's status is the last iteration's: without it a
+# Bot that fails to build ships as an image whose supervisor restarts it
+# forever.
+RUN for bot in apps/eve/bots/*/; do npm run build --workspace="${bot%/}" || exit 1; done
 
 # PID 1 is tini as root on purpose: the entrypoint execs the root init, which
 # fixes volume ownership and supervises every other process as box or hub.

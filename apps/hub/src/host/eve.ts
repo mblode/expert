@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Supervisor } from "./supervisor.ts";
 import type { BotConfig } from "../service/bots.ts";
@@ -68,6 +68,49 @@ function eveProjectCwd(
     return botsRoot;
   }
   return undefined;
+}
+
+/**
+ * Every Bot this tree ships a project for, sorted, `main` first.
+ *
+ * The roster is what the hub mounts, and the project directory is what makes
+ * a Bot able to think, so a project with no roster row is a Bot that exists
+ * in git and nowhere else. `ensureRoster` uses this to mint the missing rows,
+ * which is what makes adding a Bot a deploy rather than a deploy plus seven
+ * RPCs against the running guest.
+ *
+ * A standalone Eve app at the root (a tenant overlay) is `main`, the same
+ * layout `eveProjectCwd` accepts.
+ */
+export function eveProjectIds(
+  botsRoot: string,
+  opts: { exists?: (path: string) => boolean; readdir?: (path: string) => string[] } = {},
+): string[] {
+  const exists = opts.exists ?? existsSync;
+  const readdir =
+    opts.readdir ??
+    ((path: string) =>
+      readdirSync(path, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name));
+  if (isEveProject(botsRoot, exists)) {
+    return ["main"];
+  }
+  let names: string[];
+  try {
+    names = readdir(botsRoot);
+  } catch {
+    return [];
+  }
+  // The same test `eveProjectCwd` applies to a nested project, so the rows
+  // this mints and the Eves the supervisor launches are the same set. A row
+  // with no Eve behind it is a Bot that answers DAEMON_DOWN.
+  const ids = names
+    .filter((name) => exists(join(botsRoot, name, "package.json")))
+    .toSorted((a, b) => a.localeCompare(b));
+  // `main` is the primary Bot and owns display 1, so it is claimed first when
+  // a fresh roster is seeded from an image that ships several projects.
+  return ids.includes("main") ? ["main", ...ids.filter((id) => id !== "main")] : ids;
 }
 
 /**

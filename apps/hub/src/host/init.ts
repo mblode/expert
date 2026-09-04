@@ -28,7 +28,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { userInfo } from "node:os";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
-import { planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
+import { eveProjectIds, planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
 import { Supervisor } from "./supervisor.ts";
 
 /**
@@ -136,7 +136,13 @@ const bridgeSecret = ensureEveSecret(
   join(dataDir, "whatsapp", "bridge-secret"),
   env.WHATSAPP_BRIDGE_SECRET,
 );
-const roster = ensureRosterAt(rosterPath);
+// Which Bots this build ships is a property of the tree, so the Eve root is
+// resolved before the roster rather than after it: every project with no
+// roster row gets one here, on the lowest free screen, and adding a Bot is a
+// deploy instead of a deploy plus a `CreateBot` against the running guest.
+const imageBots = join(repoRoot, "apps/eve/bots");
+const botsRoot = resolveEveBotsRoot({ envBots: env.COMPUTER_EVE_BOTS, imageBots });
+const roster = ensureRosterAt(rosterPath, eveProjectIds(botsRoot));
 for (const f of [
   "eve-secret",
   "bots.json",
@@ -155,8 +161,6 @@ for (const f of [
 //    `<project>/.eve/.workflow-data`; for the image Bots that is the image,
 //    which a redeploy replaces. Point it at the volume so a parked turn
 //    survives a deploy. The overlay under /workspace is already there.
-const imageBots = join(repoRoot, "apps/eve/bots");
-const botsRoot = resolveEveBotsRoot({ envBots: env.COMPUTER_EVE_BOTS, imageBots });
 if (botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS) {
   for (const id of safeReaddir(botsRoot)) {
     const project = join(botsRoot, id);

@@ -18,10 +18,14 @@ import { cn } from "@/lib/utils";
 const MAX = { description: 500, name: 48, title: 64 } as const;
 
 const SHAPE_LABEL: Record<AvatarShape, string> = {
+  blob: "Blob",
   circle: "Circle",
   diamond: "Diamond",
   hexagon: "Hexagon",
   square: "Square",
+  squircle: "Squircle",
+  tablet: "Tablet",
+  wedge: "Wedge",
 };
 
 /**

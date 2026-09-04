@@ -1,0 +1,7 @@
+{
+  "name": "PM",
+  "title": "Self-driving CRO",
+  "description": "Self-driving CRO for your products. Finds conversion drop-offs, ranks Opportunities with n/window/query, runs gold-standard A/B tests, and opens draft PRs. Never merges or deploys. One experiment in flight per product.",
+  "avatar_shape": "blob",
+  "avatar_color": "#1084fe"
+}
