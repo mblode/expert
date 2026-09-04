@@ -65,6 +65,48 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(evePortForDisplay(2)).toBe(2001);
   });
 
+  /**
+   * A Bot made from `Seat.CreateBot` has no directory and cannot be given one
+   * without a deploy. Without this it is a roster row with no process, which
+   * answers DAEMON_DOWN forever and says nothing about why.
+   */
+  it("runs a Bot with no directory of its own on the template project", () => {
+    const botsRoot = tempDir();
+    botProject(botsRoot, "main");
+    botProject(botsRoot, "template");
+    const launches = planEveLaunches(
+      [
+        { display: 1, id: "main", token: "bot_main" },
+        { display: 9, id: "night", token: "bot_night" },
+      ],
+      { botsRoot },
+    );
+    expect(launches).toEqual([
+      { botId: "main", cwd: join(botsRoot, "main"), display: 1, port: 2000, token: "bot_main" },
+      {
+        botId: "night",
+        cwd: join(botsRoot, "template"),
+        display: 9,
+        port: 2008,
+        token: "bot_night",
+      },
+    ]);
+  });
+
+  it("is not a Bot itself: the template never gets a roster row", () => {
+    const botsRoot = tempDir();
+    botProject(botsRoot, "main");
+    botProject(botsRoot, "template");
+    botProject(botsRoot, "qa");
+    expect(eveProjectIds(botsRoot)).toEqual(["main", "qa"]);
+  });
+
+  it("has nothing to fall back to on a build that ships no template", () => {
+    const botsRoot = tempDir();
+    botProject(botsRoot, "main");
+    expect(planEveLaunches([{ display: 4, id: "night", token: "t" }], { botsRoot })).toEqual([]);
+  });
+
   it("launches roster main from a standalone Eve project at botsRoot", () => {
     const root = tempDir();
     writeFileSync(join(root, "package.json"), JSON.stringify({ name: "vcmc-agent" }));
@@ -171,12 +213,17 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(ensureRoster(store, ["main"]).map((c) => c.id)).toEqual(["main", "retired"]);
   });
 
-  it("refuses to put a ninth Bot on a box with eight screens", () => {
+  it("refuses the Bot past the last screen", () => {
     const store = new FileBotStore(join(tempDir(), "bots.json"));
-    const nine = Array.from({ length: 9 }, (_, i) => `bot-${i}`);
-    const roster = ensureRoster(store, nine);
+    // One more than there are screens, counted from the ceiling rather than
+    // written out: the number is allowed to move, and a test that pins it to
+    // eight would fail for the wrong reason when it does.
+    const tooMany = Array.from({ length: MAX_DISPLAYS + 1 }, (_, i) => `bot-${i}`);
+    const roster = ensureRoster(store, tooMany);
     expect(roster).toHaveLength(MAX_DISPLAYS);
-    expect(roster.map((c) => c.display)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(roster.map((c) => c.display)).toEqual(
+      Array.from({ length: MAX_DISPLAYS }, (_, i) => i + 1),
+    );
   });
 
   it("does not mint over a roster row that already has a token", () => {

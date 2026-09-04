@@ -1,6 +1,6 @@
 "use client";
 
-import { SearchIcon } from "blode-icons-react";
+import { PlusIcon, SearchIcon } from "blode-icons-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -34,6 +34,7 @@ export function BotSidebar({
   computers,
   display,
   onDisplayChange,
+  onNewBot,
   onSignOut,
   onSwitchComputer,
   profiles,
@@ -44,6 +45,8 @@ export function BotSidebar({
   computers: { id: string; label: string }[];
   display: number;
   onDisplayChange: (display: number) => void;
+  /** Absent on a hub that cannot make one (an older build, or no owner seat). */
+  onNewBot?: () => void;
   onSignOut: () => void;
   onSwitchComputer: (id: string) => void;
   /** By Bot id, from the roster. Empty until it answers. */
@@ -91,6 +94,18 @@ export function BotSidebar({
             </select>
           ) : (
             <span className="truncate font-semibold text-sm">{current?.label ?? "Computer"}</span>
+          )}
+          {onNewBot && (
+            <Button
+              aria-label="New Bot"
+              className="-mr-1 ml-auto size-8 shrink-0 pointer-coarse:size-11"
+              onClick={onNewBot}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <PlusIcon />
+            </Button>
           )}
         </div>
 

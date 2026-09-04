@@ -61,7 +61,7 @@ superviseEves(sup, launches, {
   logDir,
 });
 const stopWatchingWake = watchWake({
-  botIds: launches.map((l) => l.botId).filter((id) => id !== primaryBotId),
+  botIds: () => launches.map((l) => l.botId).filter((id) => id !== primaryBotId),
   dir: wakeDir,
   onEvent: (line) => console.log(`computer ${line}`),
   sup,

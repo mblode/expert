@@ -9,8 +9,19 @@ export type PixelY = number & { readonly __brand: "PixelY" };
 export const DISPLAY = { height: 800, scale: 1, width: 1280 } as const;
 export type Display = typeof DISPLAY;
 
-/** Window index = X display number. Primary is :1; forks are :2+. */
-export const MAX_DISPLAYS = 8 as const;
+/**
+ * Window index = X display number. Primary is :1; forks are :2+.
+ *
+ * This is a ceiling on how many Bots may exist, not on how many may run. A
+ * registered Bot costs a roster row and a stopped child; what costs memory is
+ * an Eve that is awake (224 MB) and a screen that is claimed (about 430), and
+ * both of those have their own caps of two, which is the arithmetic that
+ * actually keeps the guest inside 2 GB (`host/wake.ts`, `service/screens.ts`).
+ * It was 8, which was exactly the number of Bots the build ships, so
+ * `Seat.CreateBot` on this computer could only ever answer CONFLICT: the
+ * screen it needs was taken by a Bot that came with the image.
+ */
+export const MAX_DISPLAYS = 16 as const;
 export const PRIMARY_DISPLAY = 1 as const;
 
 export type BotId = string & { readonly __brand: "BotId" };

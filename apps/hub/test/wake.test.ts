@@ -55,7 +55,7 @@ describe("the supervisor follows the markers", () => {
     let now = 1000;
     keepAwake(dir, "qa", 5000);
     const stop = watchWake({
-      botIds: ["qa", "seo"],
+      botIds: () => ["qa", "seo"],
       dir,
       now: () => now,
       pollMs: 60_000,
@@ -76,7 +76,7 @@ describe("the supervisor follows the markers", () => {
     const later: string[] = [];
     const laterStops: string[] = [];
     watchWake({
-      botIds: ["qa"],
+      botIds: () => ["qa"],
       dir,
       now: () => now,
       pollMs: 60_000,
@@ -175,7 +175,7 @@ describe("a marker is a request, not a guarantee", () => {
     keepAwake(dir, "seo", 8000);
     keepAwake(dir, "pm", 7000);
     watchWake({
-      botIds: ["qa", "seo", "pm"],
+      botIds: () => ["qa", "seo", "pm"],
       dir,
       maxAwake: 2,
       now: () => 1000,
@@ -198,7 +198,7 @@ describe("a marker is a request, not a guarantee", () => {
     keepAwake(dir, "qa", 9000);
     expect(() =>
       watchWake({
-        botIds: ["qa"],
+        botIds: () => ["qa"],
         dir,
         now: () => 1000,
         pollMs: 60_000,
