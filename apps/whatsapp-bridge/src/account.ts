@@ -31,7 +31,7 @@ import type {
 } from "@whiskeysockets/baileys";
 import type { Logger } from "pino";
 
-import { authDir } from "./accounts.ts";
+import { authDir, connectorEndpoint } from "./accounts.ts";
 import type { AccountConfig, AccountRecord, AccountSummary, LinkStatus } from "./accounts.ts";
 import { createCacheStore, createSentStore } from "./baileys-cache.ts";
 import { boundedMap, boundedSet } from "./bounded-set.ts";
@@ -438,10 +438,15 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   // shown without ever handling a raw WhatsApp key. Bounded; see message-ids.ts.
   const messageIndex = createMessageIndex(MESSAGE_INDEX_CAP);
 
+  // The account's own hub when it has one, else the process-wide COMPUTER_URL.
+  // A bridge beside its own hub leaves hub_url empty and talks to loopback; a
+  // bridge serving several tenants sets it per account, and each tenant's
+  // public Fly hostname is what wakes a suspended Machine (its 6PN address
+  // would not: only Fly Proxy starts a stopped or suspended guest).
   const askAgent = createConnectorClient({
     acct,
     connectorSecret: record.connector_secret,
-    endpoint: `${env.computerUrl}/connectors/${record.connector_id}/message`,
+    endpoint: connectorEndpoint(record, env.computerUrl),
     logger,
     sleep,
     timeoutMs: env.agentTimeoutMs,

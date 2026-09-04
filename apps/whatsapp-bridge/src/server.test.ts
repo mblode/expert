@@ -9,7 +9,7 @@ import type { AccountHandle, AccountHealth, LinkState } from "./account.ts";
 import { defaultAccountConfig } from "./accounts.ts";
 import type { AccountConfig, AccountSummary } from "./accounts.ts";
 import type { SendEnvelope } from "./send-envelope.ts";
-import { HttpError, startServer } from "./server.ts";
+import { HttpError, resolvePrincipal, startServer } from "./server.ts";
 import type { BridgeApi, StartServerArgs } from "./server.ts";
 import type { Store } from "./store.ts";
 
@@ -91,6 +91,7 @@ let server: ReturnType<typeof startServer>;
 
 const api: BridgeApi = {
   accountIds: () => [...accounts.keys()],
+  accountSecrets: () => [...accounts.keys()].map((acct) => ({ acct, secret: `secret-${acct}` })),
   createAccount: async (body) => {
     if (typeof body.acct !== "string" || !body.connector_secret) {
       throw new HttpError(400, "acct and connector_secret required");
@@ -101,7 +102,7 @@ const api: BridgeApi = {
     created.push(body);
     const fake = fakeAccount(body.acct);
     accounts.set(body.acct, fake);
-    return fake.summary;
+    return { bridgeSecret: `secret-${body.acct}`, summary: fake.summary };
   },
   deleteAccount: async (acct) => accounts.delete(acct),
   getConfig: (acct) => accounts.get(acct)?.config,
@@ -226,6 +227,66 @@ test("every other route rejects a missing or wrong secret", async () => {
   assert.equal(wrong.status, 401);
 });
 
+// ---- per-account credentials and scoping ------------------------------------
+
+/** Call a data route with one account's own bridge secret rather than the admin one. */
+const asAccount = (acct: string, method: string, path: string, body?: unknown) =>
+  fetch(`${baseUrl}${path}`, {
+    body: body === undefined ? undefined : JSON.stringify(body),
+    headers: { "content-type": "application/json", "x-bridge-secret": `secret-${acct}` },
+    method,
+  });
+
+test("an account secret reaches its own data routes", async () => {
+  const res = await asAccount("main", "GET", "/messages?group=1@g.us");
+  assert.equal(res.status, 200);
+});
+
+test("an account secret naming another account is refused, not redirected", async () => {
+  // The whole point of the scoping: with one shared secret and `acct` read off
+  // the request, this call read the other tenant's chat and returned 200.
+  accounts.set("other", fakeAccount("other"));
+  try {
+    assert.equal(await status(asAccount("main", "GET", "/messages?group=1@g.us&acct=other")), 403);
+    assert.equal(
+      await status(
+        asAccount("main", "POST", "/send", { acct: "other", jid: "1@s.whatsapp.net", text: "hi" }),
+      ),
+      403,
+    );
+    // Its own id spelled out is the same request, so it is allowed.
+    assert.equal(await status(asAccount("main", "GET", "/messages?group=1@g.us&acct=main")), 200);
+  } finally {
+    accounts.delete("other");
+  }
+});
+
+test("an account secret cannot reach the account routes at all", async () => {
+  assert.equal(await status(asAccount("main", "GET", "/accounts")), 403);
+  assert.equal(await status(asAccount("main", "GET", "/accounts/main/config")), 403);
+  assert.equal(await status(asAccount("main", "POST", "/accounts/main/link", {})), 403);
+  assert.equal(await status(asAccount("main", "DELETE", "/accounts/main")), 403);
+});
+
+test("an unknown secret is 401 whether or not it looks like an account's", async () => {
+  assert.equal(await status(asAccount("nobody", "GET", "/messages?group=1@g.us")), 401);
+});
+
+test("resolvePrincipal never matches an empty secret on either side", () => {
+  assert.equal(resolvePrincipal("", "admin", [{ acct: "main", secret: "s" }]), null);
+  // An account whose bridge_secret has not been minted yet must not be
+  // unlocked by sending an empty header, which is what an equality check on
+  // two empty strings would do.
+  assert.equal(resolvePrincipal("", "admin", [{ acct: "main", secret: "" }]), null);
+  assert.deepEqual(resolvePrincipal("s", "admin", [{ acct: "main", secret: "s" }]), {
+    acct: "main",
+    scope: "account",
+  });
+  assert.deepEqual(resolvePrincipal("admin", "admin", [{ acct: "main", secret: "s" }]), {
+    scope: "admin",
+  });
+});
+
 // ---- accounts ---------------------------------------------------------------
 
 test("GET /accounts lists summaries and never the connector secret", async () => {
@@ -248,7 +309,9 @@ test("POST /accounts creates (201), refuses a duplicate (409) and a bad body (40
     connector_secret: "s2",
   });
   assert.equal(res.status, 201);
-  assert.deepEqual(await res.json(), { acct: "second" });
+  // The minted credential comes back exactly here, so the hub can hand it to
+  // that account's Bot. Nothing else on the API ever returns it.
+  assert.deepEqual(await res.json(), { acct: "second", bridge_secret: "secret-second" });
   assert.equal(created.at(-1)?.connector_id, "whatsapp-second");
   assert.equal(
     await status(call("POST", "/accounts", { acct: "second", connector_secret: "s2" })),
