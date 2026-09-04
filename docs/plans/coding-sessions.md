@@ -1,6 +1,6 @@
 # Coding sessions: what runs the work, who owns the record
 
-Plan date: 2026-09-04. Companion to [`../ARCHITECTURE.md`](../ARCHITECTURE.md) (why the pieces are cut where they are), [`conversations.md`](conversations.md) (the record this builds on), [`../GROK-BOT.md`](../GROK-BOT.md) (what the product being cloned actually does) and [`../../api/DESIGN.md`](../../api/DESIGN.md) (the five tools and the shell contract). Nothing here is written yet. This document is an overview and a recommendation, not an implementation plan: it says which of the available shapes to buy, what each one actually owns, and what the box forces on any of them.
+Plan date: 2026-09-04. Companion to [`../ARCHITECTURE.md`](../ARCHITECTURE.md) (why the pieces are cut where they are), [`conversations.md`](conversations.md) (the record this builds on), [`../GROK-BOT.md`](../GROK-BOT.md) (what the product being cloned actually does) and [`../../api/DESIGN.md`](../../api/DESIGN.md) (the five tools and the shell contract). This document is an overview and a recommendation rather than an implementation plan: it says which of the available shapes to buy, what each one actually owns, and what the box forces on any of them. The delegated half of that recommendation has since shipped (`apps/hub/src/service/coding.ts`, section 6); the on-box half has not.
 
 ## 1. The question is three questions
 
