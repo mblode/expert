@@ -144,6 +144,25 @@ export interface TemplateSections {
   skills: boolean;
 }
 
+/**
+ * Which sections a published template actually carries.
+ *
+ * The stored document is the record of what was shared, so this is how the
+ * sheet reopens on the choices that were made rather than on its own defaults.
+ * Without it, "Update from this Bot" re-published a Bot with whatever the
+ * switches happened to say: memories that were deliberately included silently
+ * dropped, skills that were deliberately left out silently restored.
+ */
+export function sectionsOf(template: BotTemplate): TemplateSections {
+  return {
+    instructions: template.instructions.length > 0,
+    memories: template.memories.length > 0,
+    plugins: template.plugins.length > 0,
+    routines: template.routines.length > 0,
+    skills: template.skills.length > 0,
+  };
+}
+
 export function pickSections(template: BotTemplate, sections: TemplateSections): BotTemplate {
   return {
     ...template,

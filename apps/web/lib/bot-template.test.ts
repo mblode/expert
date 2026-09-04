@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { cronLabel, parseTemplate, pickSections, templateView } from "./bot-template";
+import { cronLabel, parseTemplate, pickSections, sectionsOf, templateView } from "./bot-template";
 import type { TemplateSections } from "./bot-template";
 
 const WHOLE = {
@@ -118,6 +118,27 @@ describe("a stored Bot template", () => {
     });
     expect(bare.instructions).toBe("");
     expect(bare.routines).toEqual([]);
+  });
+
+  /**
+   * A published document is the record of what its owner chose to share, so
+   * reopening the sheet has to read the choices back off it. Reading them
+   * from the sheet's own defaults instead is how an update silently drops a
+   * section that was deliberately included, or restores one that was not.
+   */
+  it("says which sections a shared template actually carries", () => {
+    const parsed = parseTemplate(WHOLE)!;
+    expect(sectionsOf(parsed)).toEqual({
+      instructions: true,
+      memories: true,
+      plugins: true,
+      routines: true,
+      skills: true,
+    });
+    // What went out is what comes back: pick, then read, and the answer is
+    // the same set of switches.
+    const kept = pickSections(parsed, { ...ALL, memories: false, skills: false });
+    expect(sectionsOf(kept)).toMatchObject({ memories: false, skills: false, routines: true });
   });
 
   it("counts what is in it, and says whether the link is live", () => {

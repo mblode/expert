@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/copy-button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { pickSections } from "@/lib/bot-template";
+import { pickSections, sectionsOf } from "@/lib/bot-template";
 import type { TemplateSections, TemplateView } from "@/lib/bot-template";
 import { SeatError } from "@/lib/seat";
 import type { BotTemplate, Seat } from "@/lib/seat";
@@ -68,6 +68,14 @@ export function ShareTemplate({
   /** False when the rewrite was asked for and did not run. Say so, loudly. */
   const [rewritten, setRewritten] = useState(true);
   const [shared, setShared] = useState<TemplateView | undefined>();
+  /**
+   * A row this sheet created but has not got a link on yet.
+   *
+   * Publishing is a save and then a switch, and the save is what mints the
+   * id. Without remembering it, a second press after a failed switch made a
+   * second row, and the sheet would open on the orphan next time.
+   */
+  const [draftId, setDraftId] = useState<string | undefined>();
   const [detail, setDetail] = useState(false);
   const [sections, setSections] = useState<TemplateSections>({
     instructions: true,
@@ -96,6 +104,10 @@ export function ShareTemplate({
         const mine = body?.templates.find((row) => row.botId === botId);
         if (live && mine) {
           setShared(mine);
+          // The stored document is the record of what was shared, so the
+          // switches come back from it rather than from this sheet's own
+          // defaults: an update must not silently re-decide what travels.
+          setSections(sectionsOf(mine.template));
           setStep("shared");
         }
       })
@@ -125,6 +137,18 @@ export function ShareTemplate({
     }
   };
 
+  /** Turn the link on for a row that is stored but not shared. */
+  const turnLinkOn = (id: string) =>
+    post<TemplateView>(`/api/templates/${id}`, "PATCH", { published: true });
+
+  /**
+   * Save what is on screen, then make sure the link is on.
+   *
+   * Idempotent on a retry, which is the whole shape of it: the row this sheet
+   * already made is written again rather than a second one being minted, so a
+   * publish that failed halfway is fixed by pressing the button again instead
+   * of leaving an orphan draft behind the next time the sheet opens.
+   */
   const publish = async () => {
     if (!exported) {
       return;
@@ -133,18 +157,12 @@ export function ShareTemplate({
     setFailure(null);
     try {
       const template = pickSections(exported, sections);
-      // Save, then publish: two calls because they are two decisions, and the
-      // row exists either way so a failure between them leaves a draft rather
-      // than nothing.
-      const created = await post<TemplateView>("/api/templates", "POST", {
-        botId,
-        computerId,
-        template,
-      });
-      const published = await post<TemplateView>(`/api/templates/${created.id}`, "PATCH", {
-        published: true,
-      });
-      setShared(published);
+      const existing = shared?.id ?? draftId;
+      const row = existing
+        ? await post<TemplateView>(`/api/templates/${existing}`, "PUT", { template })
+        : await post<TemplateView>("/api/templates", "POST", { botId, computerId, template });
+      setDraftId(row.id);
+      setShared(row.published ? row : await turnLinkOn(row.id));
       setStep("shared");
     } catch (error) {
       setFailure(message(error, "Could not create the link."));
@@ -153,23 +171,30 @@ export function ShareTemplate({
     }
   };
 
+  /**
+   * Re-read the Bot and go back to review rather than writing on one click.
+   *
+   * An update is the same decision as the first publish, made again over a
+   * document that has changed since: what it carries has to be looked at
+   * before it replaces what people already have at that link.
+   */
   const update = async () => {
+    if (shared) {
+      setSections(sectionsOf(shared.template));
+    }
+    await build(generic);
+  };
+
+  const publishStored = async () => {
     if (!shared) {
       return;
     }
     setBusy(true);
     setFailure(null);
     try {
-      const answer = await seat.exportBotTemplate(botId, generic);
-      setNote(answer.note);
-      setRewritten(!generic || answer.generic);
-      setShared(
-        await post<TemplateView>(`/api/templates/${shared.id}`, "PUT", {
-          template: pickSections(answer.template, sections),
-        }),
-      );
+      setShared(await turnLinkOn(shared.id));
     } catch (error) {
-      setFailure(message(error, "Could not update the template."));
+      setFailure(message(error, "Could not turn the link on."));
     } finally {
       setBusy(false);
     }
@@ -184,6 +209,7 @@ export function ShareTemplate({
     try {
       await post(`/api/templates/${shared.id}`, "DELETE");
       setShared(undefined);
+      setDraftId(undefined);
       setExported(undefined);
       setStep("confirm");
     } catch (error) {
@@ -195,7 +221,14 @@ export function ShareTemplate({
 
   const body = (): React.ReactElement => {
     if (step === "shared" && shared) {
-      return <Shared onUpdate={() => void update()} busy={busy} view={shared} />;
+      return (
+        <Shared
+          busy={busy}
+          onPublish={() => void publishStored()}
+          onUpdate={() => void update()}
+          view={shared}
+        />
+      );
     }
     if (step === "review" && exported) {
       const picked = pickSections(exported, sections);
@@ -312,7 +345,7 @@ export function ShareTemplate({
               </Button>
             ) : (
               <Button loading={busy} onClick={() => void publish()} type="button">
-                Publish
+                {shared ? "Update" : "Publish"}
               </Button>
             )}
           </>
@@ -325,10 +358,13 @@ export function ShareTemplate({
 /** The link, and what turning it off means. */
 function Shared({
   busy,
+  onPublish,
   onUpdate,
   view,
 }: {
   busy: boolean;
+  /** Turn the link on for a row that was saved without one. */
+  onPublish: () => void;
   onUpdate: () => void;
   view: TemplateView;
 }): React.ReactElement {
@@ -352,10 +388,19 @@ function Shared({
         </Badge>
       </div>
 
-      <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 p-2 pl-3">
-        <span className="min-w-0 flex-1 truncate font-mono text-xs">{url || "…"}</span>
-        <CopyButton label="Copy the link" value={url} />
-      </div>
+      {view.published ? (
+        <div className="flex items-center gap-2 rounded-xl border border-border bg-muted/40 p-2 pl-3">
+          <span className="min-w-0 flex-1 truncate font-mono text-xs">{url || "…"}</span>
+          <CopyButton label="Copy the link" value={url} />
+        </div>
+      ) : (
+        // Saved, with no link on it. That is the state a publish which failed
+        // halfway leaves behind, and without this button the only way out of
+        // it was to delete the template and start again.
+        <Button disabled={busy} onClick={onPublish}>
+          Publish
+        </Button>
+      )}
 
       <p className="text-muted-foreground text-sm">
         Anyone with this link can add a copy of {view.template.name} to their own computer. Deleting
