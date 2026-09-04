@@ -184,7 +184,16 @@ fly logs -a mblode-computer       # "routine <id> is due: waking <bot>"
 ```
 
 Adding a computer to the fleet means adding it to `CLOCK_TARGETS` and
-redeploying the clock; nothing else on either side changes.
+redeploying the clock; nothing else on either side changes. Vibey is
+deliberately not a target: its Eve is an overlay on that Machine's volume, so
+its routines are not in this repo and not in the clock's image, and waking it
+on Blode's schedule would wake it at the wrong minutes and still miss its own.
+
+One Machine runs the clock, so it is a single point of failure for every
+routine on every computer, and a routine whose minute passes while it is down
+is missed rather than caught up. `fly scale count 2 -c fly.clock.toml` is safe
+if that matters: the clock holds no state and a wake is a GET, so the second
+one is a no-op.
 
 ## 4. The Vibey computer
 

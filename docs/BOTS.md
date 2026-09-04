@@ -92,12 +92,16 @@ which then wakes the Bot, and the Bot's own croner fires the routine. The
 clock keeps pinging while the box answers `busy`, so Fly does not suspend the
 guest underneath a turn that is still running.
 
-Two things follow. The clock reads the routine manifests out of its own image,
-so **a routine change is two deploys**: the guest and the clock
-(`docs/DEPLOY.md`). And the clock is now the single point of failure for every
+Three things follow. The clock reads the routine manifests out of its own
+image, so **a routine change is two deploys**: the guest and the clock
+(`docs/DEPLOY.md`). The clock is now the single point of failure for every
 routine on every computer, which is why it has a health check that fails when
-it has no schedule or no targets: read `/healthz` on it to see the next firings
-it is actually waiting for.
+it has no schedule or no targets: read `/healthz` on it to see the next
+firings it is actually waiting for. And a routine whose minute passes while
+the clock itself is down is still missed and still not caught up: firing one
+late would mean telling a Bot to run it, which needs a credential and a route
+into the box, and the clock holds neither on purpose. The failure is rarer,
+not gone.
 
 ## What a Bot costs
 

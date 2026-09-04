@@ -26,6 +26,12 @@ import { parseTargets, Tenant } from "./tenant.ts";
  *
  * It costs about $2 a month, against $10 or more for the 2 GB guest simply
  * never suspending, which was the only other honest fix.
+ *
+ * What it still does not do, and cannot: catch up. A routine whose minute
+ * passes while this app is down (a deploy, a crash, a host it did not come
+ * back on) is missed, exactly as before. Firing one late would mean telling a
+ * Bot to run it, which needs a credential and a route into the box, and this
+ * app deliberately holds neither. The failure is rarer, not gone.
  */
 
 /** Seconds in the environment, milliseconds in the code. */
@@ -48,7 +54,9 @@ const timeoutMs = ms("CLOCK_TIMEOUT_SEC", 30);
 // The same tree the guest image ships, so a routine is declared once, in the
 // Bot's own directory, and both alarms read that.
 const botsRoot = process.env.CLOCK_BOTS ?? resolve(import.meta.dirname, "../../eve/bots");
-const schedule = readSchedule(botsRoot);
+const schedule = readSchedule(botsRoot, (line) => {
+  console.warn(line);
+});
 const routineCount = schedule.reduce((n, bot) => n + bot.routines.length, 0);
 
 const log = (line: string): void => {

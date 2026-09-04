@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 import { test } from "node:test";
 import { validCron } from "@computer/shared";
 import { dueSoon, nextDue, readSchedule } from "./schedule.ts";
@@ -51,6 +53,33 @@ test("a routine that does not run today is not due", () => {
   // and nothing else fires at that hour.
   assert.equal(dueSoon(brief, at("2026-09-10T19:58:00Z"), 3 * 60_000).length, 1);
   assert.deepEqual(dueSoon(brief, at("2026-09-11T19:58:00Z"), 3 * 60_000), []);
+});
+
+test("a manifest that cannot be used says so, rather than skipping quietly", () => {
+  const root = mkdtempSync(join(tmpdir(), "clock-bots-"));
+  try {
+    mkdirSync(join(root, "broken", "agent"), { recursive: true });
+    writeFileSync(join(root, "broken", "agent", "routines.json"), "{ not json");
+    mkdirSync(join(root, "quiet", "agent"), { recursive: true });
+    const warnings: string[] = [];
+    assert.deepEqual(
+      readSchedule(root, (line) => warnings.push(line)),
+      [],
+    );
+    // A Bot with no manifest is the normal case. A Bot with one the clock
+    // cannot read is a routine nothing will ever be woken for, which is the
+    // failure this whole app exists to stop being silent.
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? "", /broken/u);
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+});
+
+test("every manifest this build ships parses", () => {
+  const warnings: string[] = [];
+  readSchedule(BOTS_ROOT, (line) => warnings.push(line));
+  assert.deepEqual(warnings, []);
 });
 
 test("the next firing of every routine, soonest first", () => {

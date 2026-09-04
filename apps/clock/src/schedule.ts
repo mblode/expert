@@ -29,8 +29,18 @@ interface DueRoutine {
   atMs: number;
 }
 
-/** Every Bot's declared routines, read from a `apps/eve/bots`-shaped tree. */
-export function readSchedule(botsRoot: string): BotRoutines[] {
+/**
+ * Every Bot's declared routines, read from a `apps/eve/bots`-shaped tree.
+ *
+ * A Bot with no manifest is the normal case and is passed over in silence. A
+ * Bot with a manifest this cannot use is not: that is a routine nothing will
+ * ever be woken for, and it would otherwise look exactly like a Bot that has
+ * none.
+ */
+export function readSchedule(
+  botsRoot: string,
+  warn: (line: string) => void = () => undefined,
+): BotRoutines[] {
   let entries: string[];
   try {
     entries = readdirSync(botsRoot, { withFileTypes: true })
@@ -52,6 +62,10 @@ export function readSchedule(botsRoot: string): BotRoutines[] {
     const routines = parseRoutines(raw);
     if (routines.length > 0) {
       schedule.push({ botId, routines });
+    } else if (raw.trim() !== "[]") {
+      warn(
+        `clock: ${botId}/agent/routines.json has no routine this can read; it will wake nothing`,
+      );
     }
   }
   return schedule;

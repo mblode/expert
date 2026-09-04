@@ -122,7 +122,14 @@ export class Tenant {
       if (res.ok) {
         this.failures = 0;
         if (this.boxBusy) {
-          this.until = Math.min(this.now() + this.opts.busyGraceMs, this.deadline);
+          // Never shortens the window, the same rule the hub's own wake
+          // markers follow. Assigning here instead would mean a box that says
+          // it is busy gets a *shorter* hold than the wake alone gave it,
+          // whenever the grace is the smaller of the two.
+          this.until = Math.min(
+            Math.max(this.until, this.now() + this.opts.busyGraceMs),
+            this.deadline,
+          );
         }
       } else {
         this.failures += 1;

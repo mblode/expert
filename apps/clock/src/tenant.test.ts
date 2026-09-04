@@ -66,6 +66,22 @@ test("a box that says it is busy keeps the Machine up past the wake window", asy
   assert.equal(t.holding(7999), true);
 });
 
+test("a busy box never gets a shorter hold than the wake alone gave it", async () => {
+  const calls: Call[] = [];
+  // The grace is shorter than the wake window, which is the case where
+  // assigning rather than extending would cut the hold short.
+  const t = tenant({
+    calls,
+    holdMs: 9000,
+    maxHoldMs: 20_000,
+    now: () => 0,
+    reply: () => ({ body: { busy: true }, ok: true }),
+  });
+  t.wake("morning-brief");
+  await t.poll();
+  assert.equal(t.holding(8999), true, "the busy answer must not shorten the window");
+});
+
 test("a busy box cannot hold the Machine up forever", async () => {
   const calls: Call[] = [];
   let now = 0;

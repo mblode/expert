@@ -12,14 +12,21 @@ interface HealthReport {
   ok: boolean;
   hub: true;
   /**
-   * True while some Bot is at work. Absent where nothing can answer that
-   * (local dev, tests).
+   * True while some Bot is awake: a live wake marker, which is what a turn in
+   * progress keeps touching. Absent where nothing can answer that (local dev,
+   * tests).
    *
    * This is the box's half of the conversation with `apps/clock`, which is
    * the only clock a Machine that suspends to zero has. The clock wakes the
    * Machine before a routine minute with a GET here, and this field is how it
-   * learns whether the turn it woke is still running: the Machine has to stay
-   * up for that, and only the box knows when it is over.
+   * learns whether it still has to hold the Machine up: a routine turn makes
+   * no traffic of its own, so the platform would otherwise suspend the guest
+   * underneath it.
+   *
+   * Deliberately the marker rather than a turn count. A marker is granted for
+   * the length of a routine's window and extended by the Bot's own tool
+   * calls, so it covers the turn and then some, and erring towards awake
+   * costs money where erring towards asleep costs the routine.
    */
   busy?: boolean;
   /** Absent when no supervisor status is available (local dev, tests). */
