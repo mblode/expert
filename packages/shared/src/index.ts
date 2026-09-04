@@ -90,6 +90,302 @@ export interface BotProfile {
  */
 export const BOT_PROFILE_MAX = { description: 500, name: 48, title: 64 } as const;
 
+/**
+ * A Bot template: everything that makes a Bot itself, as one portable
+ * document.
+ *
+ * A Bot is a profile, a brief, what it remembers, the procedures it follows,
+ * the routines it runs and the plugins it needs. Six files in six places, and
+ * until now the only way to hand someone the Bot you built was to describe it.
+ * This is that setup lifted off one computer so it can be dropped onto
+ * another: `Seat.ExportBotTemplate` reads it, hello.expert stores it behind a
+ * link, and `Seat.ApplyBotTemplate` writes it onto a Bot on the computer of
+ * whoever opened that link.
+ *
+ * Two things are deliberately not in here. **Credentials never are**: a
+ * plugin travels as the address of a service and how it authenticates, so the
+ * person installing it signs in as themselves. And **nothing that identifies
+ * the sender** is either: no bot id, no computer, no file paths off the
+ * originating box, because a template is published to strangers.
+ *
+ * Snake_cased like the rest of the wire, and versioned: a client that meets a
+ * `version` it does not know should say so rather than guess at the shape.
+ */
+export const BOT_TEMPLATE_VERSION = 1 as const;
+
+/**
+ * One procedure. `use_when` is the trigger line out of the skill's own
+ * frontmatter, which is what a person reads to decide whether they want it,
+ * and what the hub puts in the prompt so the model knows the skill is there
+ * before it reads the body.
+ */
+export interface BotTemplateSkill {
+  id: string;
+  name: string;
+  use_when: string;
+  body: string;
+}
+
+/** A schedule, as declared. See `Routine` for the cron subset that is parsed. */
+export interface BotTemplateRoutine {
+  id: string;
+  title: string;
+  cron: string;
+  prompt: string;
+}
+
+/**
+ * A service the Bot expects to be able to reach, never a way in to it.
+ * `auth` says what the person installing this will have to provide: a key of
+ * their own, or a sign-in.
+ */
+export interface BotTemplatePlugin {
+  name: string;
+  url: string;
+  auth: "static" | "oauth";
+}
+
+export interface BotTemplate {
+  version: typeof BOT_TEMPLATE_VERSION;
+  name: string;
+  title: string;
+  description: string;
+  avatar_shape: AvatarShape;
+  avatar_color: AvatarColor;
+  instructions: string;
+  memories: string[];
+  skills: BotTemplateSkill[];
+  routines: BotTemplateRoutine[];
+  plugins: BotTemplatePlugin[];
+}
+
+/**
+ * What a template may weigh, per field and in total.
+ *
+ * These are lower than they could be on purpose. A template's instructions
+ * and skill index go into a system prompt on someone else's computer, and its
+ * whole point is to arrive from a stranger, so the caps are what stop a link
+ * from being a way to fill another person's context window. Everything over a
+ * cap is truncated rather than refused, and a list over its count is cut:
+ * a template is a gift, and half a gift still installs.
+ */
+export const BOT_TEMPLATE_MAX = {
+  instructions: 8000,
+  memories: 100,
+  memory: 500,
+  plugin_name: 80,
+  plugins: 20,
+  routine_id: 48,
+  routine_prompt: 4000,
+  routine_title: 120,
+  routines: 20,
+  skill_body: 8000,
+  skill_id: 48,
+  skill_name: 64,
+  skill_use_when: 300,
+  skills: 20,
+} as const;
+
+/**
+ * Read a template from something a stranger wrote, clamped.
+ *
+ * The only two things that make this throw are a body that is not an object
+ * and a missing name: a template with no name is not a template, and every
+ * other field has a defensible empty value. Everything else degrades, which
+ * is the same posture `BotState.profile` takes on the way out of the box and
+ * for the same reason: the caller is holding a document it did not author.
+ */
+export function parseBotTemplate(value: unknown): BotTemplate {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new ComputerError("VALIDATION", "template must be an object");
+  }
+  const o = value as Record<string, unknown>;
+  const name = text(o.name, BOT_PROFILE_MAX.name);
+  if (!name) {
+    throw new ComputerError("VALIDATION", "template name is required");
+  }
+  const fallback = defaultTemplateMark(name);
+  return {
+    avatar_color: pick(AVATAR_COLORS, o.avatar_color) ?? fallback.avatar_color,
+    avatar_shape: pick(AVATAR_SHAPES, o.avatar_shape) ?? fallback.avatar_shape,
+    description: text(o.description, BOT_PROFILE_MAX.description),
+    instructions: text(o.instructions, BOT_TEMPLATE_MAX.instructions),
+    memories: list(o.memories, BOT_TEMPLATE_MAX.memories)
+      .map((entry) => text(entry, BOT_TEMPLATE_MAX.memory))
+      .filter((entry) => entry.length > 0),
+    name,
+    plugins: list(o.plugins, BOT_TEMPLATE_MAX.plugins)
+      .map((entry) => parsePlugin(entry))
+      .filter((entry): entry is BotTemplatePlugin => entry !== undefined),
+    routines: dedupe(
+      list(o.routines, BOT_TEMPLATE_MAX.routines)
+        .map((entry, i) => parseTemplateRoutine(entry, i))
+        .filter((entry): entry is BotTemplateRoutine => entry !== undefined),
+    ),
+    skills: dedupe(
+      list(o.skills, BOT_TEMPLATE_MAX.skills)
+        .map((entry, i) => parseTemplateSkill(entry, i))
+        .filter((entry): entry is BotTemplateSkill => entry !== undefined),
+    ),
+    title: text(o.title, BOT_PROFILE_MAX.title),
+    version: BOT_TEMPLATE_VERSION,
+  };
+}
+
+/**
+ * A slug for a skill or a routine inside a template.
+ *
+ * It becomes a filename on the receiving computer, so it is generated here
+ * rather than carried through: a stranger's id is a path, and a path from a
+ * stranger is a traversal waiting to be written somewhere it should not be.
+ */
+export function templateSlug(raw: unknown, max: number, fallback: string): string {
+  const slug = (typeof raw === "string" ? raw : "")
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/gu, "-")
+    .replaceAll(/^-+|-+$/gu, "")
+    .slice(0, max)
+    .replaceAll(/-+$/gu, "");
+  return slug || fallback;
+}
+
+function parseTemplateSkill(value: unknown, index = 0): BotTemplateSkill | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const o = value as Record<string, unknown>;
+  const name = text(o.name, BOT_TEMPLATE_MAX.skill_name);
+  const body = text(o.body, BOT_TEMPLATE_MAX.skill_body);
+  if (!(name || body)) {
+    return undefined;
+  }
+  return {
+    body,
+    id: templateSlug(o.id ?? name, BOT_TEMPLATE_MAX.skill_id, `skill-${index + 1}`),
+    name: name || "Skill",
+    use_when: text(o.use_when, BOT_TEMPLATE_MAX.skill_use_when),
+  };
+}
+
+/**
+ * A routine whose cron this codebase cannot evaluate is dropped rather than
+ * carried: both alarms answer "is it due?" with `cronMatches`, so a schedule
+ * neither of them parses is a promise the receiving computer cannot keep.
+ */
+function parseTemplateRoutine(value: unknown, index = 0): BotTemplateRoutine | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const o = value as Record<string, unknown>;
+  const cron = typeof o.cron === "string" ? o.cron.trim() : "";
+  if (!validCron(cron)) {
+    return undefined;
+  }
+  const title = text(o.title, BOT_TEMPLATE_MAX.routine_title);
+  return {
+    cron,
+    id: templateSlug(o.id ?? title, BOT_TEMPLATE_MAX.routine_id, `routine-${index + 1}`),
+    prompt: text(o.prompt, BOT_TEMPLATE_MAX.routine_prompt),
+    title: title || "Routine",
+  };
+}
+
+function parsePlugin(value: unknown): BotTemplatePlugin | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+  const o = value as Record<string, unknown>;
+  const name = text(o.name, BOT_TEMPLATE_MAX.plugin_name);
+  if (!name) {
+    return undefined;
+  }
+  // The address is rendered as a link on a public page, so the scheme is a
+  // closed set rather than whatever the document says.
+  let url = "";
+  try {
+    const parsed = new URL(typeof o.url === "string" ? o.url : "");
+    url = parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : "";
+  } catch {
+    url = "";
+  }
+  return { auth: o.auth === "oauth" ? "oauth" : "static", name, url };
+}
+
+/**
+ * A mark for a template whose own is missing or outside the palette. Derived
+ * from the name so the same template always looks the same, and arithmetic
+ * rather than a digest so this module stays free of node imports: two of the
+ * three things that read it are not the hub.
+ */
+function defaultTemplateMark(name: string): {
+  avatar_color: AvatarColor;
+  avatar_shape: AvatarShape;
+} {
+  let sum = 0;
+  for (const ch of name) {
+    sum = (sum * 31 + ch.codePointAt(0)!) % 0xff_ff_ff;
+  }
+  return {
+    avatar_color: AVATAR_COLORS[sum % AVATAR_COLORS.length]!,
+    avatar_shape: AVATAR_SHAPES[Math.floor(sum / 16) % AVATAR_SHAPES.length]!,
+  };
+}
+
+function list(value: unknown, max: number): unknown[] {
+  return Array.isArray(value) ? value.slice(0, max) : [];
+}
+
+/**
+ * One entry per id, first wins.
+ *
+ * An id is a filename on the receiving computer, and two skills called the
+ * same thing would be one file written twice: the second body would silently
+ * become the first's, which is worse than the second skill being missing.
+ */
+function dedupe<T extends { id: string }>(entries: T[]): T[] {
+  const seen = new Set<string>();
+  return entries.filter((entry) => {
+    if (seen.has(entry.id)) {
+      return false;
+    }
+    seen.add(entry.id);
+    return true;
+  });
+}
+
+/**
+ * Trimmed, truncated, and stripped of the control characters that let text
+ * from a document fake structure in a prompt or a transcript. `\n` and `\t`
+ * survive, because instructions and skill bodies are markdown.
+ */
+function text(value: unknown, max: number): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  return stripControl(value).trim().slice(0, max);
+}
+
+/**
+ * Tab and newline survive, every other control character goes. Written as a
+ * codepoint filter rather than a regex on purpose: a character class of
+ * control characters is a thing linters refuse and readers misread, and this
+ * says what it keeps rather than what it deletes.
+ */
+function stripControl(value: string): string {
+  let out = "";
+  for (const ch of value) {
+    const code = ch.codePointAt(0) ?? 0;
+    if (code === 9 || code === 10 || (code >= 0x20 && code !== 0x7f)) {
+      out += ch;
+    }
+  }
+  return out;
+}
+
+function pick<T extends string>(allowed: readonly T[], v: unknown): T | undefined {
+  return typeof v === "string" && (allowed as readonly string[]).includes(v) ? (v as T) : undefined;
+}
+
 export const WORKSPACE = "/workspace" as const;
 export const SPEC_ID = "computer.v1" as const;
 export const SPEC_VERSION = "1.0.0" as const;

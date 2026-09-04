@@ -1,7 +1,5 @@
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import { user } from "./schema";
-
 /**
  * What the first run learned, one row per user.
  *
@@ -17,7 +15,11 @@ import { user } from "./schema";
 export const onboarding = sqliteTable("onboarding", {
   completedAt: integer("completed_at", { mode: "timestamp_ms" }).notNull(),
   tools: text("tools").notNull(),
-  userId: text("user_id")
-    .primaryKey()
-    .references(() => user.id, { onDelete: "cascade" }),
+  /**
+   * No declared reference to `user`, matching the `CREATE TABLE` in
+   * `lib/onboarding-store.ts`: this table is made at runtime on a database
+   * that may never have run a migration, where `user` can be absent too, and
+   * a reference declared here is a claim the first insert goes on to fail on.
+   */
+  userId: text("user_id").primaryKey(),
 });

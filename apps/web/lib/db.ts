@@ -1,6 +1,7 @@
 import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 
+import { botTemplate } from "../db/bot-template";
 import { computer } from "../db/computer";
 import { computerSeat } from "../db/computer-seat";
 import { invite } from "../db/invite";
@@ -29,6 +30,7 @@ const client = createClient({
 export const db = drizzle(client, {
   schema: {
     ...schema,
+    botTemplate,
     computer,
     computerSeat,
     invite,

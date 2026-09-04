@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "ai": "^7.0.87",
     "eve": "^0.49.0",
     "just-bash": "^3.4.2"
   },

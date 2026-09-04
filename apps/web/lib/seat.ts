@@ -81,6 +81,59 @@ export interface BotProfile {
   avatar_color: AvatarColor;
 }
 
+/**
+ * A Bot's whole setup as one document: what `Seat.ExportBotTemplate` hands
+ * back and what `Seat.ApplyBotTemplate` writes onto a Bot.
+ *
+ * Mirrored from `BotTemplate` in `packages/shared`, the way the avatar sets
+ * above are, because this app does not depend on that package. The hub clamps
+ * on both sides of the wire; `lib/bot-template.ts` is this end's own clamp,
+ * for the stretch where a template is a row in Turso and a page served to
+ * whoever has the link.
+ */
+export interface BotTemplateSkill {
+  id: string;
+  name: string;
+  use_when: string;
+  body: string;
+}
+
+export interface BotTemplateRoutine {
+  id: string;
+  title: string;
+  cron: string;
+  prompt: string;
+}
+
+export interface BotTemplatePlugin {
+  name: string;
+  url: string;
+  auth: "static" | "oauth";
+}
+
+/** What `Seat.ExportBotTemplate` answers with. */
+interface ExportedTemplate {
+  template: BotTemplate;
+  /** Whether the rewrite ran. False under a generic request means read it. */
+  generic: boolean;
+  /** One sentence: what was left out, or why the rewrite did not happen. */
+  note: string;
+}
+
+export interface BotTemplate {
+  version: number;
+  name: string;
+  title: string;
+  description: string;
+  avatar_shape: AvatarShape;
+  avatar_color: AvatarColor;
+  instructions: string;
+  memories: string[];
+  skills: BotTemplateSkill[];
+  routines: BotTemplateRoutine[];
+  plugins: BotTemplatePlugin[];
+}
+
 /** What the roster route reports per Bot. Owner seats only. */
 interface RosterBot {
   id: string;
@@ -254,6 +307,27 @@ export function createSeat(hubUrl: string, token: string) {
       call<{ display: number; id: string; token: string }>("CreateBot", { id }),
     clipboardSet: (text: string, display?: number) =>
       call<{ text: string }>("ClipboardSet", { text, display }),
+    /**
+     * A Bot's setup as one portable document, read off the computer it runs
+     * on. Owner-only, and it carries what the Bot remembers, so what is
+     * published from it is ticked by the person looking at it rather than
+     * decided here.
+     *
+     * `generic` asks the computer to rewrite it for a stranger: the same
+     * assistant with the person taken out of it. The reply says whether that
+     * rewrite actually ran, because a document that still names you, handed
+     * back under a flag that says it does not, is the one answer worse than
+     * refusing.
+     */
+    exportBotTemplate: (id: string, generic = false) =>
+      call<ExportedTemplate>("ExportBotTemplate", { generic, id }),
+    /**
+     * Write a template onto a Bot on this computer. Replaces that Bot's
+     * brief, skills, routines and plugin list, and appends to its memory, so
+     * it is called on a Bot that was just made rather than on one at work.
+     */
+    applyBotTemplate: (id: string, template: BotTemplate) =>
+      call<BotProfile>("ApplyBotTemplate", { id, template }),
     hubUrl,
     /** `grab` holds the left button down across moves, that is how a drag works. */
     move: (dx: number, dy: number, grab: boolean, display?: number) =>

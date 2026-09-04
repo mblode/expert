@@ -11,6 +11,15 @@
  * on the guest `/workspace` is a real path this process can see, but under
  * `npm run up` the desk is a container and the volume is only reachable
  * through the hub. One door works in both.
+ *
+ * The profile is not the whole of it. A Bot installed from a shared template
+ * also has a brief and skills on the box (`instructions.md`, `skills.json`
+ * beside `skills/<id>.md`), written by `Seat.ApplyBotTemplate`, and they are
+ * read here for the same reason the profile is: they are what makes two Bots
+ * on one project different agents, and nothing else would ever read them.
+ * Skill *bodies* stay on disk and out of the prompt: a skill is a procedure
+ * to open when it is wanted, and five of them in every turn is a context
+ * window spent on work that is not being done.
  */
 
 import { hubRpc } from "./hub.ts";
@@ -28,6 +37,49 @@ function botId(): string | undefined {
 
 export function profilePath(id: string): string {
   return `${BOT_STATE_ROOT}/${id}/profile.json`;
+}
+
+function instructionsPath(id: string): string {
+  return `${BOT_STATE_ROOT}/${id}/instructions.md`;
+}
+
+function skillsPath(id: string): string {
+  return `${BOT_STATE_ROOT}/${id}/skills.json`;
+}
+
+/** Mirrors BOT_TEMPLATE_MAX in `@computer/shared`, for the same reason MAX does. */
+const TEMPLATE_MAX = { instructions: 8000, skill_name: 64, skill_use_when: 300, skills: 20 };
+
+/** One line per skill: what it is called, where it lives, and when to open it. */
+export function skillIndex(id: string, raw: string | undefined): string | undefined {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw ?? "");
+  } catch {
+    return undefined;
+  }
+  if (!Array.isArray(parsed)) {
+    return undefined;
+  }
+  const lines: string[] = [];
+  for (const entry of parsed.slice(0, TEMPLATE_MAX.skills)) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+    const o = entry as Record<string, unknown>;
+    const slug = clamp(o.id, 48);
+    if (!slug) {
+      continue;
+    }
+    const name = clamp(o.name, TEMPLATE_MAX.skill_name) || slug;
+    const useWhen = clamp(o.use_when, TEMPLATE_MAX.skill_use_when);
+    lines.push(
+      `- ${name} (${BOT_STATE_ROOT}/${id}/skills/${slug}.md)${useWhen ? `: ${useWhen}` : ""}`,
+    );
+  }
+  return lines.length
+    ? ["Skills you have. Read one with read_file before you use it:", ...lines].join("\n")
+    : undefined;
 }
 
 /**
@@ -79,18 +131,38 @@ function clamp(v: unknown, max: number): string {
 }
 
 /**
- * The block for this turn. Every failure is "no profile yet": a Bot whose
+ * The block for this turn. Every failure is "not written yet": a Bot whose
  * identity could not be read still has to answer, and the instructions
  * already tell it to say its brief is empty and ask rather than invent one.
+ *
+ * Three reads rather than one, and each one stands on its own: a Bot that
+ * came with the build has a profile and no template files, a Bot installed
+ * from a shared template has all three, and neither should be held up by the
+ * other's absence.
  */
 export async function botIdentityPrompt(): Promise<string | undefined> {
   const id = botId();
   if (!id) {
     return undefined;
   }
+  const [profile, brief, skills] = await Promise.all([
+    readBoxFile(profilePath(id)),
+    readBoxFile(instructionsPath(id)),
+    readBoxFile(skillsPath(id)),
+  ]);
+  const blocks = [
+    identityPrompt(id, profile),
+    clamp(brief, TEMPLATE_MAX.instructions) || undefined,
+    skillIndex(id, skills),
+  ].filter((block): block is string => Boolean(block));
+  return blocks.length ? blocks.join("\n\n") : undefined;
+}
+
+/** Missing file, unreadable box, hub not answering: all "nothing there yet". */
+async function readBoxFile(path: string): Promise<string | undefined> {
   try {
-    const { content } = await hubRpc<{ content: string }>("readFile", { path: profilePath(id) });
-    return identityPrompt(id, content);
+    const { content } = await hubRpc<{ content: string }>("readFile", { path });
+    return content;
   } catch {
     return undefined;
   }

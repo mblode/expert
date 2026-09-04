@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { identityPrompt, profilePath } from "./profile.ts";
+import { identityPrompt, profilePath, skillIndex } from "./profile.ts";
 
 /**
  * The plumbing behind `instructions.md`'s promise. A Bot made at runtime runs
@@ -52,5 +52,44 @@ describe("the identity block a Bot folds into its own prompt", () => {
   it("reads the file the hub writes", () => {
     // Mirrors BotState.profilePath in apps/hub/src/service/state.ts.
     expect(profilePath("night")).toBe("/workspace/.bots/night/profile.json");
+  });
+});
+
+/**
+ * The other half of what a Bot reads off the box at turn time, and the only
+ * reason installing a shared template does anything at all: without it the
+ * brief and the skills `Seat.ApplyBotTemplate` writes are files no turn ever
+ * opens.
+ */
+describe("the skills a Bot was given", () => {
+  it("lists each one with where it lives and when to open it", () => {
+    const block = skillIndex(
+      "cos",
+      JSON.stringify([
+        { id: "calendar", name: "Calendar", use_when: "Use when asked about the day." },
+        { id: "voice", name: "Voice", use_when: "" },
+      ]),
+    );
+    expect(block).toContain("Calendar (/workspace/.bots/cos/skills/calendar.md): Use when asked");
+    // No trigger line is not a reason to hide the skill: the path is the half
+    // that matters, and the model can open it and see.
+    expect(block).toContain("Voice (/workspace/.bots/cos/skills/voice.md)");
+  });
+
+  it("contributes nothing for a Bot with no skills, and never throws on a bad file", () => {
+    expect(skillIndex("cos", "[]")).toBe(undefined);
+    expect(skillIndex("cos", undefined)).toBe(undefined);
+    expect(skillIndex("cos", "{ not json")).toBe(undefined);
+    // An entry with no id is an entry with no file behind it.
+    expect(skillIndex("cos", JSON.stringify([{ name: "Nameless" }]))).toBe(undefined);
+  });
+
+  /** The bodies are the point of the paths: five of them per turn is the cost. */
+  it("never puts a body in the prompt", () => {
+    const block = skillIndex(
+      "cos",
+      JSON.stringify([{ body: "Open the week view.", id: "calendar", name: "Calendar" }]),
+    );
+    expect(block).not.toContain("Open the week view");
   });
 });

@@ -28,10 +28,21 @@ function ensureOnboardingTable(): Promise<void> {
   return onboardingTableReady;
 }
 
+/**
+ * No foreign key, unlike the declared schema this used to mirror.
+ *
+ * The reason there is a `CREATE TABLE` here at all is that the database may
+ * never have run a migration, and on such a database `user` is missing for
+ * exactly the same reason. SQLite accepts the DDL either way and then throws
+ * `no such table: main.user` on the first insert, which is the render error
+ * this function exists to prevent, moved from the read to the write. `invite`
+ * and `bot_template` are made the same way and declare none for the same
+ * reason.
+ */
 async function createOnboardingTable(): Promise<void> {
   await db.run(sql`
     CREATE TABLE IF NOT EXISTS onboarding (
-      user_id TEXT PRIMARY KEY NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+      user_id TEXT PRIMARY KEY NOT NULL,
       completed_at INTEGER NOT NULL,
       tools TEXT NOT NULL
     )
