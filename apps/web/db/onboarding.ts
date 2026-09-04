@@ -16,12 +16,10 @@ export const onboarding = sqliteTable("onboarding", {
   completedAt: integer("completed_at", { mode: "timestamp_ms" }).notNull(),
   tools: text("tools").notNull(),
   /**
-   * No foreign key, like `invite` and `bot_template`: this table is created
-   * at runtime by `CREATE TABLE IF NOT EXISTS` on a database that may never
-   * have run a migration, and a reference declared here but absent there is a
-   * claim the code would go on to rely on. It also made the first write
-   * depend on `user` already existing, which is a second table's problem
-   * standing in front of this one's.
+   * No declared reference to `user`, matching the `CREATE TABLE` in
+   * `lib/onboarding-store.ts`: this table is made at runtime on a database
+   * that may never have run a migration, where `user` can be absent too, and
+   * a reference declared here is a claim the first insert goes on to fail on.
    */
   userId: text("user_id").primaryKey(),
 });

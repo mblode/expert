@@ -5,23 +5,46 @@ import { db } from "./db";
 import { keepTools } from "./onboarding";
 
 /**
- * The table, made on first use.
+ * Create the table on first use, the way `invite-store.ts` does.
  *
- * Every other table this app writes at runtime does the same (`invite`,
- * `bot_template`), and this one did not: `db:push` is a command somebody runs,
- * not part of the deploy, so on a database where it had not been run the very
- * first read threw `no such table: onboarding`. That read is awaited in the
- * root server component, so it took the whole page down for anyone signed in
- * while signed-out visitors saw the marketing page as usual: a minified
- * React #441, which is a Server Components render error with the reason
- * withheld in production.
+ * There is no migration step in this deployment: nothing runs `drizzle-kit`
+ * against Turso, so a table declared in `db/` exists only if some code makes
+ * it. This one did not, and the first signed-in render after it shipped threw
+ * `no such table: onboarding` inside a Server Component, which reaches the
+ * browser as a bare "Something broke" with the message stripped. The marketing
+ * page kept rendering, so the site looked up while every account was locked
+ * out of it.
+ *
+ * Memoised per warm instance, and the promise is dropped on failure so the
+ * next request retries rather than inheriting a rejection forever.
  */
-async function ensureOnboardingTable(): Promise<void> {
+let onboardingTableReady: Promise<void> | undefined;
+
+function ensureOnboardingTable(): Promise<void> {
+  onboardingTableReady ??= createOnboardingTable().catch((error: unknown) => {
+    onboardingTableReady = undefined;
+    throw error;
+  });
+  return onboardingTableReady;
+}
+
+/**
+ * No foreign key, unlike the declared schema this used to mirror.
+ *
+ * The reason there is a `CREATE TABLE` here at all is that the database may
+ * never have run a migration, and on such a database `user` is missing for
+ * exactly the same reason. SQLite accepts the DDL either way and then throws
+ * `no such table: main.user` on the first insert, which is the render error
+ * this function exists to prevent, moved from the read to the write. `invite`
+ * and `bot_template` are made the same way and declare none for the same
+ * reason.
+ */
+async function createOnboardingTable(): Promise<void> {
   await db.run(sql`
     CREATE TABLE IF NOT EXISTS onboarding (
       user_id TEXT PRIMARY KEY NOT NULL,
-      tools TEXT NOT NULL,
-      completed_at INTEGER NOT NULL
+      completed_at INTEGER NOT NULL,
+      tools TEXT NOT NULL
     )
   `);
 }
@@ -42,17 +65,8 @@ export interface OnboardingState {
  * longer knows the name of.
  */
 export async function readOnboarding(userId: string): Promise<OnboardingState> {
-  let row: typeof onboarding.$inferSelect | undefined;
-  try {
-    await ensureOnboardingTable();
-    [row] = await db.select().from(onboarding).where(eq(onboarding.userId, userId)).limit(1);
-  } catch {
-    // A database that will not answer must not stand between a person and
-    // their computer. Read as done: the cost is that someone new skips the
-    // first run, where the cost of the other answer is an owner stuck on it,
-    // unable to reach the box, because the write cannot land either.
-    return { done: true, tools: [] };
-  }
+  await ensureOnboardingTable();
+  const [row] = await db.select().from(onboarding).where(eq(onboarding.userId, userId)).limit(1);
   if (!row) {
     return { done: false, tools: [] };
   }
@@ -70,8 +84,8 @@ export async function readOnboarding(userId: string): Promise<OnboardingState> {
 /** Finish the first run. Skipping is the same write with an empty answer. */
 export async function completeOnboarding(userId: string, tools: unknown): Promise<string[]> {
   const kept = keepTools(tools);
-  const row = { completedAt: new Date(), tools: JSON.stringify(kept) };
   await ensureOnboardingTable();
+  const row = { completedAt: new Date(), tools: JSON.stringify(kept) };
   await db
     .insert(onboarding)
     .values({ ...row, userId })
