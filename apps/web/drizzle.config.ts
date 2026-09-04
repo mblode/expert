@@ -13,5 +13,6 @@ export default defineConfig({
     "./db/computer-seat.ts",
     "./db/invite.ts",
     "./db/bot-template.ts",
+    "./db/onboarding.ts",
   ],
 });

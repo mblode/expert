@@ -1,6 +1,6 @@
 export const siteConfig = {
   description:
-    "An agent with its own computer. Always on, and you can take the mouse whenever you want.",
+    "A team of Bots with a computer of their own. Always on, and you can take the mouse whenever you want.",
   installCommand: "npx skills add https://hello.expert",
   links: {
     author: "https://blode.co",

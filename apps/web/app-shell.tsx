@@ -47,7 +47,7 @@ function signOut(seat?: { hubUrl: string; seatToken: string }): void {
 }
 
 /** The server page already required a session; this only reads the seat off it. */
-export function App(): React.ReactElement {
+export function App({ tools }: { tools: string[] }): React.ReactElement {
   const { data: session, isPending } = authClient.useSession();
   const [recovered, setRecovered] = useState<BoundSeat | null>(null);
 
@@ -97,6 +97,7 @@ export function App(): React.ReactElement {
       onRecovered={setRecovered}
       onSignOut={() => signOut({ hubUrl: seat.hubUrl, seatToken: seat.seatToken })}
       seatToken={seat.seatToken}
+      tools={tools}
       userEmail={session?.user?.email}
     />
   );
@@ -122,6 +123,7 @@ function Workspace({
   onRecovered,
   onSignOut,
   seatToken,
+  tools,
   userEmail,
 }: {
   computerId: string;
@@ -131,6 +133,8 @@ function Workspace({
   onRecovered: (seat: BoundSeat) => void;
   onSignOut: () => void;
   seatToken: string;
+  /** What this account said it lives in, at the first run. Empty is normal. */
+  tools: string[];
   userEmail?: string;
 }): React.ReactElement {
   const seat = useMemo(() => createSeat(hubUrl, seatToken), [hubUrl, seatToken]);
@@ -302,6 +306,7 @@ function Workspace({
         screenNeedsYou={waitingElsewhere}
         seat={seat}
         seatState={screens.find((s) => s.display === display)?.state}
+        tools={tools}
       />
 
       <div className="hidden min-h-0 border-border border-l lg:block">{rail}</div>
