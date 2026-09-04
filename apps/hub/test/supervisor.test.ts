@@ -162,3 +162,61 @@ describe("supervisor", () => {
     expect(sup.status().children[0]!.pid).not.toBe(first);
   });
 });
+
+describe("a lazy child sleeps and wakes", () => {
+  const dirs: string[] = [];
+  const sups: Supervisor[] = [];
+  afterEach(async () => {
+    await Promise.all(sups.splice(0).map((s) => s.stopAll(500)));
+    while (dirs.length) {
+      rmSync(dirs.pop()!, { force: true, recursive: true });
+    }
+  });
+
+  it("does not start a second process while the first is still dying", async () => {
+    const sup = new Supervisor({ backoff: { initialMs: 1, maxMs: 2, stableMs: 10 } });
+    sups.push(sup);
+    const dir = mkdtempSync(join(tmpdir(), "hub-lazy-"));
+    dirs.push(dir);
+    const log = join(dir, "eve-qa.log");
+    sup.register({
+      args: [
+        "-e",
+        "setInterval(() => {}, 1000); process.on('SIGTERM', () => setTimeout(() => process.exit(0), 150));",
+      ],
+      cmd: process.execPath,
+      id: "eve-qa",
+      lazy: true,
+      log,
+    });
+    expect(sup.status().children[0]?.state).toBe("stopped");
+    // A stopped lazy child is a healthy box, not a fault.
+    expect(sup.status().ok).toBe(true);
+
+    sup.ensure("eve-qa");
+    await waitFor(
+      () => sup.status().children[0]?.state === "up" || sup.status().children[0]?.pid !== null,
+    );
+    const first = sup.status().children[0]?.pid;
+
+    const stopping = sup.stop("eve-qa");
+    sup.ensure("eve-qa");
+    await stopping;
+    await waitFor(() => sup.status().children[0]?.pid !== null);
+    const second = sup.status().children[0]?.pid;
+    expect(second).not.toBe(first);
+    expect(sup.status().children[0]?.state).not.toBe("stopped");
+    await sup.stopAll(200);
+  });
+});
+
+async function waitFor(check: () => boolean, timeoutMs = 3000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (check()) {
+      return;
+    }
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error("timed out waiting");
+}

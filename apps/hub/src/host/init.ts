@@ -147,7 +147,14 @@ const bridgeSecret = ensureEveSecret(
 // deploy instead of a deploy plus a `CreateBot` against the running guest.
 const imageBots = join(repoRoot, "apps/eve/bots");
 const botsRoot = resolveEveBotsRoot({ envBots: env.COMPUTER_EVE_BOTS, imageBots });
-const roster = ensureRosterAt(rosterPath, eveProjectIds(botsRoot));
+// Only a tree this build shipped may mint a Bot. The overlay
+// (`/workspace/eve/bots`) is on the volume, which `box` owns, so the model's
+// own `write_file` reaches it: seeding from there would turn a directory the
+// model can create into a roster row, a minted agent token and one of the
+// eight screens. The overlay still replaces a Bot's code, which is what it is
+// for; it just cannot bring a Bot into existence.
+const trustedBots = botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS;
+const roster = ensureRosterAt(rosterPath, trustedBots ? eveProjectIds(botsRoot) : []);
 for (const f of [
   "eve-secret",
   "bots.json",
@@ -166,7 +173,7 @@ for (const f of [
 //    `<project>/.eve/.workflow-data`; for the image Bots that is the image,
 //    which a redeploy replaces. Point it at the volume so a parked turn
 //    survives a deploy. The overlay under /workspace is already there.
-if (botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS) {
+if (trustedBots) {
   for (const id of safeReaddir(botsRoot)) {
     const project = join(botsRoot, id);
     if (!existsSync(join(project, "package.json"))) {
@@ -258,8 +265,11 @@ sup.start({
 // registered asleep and started when the hub says it is wanted, because an
 // Eve is 224 MB and eight of them do not fit beside a desktop on a 2 GB
 // guest. `wakeDir` is the whole conversation between the two processes.
-const primaryBotId = roster.find((b) => b.display === 1)?.id ?? "main";
 const eves = planEveLaunches(roster, { botsRoot });
+// From the launches, not the roster: if the display-1 row names a Bot this
+// build ships no project for, taking its id here would mark every Bot lazy
+// and boot a computer with nothing running and `/healthz` calling that fine.
+const primaryBotId = eves.find((e) => e.display === 1)?.botId ?? eves[0]?.botId ?? "main";
 superviseEves(sup, eves, {
   env: childEnv({ USER: box.name }, "/home/box"),
   eveSecret,

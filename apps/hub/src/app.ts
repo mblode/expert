@@ -84,6 +84,8 @@ interface HubOptions {
    * and the tests assume.
    */
   wake?: (botId: string, display: number) => Promise<void>;
+  /** True while this Bot is awake and working; its screen is not swept. */
+  botBusy?: (botId: string) => boolean;
 }
 
 export interface Hub {
@@ -118,7 +120,12 @@ export function createHub(opts: HubOptions): Hub {
           idleMs: opts.screenIdleMs,
           isBusy: (display: number): boolean => {
             try {
-              return bots.byDisplay(display).seat.getState() !== "AGENT";
+              const bot = bots.byDisplay(display);
+              // A human at the screen, or a Bot in the middle of a turn: the
+              // second matters because a Bot doing half an hour of shell work
+              // touches no X call, and losing its browser and its open tabs
+              // mid-task is the sweep working against the work.
+              return bot.seat.getState() !== "AGENT" || opts.botBusy?.(bot.id) === true;
             } catch {
               // No Bot on that display any more: nothing to protect.
               return false;

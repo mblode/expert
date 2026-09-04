@@ -25,16 +25,21 @@ scope, not trust: see `api/DESIGN.md`.
 Screens are assigned in the order the roster is seeded (`main` first, then
 alphabetically), and a Bot keeps its screen once it has one.
 
-Every one of them opens **draft** pull requests and none of them merges,
-deploys, or sends anything live. That line is in each Bot's hard rules
-because it is the rule a human is trusting when they let eight agents share
-one signed-in computer.
+The four that touch code (`software-engineer`, `qa`, `pm`, `seo`) open
+**draft** pull requests and merge nothing; `designer` hands its work to them
+rather than opening one; `chief-of-staff` and `gtm` draft and never send. Each
+of those lines is in that Bot's hard rules, because they are what a human is
+trusting when they let eight agents share one signed-in computer. `main` is
+the exception: it is the desk agent and predates the rule.
 
 ## What they share
 
-`/workspace` is one filesystem, and the Bots use it as the handoff:
+`/workspace` is one filesystem, and the Bots use it as the handoff. "Meant
+for" is the intent, not an enforced contract: what a Bot actually reads is
+what its own instructions tell it to, and `products.md`, `voice.md` and
+`handoffs/<bot>/` are the paths every Bot is pointed at today.
 
-| Path                         | Written by            | Read by                        |
+| Path                         | Written by            | Meant for                      |
 | ---------------------------- | --------------------- | ------------------------------ |
 | `products.md`                | you, Chief of Staff   | everyone                       |
 | `voice.md`                   | Chief of Staff        | Chief of Staff, GTM            |
@@ -76,6 +81,15 @@ own: the hub reads that file and wakes the Bot a minute before it is due. The
 two copies are pinned together by a test, so adding a schedule without
 declaring it fails the build rather than quietly never running.
 
+**A suspended Machine has no clock.** This computer suspends to zero when
+nobody is using it, and neither the hub's alarm nor a Bot's own croner runs
+while it is suspended, so a routine whose time passes on a sleeping box does
+not fire and is not caught up afterwards. That is true today for `main`'s
+daily check and it is true for all seven. Closing it means either keeping one
+Machine running (`min_machines_running = 1`, and the suspend saving goes with
+it) or something outside pinging the box a minute before each routine. Until
+then, treat routines as "runs when the computer is up".
+
 ## What a Bot costs
 
 Measured idle on this guest: a Bot's Eve is 224 MB, and a claimed screen
@@ -90,9 +104,15 @@ process and no screen.
 | It touches its screen, or you open the desk | its window, about 430 MB  |
 | A routine is a minute from due              | the same, for the turn    |
 
-A Bot goes back to sleep 20 minutes after the last thing it did, and its
-screen is released after 30 minutes of nothing touching it. Waking is about
-a second, which you see as the first message of the day taking a beat.
+A Bot goes back to sleep 20 minutes after the last thing it did (30 after a
+routine woke it), and its screen is released after 30 minutes of nothing
+touching it. Waking is about a second, which you see as the first message of
+the day taking a beat.
+
+There are also ceilings, because idling out is not enough on its own: two
+Bots awake at once and two screens up at once, the primary Bot's included. Ask
+for a third and the one used longest ago goes back to sleep. A screen someone
+is at, or a Bot in the middle of a turn, is never the one taken.
 
 The primary Bot (`main`) never sleeps: it is the desk the box boots with and
 the Bot a human reaches without asking for anyone.
@@ -114,9 +134,10 @@ The payload is treated as a stranger's text: fenced, never obeyed. See
 
 Three places, and they are not interchangeable:
 
-- **Chat.** Ask the Bot. It edits its own files with `write_file` and the
-  change is live on its next turn, and gone on the next deploy if it was in
-  the image.
+- **Chat.** Ask the Bot. `write_file` reaches `/workspace` and nothing else,
+  so what it can rewrite is its own profile, its memory and its notes, live on
+  its next turn. Its instructions and skills are in the image at
+  `/opt/computer` and compiled into its build, so those are a deploy.
 - **The settings panel** at hello.expert writes the profile
   (`/workspace/.bots/<id>/profile.json`): name, label, description, mark.
   That file wins over the shipped seed forever after.

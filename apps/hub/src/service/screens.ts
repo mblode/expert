@@ -33,11 +33,19 @@ interface ScreenState extends ScreenClaim {
   lastUsed: number;
   /** One claim at a time: a burst of actions must not race start-window. */
   claiming: Promise<void> | null;
+  /**
+   * A `stop-window` in flight. `up` is cleared before it starts, so a request
+   * that arrives mid-teardown queues behind it and re-claims rather than
+   * reading a dying X server as a live screen.
+   */
+  releasing: Promise<void> | null;
 }
 
 interface ScreenKeeperOptions {
   /** How long a screen may go unused before it is released. */
   idleMs?: number;
+  /** How many screens may be up at once, the primary one included. */
+  maxUp?: number;
   /** A screen a human is at, or one waiting for one, is never released. */
   isBusy?: (display: number) => boolean;
   now?: () => number;
@@ -47,9 +55,18 @@ interface ScreenKeeperOptions {
 /** Half an hour: long enough to read a page, short enough to matter. */
 const DEFAULT_IDLE_MS = 30 * 60 * 1000;
 
+/**
+ * How many windows may be claimed at once, the primary one included. A window
+ * is about 430 MB, so two is what a 2 GB guest has room for beside the hub and
+ * a couple of Eves. Idling out at half an hour is not enough on its own: a
+ * person clicking through eight Bots claims eight windows inside a minute.
+ */
+const DEFAULT_MAX_UP = 2;
+
 export class ScreenKeeper {
   private readonly screens = new Map<number, ScreenState>();
   private readonly idleMs: number;
+  private readonly maxUp: number;
   private readonly now: () => number;
   private readonly isBusy: (display: number) => boolean;
   private readonly onEvent: ((line: string) => void) | undefined;
@@ -59,6 +76,7 @@ export class ScreenKeeper {
     opts: ScreenKeeperOptions = {},
   ) {
     this.idleMs = opts.idleMs ?? DEFAULT_IDLE_MS;
+    this.maxUp = opts.maxUp ?? DEFAULT_MAX_UP;
     this.now = opts.now ?? Date.now;
     this.isBusy = opts.isBusy ?? (() => false);
     this.onEvent = opts.onEvent;
@@ -70,6 +88,7 @@ export class ScreenKeeper {
       ...claim,
       claiming: null,
       lastUsed: this.now(),
+      releasing: null,
       up,
     });
   }
@@ -96,15 +115,61 @@ export class ScreenKeeper {
       return;
     }
     screen.lastUsed = this.now();
+    // A release in flight has already cleared `up`; wait for it rather than
+    // claiming into a window that is still being torn down.
+    if (screen.releasing) {
+      await screen.releasing.catch(() => undefined);
+    }
     if (screen.up) {
       return;
     }
+    await this.makeRoom(screen.display);
     // Concurrent actions on a sleeping screen share one start-window.
     screen.claiming ??= this.claim(screen);
     try {
       await screen.claiming;
     } finally {
       screen.claiming = null;
+    }
+  }
+
+  /**
+   * Release the least recently used screen until this one fits.
+   *
+   * Idling out is not enough by itself: a person opening eight Bots in a
+   * minute would claim eight windows, which is more memory than the guest
+   * has, and the OOM killer picks the victim rather than this. The primary
+   * screen, a screen a human is at, and one mid-claim are never the victim,
+   * so the worst case is that the cap cannot be met and the claim goes ahead:
+   * a slow box beats refusing to show a Bot its own screen.
+   */
+  private async makeRoom(forDisplay: number): Promise<void> {
+    for (;;) {
+      const up = [...this.screens.values()].filter((s) => s.up);
+      if (up.length < this.maxUp) {
+        return;
+      }
+      const [victim] = up
+        .filter(
+          (s) =>
+            s.display !== PRIMARY_DISPLAY &&
+            s.display !== forDisplay &&
+            !s.claiming &&
+            !this.isBusy(s.display),
+        )
+        .toSorted((a, b) => a.lastUsed - b.lastUsed);
+      if (!victim) {
+        return;
+      }
+      try {
+        await this.release(victim);
+      } catch (error) {
+        this.onEvent?.(
+          `screen ${victim.display}: stop failed (${(error as Error).message}); claiming anyway`,
+        );
+        return;
+      }
+      this.onEvent?.(`screen ${victim.display} released to make room (bot ${victim.botId})`);
     }
   }
 
@@ -116,22 +181,44 @@ export class ScreenKeeper {
         !screen.up ||
         screen.display === PRIMARY_DISPLAY ||
         screen.claiming ||
+        screen.releasing ||
         screen.lastUsed > cutoff ||
         this.isBusy(screen.display)
       ) {
         continue;
       }
       try {
-        await this.windows.stopWindow(screen.display);
-        screen.up = false;
+        await this.release(screen);
         this.onEvent?.(`screen ${screen.display} released after idle (bot ${screen.botId})`);
       } catch (error) {
         // A screen that will not stop is memory we wanted back, not an
-        // outage: it stays marked up and the next sweep tries again.
+        // outage: it is marked up again and the next sweep tries again.
         this.onEvent?.(
           `screen ${screen.display}: stop failed (${(error as Error).message}); still up`,
         );
       }
+    }
+  }
+
+  /**
+   * Take a window down. `up` is cleared first and the promise is published on
+   * the state, so anything that arrives while `stop-window` runs waits and
+   * then claims a fresh one instead of driving the screen being killed.
+   */
+  private async release(screen: ScreenState): Promise<void> {
+    screen.up = false;
+    const releasing = this.windows.stopWindow(screen.display);
+    screen.releasing = releasing.then(
+      () => undefined,
+      () => undefined,
+    );
+    try {
+      await releasing;
+    } catch (error) {
+      screen.up = true;
+      throw error;
+    } finally {
+      screen.releasing = null;
     }
   }
 

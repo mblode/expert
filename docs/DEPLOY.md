@@ -136,7 +136,18 @@ fly ssh console -a mblode-computer -C "sh -lc 'ps -eo rss,args --sort=-rss | hea
 
 If a Bot never wakes, the marker is the place to look: no file means the hub
 never asked (check `COMPUTER_WAKE_DIR` reached the hub child), a file with a
-past timestamp means it was asked and the window has since closed.
+past timestamp means it was asked and the window has since closed. Two Bots
+may be awake and two screens up at once; a third request puts the one used
+longest ago back to sleep, which the guest log says out loud.
+
+**Routines do not fire while the Machine is suspended.** Neither the hub's
+alarm nor the croner inside a Bot's Eve has a clock when Fly has suspended the
+guest, and a missed minute is not caught up. That was already true of `main`'s
+daily check; this build adds six more routines with the same caveat. If the
+morning brief has to arrive on a quiet day, either keep a Machine running
+(`min_machines_running = 1`, `auto_stop_machines = "off"`, and the suspend
+saving goes with it) or have something outside GET `/healthz` a minute before
+each routine's UTC minute.
 
 ## 3. The Vibey computer
 

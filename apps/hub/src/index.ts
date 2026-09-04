@@ -10,7 +10,7 @@ import {
 import { allowedBind, refuseBindMessage } from "./host/bind.ts";
 import { profileSeeds } from "./host/bot-seed.ts";
 import { eveUrlForDisplay, resolveEveBotsRoot } from "./host/eve.ts";
-import { botWaker, keepAwake } from "./host/wake.ts";
+import { awakeUntil, botWaker, keepAwake } from "./host/wake.ts";
 import { readRoutines, routineAlarm } from "./host/routines.ts";
 import { loadPolicy } from "./service/policy.ts";
 import { FileBotStore } from "./service/provision.ts";
@@ -87,6 +87,9 @@ const hub = createHub({
     secret: bridgeSecret,
     url: process.env.COMPUTER_BRIDGE_URL ?? DEFAULT_BRIDGE_URL,
   }),
+  // A Bot with a live wake marker is at work, whether or not it is touching
+  // its screen, so the sweep leaves that screen alone.
+  botBusy: (botId) => awakeUntil(wakeDir, botId) > Date.now(),
   profileSeed: profileSeeds(botsRoot),
   screenIdleMs: idleMs("COMPUTER_SCREEN_IDLE_SEC"),
   statusFile: process.env.COMPUTER_STATUS_FILE,

@@ -114,8 +114,20 @@ export class ProvisionService {
   /** Boot: mount the roster, ensure a primary bot exists, claim every window. */
   async start(): Promise<void> {
     if (this.bots.all().length === 0) {
-      this.bots.add({ display: 1, id: "main", token: mintToken() });
-      this.store.save(this.bots.configs());
+      // Re-read first. The registry was built from a snapshot taken at
+      // construction, and on a dev box the Eve supervisor seeds the roster
+      // from the shipped projects at almost the same moment: minting `main`
+      // over eight rows that appeared since would strand every token those
+      // children are already holding.
+      const appeared = this.store.load();
+      if (appeared.length > 0) {
+        for (const config of appeared) {
+          this.bots.add(config);
+        }
+      } else {
+        this.bots.add({ display: 1, id: "main", token: mintToken() });
+        this.store.save(this.bots.configs());
+      }
     }
     for (const bot of this.bots.all()) {
       // Only the primary screen comes up with the box. Every other Bot is
@@ -134,6 +146,20 @@ export class ProvisionService {
           if (!(error instanceof ComputerError) || error.code !== "CONFLICT") throw error;
           console.warn(`window ${bot.display}: reclaiming a stale claim for bot ${bot.id}`);
           await this.windows.startWindow(bot.display, bot.token, bot.id, true);
+        }
+      } else {
+        // `desk-up` restores every window in the box's own assignments file
+        // before the hub binds, so a Bot whose screen was up when the Machine
+        // last stopped comes back with an Xvfb and a Chromium the keeper
+        // would record as down and never release. Take them down here: that
+        // is the whole point of a Bot that sleeps, and `stop-window` on a
+        // display that is already down exits 0.
+        try {
+          await this.windows.stopWindow(bot.display);
+        } catch (error) {
+          console.warn(
+            `window ${bot.display}: could not release a restored screen for bot ${bot.id} (${(error as Error).message})`,
+          );
         }
       }
       this.screens?.register({ botId: bot.id, display: bot.display, token: bot.token }, eager);
@@ -223,8 +249,10 @@ export class ProvisionService {
   async remove(id: string): Promise<void> {
     const bot = this.bots.remove(id);
     this.store.save(this.bots.configs());
-    this.screens?.forget(bot.display);
     try {
+      // Stop the window before forgetting the screen, not after: a claim in
+      // flight from a concurrent action would otherwise finish after the stop
+      // and leave a window up that no keeper entry covers.
       await this.windows.stopWindow(bot.display);
     } catch (error) {
       // The roster is the source of truth: the bot is gone either way, and the
@@ -233,6 +261,7 @@ export class ProvisionService {
         `window ${bot.display}: stop failed after removing bot ${bot.id} (${(error as Error).message}); the next create() will reclaim it`,
       );
     }
+    this.screens?.forget(bot.display);
   }
 }
 

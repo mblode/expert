@@ -11,11 +11,17 @@ import { neutraliseFence } from "./fence.ts";
  * This is the event half of a routine: a schedule wakes a Bot at a time, a
  * webhook wakes it when something happened. The door in front of it is a
  * connector (`npm run bot -- connector add <id> <kind> <bot>`), so the
- * credential is hub-minted, revocable on its own, and never a seat token;
- * the hub's ingress records the payload in the Bot's conversation, binds a
- * turn to it, and forwards here with `x-computer-eve-secret`. Nothing else
- * is accepted: unlike WhatsApp there is no direct door, because the sender
- * of a webhook is by definition not on this machine.
+ * credential is hub-minted, revocable on its own, and never a seat token, and
+ * the hub forwards here with `x-computer-eve-secret`. Nothing else is
+ * accepted: unlike WhatsApp there is no direct door, because the sender of a
+ * webhook is by definition not on this machine.
+ *
+ * What the hub does not do yet is record the payload. `routeFor` in the
+ * ingress knows one kind, `whatsapp`, so an event binds no conversation and
+ * no turn: whatever the Bot says with `send_message` lands in its seat thread
+ * (the no-turn-token path), and the alert that caused it is only in this
+ * process's log. A `webhook` route is a conversation shape and a contract
+ * change, so it is named here rather than half-built.
  *
  * Mount it by re-exporting a configured channel from
  * `agent/channels/<kind>.ts`; the file stem is the channel id and has to
@@ -71,12 +77,12 @@ export function buildWake(opts: WebhookChannelOptions, raw: string): string {
 }
 
 /**
- * A webhook nobody is watching. The reply is recorded in the conversation by
- * the hub, so it is worth one honest line, but the human is not sitting in
- * front of it: anything that needs them goes through `send_message`.
+ * A webhook nobody is watching. Nothing here is recorded by the hub, so the
+ * model is told plainly which of the two things it can write actually reaches
+ * a person.
  */
 const REPLY_RULE =
-  "Nobody is watching this run. Speak with `send_message` only if a person is needed; the text you end the turn with is filed, not delivered.";
+  "Nobody is watching this run. `send_message` is the only thing that reaches a person, and it goes to the owner's thread; the text you end the turn with is neither delivered nor recorded, so say what matters with the tool.";
 
 export function webhookChannel(opts: WebhookChannelOptions) {
   return defineChannel({
@@ -113,7 +119,7 @@ export function webhookChannel(opts: WebhookChannelOptions) {
 
         // 202 with the session, not the turn's text: an alerting system wants
         // its POST to return, and this Bot's work outlives the request. What
-        // the Bot says lands in the conversation through `send_message`.
+        // the Bot says reaches the owner through `send_message`.
         return Response.json({ accepted: true, session: session.id }, { status: 202 });
       }),
     ],

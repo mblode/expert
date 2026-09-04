@@ -165,3 +165,50 @@ describe("waking a Bot from the hub", () => {
     await expect(wake("qa", 6)).resolves.toBeUndefined();
   });
 });
+
+describe("a marker is a request, not a guarantee", () => {
+  it("keeps only the most recently asked-for Bots awake", () => {
+    const dir = tempDir();
+    const started: string[] = [];
+    const stopped: string[] = [];
+    keepAwake(dir, "qa", 9000);
+    keepAwake(dir, "seo", 8000);
+    keepAwake(dir, "pm", 7000);
+    watchWake({
+      botIds: ["qa", "seo", "pm"],
+      dir,
+      maxAwake: 2,
+      now: () => 1000,
+      pollMs: 60_000,
+      sup: {
+        ensure: (id) => started.push(id),
+        stop: async (id) => {
+          stopped.push(id);
+        },
+      },
+    })();
+    // Eight Bots asking at once is 1.8 GB of Eve on a 2 GB box, so the oldest
+    // request loses rather than the machine.
+    expect(started).toEqual(["eve-qa", "eve-seo"]);
+    expect(stopped).toEqual(["eve-pm"]);
+  });
+
+  it("survives a supervisor that throws, because this runs inside PID 1", () => {
+    const dir = tempDir();
+    keepAwake(dir, "qa", 9000);
+    expect(() =>
+      watchWake({
+        botIds: ["qa"],
+        dir,
+        now: () => 1000,
+        pollMs: 60_000,
+        sup: {
+          ensure: () => {
+            throw new Error("EMFILE");
+          },
+          stop: async () => undefined,
+        },
+      })(),
+    ).not.toThrow();
+  });
+});

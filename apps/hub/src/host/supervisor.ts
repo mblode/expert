@@ -84,6 +84,8 @@ interface Managed {
   restartTimer: NodeJS.Timeout | null;
   healthTimer: NodeJS.Timeout | null;
   wantRunning: boolean;
+  /** A `stop` in flight. `ensure` waits for it rather than racing the kill. */
+  stopping: Promise<void> | null;
 }
 
 const DEFAULT_BACKOFF = { initialMs: 1000, maxMs: 30_000, stableMs: 60_000 };
@@ -129,6 +131,17 @@ export class Supervisor {
     }
     m.wantRunning = true;
     m.backoffMs = this.opts.backoff.initialMs;
+    // A kill may still be in flight: launching now would put a second process
+    // on the Bot's port, which dies on EADDRINUSE and reads as a crash loop.
+    // The marker that woke this Bot is still there, so waiting a beat is free.
+    if (m.stopping) {
+      void m.stopping.then(() => {
+        if (m.wantRunning && m.child === null) {
+          this.launch(m);
+        }
+      });
+      return;
+    }
     this.launch(m);
   }
 
@@ -155,6 +168,7 @@ export class Supervisor {
       spec,
       startedAt: 0,
       state: wantRunning ? "starting" : "stopped",
+      stopping: null,
       wantRunning,
     };
   }
@@ -165,10 +179,31 @@ export class Supervisor {
     if (!m) {
       return;
     }
+    // Already down and meant to be. Falling through would rewrite the status
+    // file for nothing, and the wake watcher calls this for every sleeping
+    // Bot on every poll: seven Bots is a mkdir, a write and a rename every
+    // two seconds, forever, on a shared vCPU.
+    if (!m.wantRunning && m.child === null) {
+      return;
+    }
     m.wantRunning = false;
     this.clearTimers(m);
-    await this.kill(m, graceMs);
-    this.setState(m, "stopped");
+    const stopping = this.kill(m, graceMs);
+    m.stopping = stopping.then(
+      () => undefined,
+      () => undefined,
+    );
+    try {
+      await stopping;
+    } finally {
+      m.stopping = null;
+    }
+    // Only if nobody asked for it back while it was dying: `ensure` sets
+    // `wantRunning` and relaunches, and saying "stopped" over that would put
+    // a running child in the status file as down.
+    if (!m.wantRunning) {
+      this.setState(m, "stopped");
+    }
   }
 
   /** Stop, then start again with the same spec: the deploy path's last step. */

@@ -147,9 +147,14 @@ npm run bot -- connector add pagerduty incident qa
 ```
 
 The door is the connector, so the credential is hub-minted and revocable on
-its own, the hub records the payload in the Bot's conversation and binds the
-turn, and the sender never sees a seat token. There is no direct door: the
+its own and the sender never sees a seat token. There is no direct door: the
 only accepted header is `x-computer-eve-secret`, from the hub on loopback.
+
+The hub does not record the payload yet: its ingress binds a conversation for
+`whatsapp` only, so an event arrives with no turn token and whatever the Bot
+says with `send_message` lands in the owner's seat thread. The alert itself
+is in the Bot's Eve log and nowhere else, which is the gap to close when a
+`webhook` conversation route lands.
 
 The payload is a stranger's. It is truncated at 16k characters, its fences
 neutralised, wrapped in `<untrusted_context>`, and the wake says in the same

@@ -15,6 +15,12 @@ import { join } from "node:path";
  * Two files saying the same thing is a real cost, and `routines.test.ts` in
  * the hub pins them together: every `defineSchedule({ cron })` in a Bot's
  * project must appear in its `agent/routines.json`, and the other way round.
+ *
+ * What this does not fix: a Machine that suspends to zero has no clock, so a
+ * routine whose minute passes while the guest is suspended does not fire here
+ * either, and nothing catches it up afterwards. Closing that needs something
+ * outside the box (a pinger, or a Machine that stays running), and pretending
+ * otherwise in this file would be the same silent failure one level up.
  */
 interface Routine {
   id: string;
@@ -70,46 +76,103 @@ export function cronMatches(cron: string, at: Date): boolean {
     return false;
   }
   const [minute, hour, dom, month, dow] = f as [string, string, string, string, string];
-  if (!(matches(minute, at.getUTCMinutes()) && matches(hour, at.getUTCHours()))) {
+  if (
+    !(matches(minute, at.getUTCMinutes(), BOUNDS[0]) && matches(hour, at.getUTCHours(), BOUNDS[1]))
+  ) {
     return false;
   }
-  if (!matches(month, at.getUTCMonth() + 1)) {
+  if (!matches(month, at.getUTCMonth() + 1, BOUNDS[3])) {
     return false;
   }
   const domRestricted = dom !== "*";
   const dowRestricted = dow !== "*";
-  const domHit = matches(dom, at.getUTCDate());
-  // Sunday is 0 and 7 in cron; `getUTCDay()` only ever says 0.
-  const dowHit = matches(dow, at.getUTCDay()) || matches(dow, at.getUTCDay() + 7);
+  const domHit = matches(dom, at.getUTCDate(), BOUNDS[2]);
+  // Sunday is 0 and 7 in cron and `getUTCDay()` only ever says 0, so a field
+  // written as `7` still has to match. A step is not tried at 7: counting
+  // from the field minimum already covers Sunday at 0.
+  const dowHit =
+    matches(dow, at.getUTCDay(), BOUNDS[4]) ||
+    (at.getUTCDay() === 0 && matches(dow.replaceAll(/\/\d+/gu, ""), 7, BOUNDS[4]));
   if (domRestricted && dowRestricted) {
     return domHit || dowHit;
   }
   return domHit && dowHit;
 }
 
+/**
+ * Every field's own bounds, in cron's order. A step counts from the field's
+ * minimum, not from zero, which is why they are here: a step of two in
+ * day-of-month is the 1st, 3rd and 5th, and reading it as "even days" would
+ * fire a routine on the wrong days for the life of the box. Day-of-week
+ * allows 7 for Sunday.
+ */
+const BOUNDS = [
+  { max: 59, min: 0 },
+  { max: 23, min: 0 },
+  { max: 31, min: 1 },
+  { max: 12, min: 1 },
+  { max: 7, min: 0 },
+] as const;
+
+/**
+ * A cron this file can actually evaluate: five fields, each in range.
+ *
+ * Range-checked rather than shape-checked, because an unmatchable field
+ * (minute 99) is a routine that never wakes its Bot and says nothing, which
+ * is the exact thing this module exists to prevent.
+ */
 export function validCron(cron: string): boolean {
   const f = cron.trim().split(/\s+/u);
-  return f.length === 5 && f.every((field) => FIELD.test(field));
+  if (f.length !== 5) {
+    return false;
+  }
+  return f.every((field, i) => fieldValid(field, BOUNDS[i]!));
 }
 
 const FIELD = /^(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?)(,(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?))*$/u;
 
-function matches(field: string, value: number): boolean {
-  return field.split(",").some((part) => matchesPart(part, value));
+interface Bound {
+  min: number;
+  max: number;
 }
 
-function matchesPart(part: string, value: number): boolean {
+function fieldValid(field: string, bound: Bound): boolean {
+  if (!FIELD.test(field)) {
+    return false;
+  }
+  return field.split(",").every((part) => partValid(part, bound));
+}
+
+function partValid(part: string, bound: Bound): boolean {
+  const [range, stepRaw] = part.split("/");
+  if (stepRaw !== undefined && !(Number(stepRaw) >= 1)) {
+    return false;
+  }
+  if (range === "*") {
+    return true;
+  }
+  const [fromRaw, toRaw] = (range ?? "").split("-");
+  const from = Number(fromRaw);
+  const to = toRaw === undefined ? from : Number(toRaw);
+  return from >= bound.min && from <= bound.max && to >= from && to <= bound.max;
+}
+
+function matches(field: string, value: number, bound: Bound): boolean {
+  return field.split(",").some((part) => matchesPart(part, value, bound));
+}
+
+function matchesPart(part: string, value: number, bound: Bound): boolean {
   const [range, stepRaw] = part.split("/");
   const step = stepRaw === undefined ? 1 : Number(stepRaw);
   if (!Number.isInteger(step) || step < 1) {
     return false;
   }
   if (range === "*") {
-    return value % step === 0;
+    return value >= bound.min && value <= bound.max && (value - bound.min) % step === 0;
   }
   const [fromRaw, toRaw] = (range ?? "").split("-");
   const from = Number(fromRaw);
-  const to = toRaw === undefined ? from : Number(toRaw);
+  const to = toRaw === undefined && stepRaw === undefined ? from : Number(toRaw ?? bound.max);
   if (!(Number.isInteger(from) && Number.isInteger(to))) {
     return false;
   }

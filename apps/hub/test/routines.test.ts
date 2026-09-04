@@ -94,3 +94,36 @@ describe("every routine a Bot ships is declared where the hub can read it", () =
     ).toEqual(scheduled.toSorted((a, b) => a.id.localeCompare(b.id)));
   });
 });
+
+describe("cron fields are checked against their own bounds", () => {
+  it("refuses a value no clock can produce", () => {
+    expect(validCron("99 20 * * *")).toBe(false);
+    expect(validCron("0 25 * * *")).toBe(false);
+    expect(validCron("0 20 32 * *")).toBe(false);
+    expect(validCron("0 20 * 13 *")).toBe(false);
+    expect(validCron("0 20 * * 8")).toBe(false);
+    expect(validCron("0 20 * * */0")).toBe(false);
+    expect(validCron("0 20 0 * *")).toBe(false);
+  });
+
+  it("counts a step from the field's own minimum", () => {
+    // Day-of-month starts at 1, so a step of two is the 1st, 3rd, 5th.
+    expect(cronMatches("0 20 */2 * *", utc("2026-09-01T20:00:00Z"))).toBe(true);
+    expect(cronMatches("0 20 */2 * *", utc("2026-09-02T20:00:00Z"))).toBe(false);
+    expect(cronMatches("0 20 */2 * *", utc("2026-09-03T20:00:00Z"))).toBe(true);
+    // Minutes start at 0, so a step of two is the even ones.
+    expect(cronMatches("*/2 20 * * *", utc("2026-09-01T20:00:00Z"))).toBe(true);
+    expect(cronMatches("*/2 20 * * *", utc("2026-09-01T20:01:00Z"))).toBe(false);
+  });
+
+  it("takes 7 as Sunday", () => {
+    expect(cronMatches("0 20 * * 7", utc("2026-09-06T20:00:00Z"))).toBe(true); // Sunday
+    expect(cronMatches("0 20 * * 7", utc("2026-09-07T20:00:00Z"))).toBe(false);
+  });
+
+  it("keeps a range with a step inside the range", () => {
+    expect(cronMatches("0 8-18/4 * * *", utc("2026-09-04T08:00:00Z"))).toBe(true);
+    expect(cronMatches("0 8-18/4 * * *", utc("2026-09-04T12:00:00Z"))).toBe(true);
+    expect(cronMatches("0 8-18/4 * * *", utc("2026-09-04T20:00:00Z"))).toBe(false);
+  });
+});

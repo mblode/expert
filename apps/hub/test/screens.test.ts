@@ -145,3 +145,78 @@ describe("a Bot with nothing to do owns no screen", () => {
     expect(h.desks.get(6)!.log).toContain("click left 1,1");
   });
 });
+
+describe("the box cannot be asked for more screens than it has memory for", () => {
+  it("releases the least recently used screen to make room", async () => {
+    let now = 1000;
+    const windows = new NoopWindowManager();
+    const keeper = new ScreenKeeper(windows, { maxUp: 2, now: () => now });
+    keeper.register({ botId: "main", display: 1, token: "bot_main" }, true);
+    keeper.register({ botId: "qa", display: 6, token: "bot_qa" });
+    keeper.register({ botId: "seo", display: 7, token: "bot_seo" });
+
+    await keeper.use(6);
+    expect(keeper.isUp(6)).toBe(true);
+    now += 1000;
+    await keeper.use(7);
+    // The primary screen is never the victim, so QA's is.
+    expect(windows.stopped).toEqual([6]);
+    expect(keeper.isUp(1)).toBe(true);
+    expect(keeper.isUp(6)).toBe(false);
+    expect(keeper.isUp(7)).toBe(true);
+  });
+
+  it("claims anyway rather than refusing a Bot its own screen", async () => {
+    const windows = new NoopWindowManager();
+    // Both other screens are held by humans, so there is nothing to release.
+    const keeper = new ScreenKeeper(windows, { isBusy: () => true, maxUp: 1 });
+    keeper.register({ botId: "main", display: 1, token: "bot_main" }, true);
+    keeper.register({ botId: "qa", display: 6, token: "bot_qa" });
+    await keeper.use(6);
+    expect(keeper.isUp(6)).toBe(true);
+    expect(windows.stopped).toEqual([]);
+  });
+
+  it("does not drive a screen that is being torn down", async () => {
+    let release: (() => void) | undefined;
+    const windows = new NoopWindowManager();
+    windows.stopWindow = () =>
+      new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    const keeper = new ScreenKeeper(windows, { idleMs: 0 });
+    keeper.register({ botId: "qa", display: 6, token: "bot_qa" }, true);
+
+    const sweeping = keeper.sweep();
+    // Mid-teardown a request arrives. It must wait for the stop and then
+    // claim a fresh window, not read the dying one as up.
+    const using = keeper.use(6);
+    release?.();
+    await sweeping;
+    await using;
+    expect(windows.started).toEqual([6]);
+    expect(keeper.isUp(6)).toBe(true);
+  });
+});
+
+describe("a screen restored by the box at boot", () => {
+  const opened: Opened[] = [];
+  afterEach(async () => {
+    while (opened.length) {
+      await opened.pop()!.close();
+    }
+  });
+
+  it("is released rather than left running unmanaged", async () => {
+    const h = await startHub({
+      bots: [
+        { display: 1, id: "main", token: "agent-token-test" },
+        { display: 6, id: "qa", token: "bot_qa" },
+      ],
+    });
+    opened.push(h);
+    // `desk-up` restores every window the box had claimed before the restart,
+    // so the sleeping Bots' screens are taken down when the roster mounts.
+    expect(h.windows.stopped).toEqual([6]);
+  });
+});

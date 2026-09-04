@@ -86,14 +86,22 @@ COPY --chown=box:box apps/eve apps/eve
 COPY --chown=box:box apps/whatsapp-bridge apps/whatsapp-bridge
 COPY --chown=box:box packages packages
 COPY --chown=box:box api api
-# `eve build` per Bot here so guest start only runs `eve start`. Every
+# `eve build` per Bot here, so the guest runs the built server rather than the
+# eve CLI (three processes and 690 MB for one agent, against 224). Every
 # directory under apps/eve/bots is a Bot, and init mints it a roster row on
 # the next boot, so building the list rather than naming it keeps the image
 # and the roster from drifting apart.
-# `|| exit 1` because the loop's status is the last iteration's: without it a
-# Bot that fails to build ships as an image whose supervisor restarts it
-# forever.
-RUN for bot in apps/eve/bots/*/; do npm run build --workspace="${bot%/}" || exit 1; done
+#
+# The `node_modules` test is the other half of that: the COPY lines above are
+# hand-written, and a Bot added without one is invisible to `npm ci`, builds
+# from hoisted dependencies and ships subtly wrong. `|| exit 1` because the
+# loop's status is the last iteration's, so without it a Bot that fails to
+# build would ship as an image whose supervisor restarts it forever.
+RUN for bot in apps/eve/bots/*/; do \
+      test -d "${bot}node_modules" \
+        || { echo "no npm ci for ${bot}: add its COPY line above" >&2; exit 1; }; \
+      npm run build --workspace="${bot%/}" || exit 1; \
+    done
 
 # PID 1 is tini as root on purpose: the entrypoint execs the root init, which
 # fixes volume ownership and supervises every other process as box or hub.

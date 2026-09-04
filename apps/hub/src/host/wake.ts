@@ -15,9 +15,16 @@ import type { Supervisor } from "./supervisor.ts";
  *
  *   /run/computer/wake/<bot-id>   "2026-09-04T21:30:00.000Z"
  *
- * That is the whole protocol. No socket, no port, no second credential: the
- * directory is root-owned and group-writable by the hub, and the worst a
- * corrupt file can do is let a Bot sleep, which the next request undoes.
+ * That is the whole protocol. No socket, no port, no second credential: root
+ * creates the directory and hands it to the hub at 0770 (`init.ts`), so the
+ * model, which runs as box, can neither write a marker nor read one, and the
+ * worst a corrupt file can do is let a Bot sleep, which the next request
+ * undoes.
+ *
+ * A marker is a request, not a guarantee. `MAX_AWAKE` is what keeps the
+ * guest's arithmetic true: a person clicking through eight Bots would
+ * otherwise ask for 1.8 GB of Eve processes on a 2 GB box, so the ones asked
+ * for most recently win and the rest go back to sleep.
  */
 
 /** How long a Bot stays awake after something used it. */
@@ -51,11 +58,20 @@ export function awakeUntil(dir: string, botId: string): number {
   return Number.isNaN(at) ? 0 : at;
 }
 
+/**
+ * How many sleeping Bots may be awake at once, beside the primary one that
+ * never sleeps. Two Eves is 448 MB on top of the hub, the primary Bot and
+ * its screen, which is what a 2 GB guest has left.
+ */
+const MAX_AWAKE = 2;
+
 interface SleepWatchOptions {
   /** The lazy children, by Bot id. The primary Bot is not one of them. */
   botIds: readonly string[];
   dir: string;
   sup: Pick<Supervisor, "ensure" | "stop">;
+  /** How many of them may run at once. */
+  maxAwake?: number;
   /**
    * How often the markers are read. A poll this cheap is one small read per
    * Bot and it cannot miss an event, which `fs.watch` on a container
@@ -77,15 +93,38 @@ interface SleepWatchOptions {
 export function watchWake(opts: SleepWatchOptions): () => void {
   const now = opts.now ?? Date.now;
   const pollMs = opts.pollMs ?? 2000;
+  const maxAwake = opts.maxAwake ?? MAX_AWAKE;
   const tick = (): void => {
     const at = now();
+    // Latest marker first: the Bot asked for most recently is the one a
+    // person is most likely looking at, and the ones past the cap sleep
+    // whatever their marker says.
+    const wanted = opts.botIds
+      .map((botId) => ({ botId, until: awakeUntil(opts.dir, botId) }))
+      .filter((b) => b.until > at)
+      .toSorted((a, b) => b.until - a.until);
+    const awake = new Set(wanted.slice(0, maxAwake).map((b) => b.botId));
+    if (wanted.length > awake.size) {
+      opts.onEvent?.(
+        `wake: ${wanted.length} Bots asked to be awake, ${maxAwake} allowed; ${wanted
+          .slice(maxAwake)
+          .map((b) => b.botId)
+          .join(", ")} stay asleep`,
+      );
+    }
     for (const botId of opts.botIds) {
-      if (awakeUntil(opts.dir, botId) > at) {
-        opts.sup.ensure(`eve-${botId}`);
-      } else {
-        void opts.sup.stop(`eve-${botId}`).catch((error: unknown) => {
-          opts.onEvent?.(`eve-${botId}: stop failed (${(error as Error).message})`);
-        });
+      // Every branch is guarded: this runs inside PID 1's interval, and an
+      // exception out of a timer callback there ends the computer.
+      try {
+        if (awake.has(botId)) {
+          opts.sup.ensure(`eve-${botId}`);
+        } else {
+          void opts.sup.stop(`eve-${botId}`).catch((error: unknown) => {
+            opts.onEvent?.(`eve-${botId}: stop failed (${(error as Error).message})`);
+          });
+        }
+      } catch (error) {
+        opts.onEvent?.(`eve-${botId}: wake failed (${(error as Error).message})`);
       }
     }
   };
@@ -108,7 +147,14 @@ interface WakerOptions {
 }
 
 /** Cold start measured at about 0.7s; this is that with room for a slow boot. */
-const DEFAULT_WAIT_MS = 8000;
+const DEFAULT_WAIT_MS = 3000;
+/**
+ * How long a Bot that never answered is taken at its word. A roster row with
+ * no Eve project, or one whose build is broken, would otherwise make every
+ * request to it wait the full deadline before the same `DAEMON_DOWN` it used
+ * to return at once.
+ */
+const GAVE_UP_FOR_MS = 60_000;
 const PROBE_EVERY_MS = 150;
 /** How often an already-awake Bot's marker is rewritten. */
 const TOUCH_EVERY_MS = 60_000;
@@ -132,6 +178,7 @@ export function botWaker(opts: WakerOptions): (botId: string, display: number) =
   // once a minute is enough to keep a working Bot awake, and the rest are a
   // read that decides to do nothing.
   const touched = new Map<string, number>();
+  const gaveUp = new Map<string, number>();
   return async (botId, display) => {
     const at = now();
     const wasAwake = awakeUntil(opts.dir, botId) > at;
@@ -153,11 +200,15 @@ export function botWaker(opts: WakerOptions): (botId: string, display: number) =
     if (!base) {
       return;
     }
+    if (at - (gaveUp.get(botId) ?? Number.NEGATIVE_INFINITY) < GAVE_UP_FOR_MS) {
+      return;
+    }
     const deadline = now() + waitMs;
     while (now() < deadline) {
       try {
         const res = await fetchImpl(`${base}/eve/v1/health`);
         if (res.ok) {
+          gaveUp.delete(botId);
           return;
         }
       } catch {
@@ -166,5 +217,6 @@ export function botWaker(opts: WakerOptions): (botId: string, display: number) =
       }
       await sleep(PROBE_EVERY_MS);
     }
+    gaveUp.set(botId, now());
   };
 }
