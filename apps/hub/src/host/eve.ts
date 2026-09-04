@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Supervisor } from "./supervisor.ts";
 import type { BotConfig } from "../service/bots.ts";
@@ -71,6 +71,49 @@ function eveProjectCwd(
 }
 
 /**
+ * Every Bot this tree ships a project for, sorted, `main` first.
+ *
+ * The roster is what the hub mounts, and the project directory is what makes
+ * a Bot able to think, so a project with no roster row is a Bot that exists
+ * in git and nowhere else. `ensureRoster` uses this to mint the missing rows,
+ * which is what makes adding a Bot a deploy rather than a deploy plus seven
+ * RPCs against the running guest.
+ *
+ * A standalone Eve app at the root (a tenant overlay) is `main`, the same
+ * layout `eveProjectCwd` accepts.
+ */
+export function eveProjectIds(
+  botsRoot: string,
+  opts: { exists?: (path: string) => boolean; readdir?: (path: string) => string[] } = {},
+): string[] {
+  const exists = opts.exists ?? existsSync;
+  const readdir =
+    opts.readdir ??
+    ((path: string) =>
+      readdirSync(path, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name));
+  if (isEveProject(botsRoot, exists)) {
+    return ["main"];
+  }
+  let names: string[];
+  try {
+    names = readdir(botsRoot);
+  } catch {
+    return [];
+  }
+  // The same test `eveProjectCwd` applies to a nested project, so the rows
+  // this mints and the Eves the supervisor launches are the same set. A row
+  // with no Eve behind it is a Bot that answers DAEMON_DOWN.
+  const ids = names
+    .filter((name) => exists(join(botsRoot, name, "package.json")))
+    .toSorted((a, b) => a.localeCompare(b));
+  // `main` is the primary Bot and owns display 1, so it is claimed first when
+  // a fresh roster is seeded from an image that ships several projects.
+  return ids.includes("main") ? ["main", ...ids.filter((id) => id !== "main")] : ids;
+}
+
+/**
  * One Eve process per roster Bot that has an eve.dev project directory
  * (`apps/eve/bots/<id>`, a tenant overlay, or a standalone Eve app for
  * `main`). Subagents under a single Eve share one token, that is not
@@ -109,6 +152,14 @@ interface EveChildOptions {
   /** Run each Eve as this user. The supervisor only honours it as root. */
   uid?: number;
   gid?: number;
+  /** Injected in tests; production asks the real filesystem for the build. */
+  exists?: (path: string) => boolean;
+  /**
+   * Which Bots are registered asleep rather than started. A sleeping Bot has
+   * no Eve process at all until something asks for it (`host/wake.ts`), which
+   * is what lets eight of them share a 2 GB guest.
+   */
+  lazy?: (botId: string) => boolean;
 }
 
 /**
@@ -131,30 +182,67 @@ export function eveChildEnv(
   };
 }
 
+/** What `eve build` leaves behind, and what production actually runs. */
+const BUILT_SERVER = join(".output", "server", "index.mjs");
+
 /**
- * Register one supervised `eve start` per launch, loopback only. The single
- * place a Bot's Eve is started: the guest's PID 1 (`init.ts`) and the local
+ * How to start one Bot's Eve: the built server directly when there is one,
+ * `npx eve start` when there is not.
+ *
+ * This is the difference between one Bot fitting on this box and three. `npx
+ * eve start` is three processes for one agent: the npm shim (95 MB), the eve
+ * CLI that supervises the build (367 MB), and the server that answers
+ * requests (224 MB), measured idle on the built QA project. Running the
+ * server the CLI would have run is 224 MB and boots in about 0.7s, so a
+ * roster of eight costs 1.8 GB instead of 5.5 GB, and the guest has 2 GB.
+ * Nothing is lost with it: schedules are compiled into that server (croner
+ * and the `eve*.schedule` modules are in the bundle) and fire there, which
+ * was checked against a one minute cron before this was written, not assumed.
+ *
+ * The fallback is for a dev who has not run `eve build`: `npm run up` on a
+ * fresh checkout still works, one process heavier. The guest image builds
+ * every Bot, so it never takes that path.
+ */
+function eveChildCommand(
+  cwd: string,
+  port: number,
+  exists: (path: string) => boolean = existsSync,
+): { cmd: string; args: string[] } {
+  return exists(join(cwd, BUILT_SERVER))
+    ? { args: [BUILT_SERVER], cmd: process.execPath }
+    : { args: ["eve", "start", "--host", "127.0.0.1", "--port", String(port)], cmd: "npx" };
+}
+
+/**
+ * Register one supervised Eve per launch, loopback only. The single place a
+ * Bot's Eve is started: the guest's PID 1 (`init.ts`) and the local
  * `npm run up` (`eves.ts`) both come through here, so a dev gets the same
  * restart backoff, the same `/eve/v1/health` probe and the same child
  * environment as production instead of a detached process nobody watches.
  */
 export function superviseEves(
-  sup: Pick<Supervisor, "start">,
+  sup: Pick<Supervisor, "start"> & Partial<Pick<Supervisor, "register">>,
   launches: readonly EveLaunch[],
   opts: EveChildOptions,
 ): void {
   for (const launch of launches) {
-    sup.start({
-      args: ["eve", "start", "--host", "127.0.0.1", "--port", String(launch.port)],
-      cmd: "npx",
+    const lazy = opts.lazy?.(launch.botId) === true && sup.register !== undefined;
+    const spec = {
+      ...eveChildCommand(launch.cwd, launch.port, opts.exists),
       cwd: launch.cwd,
       env: eveChildEnv(launch, opts),
       gid: opts.gid,
       healthUrl: `http://127.0.0.1:${launch.port}/eve/v1/health`,
       id: `eve-${launch.botId}`,
+      lazy,
       log: join(opts.logDir, `eve-${launch.botId}.log`),
       uid: opts.uid,
-    });
+    };
+    if (lazy) {
+      sup.register?.(spec);
+    } else {
+      sup.start(spec);
+    }
   }
 }
 

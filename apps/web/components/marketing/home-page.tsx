@@ -1,13 +1,14 @@
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
-import { faqs, howItWorks, surfaces, whatYouGet } from "@/lib/content";
+import { faqs, surfaces, whatYouGet } from "@/lib/content";
 import { siteConfig } from "@/lib/config";
 
 import { CtaSection } from "../shared/cta-section";
 import { Footer } from "../shared/footer";
 import { InstallDialog } from "../shared/install-dialog";
 import { Navbar } from "../shared/navbar";
+import { HowItWorksSection } from "./how-it-works";
 import { Reveal } from "./reveal";
 
 export function MarketingHome(): React.ReactElement {
@@ -60,28 +61,7 @@ export function MarketingHome(): React.ReactElement {
             </div>
           </section>
 
-          <section className="py-12 sm:py-16" id="how">
-            <div className="mx-auto max-w-4xl px-4 sm:px-6">
-              <Reveal>
-                <h2 className="font-display text-2xl font-light tracking-tight sm:text-4xl sm:tracking-[-0.03em]">
-                  How it works
-                </h2>
-              </Reveal>
-              <ol className="mt-10 grid gap-8 sm:grid-cols-3">
-                {howItWorks.map((item, index) => (
-                  <li key={item.step}>
-                    <Reveal delay={0.1 * (index + 1)}>
-                      <span className="font-mono text-[0.625rem] text-growth-green/70 sm:text-xs">
-                        {item.step}
-                      </span>
-                      <h3 className="mt-1 text-lg font-semibold">{item.title}</h3>
-                      <p className="mt-2 text-sm text-muted-foreground">{item.body}</p>
-                    </Reveal>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          </section>
+          <HowItWorksSection />
 
           <section className="py-12 sm:py-16" id="what">
             <div className="mx-auto max-w-4xl px-4 sm:px-6">

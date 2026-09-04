@@ -13,7 +13,8 @@
  */
 import { dirname, join, resolve } from "node:path";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
-import { planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
+import { eveProjectIds, planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
+import { watchWake } from "./wake.ts";
 import { Supervisor } from "./supervisor.ts";
 
 // Four segments up from apps/hub/src/host, not three: `../../..` is `apps/`,
@@ -35,7 +36,16 @@ const botsRoot = resolveEveBotsRoot({
   imageBots: join(repoRoot, "apps/eve/bots"),
 });
 
-const launches = planEveLaunches(ensureRosterAt(rosterPath), { botsRoot });
+// The roster gains a row for every project this tree ships, so `npm run up`
+// brings up the same Bots the guest does rather than only the ones a dev
+// happened to create by hand.
+const roster = ensureRosterAt(rosterPath, eveProjectIds(botsRoot));
+const launches = planEveLaunches(roster, { botsRoot });
+// Same rule as the guest: the primary Bot runs, the rest sleep until the hub
+// writes their marker. A dev box has more memory than a 2 GB Machine, but a
+// dev debugging a Bot should meet the behaviour production has.
+const primaryBotId = roster.find((b) => b.display === 1)?.id ?? "main";
+const wakeDir = env.COMPUTER_WAKE_DIR ?? join(dataDir, "wake");
 // No status file unless the caller asked for one: `/healthz` reads whatever
 // file it is pointed at and calls a file nobody refreshes stale, so only a
 // run that owns this supervisor should wire the hub to it.
@@ -43,7 +53,19 @@ const sup = new Supervisor({
   onEvent: (line) => console.log(`computer ${line}`),
   statusFile: env.COMPUTER_STATUS_FILE,
 });
-superviseEves(sup, launches, { env, eveSecret, hubUrl, logDir });
+superviseEves(sup, launches, {
+  env,
+  eveSecret,
+  hubUrl,
+  lazy: (botId) => botId !== primaryBotId,
+  logDir,
+});
+const stopWatchingWake = watchWake({
+  botIds: launches.map((l) => l.botId).filter((id) => id !== primaryBotId),
+  dir: wakeDir,
+  onEvent: (line) => console.log(`computer ${line}`),
+  sup,
+});
 
 if (launches.length === 0) {
   console.warn(`computer eve: no Eve project under ${botsRoot}; chat will report DAEMON_DOWN`);
@@ -56,6 +78,7 @@ if (launches.length === 0) {
 }
 
 const shutdown = (): void => {
+  stopWatchingWake();
   void sup.stopAll().then(() => process.exit(0));
 };
 process.on("SIGTERM", shutdown);

@@ -11,6 +11,7 @@ import {
 import { TURN_HEADER } from "../hub.ts";
 import { outboundReply } from "../format-reply.ts";
 import { parseBridgePayload } from "./bridge-protocol.ts";
+import { neutraliseFence } from "./fence.ts";
 import type { BridgeMedia, BridgePayload } from "./bridge-protocol.ts";
 
 /**
@@ -142,29 +143,6 @@ export const buildContext = (payload: BridgePayload): string[] => {
   }
   return context;
 };
-
-/**
- * A member who types `</untrusted_context>` into the chat would otherwise
- * close the fence from inside it and have the rest of the tail read as
- * unfenced context. Entity-escape either fence tag, either way round; the
- * model still sees the words, they just cannot terminate a block.
- *
- * `whatsapp_context` is in here for the same reason and a sharper one. That
- * block is the channel's own, the one carrying `response_instructions`, and
- * its `sender_name` line is a WhatsApp profile name the sender chose: a name
- * of `</whatsapp_context>` closed the trusted block from inside it and left
- * everything the sender wrote after it sitting outside every fence, which is
- * strictly worse than the hole this function was written to close.
- */
-export const neutraliseFence = (block: string): string =>
-  block.replaceAll(
-    /<(?<slash>\/?)(?<tag>untrusted_context|whatsapp_context)>/giu,
-    // The tag is lower-cased on the way out, which is what a literal
-    // replacement did when there was only one tag name to write. It keeps
-    // the escaped form one shape whatever case the sender typed; the match
-    // is case-insensitive either way, so nothing about the escape rests on it.
-    (_match, slash: string, tag: string) => `&lt;${slash}${tag.toLowerCase()}&gt;`,
-  );
 
 /**
  * One value on a `key: value` line of the channel's own context block:

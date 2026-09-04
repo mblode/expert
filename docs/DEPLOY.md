@@ -96,6 +96,59 @@ Fly does not restart the Machine over a crash-looping Eve. Read the JSON, not
 the status code: `ok:false` with `eve-main` in `starting` right after a deploy
 is normal, and `state: "up"` is what you are waiting for.
 
+### A deploy that adds Bots
+
+A build that ships new projects under `apps/eve/bots` provisions them on the
+next boot: init mints a roster row and a token for each one, on the lowest
+free screen, and the supervisor registers an Eve per Bot. Nothing is minted
+over an existing row, so this is safe to run against a volume that already has
+a roster. Confirm the roster and the children after the wake:
+
+```bash
+# Every shipped Bot has a screen and a profile. Owner seat token required.
+curl -s https://mblode-computer.fly.dev/roster -H "authorization: Bearer $SEAT" \
+  | node -e 'const b=JSON.parse(require("fs").readFileSync(0)).bots; console.table(b.map(x=>({id:x.id,display:x.display,name:x.profile.name})))'
+
+# One `eve-<id>` child per Bot: `eve-main` up, the rest stopped until used.
+curl -s https://mblode-computer.fly.dev/healthz
+```
+
+**The guest stays at 2 GB.** Eight Bots do not fit awake: a Bot's Eve is
+224 MB and a claimed screen (Xvfb, openbox, x11vnc, Chromium) is about 430,
+so they sleep instead. Only the primary Bot runs at boot; every other Bot's
+Eve is registered and stopped, and its window is claimed the first time
+something touches that screen and released after 30 minutes idle. Messaging
+a Bot wakes it in about a second, and a routine wakes its Bot a minute early
+(`agent/routines.json`, read by the hub).
+
+What that means when you read `/healthz` after a deploy: `eve-main` should be
+`up`, and every other `eve-<bot>` `stopped` until you talk to it. A stopped
+lazy child is not a fault and does not make `ok` false. To see one wake, open
+its chat and watch the child move to `starting` then `up`:
+
+```bash
+# The wake markers the hub writes, one per awake Bot.
+fly ssh console -a mblode-computer -C "sh -lc 'ls -l /run/computer/wake'"
+
+# What is actually running, and how much of the Machine is left.
+fly ssh console -a mblode-computer -C "sh -lc 'ps -eo rss,args --sort=-rss | head -15; free -m'"
+```
+
+If a Bot never wakes, the marker is the place to look: no file means the hub
+never asked (check `COMPUTER_WAKE_DIR` reached the hub child), a file with a
+past timestamp means it was asked and the window has since closed. Two Bots
+may be awake and two screens up at once; a third request puts the one used
+longest ago back to sleep, which the guest log says out loud.
+
+**Routines do not fire while the Machine is suspended.** Neither the hub's
+alarm nor the croner inside a Bot's Eve has a clock when Fly has suspended the
+guest, and a missed minute is not caught up. That was already true of `main`'s
+daily check; this build adds six more routines with the same caveat. If the
+morning brief has to arrive on a quiet day, either keep a Machine running
+(`min_machines_running = 1`, `auto_stop_machines = "off"`, and the suspend
+saving goes with it) or have something outside GET `/healthz` a minute before
+each routine's UTC minute.
+
 ## 3. The Vibey computer
 
 Same image, different app and volume.

@@ -1,8 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { ComputerError } from "@computer/shared";
+import { ComputerError, PRIMARY_DISPLAY } from "@computer/shared";
+import type { BotProfile } from "@computer/shared";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { WindowManager } from "../desk/windows.ts";
+import type { ScreenKeeper } from "./screens.ts";
 import type { Bot, BotConfig, BotRegistry } from "./bots.ts";
 import type { ConversationRegistry } from "./conversations.ts";
 
@@ -95,24 +97,72 @@ export class ProvisionService {
     private readonly windows: WindowManager,
     private readonly store: BotStore,
     private readonly conversations: ConversationRegistry,
+    /**
+     * Who a Bot ships as, from its Eve project (`host/bot-seed.ts`). Used
+     * once, when the box has no profile for that Bot yet. Absent means every
+     * Bot starts under the hashed default, which is what a hub with no Eve
+     * projects beside it should do.
+     */
+    private readonly profileSeed?: (botId: string) => Partial<BotProfile> | undefined,
+    /**
+     * Who claims and releases windows. Absent means the old behaviour: every
+     * roster screen is claimed at boot and never released.
+     */
+    private readonly screens?: ScreenKeeper,
   ) {}
 
   /** Boot: mount the roster, ensure a primary bot exists, claim every window. */
   async start(): Promise<void> {
     if (this.bots.all().length === 0) {
-      this.bots.add({ display: 1, id: "main", token: mintToken() });
-      this.store.save(this.bots.configs());
+      // Re-read first. The registry was built from a snapshot taken at
+      // construction, and on a dev box the Eve supervisor seeds the roster
+      // from the shipped projects at almost the same moment: minting `main`
+      // over eight rows that appeared since would strand every token those
+      // children are already holding.
+      const appeared = this.store.load();
+      if (appeared.length > 0) {
+        for (const config of appeared) {
+          this.bots.add(config);
+        }
+      } else {
+        this.bots.add({ display: 1, id: "main", token: mintToken() });
+        this.store.save(this.bots.configs());
+      }
     }
     for (const bot of this.bots.all()) {
-      try {
-        await this.windows.startWindow(bot.display, bot.token, bot.id);
-      } catch (error) {
-        // A claim left by a roster we no longer have must not brick startup:
-        // at boot the hub's roster is the source of truth, so take the window.
-        if (!(error instanceof ComputerError) || error.code !== "CONFLICT") throw error;
-        console.warn(`window ${bot.display}: reclaiming a stale claim for bot ${bot.id}`);
-        await this.windows.startWindow(bot.display, bot.token, bot.id, true);
+      // Only the primary screen comes up with the box. Every other Bot is
+      // registered and left asleep: `ScreenKeeper` claims its window the
+      // first time something touches that display and releases it again when
+      // it goes quiet, because eight claimed windows is eight Chromiums and
+      // this guest has 2 GB. Without a keeper (older wiring, and the tests
+      // that predate it) every screen is claimed at boot as before.
+      const eager = !this.screens || bot.display === PRIMARY_DISPLAY;
+      if (eager) {
+        try {
+          await this.windows.startWindow(bot.display, bot.token, bot.id);
+        } catch (error) {
+          // A claim left by a roster we no longer have must not brick startup:
+          // at boot the hub's roster is the source of truth, so take the window.
+          if (!(error instanceof ComputerError) || error.code !== "CONFLICT") throw error;
+          console.warn(`window ${bot.display}: reclaiming a stale claim for bot ${bot.id}`);
+          await this.windows.startWindow(bot.display, bot.token, bot.id, true);
+        }
+      } else {
+        // `desk-up` restores every window in the box's own assignments file
+        // before the hub binds, so a Bot whose screen was up when the Machine
+        // last stopped comes back with an Xvfb and a Chromium the keeper
+        // would record as down and never release. Take them down here: that
+        // is the whole point of a Bot that sleeps, and `stop-window` on a
+        // display that is already down exits 0.
+        try {
+          await this.windows.stopWindow(bot.display);
+        } catch (error) {
+          console.warn(
+            `window ${bot.display}: could not release a restored screen for bot ${bot.id} (${(error as Error).message})`,
+          );
+        }
       }
+      this.screens?.register({ botId: bot.id, display: bot.display, token: bot.token }, eager);
       await this.mountState(bot);
     }
   }
@@ -130,7 +180,7 @@ export class ProvisionService {
   private async mountState(bot: Bot): Promise<void> {
     const seat = this.conversations.resolveSeat(bot.id);
     try {
-      await bot.state.init();
+      await bot.state.init(this.profileSeed?.(bot.id));
       await this.importTranscript(bot, seat.id);
     } catch (error) {
       console.warn(`bot ${bot.id}: box state unavailable (${(error as Error).message})`);
@@ -179,6 +229,9 @@ export class ProvisionService {
       throw error;
     }
     this.store.save(this.bots.configs());
+    // Claimed above, because a person is standing there: a Bot created by
+    // hand should have a screen to look at without being poked first.
+    this.screens?.register({ botId: bot.id, display: bot.display, token: bot.token }, true);
     await this.mountState(bot);
     return bot;
   }
@@ -197,6 +250,9 @@ export class ProvisionService {
     const bot = this.bots.remove(id);
     this.store.save(this.bots.configs());
     try {
+      // Stop the window before forgetting the screen, not after: a claim in
+      // flight from a concurrent action would otherwise finish after the stop
+      // and leave a window up that no keeper entry covers.
       await this.windows.stopWindow(bot.display);
     } catch (error) {
       // The roster is the source of truth: the bot is gone either way, and the
@@ -205,6 +261,7 @@ export class ProvisionService {
         `window ${bot.display}: stop failed after removing bot ${bot.id} (${(error as Error).message}); the next create() will reclaim it`,
       );
     }
+    this.screens?.forget(bot.display);
   }
 }
 

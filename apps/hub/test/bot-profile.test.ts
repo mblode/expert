@@ -128,7 +128,7 @@ describe("a Bot's profile", () => {
     // A colour reaches a client as an inline style, so it is a closed set
     // rather than a string the hub passes through.
     await refuse({ ...base, avatar_color: "url(javascript:alert(1))" }, "VALIDATION");
-    await refuse({ ...base, avatar_shape: "blob" }, "VALIDATION");
+    await refuse({ ...base, avatar_shape: "trapezoid" }, "VALIDATION");
     await refuse({ ...base, name: "   " }, "VALIDATION");
     await refuse({ ...base, name: "x".repeat(49) }, "VALIDATION");
     await refuse({ ...base, description: "x".repeat(501) }, "VALIDATION");

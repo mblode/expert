@@ -18,8 +18,11 @@ import type { ConversationStore, MessageLog } from "./service/conversations.ts";
 import { TurnService } from "./service/turns.ts";
 import type { BridgeClient } from "./service/whatsapp.ts";
 import { eveUrlForDisplay } from "./host/eve.ts";
+import type { ProfileSeedReader } from "./host/bot-seed.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
+import { ScreenKeeper } from "./service/screens.ts";
+import { screenOnDemand } from "./desk/lazy.ts";
 import type { PolicyService } from "./service/policy.ts";
 import { ProvisionService } from "./service/provision.ts";
 import type { BotStore } from "./service/provision.ts";
@@ -72,6 +75,25 @@ interface HubOptions {
   codingFactory?: (conversations: ConversationRegistry) => CodingService;
   /** The supervisor's status file (init writes it). Absent = /healthz reports the hub alone. */
   statusFile?: string;
+  /**
+   * Who a Bot ships as, read from its Eve project by `host/bot-seed.ts`.
+   * Seeded into an empty profile once, never over one the box already has.
+   */
+  profileSeed?: ProfileSeedReader;
+  /** `false` claims every screen at boot and never releases one. */
+  screens?: false;
+  /** How long a screen may go unused before it is released. */
+  screenIdleMs?: number;
+  /** How often idle screens are looked for. */
+  screenSweepMs?: number;
+  /**
+   * Wake a sleeping Bot and wait for its Eve to answer (`host/wake.ts`).
+   * Absent means every Bot's Eve is already running, which is what a dev box
+   * and the tests assume.
+   */
+  wake?: (botId: string, display: number) => Promise<void>;
+  /** True while this Bot is awake and working; its screen is not swept. */
+  botBusy?: (botId: string) => boolean;
 }
 
 export interface Hub {
@@ -95,8 +117,49 @@ export function createHub(opts: HubOptions): Hub {
   // Before the roster: every Bot's voice speaks into a conversation, so the
   // store has to exist before a Bot can be mounted over it.
   const conversations = new ConversationRegistry(opts.conversationStore, opts.messageLog);
-  const bots = new BotRegistry(opts.deskFactory, opts.store.load(), opts.policy, conversations);
-  const provision = new ProvisionService(bots, opts.windows, opts.store, conversations);
+  // A screen is claimed by being used and released when it goes quiet, so a
+  // Bot nobody is talking to costs no Xvfb and no Chromium. `screenOnDemand`
+  // is where "used" is defined, and it wraps the desk under both the model's
+  // `computer` tool and every human seat RPC, so neither path can forget.
+  // `screens: false` keeps the old behaviour (claim everything at boot).
+  const screens: ScreenKeeper | undefined =
+    opts.screens === false
+      ? undefined
+      : new ScreenKeeper(opts.windows, {
+          idleMs: opts.screenIdleMs,
+          isBusy: (display: number): boolean => {
+            try {
+              const bot = bots.byDisplay(display);
+              // A human at the screen, or a Bot in the middle of a turn: the
+              // second matters because a Bot doing half an hour of shell work
+              // touches no X call, and losing its browser and its open tabs
+              // mid-task is the sweep working against the work.
+              return bot.seat.getState() !== "AGENT" || opts.botBusy?.(bot.id) === true;
+            } catch {
+              // No Bot on that display any more: nothing to protect.
+              return false;
+            }
+          },
+          onEvent: (line) => console.log(`computer ${line}`),
+        });
+  const deskFactory = screens
+    ? (display: number): Desk =>
+        screenOnDemand(opts.deskFactory(display), () => screens.use(display))
+    : opts.deskFactory;
+  const bots: BotRegistry = new BotRegistry(
+    deskFactory,
+    opts.store.load(),
+    opts.policy,
+    conversations,
+  );
+  const provision = new ProvisionService(
+    bots,
+    opts.windows,
+    opts.store,
+    conversations,
+    opts.profileSeed,
+    screens,
+  );
   const auth = new AuthRegistry({
     agentTokens: () => bots.tokenEntries(),
     pixels: opts.pixels,
@@ -114,7 +177,7 @@ export function createHub(opts: HubOptions): Hub {
   // DAEMON_DOWN, exactly as the WhatsApp ones do without a bridge.
   const coding = opts.codingFactory?.(conversations) ?? new CodingService(conversations);
 
-  registerAgent(router, { bots, conversations, turns });
+  registerAgent(router, { bots, conversations, turns, wake: opts.wake });
   registerSeat(router, { auth, bots, coding, conversations, provision, vncUrl: opts.vncUrl });
   registerWhatsApp(router, { bots, bridge: opts.bridge, connectors });
 
@@ -168,7 +231,14 @@ export function createHub(opts: HubOptions): Hub {
       // Before the Connect router: one origin and one credential for the
       // clients: Eve's own protocol, gated by the seat token.
       if (isEvePath(url.pathname)) {
-        await handleEveProxy(req, res, { auth, bots, cors: corsHeaders(), eveSecret, eveUrl });
+        await handleEveProxy(req, res, {
+          auth,
+          bots,
+          cors: corsHeaders(),
+          eveSecret,
+          eveUrl,
+          wake: opts.wake,
+        });
         return;
       }
       // The other door: a connector secret, not a seat. Same Eve, same hub secret.
@@ -181,6 +251,7 @@ export function createHub(opts: HubOptions): Hub {
           eveSecret,
           eveUrl,
           turns,
+          wake: opts.wake,
         });
         return;
       }
@@ -220,7 +291,15 @@ export function createHub(opts: HubOptions): Hub {
     basePort: opts.vncBasePort ?? 5900,
     hasDisplay: (display) => bots.hasDisplay(display),
     host: opts.vncHost ?? "127.0.0.1",
+    // A human opening a screen is using it: the window comes up before the
+    // socket is dialled, and watching it keeps it up. Without this a viewer
+    // would get a refused connection on a sleeping Bot's display.
+    use: screens ? (display) => screens.use(display) : undefined,
   });
+
+  // Release what nobody has touched. A minute is often enough to be timely
+  // and rare enough to cost nothing; the keeper decides what is idle.
+  let sweeper: NodeJS.Timeout | undefined;
 
   return {
     auth,
@@ -230,13 +309,24 @@ export function createHub(opts: HubOptions): Hub {
     conversations,
     close: () =>
       new Promise((resolveClose) => {
+        clearInterval(sweeper);
         wss.close();
         server.close(() => resolveClose());
       }),
     provision,
     router,
     server,
-    start: () => provision.start(),
+    start: async () => {
+      await provision.start();
+      if (screens) {
+        sweeper = setInterval(() => {
+          void screens.sweep();
+        }, opts.screenSweepMs ?? 60_000);
+        // The box must be able to suspend and the process must be able to
+        // exit: a sweep is housekeeping, not a reason to stay alive.
+        sweeper.unref();
+      }
+    },
     turns,
     wss,
   };

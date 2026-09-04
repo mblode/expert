@@ -70,8 +70,12 @@ source = "computer_workspace"
 destination = "/workspace"
 processes = ["computer"]
 
-# shared-cpu-2x / 2 GB. Chromium + Xvfb + Eve + hub will not fit in 1 GB;
-# 1 vCPU stutters VNC when Eve drives the desk.
+# shared-cpu-2x / 2 GB, and 2 GB is Fly's ceiling for a Machine that can
+# suspend, so this number is the reason Bots sleep rather than a budget to
+# raise. A roster of eight awake would be about 5 GB (224 MB per Eve, 430 per
+# claimed screen, measured), so only the primary Bot runs at boot and the rest
+# are woken by use: `host/wake.ts` and `service/screens.ts`. 1 vCPU stutters
+# VNC when a Bot drives the desk, so two.
 [[vm]]
 processes = ["computer"]
 cpu_kind = "shared"

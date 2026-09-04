@@ -9,23 +9,33 @@
  * stranger a real browser for half an hour.
  */
 
+/**
+ * The four beats of the scrolled "How it works" section, in order. A tuple
+ * rather than a plain array: the section reads them by index, and `as const`
+ * is what keeps that indexing typed under noUncheckedIndexedAccess.
+ */
 export const howItWorks = [
   {
-    body: "An email code, and the computer is already running.",
+    body: "An email code, no password and nothing to install. The computer is already awake on the other side.",
     step: "01",
     title: "Sign in",
   },
   {
-    body: "It drives a real browser and a terminal while you watch the screen.",
+    body: "Say what you want in plain words. It drives a real Chrome and a real terminal while you watch the screen.",
     step: "02",
     title: "Give it work",
   },
   {
-    body: "At a password or a captcha it hands you the mouse. Tap I’m done and it carries on.",
+    body: "At a password or a captcha it stops and hands you the mouse. Tap I’m done and it carries on from there.",
     step: "03",
     title: "Take the seat",
   },
-];
+  {
+    body: "Close the laptop and the work continues. It messages you when it needs you, and /workspace survives the restart.",
+    step: "04",
+    title: "It keeps going",
+  },
+] as const;
 
 export const whatYouGet = [
   {

@@ -18,6 +18,8 @@ export function attachVncProxy(
     basePort: number;
     auth: AuthRegistry;
     hasDisplay: (display: number) => boolean;
+    /** Bring this screen up before dialling it, and keep it up while watched. */
+    use?: (display: number) => Promise<void>;
   },
 ): void {
   wss.on("connection", (ws: WebSocket, req: IncomingMessage) => {
@@ -42,28 +44,100 @@ export function attachVncProxy(
       ws.close(4403, "token is for another display");
       return;
     }
-    const sock = createConnection({ host: opts.host, port: opts.basePort + display });
-    sock.on("error", () => ws.close());
-    sock.on("data", (d) => {
-      if (ws.readyState === ws.OPEN) {
-        ws.send(d);
-      }
+    // Bring the screen up first. x11vnc is not listening on a display whose
+    // window was released for being idle, and a viewer must not be the one
+    // thing that cannot wake a Bot's screen.
+    const screen = display;
+    let sock: ReturnType<typeof createConnection> | undefined;
+    let done = false;
+    // A viewer watching a screen is using it, so a long look does not end with
+    // the window swept out from under them.
+    const watching = setInterval(() => {
+      void opts.use?.(screen).catch(() => {
+        // The sweep decides; a failed touch is not worth closing a session for.
+      });
+    }, WATCH_TOUCH_MS);
+    watching.unref();
+    const finish = (): void => {
+      done = true;
+      clearInterval(watching);
+      sock?.destroy();
+      ws.close();
+    };
+    ws.on("close", () => {
+      done = true;
+      clearInterval(watching);
+      sock?.destroy();
     });
-    sock.on("close", () => ws.close());
+    // Attached once, not per dial: RFB is server-speaks-first, so nothing has
+    // arrived yet, and a listener per retry would write every frame twice.
     ws.on("message", (d) => {
-      // ws delivers Buffer | ArrayBuffer | Buffer[]; a fragmented frame arrives
-      // as the array and must be joined, not passed to Buffer.from().
+      // ws delivers Buffer | ArrayBuffer | Buffer[]; a fragmented frame
+      // arrives as the array and must be joined, not passed to Buffer.from().
       if (Buffer.isBuffer(d)) {
-        sock.write(d);
+        sock?.write(d);
       } else if (Array.isArray(d)) {
-        sock.write(Buffer.concat(d));
+        sock?.write(Buffer.concat(d));
       } else {
-        sock.write(Buffer.from(d));
+        sock?.write(Buffer.from(d));
       }
     });
-    ws.on("close", () => sock.destroy());
+    void (opts.use?.(screen) ?? Promise.resolve())
+      .catch(() => {
+        // Fall through to the dial: the window may be up anyway, and a
+        // refused connection is a clearer failure than a silent close.
+      })
+      .then(() => {
+        if (ws.readyState !== ws.OPEN && ws.readyState !== ws.CONNECTING) {
+          return;
+        }
+        dial();
+      });
+
+    /**
+     * Dial x11vnc, retrying a connect that was refused.
+     *
+     * `start-window` waits for the X server, not for x11vnc, which comes up a
+     * moment later, so on a screen that was just claimed the first connect
+     * loses the race. Closing the socket there would make waking a sleeping
+     * Bot's desk look broken to the person who asked for it. A connection
+     * that came up and then closed is the box saying the session ended, and
+     * that is not retried.
+     */
+    function dial(attempt = 0): void {
+      if (done || ws.readyState !== ws.OPEN) {
+        return;
+      }
+      const next = createConnection({ host: opts.host, port: opts.basePort + screen });
+      sock = next;
+      let connected = false;
+      next.on("connect", () => {
+        connected = true;
+      });
+      // Handled on "close", which always follows: retrying here as well would
+      // dial twice for one failure.
+      next.on("error", () => undefined);
+      next.on("data", (d) => {
+        if (ws.readyState === ws.OPEN) {
+          ws.send(d);
+        }
+      });
+      next.on("close", () => {
+        if (connected || done || attempt >= DIAL_ATTEMPTS) {
+          finish();
+          return;
+        }
+        setTimeout(() => dial(attempt + 1), DIAL_RETRY_MS).unref();
+      });
+    }
   });
 }
+
+/** How often a live viewer counts as using the screen it is watching. */
+const WATCH_TOUCH_MS = 60_000;
+/** x11vnc is a second behind the X server on a screen that was just claimed. */
+const DIAL_ATTEMPTS = 8;
+const DIAL_RETRY_MS = 250;
 
 function parseDisplayParam(v: string | null): number | null {
   if (v === null || v === "") {
