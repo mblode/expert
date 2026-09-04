@@ -4,29 +4,18 @@ import { CheckIcon } from "blode-icons-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 
-import { BotMark } from "@/components/bot-mark";
+import { BotMark, COLOR_LABEL, SHAPE_LABEL } from "@/components/bot-mark";
 import { Button } from "@/components/ui/button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AVATAR_COLORS, AVATAR_SHAPES, SeatError } from "@/lib/seat";
-import type { AvatarShape, BotProfile, Seat } from "@/lib/seat";
+import type { BotProfile, Seat } from "@/lib/seat";
 import { cn } from "@/lib/utils";
 
 /** The hub's caps, so a long name is caught while typing rather than on save. */
 const MAX = { description: 500, name: 48, title: 64 } as const;
-
-const SHAPE_LABEL: Record<AvatarShape, string> = {
-  blob: "Blob",
-  circle: "Circle",
-  diamond: "Diamond",
-  hexagon: "Hexagon",
-  square: "Square",
-  squircle: "Squircle",
-  tablet: "Tablet",
-  wedge: "Wedge",
-};
 
 /**
  * Who a Bot is, edited by the human whose computer it runs on.
@@ -117,7 +106,9 @@ export function BotSettings({
           <Field>
             <FieldLabel htmlFor="bot-name">Name</FieldLabel>
             <Input
+              aria-describedby={nameMissing ? "bot-name-error" : undefined}
               autoComplete="off"
+              hasError={nameMissing}
               id="bot-name"
               maxLength={MAX.name}
               onChange={(event) => edit({ name: event.target.value })}
@@ -127,6 +118,11 @@ export function BotSettings({
             <FieldDescription>
               What it calls itself. Its id on the computer stays {botId}.
             </FieldDescription>
+            {/* Save is disabled without one, and a dead button at the foot of
+                a sheet does not say which field it is waiting on. */}
+            {nameMissing && (
+              <FieldError id="bot-name-error">A Bot needs a name to be called by.</FieldError>
+            )}
           </Field>
 
           <Field>
@@ -188,7 +184,7 @@ export function BotSettings({
               <div className="flex flex-wrap justify-center gap-3">
                 {AVATAR_COLORS.map((color) => (
                   <button
-                    aria-label={color}
+                    aria-label={COLOR_LABEL[color]}
                     aria-pressed={draft.avatar_color === color}
                     className={cn(
                       "grid size-11 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",

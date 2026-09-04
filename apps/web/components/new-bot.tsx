@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 
-import { BotMark } from "@/components/bot-mark";
+import { BotMark, COLOR_LABEL, SHAPE_LABEL } from "@/components/bot-mark";
 import { Button } from "@/components/ui/button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -48,6 +48,14 @@ export function NewBot({
 
   const id = botIdFrom(name);
   const taken = existingIds.includes(id);
+  // A name that transliterates to nothing (emoji, punctuation) leaves Create
+  // disabled, and a dead button with no reason beside it reads as a bug.
+  const unnameable = name.trim().length > 0 && !id;
+  const nameError = taken
+    ? `There is already a Bot called ${id} on this computer.`
+    : unnameable
+      ? "That name leaves nothing the computer can use as an id. Try one with letters or numbers."
+      : null;
   const draft: BotProfile = {
     avatar_color: color,
     avatar_shape: shape,
@@ -90,7 +98,9 @@ export function NewBot({
           <Field>
             <FieldLabel htmlFor="new-bot-name">Name</FieldLabel>
             <Input
+              aria-describedby={nameError ? "new-bot-name-error" : undefined}
               autoComplete="off"
+              hasError={Boolean(nameError)}
               id="new-bot-name"
               maxLength={MAX.name}
               onChange={(event) => setName(event.target.value)}
@@ -100,6 +110,9 @@ export function NewBot({
             <FieldDescription>
               {id ? `The computer will call it ${id}, and that part cannot change.` : " "}
             </FieldDescription>
+            {/* Beside the field it is about. The collision used to sit at the
+                foot of the form, a scroll below the name that caused it. */}
+            {nameError && <FieldError id="new-bot-name-error">{nameError}</FieldError>}
           </Field>
 
           <Field>
@@ -124,7 +137,7 @@ export function NewBot({
               <div className="flex flex-wrap justify-center gap-3">
                 {AVATAR_SHAPES.map((option) => (
                   <button
-                    aria-label={option}
+                    aria-label={SHAPE_LABEL[option]}
                     aria-pressed={shape === option}
                     className={cn(
                       "grid size-11 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -145,7 +158,7 @@ export function NewBot({
               <div className="flex flex-wrap justify-center gap-3">
                 {AVATAR_COLORS.map((option) => (
                   <button
-                    aria-label={option}
+                    aria-label={COLOR_LABEL[option]}
                     aria-pressed={color === option}
                     className={cn(
                       "grid size-11 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -165,7 +178,6 @@ export function NewBot({
             </div>
           </Field>
 
-          {taken && <FieldError>There is already a Bot called {id} on this computer.</FieldError>}
           {failure && <FieldError>{failure}</FieldError>}
         </FieldGroup>
       </div>

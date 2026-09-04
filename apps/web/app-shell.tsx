@@ -258,9 +258,17 @@ function Workspace({
       computerId={computerId}
       computers={computers}
       display={display}
+      // Undefined until the first poll answers. An empty roster and a roster
+      // that has not arrived yet are different sentences in the sidebar, and
+      // on a suspended Machine the wake is seconds long, so the wrong one is
+      // what an operator sees on most cold loads.
+      loading={status === undefined}
       onDisplayChange={pickDisplay}
       // Same gate as the settings sheet: a hub that cannot serve the roster
       // read cannot serve the write either, so the button is not offered.
+      // `profiles` and not `status`: the roster is owner-only, so its rows are
+      // what prove this seat may also write. `status` would offer the button
+      // to a seat whose `CreateBot` comes back UNAUTHENTICATED.
       onNewBot={Object.keys(profiles).length > 0 ? () => setNewBotOpen(true) : undefined}
       onSignOut={onSignOut}
       onSwitchComputer={switchComputer}

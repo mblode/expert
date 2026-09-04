@@ -53,9 +53,6 @@ interface MemoryEntry {
 /** One fact per line. Grok caps entries around here; longer lines are truncated, not dropped. */
 const MEMORY_MAX_CHARS = 500;
 
-/** How much memory rides along in the system prompt. The box is a pet, not a RAG index. */
-const MEMORY_IN_PROMPT = 50;
-
 /** `- (2026-09-01) [note] the fact`. The kind prefix is optional and defaults to note. */
 const MEMORY_LINE = /^-\s+\((\d{4}-\d{2}-\d{2})\)\s+(?:\[(note|episode)\]\s*)?(\S.*)$/;
 
@@ -169,11 +166,16 @@ export class BotState {
    * Who this Bot is, clamped.
    *
    * The agent can edit this file (it is under `/workspace`, so `write_file`
-   * reaches it), and this is where the profile leaves the box: for the
-   * prompt, for `/roster`, and from there into a client that renders the
-   * colour as an inline style. So every field is untrusted on the way out,
-   * not only on the way in: an unknown shape or colour falls back to the
-   * seeded one and the strings are truncated rather than dropped.
+   * reaches it), and this is where the profile leaves the box for `/roster`
+   * and from there into a client that renders the colour as an inline style.
+   * So every field is untrusted on the way out, not only on the way in: an
+   * unknown shape or colour falls back to the seeded one and the strings are
+   * truncated rather than dropped.
+   *
+   * The system prompt does not come through here. A Bot's Eve reads the same
+   * file on the box at the start of each turn (`apps/eve/lib/profile.ts`),
+   * because the hub's only seam in front of a turn is a byte pass-through
+   * proxy and a prompt the hub rendered would have nowhere to go.
    */
   async profile(): Promise<BotProfile> {
     const raw = await this.read(this.profilePath);
@@ -253,30 +255,6 @@ export class BotState {
       }
     }
     return out;
-  }
-
-  /**
-   * Who this Bot is, for the system prompt. A fresh Bot with a default
-   * profile and no memory still gets its directory, because that path is how
-   * the agent reaches the memory file to write to it.
-   */
-  async prompt(): Promise<string> {
-    const p = await this.profile();
-    const lines = [`You are ${p.name}${p.title ? `, ${p.title}` : ""}.`];
-    if (p.description) {
-      lines.push(p.description);
-    }
-    lines.push(
-      `Your own files are in ${this.dir}. ${this.memoryPath} is your memory, read it, and write_file a new "- (date) [note] fact" line when something is worth keeping.`,
-    );
-    const entries = await this.memory();
-    if (entries.length) {
-      lines.push("What you remember:");
-      for (const e of entries.slice(-MEMORY_IN_PROMPT)) {
-        lines.push(`- (${e.date}) [${e.kind}] ${e.text}`);
-      }
-    }
-    return lines.join("\n");
   }
 
   /** Missing file, unreadable box: both are "nothing there yet" to every caller here. */

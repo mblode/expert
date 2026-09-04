@@ -36,7 +36,11 @@ beside `main`; [`docs/BOTS.md`](../../docs/BOTS.md) says who owns what.
    Bot with schedules also lists them in `agent/routines.json` as
    `{ id, cron }`: it sleeps when nobody is using it, and that file is how the
    hub knows to wake it a minute before one is due. A test fails if the two
-   drift.
+   drift. A shipped Bot's identity is in `instructions.md`, so it does not
+   need the template's `agent/instructions/profile.ts`: that resolver reads
+   `/workspace/.bots/<id>/profile.json` at `turn.started` and is the only
+   thing telling two Bots on the shared template project apart. Re-export it
+   when a rename from the settings sheet should reach the prompt here too.
 4. Add a `COPY` line for its `package.json` in `deploy/fly/Dockerfile` (one
    per bot: a wildcard `COPY` flattens them onto one path) and deploy. The
    image builds every project under `apps/eve/bots`, the guest's init mints a

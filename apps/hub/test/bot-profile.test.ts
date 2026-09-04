@@ -74,10 +74,13 @@ describe("a Bot's profile", () => {
       title: "night shift",
     });
 
-    // The point of the feature: the prompt is where a profile edit lands.
-    const prompt = await h.hub.bots.byId("main").state.prompt();
-    expect(prompt).toContain("You are Ada, night shift.");
-    expect(prompt).toContain("Keeps the deploys honest.");
+    // The point of the feature: an edit lands on the box, in the file the
+    // Bot's own Eve reads at the start of every turn.
+    expect(JSON.parse(h.desk.files.get(PROFILE)!.content)).toMatchObject({
+      description: "Keeps the deploys honest.",
+      name: "Ada",
+      title: "night shift",
+    });
     const [bot] = await roster(h.url, seat);
     expect(bot?.profile.name).toBe("Ada");
   });
@@ -106,7 +109,11 @@ describe("a Bot's profile", () => {
       title: "",
     });
     expect(cleared).toMatchObject({ description: "", id: "main", title: "" });
-    expect(await h.hub.bots.byId("main").state.prompt()).toContain("You are Ada.");
+    expect(await h.hub.bots.byId("main").state.profile()).toMatchObject({
+      description: "",
+      name: "Ada",
+      title: "",
+    });
   });
 
   it("refuses a mark outside the palette, an empty name and an unknown Bot", async () => {
