@@ -17,7 +17,7 @@ import { ConversationRegistry } from "./service/conversations.ts";
 import type { ConversationStore, MessageLog } from "./service/conversations.ts";
 import { TurnService } from "./service/turns.ts";
 import type { BridgeClient } from "./service/whatsapp.ts";
-import { eveUrlForDisplay } from "./host/eve.ts";
+import { EVE_HUB_SECRET_HEADER, eveUrlForDisplay } from "./host/eve.ts";
 import type { ProfileSeedReader } from "./host/bot-seed.ts";
 import { needsSeatPixelAuth, serveStatic } from "./handler/static.ts";
 import { BotRegistry } from "./service/bots.ts";
@@ -28,8 +28,7 @@ import { ProvisionService } from "./service/provision.ts";
 import type { BotStore } from "./service/provision.ts";
 import { BotTemplateService } from "./service/templates.ts";
 import type { TemplateSourceReader } from "./service/templates.ts";
-import { genericConfig } from "./service/template-generic.ts";
-import type { GenericConfig } from "./service/template-generic.ts";
+import type { AskEveFn } from "./service/template-generic.ts";
 import type { PrincipalStore } from "./service/principals.ts";
 import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
@@ -92,11 +91,12 @@ interface HubOptions {
    */
   templateSource?: TemplateSourceReader;
   /**
-   * The model that rewrites a template for a stranger. Absent reads the
-   * environment (`AI_GATEWAY_API_KEY`, as Auto Review does); `null` is a hub
-   * that will only ever scrub, which is what the tests want by default.
+   * How a Bot's setup is rewritten for a stranger: a POST to that Bot's own
+   * Eve. Absent uses the same Eve URL and secret the proxy does; `null` is a
+   * hub whose exports are never generic, which is what the tests want by
+   * default so that none of them reaches a model.
    */
-  templateGeneric?: GenericConfig | null;
+  templateGeneric?: AskEveFn | null;
   /** `false` claims every screen at boot and never releases one. */
   screens?: false;
   /** How long a screen may go unused before it is released. */
@@ -136,6 +136,9 @@ export interface Hub {
   start: () => Promise<void>;
   close: () => Promise<void>;
 }
+
+/** One generation on the Bot's own model, and not a turn: seconds, not minutes. */
+const TEMPLATE_REWRITE_TIMEOUT_MS = 60_000;
 
 export function createHub(opts: HubOptions): Hub {
   // Before the roster: every Bot's voice speaks into a conversation, so the
@@ -201,6 +204,55 @@ export function createHub(opts: HubOptions): Hub {
   // DAEMON_DOWN, exactly as the WhatsApp ones do without a bridge.
   const coding = opts.codingFactory?.(conversations) ?? new CodingService(conversations);
 
+  const eveSecret = opts.eveSecret ?? process.env.COMPUTER_EVE_SECRET;
+  // Resolved per request: the roster changes at runtime (CreateBot), and at
+  // construction time a fresh box has no primary yet.
+  // Resolved per request: the roster changes at runtime (CreateBot), and at
+  // construction time a fresh box has no primary yet. Empty string = no Eve.
+  const eveUrl = (botId: string, display: number): string => {
+    const override = process.env.COMPUTER_EVE_URL;
+    if (opts.eveUrls) {
+      return opts.eveUrls[botId] ?? eveUrlForDisplay(display);
+    }
+    if (override && botId === bots.primary().id) {
+      return override;
+    }
+    return eveUrlForDisplay(display);
+  };
+
+  /**
+   * Rewrite this Bot's setup for a stranger, by asking the Bot.
+   *
+   * The same loopback door the connector ingress uses: that Bot's own Eve,
+   * the hub's secret, and a wake first because a Bot nobody is talking to has
+   * no process at all. It is `apps/eve/lib/channels/template.ts` on the other
+   * end, and it answers with a rewritten document rather than starting a
+   * turn, so nothing here hands the five tools a document to read.
+   */
+  const askEveForGeneric: AskEveFn = async (botId, template) => {
+    const bot = bots.byId(botId);
+    const url = eveUrl(bot.id, bot.display);
+    if (!url) {
+      throw new Error("this Bot has no Eve");
+    }
+    await opts.wake?.(bot.id, bot.display);
+    const res = await fetch(`${url}/eve/v1/template/generic`, {
+      body: JSON.stringify({ template }),
+      headers: {
+        "content-type": "application/json",
+        ...(eveSecret ? { [EVE_HUB_SECRET_HEADER]: eveSecret } : {}),
+      },
+      method: "POST",
+      // A document, not a turn: long enough for one generation and no longer.
+      signal: AbortSignal.timeout(TEMPLATE_REWRITE_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      const detail = (await res.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(detail?.error ?? `Eve answered ${res.status}`);
+    }
+    return await res.json();
+  };
+
   registerAgent(router, { bots, conversations, turns, wake: opts.wake });
   registerSeat(router, {
     auth,
@@ -210,7 +262,7 @@ export function createHub(opts: HubOptions): Hub {
     provision,
     templates: new BotTemplateService(
       opts.templateSource,
-      opts.templateGeneric === undefined ? genericConfig() : opts.templateGeneric,
+      opts.templateGeneric === undefined ? askEveForGeneric : (opts.templateGeneric ?? undefined),
     ),
     vncUrl: opts.vncUrl,
     wake: opts.wake,
@@ -242,22 +294,6 @@ export function createHub(opts: HubOptions): Hub {
   router.assertAllPolicies();
 
   const staticDir = resolve(import.meta.dirname, "static");
-  const eveSecret = opts.eveSecret ?? process.env.COMPUTER_EVE_SECRET;
-  // Resolved per request: the roster changes at runtime (CreateBot), and at
-  // construction time a fresh box has no primary yet.
-  // Resolved per request: the roster changes at runtime (CreateBot), and at
-  // construction time a fresh box has no primary yet. Empty string = no Eve.
-  const eveUrl = (botId: string, display: number): string => {
-    const override = process.env.COMPUTER_EVE_URL;
-    if (opts.eveUrls) {
-      return opts.eveUrls[botId] ?? eveUrlForDisplay(display);
-    }
-    if (override && botId === bots.primary().id) {
-      return override;
-    }
-    return eveUrlForDisplay(display);
-  };
-
   const server = createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");

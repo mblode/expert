@@ -185,12 +185,14 @@ reads its whole setup off the computer (`Seat.ExportBotTemplate`), shows it
 with a switch beside each section, and publishes what you tick to a link on
 hello.expert: `/bot/<id>`.
 
-**It is made generic first, by default.** Your Bot is full of you: its brief
-names your product, its skills name your repository, its memory is a list of
-facts about you. So the computer rewrites it for a stranger before you see
-it, keeping the job and dropping the parts that only make sense for you, and
-says in one line what it left out. Turn it off and you share your Bot exactly
-as it is, which is what a backup wants and not what a link does.
+**The Bot makes it generic first, by default.** Your Bot is full of you: its
+brief names your product, its skills name your repository, its memory is a
+list of facts about you. So the Bot itself rewrites its setup for a stranger
+before you see it, on its own model, keeping the job and dropping the parts
+that only make sense for you, and says in one line what it left out. Turn it
+off and you share your Bot exactly as it is, which is what a backup wants and
+not what a link does. If its Eve cannot answer, the sheet says the rewrite
+did not run rather than calling the document generic.
 
 Three more things about what travels. **No credential does**: a plugin is the
 address of a service and how it authenticates, so whoever installs it signs

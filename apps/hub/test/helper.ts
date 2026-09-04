@@ -15,7 +15,7 @@ import type {
   MessageLog,
 } from "../src/service/conversations.ts";
 import type { BridgeClient } from "../src/service/whatsapp.ts";
-import type { GenericConfig } from "../src/service/template-generic.ts";
+import type { AskEveFn } from "../src/service/template-generic.ts";
 
 const SETUP_CODE = "setup-code-test";
 const AGENT_TOKEN = "agent-token-test";
@@ -54,8 +54,8 @@ export async function startHub(
     messageLog?: MessageLog;
     bridge?: BridgeClient;
     codingFactory?: (conversations: ConversationRegistry) => CodingService;
-    /** The template rewriter. Null by default: no test may reach a gateway. */
-    templateGeneric?: GenericConfig | null;
+    /** How a template is made generic. Null by default: no test asks a model. */
+    templateGeneric?: AskEveFn | null;
   } = {},
 ): Promise<StartedHub> {
   const configs = opts.bots ?? [{ display: 1, id: "main", token: AGENT_TOKEN }];

@@ -1,6 +1,6 @@
 import { BOT_TEMPLATE_VERSION, parseBotTemplate } from "@computer/shared";
-import { generaliseTemplate, scrubTemplate } from "./template-generic.ts";
-import type { GenericConfig } from "./template-generic.ts";
+import { generaliseTemplate } from "./template-generic.ts";
+import type { AskEveFn } from "./template-generic.ts";
 import type {
   BotProfile,
   BotTemplate,
@@ -60,11 +60,12 @@ export class BotTemplateService {
   constructor(
     private readonly source?: TemplateSourceReader,
     /**
-     * The model that rewrites a template for a stranger. Absent (no
-     * `AI_GATEWAY_API_KEY`) means an export can still be scrubbed but never
-     * rewritten, and says so rather than pretending.
+     * How to reach a Bot's own Eve, which is what rewrites its setup for a
+     * stranger. Absent means a hub with no Eve beside it: an export is still
+     * whole, it is simply never generic, and it says so rather than
+     * pretending.
      */
-    private readonly generic?: GenericConfig | null,
+    private readonly askEve?: AskEveFn,
   ) {}
 
   /**
@@ -111,30 +112,24 @@ export class BotTemplateService {
     if (!opts.generic) {
       return { generic: false, note: "", template: verbatim };
     }
-    if (!this.generic) {
-      // Scrubbed but not rewritten, and named as such. The addresses and
-      // phone numbers are gone; whose product this is, is not.
+    if (!this.askEve) {
       return {
         generic: false,
-        note: "This computer has no model to rewrite the template with, so it is your Bot as it is, with email addresses and phone numbers removed. Read it before you publish it.",
-        template: scrubTemplate(verbatim),
+        note: "This Bot has no Eve to rewrite its setup with, so this is your Bot exactly as it is. Read every section before you publish it.",
+        template: verbatim,
       };
     }
     try {
-      const { dropped, template } = await generaliseTemplate(verbatim, this.generic);
-      return {
-        generic: true,
-        note: dropped,
-        template,
-      };
+      const { dropped, template } = await generaliseTemplate(botId, verbatim, this.askEve);
+      return { generic: true, note: dropped, template };
     } catch (error) {
-      // Never the verbatim document under the generic flag: say the rewrite
-      // did not happen and hand back the one thing that is still true, which
-      // is the scrub.
+      // Never the verbatim document as though it had been rewritten. It is
+      // handed back because the person may still want it, under a flag and a
+      // sentence that say plainly what they are looking at.
       return {
         generic: false,
-        note: `The rewrite did not run (${(error as Error).message}), so this is your Bot with email addresses and phone numbers removed. Read it before you publish it.`,
-        template: scrubTemplate(verbatim),
+        note: `${botName(verbatim)} could not rewrite it (${(error as Error).message}), so this is your Bot exactly as it is. Read every section before you publish it.`,
+        template: verbatim,
       };
     }
   }
@@ -170,4 +165,9 @@ export class BotTemplateService {
     await state.addMemories(template.memories);
     return profile;
   }
+}
+
+/** The Bot in the sentence a person reads, not an id. */
+function botName(template: BotTemplate): string {
+  return template.name || "This Bot";
 }

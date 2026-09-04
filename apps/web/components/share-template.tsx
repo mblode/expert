@@ -260,7 +260,7 @@ export function ShareTemplate({
             </label>
             <p className="text-muted-foreground text-xs">
               {generic
-                ? "The same Bot with you taken out of it: no names, no products, no repositories, and nothing it remembers about you."
+                ? `${botName} rewrites its own setup for a stranger: the same job, with no names, no products, no repositories, and nothing it remembers about you.`
                 : "Your Bot exactly as it is. Read every section before you publish: whatever it knows about you goes with it."}
             </p>
             {note && (
