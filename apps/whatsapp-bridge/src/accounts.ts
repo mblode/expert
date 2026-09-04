@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -6,7 +7,8 @@ import path from "node:path";
  *
  * ```
  * { "version": 1, "accounts": [ { "acct": "main", "bot": "main", "phone": "614…" | null,
- *   "connector_id": "whatsapp", "connector_secret": "…", "config": { … } } ] }
+ *   "connector_id": "whatsapp", "connector_secret": "…", "bridge_secret": "…",
+ *   "hub_url": "", "config": { … } } ] }
  * ```
  *
  * `channel_id` / `channel_secret` are the pre-rename names and are still read,
@@ -69,6 +71,37 @@ export interface AccountRecord {
   /** Hub connector id; inbound goes to `/connectors/<connector_id>/message`. */
   connector_id: string;
   connector_secret: string;
+  /**
+   * This account's own credential on the bridge's HTTP API, minted here and
+   * handed to that account's Bot. It is what scopes a caller: a request
+   * presenting it may only reach this `acct`, whatever `acct` the query or
+   * body names. The process-wide `WHATSAPP_BRIDGE_SECRET` stays the admin
+   * credential the hub holds, and it alone opens the `/accounts` routes.
+   *
+   * Two secrets rather than one because the two point in opposite directions.
+   * `connector_secret` is spent bridge -> hub and identifies this door to the
+   * tenant; `bridge_secret` is spent Bot -> bridge and identifies the Bot as
+   * this account's. With one shared secret and `acct` read off the request,
+   * every holder could read every account's messages by naming another id,
+   * which is invisible while the only caller is the one tenant's Eve on
+   * loopback and is a cross-tenant read the moment the bridge serves two.
+   *
+   * Empty on a record parsed from a file written before this existed; boot
+   * mints one and rewrites the file, so it is empty only in between.
+   */
+  bridge_secret: string;
+  /**
+   * Tenant hub base URL for this account's inbound messages, no trailing
+   * slash. Empty means the process-wide `COMPUTER_URL`, which is what a
+   * bridge running beside its own hub on loopback wants.
+   *
+   * It is per account because one bridge can serve numbers belonging to
+   * different tenants, each with its own hub. Point it at the tenant's public
+   * Fly hostname, never at `<app>.internal`: only Fly Proxy starts a stopped
+   * or suspended Machine, so a 6PN address reaches a hibernated tenant as a
+   * connection error rather than as a wake.
+   */
+  hub_url: string;
   config: AccountConfig;
 }
 
@@ -258,14 +291,63 @@ export const parseAccountRecord = (raw: unknown): AccountRecord => {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(connector_id)) {
     throw new Error("connector_id must be a short URL-safe id");
   }
+  // Absent is allowed, and only here: a file written before per-account
+  // credentials existed has none, and refusing it would take every linked
+  // number down on the deploy that introduces them. Boot mints one for every
+  // record that comes back empty, so the window is one startup wide.
+  const rawBridgeSecret = o.bridge_secret;
+  if (rawBridgeSecret !== undefined && rawBridgeSecret !== null) {
+    if (typeof rawBridgeSecret !== "string") {
+      throw new TypeError("bridge_secret must be a string");
+    }
+    if (rawBridgeSecret.trim() && rawBridgeSecret.trim().length < 16) {
+      throw new Error("bridge_secret must be at least 16 characters");
+    }
+  }
   return {
     acct,
     bot,
+    bridge_secret: typeof rawBridgeSecret === "string" ? rawBridgeSecret.trim() : "",
     config: parseAccountConfig(o.config),
     connector_id,
     connector_secret,
+    hub_url: parseHubUrl(o.hub_url),
     phone: parsePhone(o.phone),
   };
+};
+
+/** A fresh 256-bit credential, the same shape the hub mints connector secrets in. */
+export const mintBridgeSecret = (): string => randomBytes(32).toString("base64url");
+
+/**
+ * An absolute http(s) base URL with no trailing slash, or "" for unset.
+ *
+ * Only the scheme is constrained, because a tenant hub is reached at whatever
+ * hostname Fly gave its app. A relative or non-HTTP value is refused rather
+ * than defaulted: silently falling back to the loopback hub would send one
+ * tenant's messages to another tenant's Bot.
+ */
+export const parseHubUrl = (value: unknown): string => {
+  if (value === undefined || value === null || value === "") {
+    return "";
+  }
+  if (typeof value !== "string") {
+    throw new TypeError("hub_url must be a string");
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    throw new Error("hub_url must be an absolute http(s) URL");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("hub_url must be an absolute http(s) URL");
+  }
+  return trimmed.replace(/\/+$/u, "");
 };
 
 /** Parse the whole file; an empty or missing file is a valid empty registry. */
@@ -292,6 +374,18 @@ export const parseAccountsFile = (raw: unknown): AccountsFile => {
   });
   return { accounts, version: 1 };
 };
+
+/**
+ * Where this account's inbound messages go.
+ *
+ * `hub_url` when the account names its own hub, else the process-wide default,
+ * which is what a bridge running beside its own hub on loopback uses. Kept
+ * here rather than inlined at the call site so the fallback is one rule with
+ * one test: getting it wrong points a tenant's WhatsApp traffic at whichever
+ * Bot happens to be local.
+ */
+export const connectorEndpoint = (record: AccountRecord, defaultHubUrl: string): string =>
+  `${record.hub_url || defaultHubUrl}/connectors/${record.connector_id}/message`;
 
 /** Where the file lives under the state dir. */
 export const accountsPath = (stateDir: string): string => path.join(stateDir, "accounts.json");
@@ -343,6 +437,15 @@ interface AccountsRegistry {
   remove: (acct: string) => Promise<boolean>;
   setConfig: (acct: string, config: AccountConfig) => Promise<AccountRecord>;
   setPhone: (acct: string, phone: string | null) => Promise<AccountRecord>;
+  /**
+   * Mint a `bridge_secret` for every record that has none and persist once.
+   * Called at boot, so an accounts.json written before per-account credentials
+   * existed gains them without a migration step anyone has to remember. Returns
+   * the ids it minted for, which the caller logs: a Bot holding the old shared
+   * secret keeps working (that is the admin credential) but the operator needs
+   * to know a new per-account one now exists to hand out.
+   */
+  ensureBridgeSecrets: () => Promise<string[]>;
 }
 
 export const createAccountsRegistry = (
@@ -374,6 +477,19 @@ export const createAccountsRegistry = (
       accounts.set(record.acct, record);
       await persist();
       return record;
+    },
+    async ensureBridgeSecrets() {
+      const minted: string[] = [];
+      for (const [acct, record] of accounts) {
+        if (!record.bridge_secret) {
+          accounts.set(acct, { ...record, bridge_secret: mintBridgeSecret() });
+          minted.push(acct);
+        }
+      }
+      if (minted.length > 0) {
+        await persist();
+      }
+      return minted;
     },
     list: () => [...accounts.values()],
     async remove(acct) {

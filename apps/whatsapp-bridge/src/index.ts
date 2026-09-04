@@ -17,6 +17,7 @@ import type { AccountRuntime } from "./account.ts";
 import {
   createAccountsRegistry,
   loadAccountsFile,
+  mintBridgeSecret,
   parseAccountConfig,
   parseAccountRecord,
 } from "./accounts.ts";
@@ -40,6 +41,14 @@ let shuttingDown = false;
 
 const main = async (): Promise<void> => {
   const registry = createAccountsRegistry(env.stateDir, await loadAccountsFile(env.stateDir));
+  // Before any socket opens: an accounts.json written before per-account
+  // credentials existed has none, and until each account has one the only way
+  // in is the admin secret, which is exactly the shared-credential shape this
+  // replaces. Minting here rather than lazily keeps that window one boot wide.
+  const minted = await registry.ensureBridgeSecrets();
+  if (minted.length > 0) {
+    logger.info({ accounts: minted }, "minted per-account bridge secrets");
+  }
 
   const spawn = (record: AccountRecord): AccountRuntime => {
     const runtime = createAccountRuntime({
@@ -77,6 +86,12 @@ const main = async (): Promise<void> => {
 
   const api: BridgeApi = {
     accountIds: () => [...runtimes.keys()],
+    // Off the registry rather than the runtimes, so an account whose socket
+    // failed to start still authenticates: its Bot can read stored messages
+    // and get a clean 503 from a send, instead of a 401 that reads as a bad
+    // credential and sends someone rotating secrets.
+    accountSecrets: () =>
+      registry.list().map((record) => ({ acct: record.acct, secret: record.bridge_secret })),
     async createAccount(body) {
       let record: AccountRecord;
       try {
@@ -87,10 +102,16 @@ const main = async (): Promise<void> => {
       if (runtimes.has(record.acct)) {
         throw new HttpError(409, `account ${record.acct} already exists`);
       }
-      await registry.add(record);
-      const runtime = spawn(record);
+      // The caller may supply one (a re-create that has to keep the Bot's
+      // existing credential working); otherwise it is minted here and returned
+      // exactly once, in this response.
+      const withSecret: AccountRecord = record.bridge_secret
+        ? record
+        : { ...record, bridge_secret: mintBridgeSecret() };
+      await registry.add(withSecret);
+      const runtime = spawn(withSecret);
       await boot(runtime);
-      return runtime.summary();
+      return { bridgeSecret: withSecret.bridge_secret, summary: runtime.summary() };
     },
     async deleteAccount(acct) {
       const runtime = runtimes.get(acct);

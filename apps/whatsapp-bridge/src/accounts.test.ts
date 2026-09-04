@@ -8,13 +8,16 @@ import { test } from "node:test";
 import {
   ACCT_ID_RE,
   accountsPath,
+  connectorEndpoint,
   authDir,
   createAccountsRegistry,
   defaultAccountConfig,
   loadAccountsFile,
+  mintBridgeSecret,
   parseAccountConfig,
   parseAccountRecord,
   parseAccountsFile,
+  parseHubUrl,
   parsePhone,
   saveAccountsFile,
 } from "./accounts.ts";
@@ -232,4 +235,99 @@ test("the registry persists every mutation and refuses a duplicate id", async ()
   assert.equal(await registry.remove("main"), true);
   assert.equal(await registry.remove("main"), false);
   assert.deepEqual(await savedAccounts(dir), []);
+});
+
+test("parseAccountRecord reads bridge_secret and hub_url, and tolerates neither", () => {
+  // A file written before per-account credentials existed must still parse:
+  // refusing it would take every linked number down on the deploy that adds
+  // them. Boot mints the missing secret instead.
+  const legacy = parseAccountRecord({ acct: "main", bot: "main", connector_secret: "s" });
+  assert.equal(legacy.bridge_secret, "");
+  assert.equal(legacy.hub_url, "");
+
+  const full = parseAccountRecord({
+    acct: "main",
+    bot: "main",
+    bridge_secret: "0123456789abcdef0",
+    connector_secret: "s",
+    hub_url: "https://tenant.fly.dev/",
+  });
+  assert.equal(full.bridge_secret, "0123456789abcdef0");
+  assert.equal(full.hub_url, "https://tenant.fly.dev");
+
+  // A short secret is refused rather than accepted and made to look scoped.
+  assert.throws(
+    () =>
+      parseAccountRecord({
+        acct: "main",
+        bot: "main",
+        bridge_secret: "abc",
+        connector_secret: "s",
+      }),
+    /bridge_secret/u,
+  );
+});
+
+test("parseHubUrl takes absolute http(s) only, and never silently defaults", () => {
+  assert.equal(parseHubUrl(undefined), "");
+  assert.equal(parseHubUrl(""), "");
+  assert.equal(parseHubUrl("  "), "");
+  assert.equal(parseHubUrl("http://127.0.0.1:8080"), "http://127.0.0.1:8080");
+  assert.equal(parseHubUrl("https://t.fly.dev///"), "https://t.fly.dev");
+  // Falling back to the loopback hub on a bad value would send one tenant's
+  // messages to whichever Bot happens to be local, so it throws instead.
+  assert.throws(() => parseHubUrl("tenant.fly.dev"), /hub_url/u);
+  assert.throws(() => parseHubUrl("ftp://tenant.fly.dev"), /hub_url/u);
+  assert.throws(() => parseHubUrl(7), /hub_url/u);
+});
+
+test("mintBridgeSecret is 256 bits of base64url", () => {
+  const secret = mintBridgeSecret();
+  assert.match(secret, /^[\w-]{43}$/u);
+  assert.notEqual(secret, mintBridgeSecret());
+});
+
+test("ensureBridgeSecrets fills the gaps once and persists", async () => {
+  const dir = path.join(await mkdtemp(path.join(tmpdir(), "wa-accounts-")), "state");
+  const registry = createAccountsRegistry(dir, {
+    accounts: [
+      parseAccountRecord({ acct: "one", bot: "one", connector_secret: "s1" }),
+      parseAccountRecord({
+        acct: "two",
+        bot: "two",
+        bridge_secret: "kept-secret-0123456789",
+        connector_secret: "s2",
+      }),
+    ],
+    version: 1,
+  });
+
+  const minted = await registry.ensureBridgeSecrets();
+  assert.deepEqual(minted, ["one"]);
+  const saved = await savedAccounts(dir);
+  assert.match(saved.find((a) => a.acct === "one")?.bridge_secret ?? "", /^[\w-]{43}$/u);
+  // An account that already had one keeps it: re-minting would break the Bot
+  // holding it on every restart.
+  assert.equal(saved.find((a) => a.acct === "two")?.bridge_secret, "kept-secret-0123456789");
+
+  assert.deepEqual(await registry.ensureBridgeSecrets(), []);
+});
+
+test("connectorEndpoint prefers the account's own hub over the process default", () => {
+  const local = parseAccountRecord({ acct: "main", bot: "main", connector_secret: "s" });
+  assert.equal(
+    connectorEndpoint(local, "http://127.0.0.1:8080"),
+    "http://127.0.0.1:8080/connectors/whatsapp/message",
+  );
+  const remote = parseAccountRecord({
+    acct: "main",
+    bot: "main",
+    connector_id: "whatsapp-vibey",
+    connector_secret: "s",
+    hub_url: "https://vcmc-computer.fly.dev",
+  });
+  assert.equal(
+    connectorEndpoint(remote, "http://127.0.0.1:8080"),
+    "https://vcmc-computer.fly.dev/connectors/whatsapp-vibey/message",
+  );
 });
