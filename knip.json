@@ -21,7 +21,7 @@
       "ignoreDependencies": ["postcss"]
     },
     "apps/eve": {},
-    "apps/eve/bots/main": {
+    "apps/eve/bots/*": {
       "entry": ["agent/**/*.ts"]
     }
   },

@@ -12,6 +12,11 @@ interface AgentDeps {
   bots: BotRegistry;
   conversations: ConversationRegistry;
   turns: TurnService;
+  /**
+   * Keep this Bot awake (`host/wake.ts`). A Bot calling a tool is a Bot at
+   * work, and the sleep timer must not run out from under a long turn.
+   */
+  wake?: (botId: string, display: number) => Promise<void>;
 }
 
 /** Agent token → Bot → screen. The model never names a display. */
@@ -21,7 +26,13 @@ export function registerAgent(router: ConnectRouter, deps: AgentDeps): void {
     if (!ctx.botId) {
       throw new ComputerError("UNAUTHENTICATED", "agent token required");
     }
-    return bots.byId(ctx.botId);
+    const found = bots.byId(ctx.botId);
+    // Fire and forget: the marker is a note about when this Bot may sleep,
+    // never something a tool call waits on.
+    void deps.wake?.(found.id, found.display).catch(() => {
+      /* a Bot that is running does not need waking */
+    });
+    return found;
   };
 
   router.rpc(AgentMethods.Spec, "agent", async () => ({

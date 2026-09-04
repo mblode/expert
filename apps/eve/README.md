@@ -8,26 +8,49 @@ loopback. See [eve.dev](https://eve.dev): the directory is the agent.
 ## Layout
 
 ```
-apps/eve/lib/           shared tools, hub RPC, hubLoopbackAuth
-apps/eve/bots/main/     the desk agent (roster bot on display 1, :2000)
+apps/eve/lib/                    shared tools, hub RPC, channels, hubLoopbackAuth
+apps/eve/bots/main/              the desk agent (display 1, :2000)
+apps/eve/bots/<id>/              one directory per Bot, and that is the Bot
 ```
 
-Each bot is its own eve.dev project: `agent/instructions.md`, `agent/skills/`,
-`agent/schedules/`. Shared typed tools (`computer`, `shell`, `read_file`,
-`write_file`, `send_message`) live in `lib/` and are re-exported from the bot.
+Each bot is its own eve.dev project: `agent/profile.json`,
+`agent/instructions.md`, `agent/skills/`, `agent/schedules/`, and
+`agent/channels/` for a door something else can knock on. Shared typed tools
+(`computer`, `shell`, `read_file`, `write_file`, `send_message`) live in
+`lib/` and are re-exported from the bot.
 
-One **process** per bot. `COMPUTER_BOT_TOKEN` is that bot's identity and
-screen. Port is `2000 + (display - 1)`.
+One **process** per bot, while that bot is awake. `COMPUTER_BOT_TOKEN` is its
+identity and its screen; the port is `2000 + (display - 1)`. The roster ships seven specialists
+beside `main`; [`docs/BOTS.md`](../../docs/BOTS.md) says who owns what.
 
 ## Add a bot
 
-1. Copy `bots/main` to `bots/<id>` and add `apps/eve/bots/<id>` to the
-   `workspaces` list in the root `package.json`.
-2. Rewrite `agent/instructions.md` (and skills / schedules) for that bot.
-3. Mint a token: `npm run bot -- new <id>` (or restore one on the volume).
-4. On Fly, add an `eve build` line for it in `deploy/fly/Dockerfile` and
-   deploy. The supervisor starts `eve start --host 127.0.0.1 --port …` only
-   if `<id>` is on the roster and a project exists.
+1. Copy `bots/main` to `bots/<id>`. The root `package.json` globs
+   `apps/eve/bots/*`, so there is no workspace list to edit.
+2. Write `agent/profile.json`: the name, the label, the description and the
+   mark (a shape and a colour from `AVATAR_SHAPES` / `AVATAR_COLORS` in
+   `packages/shared`). The hub seeds it into `/workspace/.bots/<id>/` the
+   first time that Bot boots and never again, so a later rename by the human
+   or by the Bot itself survives every deploy.
+3. Rewrite `agent/instructions.md` and its skills, schedules and channels. A
+   Bot with schedules also lists them in `agent/routines.json` as
+   `{ id, cron }`: it sleeps when nobody is using it, and that file is how the
+   hub knows to wake it a minute before one is due. A test fails if the two
+   drift.
+4. Add a `COPY` line for its `package.json` in `deploy/fly/Dockerfile` (one
+   per bot: a wildcard `COPY` flattens them onto one path) and deploy. The
+   image builds every project under `apps/eve/bots`, the guest's init mints a
+   roster row and a token for any project that has none, on the lowest free
+   screen, and the supervisor registers it. Production runs the built server
+   (`node .output/server/index.mjs`, 224 MB) rather than `npx eve start`
+   (690 MB for the same agent), and only the primary Bot runs at boot: the
+   rest are started when something asks for them and stopped when they go
+   quiet.
+
+Eight screens is the ceiling (`MAX_DISPLAYS`), so a ninth project boots with
+a warning and no screen. Deleting a Bot whose project is still in the image
+frees its screen only until the next boot: removing one for good means
+removing its directory.
 
 A tenant that is not this tree (for example Vibey's Eve app, which stays in
 its own repo) is not copied here. Point `COMPUTER_EVE_BOTS` at it, or put
@@ -97,6 +120,47 @@ redacted.
 
 Tests: `npm test --workspace=apps/eve` (vitest over `lib/**/*.test.ts`;
 nothing boots eve).
+
+## Wake a Bot on an event
+
+A schedule wakes a Bot at a time; a webhook wakes it when something
+happened. `lib/channels/webhook.ts` is the second half, generic over the Bot
+and over what fires it:
+
+```ts
+// apps/eve/bots/qa/agent/channels/incident.ts
+import { webhookChannel } from "../../../../lib/channels/webhook.ts";
+
+export default webhookChannel({
+  handling: "Triage it. Follow `skills/incident`.",
+  kind: "incident",
+  purpose: "Something upstream thinks a product is unhealthy.",
+});
+```
+
+The file stem is the channel id and has to match the connector's kind, which
+is what makes the hub's ingress land on `/eve/v1/incident/event`:
+
+```sh
+npm run bot -- connector add pagerduty incident qa
+# POST https://<computer>/connectors/pagerduty/event  (x-connector-secret)
+```
+
+The door is the connector, so the credential is hub-minted and revocable on
+its own and the sender never sees a seat token. There is no direct door: the
+only accepted header is `x-computer-eve-secret`, from the hub on loopback.
+
+The hub does not record the payload yet: its ingress binds a conversation for
+`whatsapp` only, so an event arrives with no turn token and whatever the Bot
+says with `send_message` lands in the owner's seat thread. The alert itself
+is in the Bot's Eve log and nowhere else, which is the gap to close when a
+`webhook` conversation route lands.
+
+The payload is a stranger's. It is truncated at 16k characters, its fences
+neutralised, wrapped in `<untrusted_context>`, and the wake says in the same
+breath that it is evidence and not instructions. The route answers 202 with
+the session id rather than the turn's text: an alerting system wants its
+POST to return, and what the Bot has to say goes through `send_message`.
 
 ## Auth
 

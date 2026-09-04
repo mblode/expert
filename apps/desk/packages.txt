@@ -2,9 +2,14 @@
 # (local compose) and deploy/fly/Dockerfile (cloud guest) read this file.
 ca-certificates
 chromium
+# curl and git are the Bots' hands outside the browser: four of them read an
+# API or land a branch, and a computer where the only way to reach a repo is
+# clicking through github.com in Chromium is a slower, worse computer.
+curl
 dbus-x11
 fonts-dejavu-core
 fonts-liberation
+git
 imagemagick
 openbox
 openssl

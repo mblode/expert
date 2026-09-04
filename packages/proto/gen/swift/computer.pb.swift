@@ -1613,11 +1613,13 @@ public nonisolated struct Computer_V1_SetBotProfileRequest: Sendable {
 
   public var description_p: String = String()
 
-  /// circle | square | hexagon | diamond. Anything else is VALIDATION.
+  /// One of AVATAR_SHAPES in packages/shared (eight of them). Anything else
+  /// is VALIDATION.
   public var avatarShape: String = String()
 
-  /// One of the six colours the hub allows. A closed set because the model can
-  /// rewrite this file itself and the value lands in a client's inline style.
+  /// One of AVATAR_COLORS in packages/shared (twelve of them). A closed set
+  /// because the model can rewrite this file itself and the value lands in a
+  /// client's inline style.
   public var avatarColor: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()

@@ -35,14 +35,19 @@ const SIZES = {
 } as const;
 
 /**
- * The four marks. A circle and a square are rounding; the other two are clip
- * paths, drawn a little inside the box so the letter still has room.
+ * The eight marks. Circle, square, squircle and blob are rounding; the rest
+ * are clip paths, drawn a little inside the box so the letter still has room,
+ * which is why none of them is a bare triangle.
  */
 const SHAPES = {
+  blob: "[border-radius:62%_38%_54%_46%/45%_58%_42%_55%]",
   circle: "rounded-full",
   diamond: "[clip-path:polygon(50%_2%,98%_50%,50%_98%,2%_50%)]",
   hexagon: "[clip-path:polygon(50%_1%,94%_26%,94%_74%,50%_99%,6%_74%,6%_26%)]",
   square: "rounded-[30%]",
+  squircle: "rounded-[42%]",
+  tablet: "[clip-path:inset(14%_2%_14%_2%_round_34%)]",
+  wedge: "[clip-path:polygon(2%_2%,98%_2%,98%_66%,50%_98%,2%_66%)]",
 } as const;
 
 /** A stored value, or nothing when it is not one the client draws. */

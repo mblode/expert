@@ -31,6 +31,8 @@ interface ConnectorIngressDeps {
   eveUrl: (botId: string, display: number) => string;
   /** Shared secret the Eve channel expects on loopback (`eve start`). */
   eveSecret?: string;
+  /** Bring a sleeping Bot's Eve up before forwarding to it (`host/wake.ts`). */
+  wake?: (botId: string, display: number) => Promise<void>;
   cors: Record<string, string>;
 }
 
@@ -81,6 +83,9 @@ export async function handleConnectorIngress(
     if (!base) {
       throw daemonDown(bot.id);
     }
+    // An event for a sleeping Bot wakes it. A webhook is the one caller with
+    // nobody watching, so a cold start here is a second nobody sees.
+    await deps.wake?.(bot.id, bot.display);
     const declared = Number(req.headers["content-length"] ?? 0);
     if (declared > MAX_BODY) {
       throw new ComputerError("VALIDATION", `body over ${MAX_BODY} bytes`);

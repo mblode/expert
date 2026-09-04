@@ -28,7 +28,8 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { userInfo } from "node:os";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
-import { planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
+import { eveProjectIds, planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
+import { watchWake } from "./wake.ts";
 import { Supervisor } from "./supervisor.ts";
 
 /**
@@ -59,6 +60,10 @@ const rosterPath = resolve(env.COMPUTER_DATA ?? "/workspace/.computer/bots.json"
 const dataDir = dirname(rosterPath);
 const runDir = env.COMPUTER_RUN_DIR ?? "/run/computer";
 const statusFile = env.COMPUTER_STATUS_FILE ?? join(runDir, "status.json");
+// Where the hub says which Bots should be awake. Root writes the directory
+// and hands it to the hub group; the hub writes one small file per Bot and
+// this process reads them. See `host/wake.ts`.
+const wakeDir = env.COMPUTER_WAKE_DIR ?? join(runDir, "wake");
 const logDir = env.COMPUTER_LOG_DIR ?? join(dataDir, "logs");
 const bridgePort = env.COMPUTER_BRIDGE_PORT ?? "2100";
 const bridgeDir = join(repoRoot, "apps/whatsapp-bridge");
@@ -136,7 +141,20 @@ const bridgeSecret = ensureEveSecret(
   join(dataDir, "whatsapp", "bridge-secret"),
   env.WHATSAPP_BRIDGE_SECRET,
 );
-const roster = ensureRosterAt(rosterPath);
+// Which Bots this build ships is a property of the tree, so the Eve root is
+// resolved before the roster rather than after it: every project with no
+// roster row gets one here, on the lowest free screen, and adding a Bot is a
+// deploy instead of a deploy plus a `CreateBot` against the running guest.
+const imageBots = join(repoRoot, "apps/eve/bots");
+const botsRoot = resolveEveBotsRoot({ envBots: env.COMPUTER_EVE_BOTS, imageBots });
+// Only a tree this build shipped may mint a Bot. The overlay
+// (`/workspace/eve/bots`) is on the volume, which `box` owns, so the model's
+// own `write_file` reaches it: seeding from there would turn a directory the
+// model can create into a roster row, a minted agent token and one of the
+// eight screens. The overlay still replaces a Bot's code, which is what it is
+// for; it just cannot bring a Bot into existence.
+const trustedBots = botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS;
+const roster = ensureRosterAt(rosterPath, trustedBots ? eveProjectIds(botsRoot) : []);
 for (const f of [
   "eve-secret",
   "bots.json",
@@ -155,9 +173,7 @@ for (const f of [
 //    `<project>/.eve/.workflow-data`; for the image Bots that is the image,
 //    which a redeploy replaces. Point it at the volume so a parked turn
 //    survives a deploy. The overlay under /workspace is already there.
-const imageBots = join(repoRoot, "apps/eve/bots");
-const botsRoot = resolveEveBotsRoot({ envBots: env.COMPUTER_EVE_BOTS, imageBots });
-if (botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS) {
+if (trustedBots) {
   for (const id of safeReaddir(botsRoot)) {
     const project = join(botsRoot, id);
     if (!existsSync(join(project, "package.json"))) {
@@ -200,6 +216,10 @@ if (botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS) {
 //    and belong to `hub` before the first of them is spawned, not after.
 mkdirSync(logDir, { mode: 0o700, recursive: true });
 own(logDir, hub, 0o700);
+// 0770 and hub-owned: the hub writes the markers, root reads them, and the
+// model (box) sees neither. A Bot cannot vote on whether it is awake.
+mkdirSync(wakeDir, { mode: 0o770, recursive: true });
+own(wakeDir, hub, 0o770);
 mkdirSync(join(dataDir, "home"), { mode: 0o700, recursive: true });
 own(join(dataDir, "home"), hub, 0o700);
 
@@ -240,14 +260,30 @@ sup.start({
   uid: box.uid,
 });
 
+// The primary Bot is always running: it is the desk agent, the default route
+// and the one a human reaches without asking for anyone. Every other Bot is
+// registered asleep and started when the hub says it is wanted, because an
+// Eve is 224 MB and eight of them do not fit beside a desktop on a 2 GB
+// guest. `wakeDir` is the whole conversation between the two processes.
 const eves = planEveLaunches(roster, { botsRoot });
+// From the launches, not the roster: if the display-1 row names a Bot this
+// build ships no project for, taking its id here would mark every Bot lazy
+// and boot a computer with nothing running and `/healthz` calling that fine.
+const primaryBotId = eves.find((e) => e.display === 1)?.botId ?? eves[0]?.botId ?? "main";
 superviseEves(sup, eves, {
   env: childEnv({ USER: box.name }, "/home/box"),
   eveSecret,
   gid: box.gid,
   hubUrl,
+  lazy: (botId) => botId !== primaryBotId,
   logDir,
   uid: box.uid,
+});
+const stopWatchingWake = watchWake({
+  botIds: eves.map((e) => e.botId).filter((id) => id !== primaryBotId),
+  dir: wakeDir,
+  onEvent: (line) => console.log(`computer ${line}`),
+  sup,
 });
 if (eves.length === 0) {
   console.warn(`computer init: no Eve project under ${botsRoot}; chat will report DAEMON_DOWN`);
@@ -295,6 +331,7 @@ sup.start({
       COMPUTER_RUN_AS: box.name,
       COMPUTER_SETUP_CODE: setupCode,
       COMPUTER_STATUS_FILE: statusFile,
+      COMPUTER_WAKE_DIR: wakeDir,
       USER: hub.name,
       WHATSAPP_BRIDGE_SECRET: bridgeSecret,
     },
@@ -314,6 +351,7 @@ console.log(
 );
 
 const shutdown = (): void => {
+  stopWatchingWake();
   void sup.stopAll().then(() => process.exit(0));
 };
 process.on("SIGTERM", shutdown);

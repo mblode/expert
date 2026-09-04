@@ -12,10 +12,12 @@ import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { FileBotStore } from "../src/service/provision.ts";
 import { ensureEveSecret, ensureRoster, ensureRosterAt } from "../src/host/ensure-roster.ts";
+import { MAX_DISPLAYS } from "@computer/shared";
 import {
   DEFAULT_EVE_OVERLAY,
   eveChildEnv,
   evePortForDisplay,
+  eveProjectIds,
   planEveLaunches,
   resolveEveBotsRoot,
   superviseEves,
@@ -130,6 +132,53 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(again).toEqual(first);
   });
 
+  it("lists the Bots a build ships a project for, main first", () => {
+    const botsRoot = tempDir();
+    botProject(botsRoot, "qa");
+    botProject(botsRoot, "main");
+    botProject(botsRoot, "designer");
+    mkdirSync(join(botsRoot, "notes"));
+    expect(eveProjectIds(botsRoot)).toEqual(["main", "designer", "qa"]);
+  });
+
+  it("reads a standalone Eve project at the root as main", () => {
+    const root = tempDir();
+    writeFileSync(join(root, "package.json"), JSON.stringify({ name: "vcmc-agent" }));
+    mkdirSync(join(root, "agent"));
+    expect(eveProjectIds(root)).toEqual(["main"]);
+  });
+
+  it("mints a row for every shipped project on the lowest free screen", () => {
+    const path = join(tempDir(), "bots.json");
+    const store = new FileBotStore(path);
+    store.save([{ display: 1, id: "main", token: "bot_keep" }]);
+    const roster = ensureRoster(store, ["main", "designer", "qa"]);
+    expect(roster).toEqual([
+      { display: 1, id: "main", token: "bot_keep" },
+      { display: 2, id: "designer", token: expect.stringMatching(/^bot_/) as unknown as string },
+      { display: 3, id: "qa", token: expect.stringMatching(/^bot_/) as unknown as string },
+    ]);
+    // Persisted, and stable: the second boot mints nothing.
+    expect(ensureRoster(new FileBotStore(path), ["main", "designer", "qa"])).toEqual(roster);
+  });
+
+  it("keeps a Bot whose project is gone, screen and all", () => {
+    const store = new FileBotStore(join(tempDir(), "bots.json"));
+    store.save([
+      { display: 1, id: "main", token: "bot_main" },
+      { display: 2, id: "retired", token: "bot_retired" },
+    ]);
+    expect(ensureRoster(store, ["main"]).map((c) => c.id)).toEqual(["main", "retired"]);
+  });
+
+  it("refuses to put a ninth Bot on a box with eight screens", () => {
+    const store = new FileBotStore(join(tempDir(), "bots.json"));
+    const nine = Array.from({ length: 9 }, (_, i) => `bot-${i}`);
+    const roster = ensureRoster(store, nine);
+    expect(roster).toHaveLength(MAX_DISPLAYS);
+    expect(roster.map((c) => c.display)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
   it("does not mint over a roster row that already has a token", () => {
     const store = new FileBotStore(join(tempDir(), "bots.json"));
     store.save([{ display: 1, id: "main", token: "bot_keep" }]);
@@ -180,6 +229,7 @@ describe("eve supervisor: N Eves from the roster", () => {
       {
         env: { PATH: "/bin" },
         eveSecret: "secret",
+        exists: () => false,
         gid: 1000,
         hubUrl: "http://127.0.0.1:8080",
         logDir: "/var/log/computer",
@@ -200,6 +250,30 @@ describe("eve supervisor: N Eves from the roster", () => {
     // A supervised child, not a detached one: no `oneShot`, so an Eve that
     // dies is restarted rather than left down until the box reboots.
     expect(specs[0]?.oneShot).toBeUndefined();
+  });
+
+  it("runs the built server itself when the Bot has been built", () => {
+    const specs: ChildSpec[] = [];
+    superviseEves(
+      { start: (spec) => specs.push(spec) },
+      [{ botId: "main", cwd: "/opt/eve/main", display: 1, port: 2000, token: "bot_main" }],
+      {
+        eveSecret: "secret",
+        exists: (path) => path === "/opt/eve/main/.output/server/index.mjs",
+        hubUrl: "http://127.0.0.1:8080",
+        logDir: "/var/log/computer",
+      },
+    );
+    // The CLI would spawn this same server and then sit on 367 MB watching it,
+    // under an npm shim holding another 95. The guest has 2 GB for eight Bots.
+    expect(specs[0]).toMatchObject({
+      args: [".output/server/index.mjs"],
+      cmd: process.execPath,
+      cwd: "/opt/eve/main",
+      // Still the same door: HOST and PORT come from the child environment.
+      healthUrl: "http://127.0.0.1:2000/eve/v1/health",
+    });
+    expect(specs[0]?.env?.PORT).toBe("2000");
   });
 
   it("`npm run up` and the guest init share one Eve launcher", () => {

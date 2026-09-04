@@ -43,7 +43,16 @@ export interface BoxStatus {
  * model can rewrite with `write_file`. The hub clamps on the way out; this
  * is the same check at the other end, not a second opinion about the value.
  */
-export const AVATAR_SHAPES = ["circle", "square", "hexagon", "diamond"] as const;
+export const AVATAR_SHAPES = [
+  "circle",
+  "square",
+  "hexagon",
+  "diamond",
+  "squircle",
+  "blob",
+  "tablet",
+  "wedge",
+] as const;
 export type AvatarShape = (typeof AVATAR_SHAPES)[number];
 
 export const AVATAR_COLORS = [
@@ -53,6 +62,12 @@ export const AVATAR_COLORS = [
   "#46a758",
   "#0091ff",
   "#8e4ec6",
+  "#9159fe",
+  "#1084fe",
+  "#00c972",
+  "#ff6700",
+  "#777777",
+  "#000000",
 ] as const;
 export type AvatarColor = (typeof AVATAR_COLORS)[number];
 

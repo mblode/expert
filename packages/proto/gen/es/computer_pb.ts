@@ -1960,15 +1960,17 @@ export type SetBotProfileRequest = Message<"computer.v1.SetBotProfileRequest"> &
   description: string;
 
   /**
-   * circle | square | hexagon | diamond. Anything else is VALIDATION.
+   * One of AVATAR_SHAPES in packages/shared (eight of them). Anything else
+   * is VALIDATION.
    *
    * @generated from field: string avatar_shape = 5;
    */
   avatarShape: string;
 
   /**
-   * One of the six colours the hub allows. A closed set because the model can
-   * rewrite this file itself and the value lands in a client's inline style.
+   * One of AVATAR_COLORS in packages/shared (twelve of them). A closed set
+   * because the model can rewrite this file itself and the value lands in a
+   * client's inline style.
    *
    * @generated from field: string avatar_color = 6;
    */

@@ -1,0 +1,23 @@
+{
+  "name": "@computer/eve-pm",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "imports": {
+    "#*": "./agent/*"
+  },
+  "scripts": {
+    "build": "eve build",
+    "dev": "eve dev",
+    "start": "eve start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "eve": "^0.49.0",
+    "just-bash": "^3.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "typescript": "7.0.2"
+  }
+}

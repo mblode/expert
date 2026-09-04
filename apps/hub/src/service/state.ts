@@ -143,12 +143,21 @@ export class BotState {
    * Establish the directory. Seeds a profile and a memory file only when they
    * are absent, so a Bot re-created under a name it had before adopts what it
    * left behind rather than overwriting it.
+   *
+   * `seed` is who the Bot ships as: the profile its Eve project carries in
+   * git, so a Bot that arrives with a deploy already has its name, its label
+   * and its mark the first time a client lists the roster, rather than
+   * showing up as its own id in a hashed colour. It is a seed and not a
+   * default: the file wins on every later boot, because after the first one
+   * it is the human's and the Bot's, and a deploy must not reset a rename.
+   * Every field is validated the way a read is, so a bad seed degrades to the
+   * hashed default rather than failing the boot it happens during.
    */
-  async init(): Promise<void> {
+  async init(seed?: Partial<BotProfile>): Promise<void> {
     if (!(await this.read(this.profilePath))) {
       await this.desk.writeFile(
         this.profilePath,
-        `${JSON.stringify(defaultProfile(this.botId), null, 2)}\n`,
+        `${JSON.stringify(seededProfile(this.botId, seed), null, 2)}\n`,
       );
     }
     if (!(await this.read(this.memoryPath))) {
@@ -278,6 +287,27 @@ export class BotState {
       return undefined;
     }
   }
+}
+
+/**
+ * The default profile with the project's seed folded over it, field by field.
+ * Unknown shapes and colours, and strings over the caps, fall back to the
+ * default rather than throwing: this runs at boot, and a Bot with a typo in
+ * its shipped profile still has to come up.
+ */
+function seededProfile(id: string, seed?: Partial<BotProfile>): BotProfile {
+  const fallback = defaultProfile(id);
+  if (!seed) {
+    return fallback;
+  }
+  return {
+    avatar_color: oneOf(AVATAR_COLORS, seed.avatar_color) ?? fallback.avatar_color,
+    avatar_shape: oneOf(AVATAR_SHAPES, seed.avatar_shape) ?? fallback.avatar_shape,
+    description: clamp(seed.description, BOT_PROFILE_MAX.description) ?? fallback.description,
+    id,
+    name: clamp(seed.name, BOT_PROFILE_MAX.name) ?? fallback.name,
+    title: clamp(seed.title, BOT_PROFILE_MAX.title) ?? fallback.title,
+  };
 }
 
 function defaultProfile(id: string): BotProfile {

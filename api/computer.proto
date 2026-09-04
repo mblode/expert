@@ -548,10 +548,12 @@ message SetBotProfileRequest {
   // Cleared by an empty string, unlike the three above.
   string title = 3;
   string description = 4;
-  // circle | square | hexagon | diamond. Anything else is VALIDATION.
+  // One of AVATAR_SHAPES in packages/shared (eight of them). Anything else
+  // is VALIDATION.
   string avatar_shape = 5;
-  // One of the six colours the hub allows. A closed set because the model can
-  // rewrite this file itself and the value lands in a client's inline style.
+  // One of AVATAR_COLORS in packages/shared (twelve of them). A closed set
+  // because the model can rewrite this file itself and the value lands in a
+  // client's inline style.
   string avatar_color = 6;
 }
 

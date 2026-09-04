@@ -16,6 +16,8 @@ interface EveProxyDeps {
   eveUrl: (botId: string, display: number) => string;
   /** Shared secret the Eve channel expects on loopback (`eve start`). */
   eveSecret?: string;
+  /** Bring a sleeping Bot's Eve up before forwarding to it (`host/wake.ts`). */
+  wake?: (botId: string, display: number) => Promise<void>;
   cors: Record<string, string>;
 }
 
@@ -54,6 +56,11 @@ export async function handleEveProxy(
     daemonDown(res, bot.id);
     return;
   }
+
+  // A Bot with nothing to do has no process. Opening its chat is what brings
+  // it back, and this waits for it: about a second on the guest, against a
+  // `DAEMON_DOWN` that would look like a broken computer.
+  await deps.wake?.(bot.id, bot.display);
 
   const url = new URL(req.url ?? "/", "http://127.0.0.1");
   url.searchParams.delete("token");

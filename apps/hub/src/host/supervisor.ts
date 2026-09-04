@@ -32,6 +32,13 @@ export interface ChildSpec {
   healthUrl?: string;
   /** A one-shot child (desk-up) exits 0 and stays "done" rather than restarting. */
   oneShot?: boolean;
+  /**
+   * A child that is meant to be down most of the time: a Bot's Eve, which
+   * costs 224 MB and only exists while that Bot is in use. Registered rather
+   * than started, woken by `ensure`, and its being stopped is a healthy box
+   * rather than a fault, so `ok` ignores it.
+   */
+  lazy?: boolean;
 }
 
 type ChildState = "starting" | "up" | "down" | "restarting" | "done" | "stopped";
@@ -77,6 +84,8 @@ interface Managed {
   restartTimer: NodeJS.Timeout | null;
   healthTimer: NodeJS.Timeout | null;
   wantRunning: boolean;
+  /** A `stop` in flight. `ensure` waits for it rather than racing the kill. */
+  stopping: Promise<void> | null;
 }
 
 const DEFAULT_BACKOFF = { initialMs: 1000, maxMs: 30_000, stableMs: 60_000 };
@@ -99,12 +108,55 @@ export class Supervisor {
     };
   }
 
+  /**
+   * Register a child without starting it. `ensure` starts it; until then it
+   * is a name, a command and nothing running.
+   */
+  register(spec: ChildSpec): void {
+    if (this.children.has(spec.id)) {
+      return;
+    }
+    this.children.set(spec.id, this.managed(spec, false));
+    this.setState(this.children.get(spec.id)!, "stopped");
+  }
+
+  /**
+   * Start a registered child if it is not already running or on its way.
+   * The wake half of `stop`: same spec, fresh backoff.
+   */
+  ensure(id: string): void {
+    const m = this.children.get(id);
+    if (!m || m.wantRunning) {
+      return;
+    }
+    m.wantRunning = true;
+    m.backoffMs = this.opts.backoff.initialMs;
+    // A kill may still be in flight: launching now would put a second process
+    // on the Bot's port, which dies on EADDRINUSE and reads as a crash loop.
+    // The marker that woke this Bot is still there, so waiting a beat is free.
+    if (m.stopping) {
+      void m.stopping.then(() => {
+        if (m.wantRunning && m.child === null) {
+          this.launch(m);
+        }
+      });
+      return;
+    }
+    this.launch(m);
+  }
+
   /** Register and start a child. Starting twice is a no-op. */
   start(spec: ChildSpec): void {
     if (this.children.has(spec.id)) {
       return;
     }
-    const m: Managed = {
+    const m = this.managed(spec, true);
+    this.children.set(spec.id, m);
+    this.launch(m);
+  }
+
+  private managed(spec: ChildSpec, wantRunning: boolean): Managed {
+    return {
       backoffMs: this.opts.backoff.initialMs,
       child: null,
       healthTimer: null,
@@ -115,11 +167,10 @@ export class Supervisor {
       since: Date.now(),
       spec,
       startedAt: 0,
-      state: "starting",
-      wantRunning: true,
+      state: wantRunning ? "starting" : "stopped",
+      stopping: null,
+      wantRunning,
     };
-    this.children.set(spec.id, m);
-    this.launch(m);
   }
 
   /** Stop one child (SIGTERM, then SIGKILL after `graceMs`) and keep it stopped. */
@@ -128,10 +179,31 @@ export class Supervisor {
     if (!m) {
       return;
     }
+    // Already down and meant to be. Falling through would rewrite the status
+    // file for nothing, and the wake watcher calls this for every sleeping
+    // Bot on every poll: seven Bots is a mkdir, a write and a rename every
+    // two seconds, forever, on a shared vCPU.
+    if (!m.wantRunning && m.child === null) {
+      return;
+    }
     m.wantRunning = false;
     this.clearTimers(m);
-    await this.kill(m, graceMs);
-    this.setState(m, "stopped");
+    const stopping = this.kill(m, graceMs);
+    m.stopping = stopping.then(
+      () => undefined,
+      () => undefined,
+    );
+    try {
+      await stopping;
+    } finally {
+      m.stopping = null;
+    }
+    // Only if nobody asked for it back while it was dying: `ensure` sets
+    // `wantRunning` and relaunches, and saying "stopped" over that would put
+    // a running child in the status file as down.
+    if (!m.wantRunning) {
+      this.setState(m, "stopped");
+    }
   }
 
   /** Stop, then start again with the same spec: the deploy path's last step. */
@@ -163,9 +235,15 @@ export class Supervisor {
       state: m.state,
     }));
     // "ok" is every long-running child up and, where it has a probe, healthy.
-    const ok = children.every(
-      (c) => c.state === "done" || (c.state === "up" && c.healthy !== false),
-    );
+    // A lazy child that is stopped is the box working as designed: a Bot
+    // nobody is talking to has no process, and reading that as a fault would
+    // put `/healthz` permanently in the red on a full roster.
+    const ok = [...this.children.values()].every((m) => {
+      if (m.spec.lazy && !m.wantRunning) {
+        return true;
+      }
+      return m.state === "done" || (m.state === "up" && m.healthy !== false);
+    });
     return { at: new Date(now).toISOString(), children, ok };
   }
 
