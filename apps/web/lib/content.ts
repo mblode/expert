@@ -27,22 +27,22 @@ import type { AvatarColor, AvatarShape } from "./seat";
  */
 export const howItWorks = [
   {
-    body: "An email code, no password and nothing to install. The computer is already awake, with your Bots on it.",
+    body: "An email code. Nothing to install, and the computer is already awake.",
     step: "01",
     title: "Sign in",
   },
   {
-    body: "Say what you want in plain words. A Bot drives a real Chrome and a real terminal while you watch its screen.",
+    body: "Say what you want. A Bot drives a real Chrome while you watch its screen.",
     step: "02",
     title: "Hand off the work",
   },
   {
-    body: "At a password or a captcha it stops and hands you the mouse. Tap I’m done and it carries on from there.",
+    body: "At a password it stops and gives you the mouse. Tap I’m done and it carries on.",
     step: "03",
     title: "Take the seat",
   },
   {
-    body: "Close the laptop and the work continues. Routines fire on their own, and /workspace survives the restart.",
+    body: "Close the laptop and it keeps going. Routines fire on their own.",
     step: "04",
     title: "It keeps going",
   },
@@ -51,32 +51,27 @@ export const howItWorks = [
 export const whatYouGet = [
   {
     description:
-      "One Linux machine per account, with Chrome, a terminal, and files that survive a restart. The Bots share it the way a team shares an office.",
+      "One Linux machine per account. Chrome, a terminal, and files that survive a restart.",
     title: "A computer of their own",
   },
   {
-    description:
-      "Eight Bots arrive with it, each with a lane it owns and a short list of things it will not do. Make more when you need them.",
+    description: "Eight of them, each with a lane it owns. Make more when you need them.",
     title: "A team, not a chatbot",
   },
   {
-    description:
-      "No API and no connector to wire up first. A Bot opens the site in its own browser and the work lands where you would have put it yourself.",
-    title: "It works inside your tools",
+    description: "No API to wire up. A Bot opens the site and does the work there, like you would.",
+    title: "Real apps, not integrations",
   },
   {
-    description:
-      "A morning brief, a twice-daily smoke test, a weekly scan. They fire on their schedule whether or not anything of yours is open.",
-    title: "Routines while you sleep",
+    description: "A morning brief, a smoke test, a weekly scan. They run on time without you.",
+    title: "Work that runs itself",
   },
   {
-    description:
-      "The screen is live and view-only until you take it. Then the mouse, keyboard and clipboard are yours, and the Bot waits.",
+    description: "The screen is live and view-only until you take it. Then the Bot waits.",
     title: "A seat you can take",
   },
   {
-    description:
-      "Send someone a link and it opens the screen on their phone for half an hour, then dies. They never sign in.",
+    description: "Send a link and someone watches the screen on their phone for half an hour.",
     title: "A link you can hand over",
   },
 ];
@@ -103,56 +98,56 @@ export const roster: {
   {
     color: "#0091ff",
     name: "Main",
-    owns: "The desk itself: the screen, the files and the terminal. The Bot you reach first.",
+    owns: "The screen, the files and the terminal. The one you reach first.",
     shape: "circle",
     title: "Desk agent",
   },
   {
     color: "#9159fe",
     name: "Chief of Staff",
-    owns: "Calendar, mail drafts, the weekday morning brief, and routing work to the right specialist. Never sends.",
+    owns: "Calendar, mail drafts, the morning brief. Never sends.",
     shape: "blob",
     title: "Front of house",
   },
   {
     color: "#00c972",
     name: "Software Engineer",
-    owns: "Builds and lands code, and reviews the architecture for the smallest system that is correct. One PR per run.",
+    owns: "Writes and lands code. One PR per run.",
     shape: "tablet",
     title: "Engineer",
   },
   {
     color: "#ff6700",
     name: "QA",
-    owns: "Incidents, CI failures, browser QA, and reproduce-and-fix. Draft bugfix PRs only, and it never skips a test.",
+    owns: "Incidents, CI failures, browser testing. Draft fixes only.",
     shape: "wedge",
     title: "QA and bug fixer",
   },
   {
     color: "#000000",
     name: "Designer",
-    owns: "Product, UI and brand design, and obsessive reduction. Designs only: the engineer implements them.",
+    owns: "Product, UI and brand. Designs, not code.",
     shape: "blob",
     title: "Product, UI and brand",
   },
   {
     color: "#1084fe",
     name: "PM",
-    owns: "Conversion drop-offs, ranked opportunities, and A/B tests. One experiment in flight at a time.",
+    owns: "Drop-offs, opportunities, A/B tests. One experiment at a time.",
     shape: "blob",
     title: "Self-driving CRO",
   },
   {
     color: "#777777",
     name: "GTM",
-    owns: "Campaigns, listings, founder emails and sequence copy. Nothing goes out live until you say go.",
+    owns: "Campaigns, listings, founder emails. Nothing sends without you.",
     shape: "tablet",
     title: "Outbound operator",
   },
   {
     color: "#777777",
     name: "SEO",
-    owns: "Demand research, writer briefs and Search Console. It briefs the article rather than writing it.",
+    owns: "Demand research, Search Console, writer briefs. Not the article.",
     shape: "squircle",
     title: "Search and answer engines",
   },
@@ -171,30 +166,26 @@ export const roster: {
 export const surfaces = [
   {
     description:
-      "hello.expert on a laptop or a phone: the roster, the conversation, the live screen, and the seat when you want it.",
+      "hello.expert on a laptop or a phone: the Bots, the conversation, the live screen.",
     title: "The web",
   },
   {
-    description:
-      "Message a Bot like you would a person. When it needs hands it sends back a link that opens the screen on your phone.",
+    description: "Message a Bot like a person. When it needs hands it sends a link to the screen.",
     title: "WhatsApp",
   },
   {
-    description:
-      "Add the skill and Claude Code, Codex, OpenCode or Cursor drive the same computer you do, through the same seat.",
+    description: "Add the skill and Claude Code, Codex or Cursor drive the same computer you do.",
     title: "Your CLI",
   },
   {
-    description:
-      "Connect an MCP server and the Bots use those tools beside their own browser and terminal.",
+    description: "Connect an MCP server and the Bots use those tools too.",
     title: "MCP",
   },
 ];
 
 export const faqs = [
   {
-    answer:
-      "One Linux computer that stays on, and a team of Bots that drive it. You watch any of their screens and take the mouse whenever you want.",
+    answer: "One Linux computer that stays on, and a team of Bots that drive it.",
     question: "What is this?",
   },
   {
@@ -202,33 +193,28 @@ export const faqs = [
     question: "How do I start?",
   },
   {
-    answer:
-      "Eight, each with its own screen, its own thread and its own lane. You can make more, and tell a new one what it is for in the first message.",
+    answer: "Eight, each with its own screen and thread. You can make more.",
     question: "How many Bots do I get?",
   },
   {
     answer:
-      "Front of house routes a job to the specialist that owns it and tells you where it went. They cannot message each other directly yet.",
+      "Front of house passes a job to the specialist and tells you where it went. They cannot message each other yet.",
     question: "Do the Bots work together?",
   },
   {
-    answer:
-      "It opens the site in its own Chrome and works it the way you would. Sign-ins are the one part it hands back to you.",
+    answer: "No. It opens the site in its own Chrome. Sign-ins are the part it hands back to you.",
     question: "Does it need an API for my tools?",
   },
   {
-    answer:
-      "Yes. Take the seat and the mouse, keyboard and clipboard are yours; the Bot's next move waits until you hand it back.",
+    answer: "Yes. Take the seat and the Bot waits until you hand it back.",
     question: "Can I drive it myself?",
   },
   {
-    answer:
-      "You do. It asks for the seat, or for a masked code that goes straight to the computer's clipboard and never reaches the model.",
+    answer: "You do. It asks for the seat, or for a masked code that never reaches the model.",
     question: "Who types the passwords and 2FA codes?",
   },
   {
-    answer:
-      "Yes. A link opens one screen for a set time and then expires, and it can paste but never read what the computer copied.",
+    answer: "Yes. A link opens one screen for a set time, then expires.",
     question: "Can I hand the screen to someone else?",
   },
   {

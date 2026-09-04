@@ -20,22 +20,22 @@ type OnboardingArt = "computer" | "handoff" | "meet" | "tools";
 export const onboardingSteps = [
   {
     art: "meet",
-    body: "Each one is a teammate with its own screen on your computer. Ask in plain words; it works while you are somewhere else.",
+    body: "Each one has its own screen on your computer. Ask in plain words and it gets on with it.",
     title: "Meet your Bots",
   },
   {
     art: "computer",
-    body: "A real Chrome and a real terminal, always on. When it hits a password or a captcha it stops and hands you the mouse.",
+    body: "A real Chrome and a real terminal. At a password it stops and gives you the mouse.",
     title: "Working in its own computer, just like you",
   },
   {
     art: "handoff",
-    body: "Ask for something now, or leave a routine running to a schedule. It comes back when it is done, or when it needs you.",
+    body: "Ask now, or leave a routine running. It comes back when it is done or needs you.",
     title: "Hand off tasks, on demand or automated",
   },
   {
     art: "tools",
-    body: "Its browser starts signed into nothing. Pick the ones you live in and the first thing it offers is to sign you into one, with you at the keyboard for the password.",
+    body: "Its browser is signed into nothing yet. Pick a few and it offers to sign you in first.",
     title: "Which tools do you use every day?",
   },
 ] as const satisfies readonly { art: OnboardingArt; body: string; title: string }[];
