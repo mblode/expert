@@ -1,0 +1,61 @@
+# The clock outside the box.
+#
+# A computer suspends to zero when nobody is using it, and a suspended Machine
+# has no clock, so a routine whose minute passes while it is down does not
+# fire and nothing catches it up. Every in-guest fix is circular: croner, the
+# hub's own alarm, supercronic in the image, all of them are stopped too. Fly's
+# scheduled Machines are documented as fuzzy interval buckets timed from the
+# machine's creation, which is not something to hang a morning brief on. What
+# is left is Fly's own answer for work that has to happen at a time: a small
+# always-on app that pokes the app that sleeps.
+#
+# This is that app, one per fleet rather than one per tenant: it wakes every
+# computer in CLOCK_TARGETS. It holds no credential. `/healthz` on a tenant is
+# public, unauthenticated, and the only route it calls, so the worst this app
+# can do to a computer is start it.
+#
+# Deploy: fly deploy -c fly.clock.toml
+app = "expert-clock"
+primary_region = "syd"
+
+[build]
+dockerfile = "deploy/clock/Dockerfile"
+
+[env]
+# The tenants' PUBLIC hostnames. Never <app>.internal: 6PN skips Fly Proxy,
+# and only the proxy starts a suspended Machine, so a private-network request
+# reaches a sleeping tenant as a connection error rather than a wake.
+CLOCK_TARGETS = "mblode-computer=https://mblode-computer.fly.dev"
+CLOCK_BOTS = "/opt/clock/apps/eve/bots"
+CLOCK_PORT = "8080"
+
+# No [http_service] and no [[services]] on purpose. Nothing needs to reach the
+# clock from the internet, and a Machine with no services is one Fly Proxy
+# never autostops: this app is up because it has nothing to suspend for, not
+# because a min_machines_running setting says so.
+#
+# 256 MB and one shared CPU: the process is a timer, a fetch and a JSON page.
+[[vm]]
+cpu_kind = "shared"
+cpus = 1
+memory = "256mb"
+
+# A Machine check rather than a proxy one, since there is no service to check
+# through. It fails when the clock has no schedule or no targets, which is the
+# one way this app breaks quietly: a clock that is up and waking nothing looks
+# exactly like a clock that is working.
+[checks.schedule]
+type = "http"
+port = 8080
+method = "get"
+path = "/healthz"
+interval = "60s"
+timeout = "5s"
+grace_period = "20s"
+
+# A clock that exits is a clock that is not keeping time; bring it back.
+[[restart]]
+policy = "always"
+
+[deploy]
+strategy = "immediate"

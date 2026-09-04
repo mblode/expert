@@ -1,0 +1,23 @@
+{
+  "name": "@computer/clock",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The clock outside the box: an always-on Fly app that wakes a suspended tenant through Fly Proxy before its routines are due.",
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@computer/shared": "*",
+    "tsx": "^4.20.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.x",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

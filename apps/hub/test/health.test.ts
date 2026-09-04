@@ -23,6 +23,23 @@ describe("healthz reads the supervisor", () => {
     expect(readHealth(undefined)).toEqual({ hub: true, ok: true });
   });
 
+  /**
+   * `busy` is what the clock outside the Machine reads to decide whether to
+   * keep holding it awake (`apps/clock`), so the two ways it can lie both
+   * cost a routine: a throw here would be a 500 and no answer at all, and a
+   * field that is always there would tell a clock to hold up a dev box.
+   */
+  it("reports whether a Bot is at work, and survives a probe that throws", () => {
+    expect(readHealth(undefined, Date.now(), () => true)).toMatchObject({ busy: true, ok: true });
+    expect(readHealth(undefined, Date.now(), () => false)).toMatchObject({ busy: false });
+    expect(readHealth(undefined)).not.toHaveProperty("busy");
+    expect(
+      readHealth(undefined, Date.now(), () => {
+        throw new Error("no wake directory");
+      }),
+    ).toEqual({ hub: true, ok: true });
+  });
+
   it("mirrors the supervisor's ok and children", () => {
     const now = Date.parse("2026-09-02T10:00:00Z");
     const path = file(
