@@ -1574,19 +1574,6 @@ public nonisolated struct Computer_V1_RefreshCodingSessionRequest: Sendable {
   public init() {}
 }
 
-public nonisolated struct Computer_V1_CodingSessionsRequest: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  /// 0/absent = every screen this seat may see, as in Conversations.
-  public var display: Int32 = 0
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
 /// One coding session. `state` is the agent-session vocabulary the product
 /// speaks everywhere: pending | active | awaitingInput | complete | error |
 /// stale. `branch`, `pr_url` and `summary` are empty until the run has them.
@@ -1611,18 +1598,6 @@ public nonisolated struct Computer_V1_CodingSession: Sendable {
   public var prURL: String = String()
 
   public var summary: String = String()
-
-  public var unknownFields = SwiftProtobuf.UnknownStorage()
-
-  public init() {}
-}
-
-public nonisolated struct Computer_V1_CodingSessionsResponse: Sendable {
-  // SwiftProtobuf.Message conformance is added in an extension below. See the
-  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
-  // methods supported on all messages.
-
-  public var sessions: [Computer_V1_CodingSession] = []
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -5003,36 +4978,6 @@ nonisolated extension Computer_V1_RefreshCodingSessionRequest: SwiftProtobuf.Mes
   }
 }
 
-nonisolated extension Computer_V1_CodingSessionsRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".CodingSessionsRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}display\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeSingularInt32Field(value: &self.display) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if self.display != 0 {
-      try visitor.visitSingularInt32Field(value: self.display, fieldNumber: 1)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Computer_V1_CodingSessionsRequest, rhs: Computer_V1_CodingSessionsRequest) -> Bool {
-    if lhs.display != rhs.display {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
 nonisolated extension Computer_V1_CodingSession: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".CodingSession"
   public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}conversation_id\0\u{1}agent\0\u{1}repo\0\u{1}state\0\u{1}url\0\u{1}branch\0\u{3}pr_url\0\u{1}summary\0")
@@ -5093,36 +5038,6 @@ nonisolated extension Computer_V1_CodingSession: SwiftProtobuf.Message, SwiftPro
     if lhs.branch != rhs.branch {return false}
     if lhs.prURL != rhs.prURL {return false}
     if lhs.summary != rhs.summary {return false}
-    if lhs.unknownFields != rhs.unknownFields {return false}
-    return true
-  }
-}
-
-nonisolated extension Computer_V1_CodingSessionsResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
-  public static let protoMessageName: String = _protobuf_package + ".CodingSessionsResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}sessions\0")
-
-  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
-    while let fieldNumber = try decoder.nextFieldNumber() {
-      // The use of inline closures is to circumvent an issue where the compiler
-      // allocates stack space for every case branch when no optimizations are
-      // enabled. https://github.com/apple/swift-protobuf/issues/1034
-      switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.sessions) }()
-      default: break
-      }
-    }
-  }
-
-  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    if !self.sessions.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.sessions, fieldNumber: 1)
-    }
-    try unknownFields.traverse(visitor: &visitor)
-  }
-
-  public static func ==(lhs: Computer_V1_CodingSessionsResponse, rhs: Computer_V1_CodingSessionsResponse) -> Bool {
-    if lhs.sessions != rhs.sessions {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

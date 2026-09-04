@@ -42,8 +42,9 @@ service Seat {
   // this RPC.
   rpc StartCodingSession(StartCodingSessionRequest) returns (CodingSession);
   // Re-read one from the runner and record anything new in its thread.
+  // There is no list RPC: a coding session is a conversation, so Conversations
+  // already lists them, with `repo` and `agent` on the route.
   rpc RefreshCodingSession(RefreshCodingSessionRequest) returns (CodingSession);
-  rpc CodingSessions(CodingSessionsRequest) returns (CodingSessionsResponse);
   // Deliver a masked value for an open secret_request. The value goes to
   // the box clipboard and is never stored, logged, or returned.
   rpc ProvideSecret(ProvideSecretRequest) returns (ProvideSecretResponse);
@@ -552,11 +553,6 @@ message RefreshCodingSessionRequest {
   string conversation_id = 1;
 }
 
-message CodingSessionsRequest {
-  // 0/absent = every screen this seat may see, as in Conversations.
-  int32 display = 1;
-}
-
 // One coding session. `state` is the agent-session vocabulary the product
 // speaks everywhere: pending | active | awaitingInput | complete | error |
 // stale. `branch`, `pr_url` and `summary` are empty until the run has them.
@@ -570,10 +566,6 @@ message CodingSession {
   string branch = 6;
   string pr_url = 7;
   string summary = 8;
-}
-
-message CodingSessionsResponse {
-  repeated CodingSession sessions = 1;
 }
 
 message ProvideSecretRequest {

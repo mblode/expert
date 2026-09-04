@@ -540,15 +540,13 @@ export type Route =
  * expired, which are the same thing to someone reading the thread: nobody is
  * working on it and nothing more is coming.
  */
-export const CODING_SESSION_STATES = [
-  "pending",
-  "active",
-  "awaitingInput",
-  "complete",
-  "error",
-  "stale",
-] as const;
-export type CodingSessionState = (typeof CODING_SESSION_STATES)[number];
+export type CodingSessionState =
+  | "pending"
+  | "active"
+  | "awaitingInput"
+  | "complete"
+  | "error"
+  | "stale";
 
 /**
  * Who is in the conversation. `ref` is the human's identity on the route: a

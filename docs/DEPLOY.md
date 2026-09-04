@@ -276,7 +276,7 @@ bound to screen 1 that expires with the link.
 
 ### Coding sessions (optional)
 
-Off until a key is set, and the three Seat RPCs answer `DAEMON_DOWN` without
+Off until a key is set, and the two Seat RPCs answer `DAEMON_DOWN` without
 one, exactly as the WhatsApp RPCs do without a bridge.
 
 ```bash

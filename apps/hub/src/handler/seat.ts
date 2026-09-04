@@ -333,17 +333,6 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     return await deps.coding.refresh(o.conversation_id);
   });
 
-  // The list, for a client that wants the sessions without the threads.
-  router.rpc(SeatMethods.CodingSessions, "seat", async (ctx) => {
-    const o = requireObject(ctx.body);
-    const asked = o.display === undefined || o.display === 0 ? undefined : o.display;
-    const visible =
-      ctx.principal?.display === undefined && asked === undefined
-        ? deps.bots.all()
-        : [deps.bots.byDisplay(displayFor({ display: asked }, ctx.principal))];
-    return { sessions: deps.coding.list(new Set(visible.map((b) => b.id as string))) };
-  });
-
   // A masked value for an open secret_request. It goes to the clipboard and
   // nowhere else, not the log, not the response, not the model's context.
   // Nothing here may echo `value` back, including in an error message.

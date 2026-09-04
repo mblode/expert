@@ -22,7 +22,6 @@ export const AgentMethods = {
 export const SeatMethods = {
   ClipboardGet: path(Seat, Seat.method.clipboardGet),
   ClipboardSet: path(Seat, Seat.method.clipboardSet),
-  CodingSessions: path(Seat, Seat.method.codingSessions),
   Conversations: path(Seat, Seat.method.conversations),
   CreateBot: path(Seat, Seat.method.createBot),
   DeleteBot: path(Seat, Seat.method.deleteBot),

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { ComputerError } from "@computer/shared";
-import { CodingService, codingConfigFromEnv } from "../src/service/coding.ts";
-import type { CodingConfig, CodingSession, FetchLike } from "../src/service/coding.ts";
+import { CodingService } from "../src/service/coding.ts";
+import type { CodingSession, FetchLike } from "../src/service/coding.ts";
 import {
   ConversationRegistry,
   MemoryConversationStore,
@@ -9,7 +9,7 @@ import {
 } from "../src/service/conversations.ts";
 import { rpc, startHub } from "./helper.ts";
 
-const CONFIG: CodingConfig = { apiKey: "k", endpoint: "https://runner.test", timeoutMs: 1000 };
+const KEY = "k";
 const REPO = "https://github.com/mblode/expert";
 
 const registry = (): ConversationRegistry =>
@@ -54,7 +54,7 @@ describe("coding sessions", () => {
   it("launches against the runner and records the ask in a code conversation", async () => {
     const conv = registry();
     const net = runner([{ agent: agent(), run: run("CREATING") }]);
-    const coding = new CodingService(conv, CONFIG, net.fetch);
+    const coding = new CodingService(conv, KEY, net.fetch);
 
     const session: CodingSession = await coding.start({
       bot: "main",
@@ -62,7 +62,7 @@ describe("coding sessions", () => {
       repo: REPO,
     });
 
-    expect(net.calls[0]?.url).toBe("https://runner.test/v1/agents");
+    expect(net.calls[0]?.url).toBe("https://api.cursor.com/v1/agents");
     expect(JSON.parse(net.calls[0]?.body ?? "{}")).toMatchObject({
       prompt: { text: "fix the flaky test" },
       repos: [{ url: REPO }],
@@ -84,7 +84,7 @@ describe("coding sessions", () => {
       { agent: agent({ id: "bc-1" }), run: run("RUNNING") },
       { agent: agent({ id: "bc-2" }), run: { ...run("RUNNING"), agentId: "bc-2" } },
     ]);
-    const coding = new CodingService(conv, CONFIG, net.fetch);
+    const coding = new CodingService(conv, KEY, net.fetch);
 
     const first = await coding.start({ bot: "main", prompt: "one", repo: REPO });
     const second = await coding.start({ bot: "main", prompt: "two", repo: REPO });
@@ -96,7 +96,7 @@ describe("coding sessions", () => {
   it("appends a line only when the state moved, so polling is free", async () => {
     const conv = registry();
     const net = runner([{ agent: agent(), run: run("RUNNING") }]);
-    const coding = new CodingService(conv, CONFIG, net.fetch);
+    const coding = new CodingService(conv, KEY, net.fetch);
     const started = await coding.start({ bot: "main", prompt: "go", repo: REPO });
     expect(text(conv, started.conversation_id)).toHaveLength(1);
 
@@ -121,7 +121,7 @@ describe("coding sessions", () => {
       result: "Fixed the flake and added a regression test.",
     });
     const net = runner([{ agent: agent(), run: run("RUNNING") }, agent(), finished]);
-    const coding = new CodingService(conv, CONFIG, net.fetch);
+    const coding = new CodingService(conv, KEY, net.fetch);
     const started = await coding.start({ bot: "main", prompt: "go", repo: REPO });
 
     const done = await coding.refresh(started.conversation_id);
@@ -144,7 +144,7 @@ describe("coding sessions", () => {
       ["ERROR", "error"],
     ] as const) {
       const net = runner([{ agent: agent(), run: run(status) }]);
-      const coding = new CodingService(registry(), CONFIG, net.fetch);
+      const coding = new CodingService(registry(), KEY, net.fetch);
       const session = await coding.start({ bot: "main", prompt: "go", repo: REPO });
       expect(session.state).toBe(state);
     }
@@ -154,7 +154,7 @@ describe("coding sessions", () => {
   it("refuses a repository that is not a GitHub URL before it calls anything", async () => {
     const conv = registry();
     const net = runner([{ agent: agent() }]);
-    const coding = new CodingService(conv, CONFIG, net.fetch);
+    const coding = new CodingService(conv, KEY, net.fetch);
 
     await expect(
       coding.start({ bot: "main", prompt: "go", repo: "git@github.com:mblode/expert.git" }),
@@ -165,7 +165,7 @@ describe("coding sessions", () => {
   it("refuses to refresh a conversation that is not a coding session", async () => {
     const conv = registry();
     const seat = conv.resolveSeat("main");
-    const coding = new CodingService(conv, CONFIG, runner([{}]).fetch);
+    const coding = new CodingService(conv, KEY, runner([{}]).fetch);
 
     await expect(coding.refresh(seat.id)).rejects.toMatchObject({ code: "VALIDATION" });
   });
@@ -174,7 +174,7 @@ describe("coding sessions", () => {
     const conv = registry();
     const refused: FetchLike = async () => new Response("no such repo", { status: 404 });
     await expect(
-      new CodingService(conv, CONFIG, refused).start({
+      new CodingService(conv, KEY, refused).start({
         bot: "main",
         prompt: "go",
         repo: REPO,
@@ -183,14 +183,14 @@ describe("coding sessions", () => {
 
     const broken: FetchLike = async () => new Response("boom", { status: 502 });
     await expect(
-      new CodingService(conv, CONFIG, broken).start({ bot: "main", prompt: "go", repo: REPO }),
+      new CodingService(conv, KEY, broken).start({ bot: "main", prompt: "go", repo: REPO }),
     ).rejects.toMatchObject({ code: "DAEMON_DOWN" });
   });
 
   it("never puts the key in an error a caller can read", async () => {
     const conv = registry();
     const refused: FetchLike = async () => new Response("nope", { status: 401 });
-    const service = new CodingService(conv, { ...CONFIG, apiKey: "sk-secret" }, refused);
+    const service = new CodingService(conv, "sk-secret", refused);
     const refusal: unknown = await service
       .start({ bot: "main", prompt: "go", repo: REPO })
       .catch((error: unknown) => error);
@@ -201,39 +201,9 @@ describe("coding sessions", () => {
 
   it("answers DAEMON_DOWN when no runner is configured, like WhatsApp without a bridge", async () => {
     const coding = new CodingService(registry(), undefined, runner([{}]).fetch);
-    expect(coding.enabled).toBe(false);
     await expect(coding.start({ bot: "main", prompt: "go", repo: REPO })).rejects.toMatchObject({
       code: "DAEMON_DOWN",
     });
-  });
-
-  it("is off without a key and takes the endpoint from the environment", () => {
-    expect(codingConfigFromEnv({} as NodeJS.ProcessEnv)).toBeUndefined();
-    expect(codingConfigFromEnv({ CURSOR_API_KEY: "  " } as NodeJS.ProcessEnv)).toBeUndefined();
-    expect(
-      codingConfigFromEnv({
-        CURSOR_API_KEY: "k",
-        CURSOR_API_URL: "https://runner.test/",
-      } as NodeJS.ProcessEnv),
-    ).toMatchObject({ apiKey: "k", endpoint: "https://runner.test" });
-  });
-
-  it("lists only the sessions of Bots the caller may see", async () => {
-    const conv = registry();
-    const net = runner([
-      { agent: agent({ id: "bc-1" }), run: run("RUNNING") },
-      { agent: agent({ id: "bc-2" }), run: { ...run("RUNNING"), agentId: "bc-2" } },
-    ]);
-    const coding = new CodingService(conv, CONFIG, net.fetch);
-    await coding.start({ bot: "main", prompt: "one", repo: REPO });
-    await coding.start({ bot: "night", prompt: "two", repo: REPO });
-    // The seat thread is not a coding session and never appears here.
-    conv.resolveSeat("main");
-
-    expect(coding.list(new Set(["main"]))).toEqual([
-      { agent: "bc-1", conversation_id: expect.any(String), repo: REPO },
-    ]);
-    expect(coding.list(new Set(["main", "night"]))).toHaveLength(2);
   });
 
   describe("over the wire", () => {
@@ -244,7 +214,7 @@ describe("coding sessions", () => {
       }
     });
 
-    it("starts, lists and reads one back through the Seat RPCs", async () => {
+    it("starts one, finds it in Conversations, and reads the thread back", async () => {
       const net = runner([
         { agent: agent(), run: run("RUNNING") },
         agent(),
@@ -253,7 +223,7 @@ describe("coding sessions", () => {
       // The hub's own conversation store, so the thread the session writes
       // is the thread `Seat.Occurrences` reads.
       const h = await startHub({
-        codingFactory: (conversations) => new CodingService(conversations, CONFIG, net.fetch),
+        codingFactory: (conversations) => new CodingService(conversations, KEY, net.fetch),
       });
       opened.push(h);
       const token = await h.pair();
@@ -267,12 +237,15 @@ describe("coding sessions", () => {
       expect(started.state).toBe("active");
       expect(started.agent).toBe("bc-1");
 
-      const listed = (await rpc(h.url, "/computer.v1.Seat/CodingSessions", {}, token)) as {
-        sessions: { conversation_id: string; repo: string }[];
+      // No list RPC: a session is a conversation, so the existing one lists
+      // it, carrying the repo and the runner's handle on the route.
+      const listed = (await rpc(h.url, "/computer.v1.Seat/Conversations", {}, token)) as {
+        conversations: { id: string; route: Record<string, string> }[];
       };
-      expect(listed.sessions).toEqual([
-        { agent: "bc-1", conversation_id: started.conversation_id, repo: REPO },
-      ]);
+      expect(listed.conversations.find((c) => c.route.kind === "code")).toMatchObject({
+        id: started.conversation_id,
+        route: { agent: "bc-1", kind: "code", repo: REPO },
+      });
 
       const refreshed = (await rpc(
         h.url,

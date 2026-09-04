@@ -344,16 +344,17 @@ Work that genuinely needs the box (this computer's own code and deploy, the
 signed-in browser, `/workspace` state that exists nowhere else) is not this
 RPC and is not yet built; `docs/plans/coding-sessions.md` says what it takes.
 
-Three Seat RPCs, owner only and contained by the screen exactly as
+Two Seat RPCs, owner only and contained by the screen exactly as
 `Occurrences` and `Conversations` are:
 
 ```
 Seat.StartCodingSession { display?, repo, prompt, ref?, auto_create_pr?, model? }
 Seat.RefreshCodingSession { conversation_id }
-Seat.CodingSessions { display? }
 ```
 
-Each answers a `CodingSession`
+There is deliberately no list RPC: a session is a conversation, so
+`Seat.Conversations` already lists them, with `repo` and `agent` on the
+route. Both answer a `CodingSession`
 `{ conversation_id, agent, repo, state, url, branch, pr_url, summary }`.
 `state` is the agent-session vocabulary, `pending | active | awaitingInput |
 complete | error | stale`, chosen to match Linear's so that reading a
@@ -373,8 +374,8 @@ refuses anything else rather than passing a URL through to be guessed at.
 by a connector. The five tools are the whole model surface and a sixth for
 this would be the same widening the Voice section refuses; a Bot delegating
 work is bot-to-bot, which is a conversation, not a new tool. Unconfigured
-(no `CURSOR_API_KEY`) is `DAEMON_DOWN` on all three, the way the WhatsApp
-RPCs answer without a bridge. The key lives in the hub's environment and
+(no `CURSOR_API_KEY`) is `DAEMON_DOWN` on both, the way the WhatsApp RPCs
+answer without a bridge. The key lives in the hub's environment and
 never in an error message.
 
 ## Connectors

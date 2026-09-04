@@ -129,11 +129,10 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     func `startCodingSession`(request: Computer_V1_StartCodingSessionRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_CodingSession>
 
     /// Re-read one from the runner and record anything new in its thread.
+    /// There is no list RPC: a coding session is a conversation, so Conversations
+    /// already lists them, with `repo` and `agent` on the route.
     @available(iOS 13, *)
     func `refreshCodingSession`(request: Computer_V1_RefreshCodingSessionRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_CodingSession>
-
-    @available(iOS 13, *)
-    func `codingSessions`(request: Computer_V1_CodingSessionsRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_CodingSessionsResponse>
 
     /// Deliver a masked value for an open secret_request. The value goes to
     /// the box clipboard and is never stored, logged, or returned.
@@ -254,11 +253,6 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
-    public func `codingSessions`(request: Computer_V1_CodingSessionsRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_CodingSessionsResponse> {
-        return await self.client.unary(path: "/computer.v1.Seat/CodingSessions", idempotencyLevel: .unknown, request: request, headers: headers)
-    }
-
-    @available(iOS 13, *)
     public func `provideSecret`(request: Computer_V1_ProvideSecretRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_ProvideSecretResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/ProvideSecret", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -326,7 +320,6 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let conversations = Connect.MethodSpec(name: "Conversations", service: "computer.v1.Seat", type: .unary)
             public static let startCodingSession = Connect.MethodSpec(name: "StartCodingSession", service: "computer.v1.Seat", type: .unary)
             public static let refreshCodingSession = Connect.MethodSpec(name: "RefreshCodingSession", service: "computer.v1.Seat", type: .unary)
-            public static let codingSessions = Connect.MethodSpec(name: "CodingSessions", service: "computer.v1.Seat", type: .unary)
             public static let provideSecret = Connect.MethodSpec(name: "ProvideSecret", service: "computer.v1.Seat", type: .unary)
             public static let createBot = Connect.MethodSpec(name: "CreateBot", service: "computer.v1.Seat", type: .unary)
             public static let deleteBot = Connect.MethodSpec(name: "DeleteBot", service: "computer.v1.Seat", type: .unary)

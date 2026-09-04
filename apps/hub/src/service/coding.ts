@@ -32,41 +32,13 @@ import type { CodingSessionState, Conversation } from "@computer/shared";
 import { SEAT_HUMAN_REF } from "./conversations.ts";
 import type { ConversationRegistry } from "./conversations.ts";
 
-export interface CodingConfig {
-  apiKey: string;
-  /** Base URL, no trailing slash. Configurable for the same reason a hostname usually is. */
-  endpoint: string;
-  timeoutMs: number;
-}
-
-const DEFAULT_ENDPOINT = "https://api.cursor.com";
+const ENDPOINT = "https://api.cursor.com";
 /**
  * A launch is one POST and a refresh is two GETs, none of which waits on the
- * work itself: the run is asynchronous by construction, so this timeout is
- * about the API answering, not about the coding finishing.
+ * work itself: the run is asynchronous by construction, so this is about the
+ * API answering, not about the coding finishing.
  */
-const DEFAULT_TIMEOUT_MS = 30_000;
-
-/**
- * Absent key means no coding sessions on this computer, and the RPCs answer
- * `DAEMON_DOWN` the way the WhatsApp ones do without a bridge. Deliberately
- * not a separate on/off switch: a deployment with no key cannot half-enable
- * a runner that then fails on every call.
- */
-export function codingConfigFromEnv(
-  env: NodeJS.ProcessEnv = process.env,
-): CodingConfig | undefined {
-  const apiKey = env.CURSOR_API_KEY?.trim();
-  if (!apiKey) {
-    return undefined;
-  }
-  const timeout = Number(env.CURSOR_API_TIMEOUT_MS);
-  return {
-    apiKey,
-    endpoint: (env.CURSOR_API_URL?.trim() || DEFAULT_ENDPOINT).replace(/\/$/, ""),
-    timeoutMs: Number.isFinite(timeout) && timeout > 0 ? timeout : DEFAULT_TIMEOUT_MS,
-  };
-}
+const TIMEOUT_MS = 30_000;
 
 /** What a client renders: the thread's id, where the work is, and what came out. */
 export interface CodingSession {
@@ -132,15 +104,17 @@ const REPO_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/;
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export class CodingService {
+  /**
+   * No key means no coding sessions on this computer, and both RPCs answer
+   * `DAEMON_DOWN` the way the WhatsApp ones do without a bridge. Deliberately
+   * not a separate on/off switch: a deployment with no key cannot
+   * half-enable a runner that then fails on every call.
+   */
   constructor(
     private readonly conversations: ConversationRegistry,
-    private readonly config: CodingConfig | undefined = codingConfigFromEnv(),
+    private readonly apiKey: string | undefined = process.env.CURSOR_API_KEY?.trim(),
     private readonly fetchImpl: FetchLike = fetch,
   ) {}
-
-  get enabled(): boolean {
-    return this.config !== undefined;
-  }
 
   /**
    * Launch one, then record it.
@@ -151,7 +125,7 @@ export class CodingService {
    * what it is: the person at the seat asked for this.
    */
   async start(req: StartCodingSession): Promise<CodingSession> {
-    const config = this.require();
+    const key = this.require();
     const repo = req.repo
       .trim()
       .replace(/\.git$/, "")
@@ -168,7 +142,7 @@ export class CodingService {
       prompt: { text: req.prompt },
       repos: [{ url: repo, ...(req.ref ? { startingRef: req.ref } : {}) }],
     };
-    const created = await this.call(config, "POST", "/v1/agents", body);
+    const created = await this.call(key, "POST", "/v1/agents", body);
     const agent = readAgent(created);
     const conversation = this.conversations.resolve(
       req.bot,
@@ -186,7 +160,7 @@ export class CodingService {
       { kind: "human", ref: SEAT_HUMAN_REF },
       { kind: "human", text: req.prompt },
     );
-    const run = readRun(created) ?? (await this.latestRun(config, agent));
+    const run = readRun(created) ?? (await this.latestRun(key, agent));
     return this.record(conversation.id, repo, agent, run);
   }
 
@@ -200,7 +174,7 @@ export class CodingService {
    * repeat the last line it wrote.
    */
   async refresh(conversationId: string): Promise<CodingSession> {
-    const config = this.require();
+    const key = this.require();
     const conversation = this.conversations.byId(conversationId);
     if (conversation.route.kind !== "code") {
       throw new ComputerError(
@@ -209,40 +183,18 @@ export class CodingService {
       );
     }
     const agent = readAgent(
-      await this.call(config, "GET", `/v1/agents/${encodeURIComponent(conversation.route.agent)}`),
+      await this.call(key, "GET", `/v1/agents/${encodeURIComponent(conversation.route.agent)}`),
     );
-    const run = await this.latestRun(config, agent);
+    const run = await this.latestRun(key, agent);
     return this.record(conversation.id, conversation.route.repo, agent, run);
   }
 
-  /**
-   * Every coding session a set of Bots owns.
-   *
-   * Unordered, like `Seat.Conversations` beside it: each record carries its
-   * own `updated_at` through that RPC and a client that wants newest-first
-   * has what it needs, so a second ordering rule here would be one more
-   * thing for the two lists to disagree about.
-   */
-  list(bots: Set<string>): { conversation_id: string; agent: string; repo: string }[] {
-    return this.conversations
-      .list()
-      .filter((c) => c.route.kind === "code" && bots.has(c.bot))
-      .map((c) => ({
-        agent: (c.route as { agent: string }).agent,
-        conversation_id: c.id,
-        repo: (c.route as { repo: string }).repo,
-      }));
-  }
-
-  private async latestRun(
-    config: CodingConfig,
-    agent: AgentSnapshot,
-  ): Promise<RunSnapshot | undefined> {
+  private async latestRun(apiKey: string, agent: AgentSnapshot): Promise<RunSnapshot | undefined> {
     if (!agent.latestRunId) {
       return undefined;
     }
     const path = `/v1/agents/${encodeURIComponent(agent.id)}/runs/${encodeURIComponent(agent.latestRunId)}`;
-    return readRun(await this.call(config, "GET", path));
+    return readRun(await this.call(apiKey, "GET", path));
   }
 
   /** Build the view, append the status line when it says something new. */
@@ -286,11 +238,11 @@ export class CodingService {
     return tail?.kind === "text" ? tail.text : undefined;
   }
 
-  private require(): CodingConfig {
-    if (!this.config) {
+  private require(): string {
+    if (!this.apiKey) {
       throw new ComputerError("DAEMON_DOWN", "coding sessions are not configured on this computer");
     }
-    return this.config;
+    return this.apiKey;
   }
 
   /**
@@ -302,21 +254,21 @@ export class CodingService {
    * whether retrying is worth anything. The key is never in a message.
    */
   private async call(
-    config: CodingConfig,
+    apiKey: string,
     method: "GET" | "POST",
     path: string,
     body?: unknown,
   ): Promise<unknown> {
     let res: Response;
     try {
-      res = await this.fetchImpl(`${config.endpoint}${path}`, {
+      res = await this.fetchImpl(`${ENDPOINT}${path}`, {
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         headers: {
-          authorization: `Bearer ${config.apiKey}`,
+          authorization: `Bearer ${apiKey}`,
           "content-type": "application/json",
         },
         method,
-        signal: AbortSignal.timeout(config.timeoutMs),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
       });
     } catch (error) {
       const why = error instanceof Error && error.name === "TimeoutError" ? "timed out" : "failed";
