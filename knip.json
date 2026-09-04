@@ -8,6 +8,7 @@
     },
     "apps/hub": {
       "entry": [
+        "src/host/auto-review-cli.ts",
         "src/host/eves.ts",
         "src/host/init.ts",
         "src/host/machine-cli.ts",

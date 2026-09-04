@@ -65,6 +65,25 @@ Windows, iOS 18+. The laptop can close. iOS is a real takeover:
 trackpad, pinch, clipboard, **I'm done**. Cost is plan + tokens, not
 VM-hours.
 
+Two of those claims are now confirmed first-party, by Cursor's own docs
+(<https://cursor.com/docs/grok-bot/teams#security>), which matters because
+until now the load-bearing half of this section rested on a reconstruction
+with no licence. In their words: each user's work runs in "a dedicated
+Firecracker microVM", one persistent microVM per user; and "within one user's
+account, all their Bots share a single computer and share access to logins and
+files", which is the same sentence as our own "Bots are not security
+boundaries", arrived at independently. The same page adds a detail the
+reconstruction did not: terminating a computer keeps the durable disk and
+"the member's next session starts a fresh computer", so the disk is the
+identity and the VM is disposable. Fly pins a volume to a host, so our
+equivalent is snapshot, destroy, restore, not a native move.
+
+It also names two mechanisms we do not have. Sensitive actions are gated by
+"an independent review model called Auto Review", which is a model reading the
+proposed action rather than a list of patterns matching it; `service/auto-review.ts`
+is ours. And Network Controls are destination allowlists on egress, which we
+have nothing for (see `docs/ARCHITECTURE.md` section 7).
+
 The 0.18 reconstruction (secondary source, above) describes the desktop
 and exec planes:
 
@@ -350,6 +369,7 @@ other sentence. Do not write it.
 - Computer-hub wire protocol (first-party, Apache-2.0):
   https://github.com/xai-org/grok-build: `crates/common/xai-tool-protocol`,
   `xai-computer-hub-core`, `xai-message-delivery-core`
+- Grok Bot teams and security, first-party: https://cursor.com/docs/grok-bot/teams#security
 - 0.18 reconstruction (secondary, no licence):
   https://github.com/b-nnett/grok-bot-0.18-reconstructed
 - Behaviour contract: https://github.com/yuanyijie/learn-grok-bot
