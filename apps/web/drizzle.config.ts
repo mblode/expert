@@ -7,5 +7,11 @@ export default defineConfig({
   },
   dialect: "turso",
   out: "./drizzle",
-  schema: ["./db/schema.ts", "./db/computer.ts", "./db/computer-seat.ts", "./db/invite.ts"],
+  schema: [
+    "./db/schema.ts",
+    "./db/computer.ts",
+    "./db/computer-seat.ts",
+    "./db/invite.ts",
+    "./db/onboarding.ts",
+  ],
 });
