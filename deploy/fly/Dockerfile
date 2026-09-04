@@ -96,13 +96,20 @@ COPY --chown=box:box api api
 # the next boot, so building the list rather than naming it keeps the image
 # and the roster from drifting apart.
 #
-# The `node_modules` test is the other half of that: the COPY lines above are
+# The symlink test is the other half of that: the COPY lines above are
 # hand-written, and a Bot added without one is invisible to `npm ci`, builds
-# from hoisted dependencies and ships subtly wrong. `|| exit 1` because the
-# loop's status is the last iteration's, so without it a Bot that fails to
-# build would ship as an image whose supervisor restarts it forever.
+# from hoisted dependencies and ships subtly wrong. What proves npm saw a
+# workspace is the link it writes into the root `node_modules` under that
+# package's name, NOT a `node_modules` inside the Bot: npm hoists, so no
+# workspace here has one and `test -d "${bot}node_modules"` failed on the
+# first Bot of every build from the day the seven landed. That is why the
+# image that shipped them never built and Blode kept running one Bot.
+# `|| exit 1` because the loop's status is the last iteration's, so without
+# it a Bot that fails to build would ship as an image whose supervisor
+# restarts it forever.
 RUN for bot in apps/eve/bots/*/; do \
-      test -d "${bot}node_modules" \
+      name="$(node -p "require('./${bot}package.json').name")"; \
+      test -e "node_modules/${name}" \
         || { echo "no npm ci for ${bot}: add its COPY line above" >&2; exit 1; }; \
       npm run build --workspace="${bot%/}" || exit 1; \
     done

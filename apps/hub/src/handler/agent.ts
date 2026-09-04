@@ -43,20 +43,6 @@ export function registerAgent(router: ConnectRouter, deps: AgentDeps): void {
     workspace: WORKSPACE,
   }));
 
-  /**
-   * Who this Bot is, for the harness to fold into its system prompt.
-   *
-   * Not a tool, the way `Spec` is not one: the model never sees this call and
-   * cannot make it, the harness does before a turn. It is here because the
-   * hub is what owns the files this is composed from (the profile, the brief
-   * a template wrote, the skill index), and the alternative is every harness
-   * assembling an identity of its own out of `read_file` and drifting from
-   * the thing that writes it.
-   */
-  router.rpc(AgentMethods.Identity, "agent", async (ctx) => ({
-    prompt: await bot(ctx).state.prompt(),
-  }));
-
   // The voice leads the tool table: everything else is work the human
   // never sees unless this is called.
   router.rpc(AgentMethods.SendMessage, "agent", async (ctx) => {

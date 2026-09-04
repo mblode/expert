@@ -79,48 +79,28 @@ describe("a Bot template", () => {
   const apply = (h: Opened, id: string, template: unknown, seat: string) =>
     rpc(h.url, "/computer.v1.Seat/ApplyBotTemplate", { id, template }, seat);
 
-  it("installs a whole setup and the Bot wakes up as it", async () => {
+  /**
+   * Applying a template is writing the files a Bot's own Eve reads at the
+   * start of every turn (`apps/eve/lib/profile.ts`), so what this pins is
+   * that they are on the box, at the paths that composer looks in, with the
+   * document's contents in them.
+   */
+  it("writes a whole setup onto the Bot, where its next turn reads it", async () => {
     const h = await boot();
     const seat = await h.pair();
     await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: "cos" }, seat);
     await apply(h, "cos", A_TEMPLATE, seat);
 
-    // The point of the feature: everything in the document is in the prompt
-    // the Bot's next turn runs under, not in a file nobody reads.
     const { state } = h.hub.bots.byId("cos");
-    const prompt = await state.prompt();
-    expect(prompt).toContain("You are Chief of Staff, personal ops.");
-    expect(prompt).toContain("Route work to the specialist");
-    expect(prompt).toContain("Calendar (/workspace/.bots/cos/skills/calendar.md)");
-    expect(prompt).toContain("Use when asked what their day looks like.");
-    expect(prompt).toContain("the human is in Melbourne");
-    // The body is a file to open, never a paragraph in every prompt.
-    expect(prompt).not.toContain("Open the week view");
-    expect(await state.skills()).toMatchObject([{ body: expect.stringContaining("week view") }]);
+    expect(await state.profile()).toMatchObject({ name: "Chief of Staff", title: "personal ops" });
+    expect(await state.instructions()).toContain("Route work to the specialist");
+    expect(await state.skills()).toMatchObject([
+      { body: expect.stringContaining("week view"), id: "calendar", name: "Calendar" },
+    ]);
+    expect(state.skillBodyPath("calendar")).toBe("/workspace/.bots/cos/skills/calendar.md");
     expect(await state.routines()).toMatchObject([{ cron: "0 20 * * 0-4", id: "morning-brief" }]);
     expect(await state.plugins()).toMatchObject([{ auth: "oauth", name: "calendar" }]);
-  });
-
-  /**
-   * The whole feature turns on this call: the files a template writes are
-   * only worth writing if the turn that follows runs under them. `Spec` is
-   * the precedent for an Agent RPC the harness makes and the model never
-   * sees, and `apps/eve/lib/instructions/identity.ts` is what calls it.
-   */
-  it("hands the Bot's identity to its harness, on the agent token", async () => {
-    const h = await boot();
-    const seat = await h.pair();
-    await apply(h, "main", A_TEMPLATE, seat);
-    const identity = (await rpc(h.url, "/computer.v1.Agent/Identity", {}, h.agent)) as {
-      prompt: string;
-    };
-    expect(identity.prompt).toContain("You are Chief of Staff, personal ops.");
-    expect(identity.prompt).toContain("Route work to the specialist");
-    expect(identity.prompt).toContain("Calendar (/workspace/.bots/main/skills/calendar.md)");
-    // A seat token is not a Bot: this is the agent door.
-    await expect(rpc(h.url, "/computer.v1.Agent/Identity", {}, seat)).rejects.toMatchObject({
-      code: "UNAUTHENTICATED",
-    });
+    expect(await state.memories()).toContain("the human is in Melbourne");
   });
 
   it("comes back out of the computer as what went in", async () => {

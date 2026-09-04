@@ -34,10 +34,11 @@ agent token, exactly like the shipped ones.
 
 What it does not get is a directory, and it cannot: that would be a deploy.
 It runs `apps/eve/bots/template` instead, which is the same five tools and
-the same box, and what makes it itself is its profile. The hub folds the
-name, the label and the description into its system prompt before every
-turn, so "what is it for" is the brief rather than a note: write it as an
-instruction and rewrite it whenever from the Bot's own sheet.
+the same box, and what makes it itself is its profile. The template reads
+that profile off the box at the start of every turn and folds the name, the
+label and the description into its own system prompt, so "what is it for" is
+the brief rather than a note: write it as an instruction and rewrite it
+whenever from the Bot's own sheet.
 
 What it does get, and did not before templates, is the rest of a setup on
 the volume: `/workspace/.bots/<id>/instructions.md` is a brief the hub folds

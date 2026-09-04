@@ -14,16 +14,6 @@ public protocol Computer_V1_AgentClientInterface: Sendable {
     @available(iOS 13, *)
     func `spec`(request: Computer_V1_SpecRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_SpecResponse>
 
-    /// Who this Bot is, composed by the hub from its own files on the box: the
-    /// profile, the brief, and the index of its skills. The harness calls it and
-    /// folds the answer into the system prompt; it is not a tool and the model
-    /// never sees it, exactly as Spec is not one. It is here rather than on Seat
-    /// because the caller is the Bot, identified by its agent token, and because
-    /// the alternative is every harness composing an identity of its own out of
-    /// read_file and drifting from the hub that writes it.
-    @available(iOS 13, *)
-    func `identity`(request: Computer_V1_IdentityRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_IdentityResponse>
-
     /// The only voice. Plain model text is a private scratchpad; the human
     /// sees nothing the agent did not send here. A widget or secret_request
     /// ends the turn, and a second send in the same turn is rejected.
@@ -57,11 +47,6 @@ public final class Computer_V1_AgentClient: Computer_V1_AgentClientInterface, Se
     }
 
     @available(iOS 13, *)
-    public func `identity`(request: Computer_V1_IdentityRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_IdentityResponse> {
-        return await self.client.unary(path: "/computer.v1.Agent/Identity", idempotencyLevel: .unknown, request: request, headers: headers)
-    }
-
-    @available(iOS 13, *)
     public func `sendMessage`(request: Computer_V1_SendMessageRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_SendMessageResponse> {
         return await self.client.unary(path: "/computer.v1.Agent/SendMessage", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -89,7 +74,6 @@ public final class Computer_V1_AgentClient: Computer_V1_AgentClientInterface, Se
     public enum Metadata {
         public enum Methods {
             public static let spec = Connect.MethodSpec(name: "Spec", service: "computer.v1.Agent", type: .unary)
-            public static let identity = Connect.MethodSpec(name: "Identity", service: "computer.v1.Agent", type: .unary)
             public static let sendMessage = Connect.MethodSpec(name: "SendMessage", service: "computer.v1.Agent", type: .unary)
             public static let computer = Connect.MethodSpec(name: "Computer", service: "computer.v1.Agent", type: .unary)
             public static let shell = Connect.MethodSpec(name: "Shell", service: "computer.v1.Agent", type: .unary)

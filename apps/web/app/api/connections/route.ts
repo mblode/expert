@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { revokeSeat } from "@/lib/computers";
 import { writeConnectionFile } from "@/lib/connection-guest";
 import { installConnection } from "@/lib/connection-install";
@@ -49,16 +51,20 @@ export async function POST(request: Request): Promise<Response> {
     if ("error" in result) {
       return Response.json({ error: result.error }, { status: result.status });
     }
-    await captureServerEvent({
-      distinctId: distinctIdFromRequest(request, granted.computerId),
-      event: "plugin_added",
-      properties: {
-        auth_kind: result.plugin.authKind,
-        computer_id: granted.computerId,
-        installed: result.installed,
-        source: "invite",
-      },
-    });
+    // Awaited, this held the install response behind a two-second analytics
+    // flush and delayed the `finally` that ends the plugins seat.
+    after(() =>
+      captureServerEvent({
+        distinctId: distinctIdFromRequest(request, granted.computerId),
+        event: "plugin_added",
+        properties: {
+          auth_kind: result.plugin.authKind,
+          computer_id: granted.computerId,
+          installed: result.installed,
+          source: "invite",
+        },
+      }),
+    );
     return Response.json(result);
   } finally {
     // The plugins seat exists to write one file. It expires on its own in

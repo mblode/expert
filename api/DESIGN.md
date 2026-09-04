@@ -18,10 +18,10 @@ types live in `packages/shared/src/index.ts`.
 Clipboard is not a model tool. A page that copies a prompt into the
 clipboard would otherwise become an injection path.
 
-`Spec` and `Identity` are on `Agent` and are not tools either. The harness
-calls them with the Bot's token to build its own context, and neither
-appears in the five the model can invoke: `TOOLS` in `packages/shared` is
-the list, and `spec.json` is what a model actually loads.
+`Spec` is on `Agent` and is not a tool either: the harness calls it with the
+Bot's token to learn the display and the workspace, and it is not one of the
+five the model can invoke. `TOOLS` in `packages/shared` is that list, and
+`spec.json` is what a model actually loads.
 
 ## Shape
 
@@ -36,7 +36,6 @@ Every screen is 1280×800.
 ```
 service Agent {
   rpc Spec
-  rpc Identity          // who this Bot is, for the harness's system prompt
   rpc SendMessage       // the voice: the only thing the human sees
   rpc Computer
   rpc Shell
@@ -343,15 +342,12 @@ deleting a Bot leaves its box state alone. It is the human's record.
 
 ## Templates
 
-`Agent.Identity` is the other half of this and the reason any of it reaches
-a model. The hub composes the Bot's profile, its brief and its skill index
-into one string (`BotState.prompt`) and the harness folds that into the
-system prompt each turn (`apps/eve/lib/instructions/identity.ts`). Without
-it the files below would be written and read by nobody: a template would
-install onto the volume and never reach a turn, and the profile a person
-types into the settings sheet would be decoration. Skill _bodies_ are never
-in it; the index names the path and the model opens one with `read_file`
-when the work calls for it.
+A Bot reads all of this off the box itself, at the start of every turn. The
+template project's `agent/instructions/profile.ts` folds in the profile, the
+brief and the index of the skills (never their bodies) through the `read_file`
+door it already has, which is why applying a template is writing those files
+and nothing more: no RPC was added for it, and the Agent service is still the
+five tools plus `Spec`. `apps/eve/lib/profile.ts` is the composer.
 
 A **template** is everything that makes a Bot itself, as one document: its
 profile, its brief, what it remembers, its skills, its routines and the

@@ -12,7 +12,6 @@ function path(service: { typeName: string }, method: { name: string }): string {
 
 export const AgentMethods = {
   Computer: path(Agent, Agent.method.computer),
-  Identity: path(Agent, Agent.method.identity),
   ReadFile: path(Agent, Agent.method.readFile),
   SendMessage: path(Agent, Agent.method.sendMessage),
   Shell: path(Agent, Agent.method.shell),

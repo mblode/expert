@@ -58,7 +58,9 @@ export function ChatComposer({
           Ask {botName}
         </label>
         <textarea
-          className="max-h-[200px] min-h-9 flex-1 resize-none self-center bg-transparent py-1.5 text-sm outline-none placeholder:text-muted-foreground disabled:opacity-50"
+          // 16px on touch: iOS zooms the viewport into any field below that and
+          // does not zoom back out, leaving the composer panned off screen.
+          className="max-h-[200px] min-h-9 flex-1 resize-none self-center bg-transparent py-1.5 text-base outline-none placeholder:text-muted-foreground disabled:opacity-50 sm:text-sm"
           disabled={disabled}
           id="chat-composer"
           onChange={(event) => {
