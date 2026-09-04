@@ -7,6 +7,14 @@ package computer.v1;
 
 service Agent {
   rpc Spec(SpecRequest) returns (SpecResponse);
+  // Who this Bot is, composed by the hub from its own files on the box: the
+  // profile, the brief, and the index of its skills. The harness calls it and
+  // folds the answer into the system prompt; it is not a tool and the model
+  // never sees it, exactly as Spec is not one. It is here rather than on Seat
+  // because the caller is the Bot, identified by its agent token, and because
+  // the alternative is every harness composing an identity of its own out of
+  // read_file and drifting from the hub that writes it.
+  rpc Identity(IdentityRequest) returns (IdentityResponse);
   // The only voice. Plain model text is a private scratchpad; the human
   // sees nothing the agent did not send here. A widget or secret_request
   // ends the turn, and a second send in the same turn is rejected.
@@ -60,6 +68,15 @@ service Seat {
   // owner's edit rather than an operator's, who drives the box without
   // reshaping it. The request is the whole profile, not a patch.
   rpc SetBotProfile(SetBotProfileRequest) returns (BotProfile);
+  // A Bot's whole setup as one portable document: its profile, its brief,
+  // what it remembers, its skills, its routines and the services it expects.
+  // Export reads the box and the Bot's Eve project; apply writes the box and
+  // only the box, so a template is never a way to edit the image. Neither
+  // carries a credential, a token, or the name of the computer it came from:
+  // a template is published to strangers, and installing one is consenting to
+  // run its instructions, which is why every section is shown before it does.
+  rpc ExportBotTemplate(ExportBotTemplateRequest) returns (BotTemplate);
+  rpc ApplyBotTemplate(ApplyBotTemplateRequest) returns (BotProfile);
   // Drop a seat token: the caller's own (sign-out), any other from an owner
   // seat, or any unprivileged one from an issuer replacing a grant it made.
   // Guest seats from invites expire on their own; this is early.
@@ -150,6 +167,14 @@ message PendingCheck {
 }
 
 // --- Agent ---
+
+message IdentityRequest {}
+
+message IdentityResponse {
+  // Markdown, already assembled. Empty when this Bot has nothing on the box
+  // beyond its id, which is a harness that should contribute nothing.
+  string prompt = 1;
+}
 
 message SpecRequest {}
 
@@ -618,6 +643,66 @@ message BotProfile {
   string description = 4;
   string avatar_shape = 5;
   string avatar_color = 6;
+}
+
+message ExportBotTemplateRequest {
+  string id = 1;
+}
+
+message ApplyBotTemplateRequest {
+  string id = 1;
+  BotTemplate template = 2;
+}
+
+// A Bot's setup, portable. Caps are BOT_TEMPLATE_MAX in packages/shared and
+// are applied on read as well as on write: the document arrives from a
+// computer this one has never met.
+message BotTemplate {
+  // 1. A client meeting a version it does not know should say so, not guess.
+  int32 version = 1;
+  string name = 2;
+  string title = 3;
+  string description = 4;
+  string avatar_shape = 5;
+  string avatar_color = 6;
+  // The Bot's brief, markdown. Folded into its system prompt on the computer
+  // that installs this, which is the whole reason the install page shows it.
+  string instructions = 7;
+  // Facts, without the dates they were learned on: a shared memory is
+  // something the receiving Bot is being told, not something that happened
+  // to it. Appended to what that Bot already knows, never written over it.
+  repeated string memories = 8;
+  repeated BotTemplateSkill skills = 9;
+  repeated BotTemplateRoutine routines = 10;
+  repeated BotTemplatePlugin plugins = 11;
+}
+
+message BotTemplateSkill {
+  // Slugged by the receiver, never trusted: it becomes a filename.
+  string id = 1;
+  string name = 2;
+  // The "use when" trigger. The one line that goes in the prompt, so the
+  // model knows the skill is there before it reads the body.
+  string use_when = 3;
+  string body = 4;
+}
+
+message BotTemplateRoutine {
+  string id = 1;
+  string title = 2;
+  // Five-field cron, UTC, the subset cronMatches understands. Anything else
+  // is dropped rather than carried: a schedule neither alarm can parse is a
+  // promise the receiving computer cannot keep.
+  string cron = 3;
+  string prompt = 4;
+}
+
+// A service the Bot expects to reach, never a way in to it. `auth` says what
+// the person installing has to provide: a key of their own, or a sign-in.
+message BotTemplatePlugin {
+  string name = 1;
+  string url = 2;
+  string auth = 3; // static | oauth
 }
 
 message RevokeRequest {

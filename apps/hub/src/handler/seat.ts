@@ -5,6 +5,7 @@ import type { Bot, BotRegistry } from "../service/bots.ts";
 import type { CodingService, StartCodingSession } from "../service/coding.ts";
 import type { ConversationRegistry } from "../service/conversations.ts";
 import type { ProvisionService } from "../service/provision.ts";
+import type { BotTemplateService } from "../service/templates.ts";
 import { asRole } from "../service/principals.ts";
 import type { PrincipalRecord } from "../service/principals.ts";
 import type { AuthRegistry } from "./auth.ts";
@@ -39,6 +40,8 @@ interface SeatDeps {
   coding: CodingService;
   conversations: ConversationRegistry;
   provision: ProvisionService;
+  /** A Bot's setup as one document: `Seat.ExportBotTemplate`/`ApplyBotTemplate`. */
+  templates: BotTemplateService;
   vncUrl: string;
   /**
    * Wake a Bot (`host/wake.ts`). Called the moment one is made, so the
@@ -403,6 +406,46 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     }
     await bot.desk.ping();
     return bot.state.setProfile(o);
+  });
+
+  /**
+   * A Bot's setup, out and back in.
+   *
+   * Owner only, the way `SetBotProfile` is and for a stronger version of the
+   * same reason: exporting reads everything the Bot knows, and applying
+   * rewrites its brief, its skills and its schedule, which is reshaping the
+   * box rather than driving it. Screen containment is the rule every by-id
+   * RPC here follows.
+   *
+   * Apply replaces rather than merges, so the caller is expected to have just
+   * made the Bot. That is what hello.expert does with a shared link: create,
+   * then apply, then open the thread.
+   */
+  const templateBot = (ctx: RpcContext, o: Record<string, unknown>): Bot => {
+    if (typeof o.id !== "string" || o.id.length === 0) {
+      throw new ComputerError("VALIDATION", 'id is required, e.g. {"id":"main"}');
+    }
+    const bot = deps.bots.byId(o.id);
+    if (ctx.principal?.display !== undefined && ctx.principal.display !== bot.display) {
+      throw new ComputerError(
+        "UNAUTHENTICATED",
+        `this seat is for screen ${ctx.principal.display}`,
+      );
+    }
+    return bot;
+  };
+
+  router.rpc(SeatMethods.ExportBotTemplate, "seat", async (ctx) => {
+    const bot = templateBot(ctx, requireObject(ctx.body));
+    await bot.desk.ping();
+    return deps.templates.export(bot.id, bot.state);
+  });
+
+  router.rpc(SeatMethods.ApplyBotTemplate, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    const bot = templateBot(ctx, o);
+    await bot.desk.ping();
+    return deps.templates.apply(bot.state, o.template);
   });
 
   router.rpc(SeatMethods.DeleteBot, "seat", async (ctx) => {

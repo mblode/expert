@@ -44,11 +44,18 @@ const SHAPE_LABEL: Record<AvatarShape, string> = {
 export function BotSettings({
   botId,
   onSaved,
+  onShare,
   profile,
   seat,
 }: {
   botId: string;
   onSaved: (profile: BotProfile) => void;
+  /**
+   * Open the share sheet. Absent on a hub too old to export a template, the
+   * way the settings gear itself is absent on one too old to serve profiles:
+   * a button whose first call is a 404 is worse than no button.
+   */
+  onShare?: () => void;
   /** Absent until the roster answers; the form waits rather than guessing. */
   profile?: BotProfile;
   seat: Seat;
@@ -211,6 +218,30 @@ export function BotSettings({
 
           {failure && <FieldError>{failure}</FieldError>}
         </FieldGroup>
+
+        {/* Last, and outside the form: sharing is not a field of the Bot, it
+            is a thing you do with one. What it hands out is everything above
+            plus what this Bot has learned and been taught, which is why the
+            sheet it opens shows all of that with a switch beside each part
+            rather than publishing on this click. */}
+        {onShare && (
+          <div className="mt-6 flex flex-col gap-2 rounded-xl border border-border p-4">
+            <p className="font-medium text-sm">Share as Template</p>
+            <p className="text-muted-foreground text-sm">
+              Hand someone a link that adds a copy of {draft.name || botId} to their own computer.
+              No key, token or account travels with it.
+            </p>
+            <Button
+              className="self-start"
+              onClick={onShare}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Share as Template
+            </Button>
+          </div>
+        )}
       </div>
 
       <DialogFooter className="border-border border-t px-5 py-3">

@@ -27,9 +27,17 @@ type Step = "email" | "otp";
 export function LoginForm({
   appleEnabled = false,
   googleEnabled = false,
+  next = "/",
 }: {
   appleEnabled?: boolean;
   googleEnabled?: boolean;
+  /**
+   * Where to land after signing in. The workspace unless the person arrived
+   * from somewhere that needs them signed in, which today is a shared Bot
+   * template: sending them to the workspace instead would lose the link they
+   * were sent. The page validates it; this only carries it.
+   */
+  next?: string;
 }): React.ReactElement {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
@@ -133,7 +141,7 @@ export function LoginForm({
     } catch {
       // Analytics must not unlock the form or paint a network error.
     }
-    window.location.assign("/");
+    window.location.assign(next);
   };
 
   const social = async (provider: "google" | "apple") => {
@@ -143,7 +151,7 @@ export function LoginForm({
     setPending(true);
     setError(null);
     try {
-      await authClient.signIn.social({ callbackURL: "/", provider });
+      await authClient.signIn.social({ callbackURL: next, provider });
     } catch {
       setError(NETWORK_ERROR);
       setPending(false);

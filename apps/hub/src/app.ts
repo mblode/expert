@@ -26,6 +26,8 @@ import { screenOnDemand } from "./desk/lazy.ts";
 import type { PolicyService } from "./service/policy.ts";
 import { ProvisionService } from "./service/provision.ts";
 import type { BotStore } from "./service/provision.ts";
+import { BotTemplateService } from "./service/templates.ts";
+import type { TemplateSourceReader } from "./service/templates.ts";
 import type { PrincipalStore } from "./service/principals.ts";
 import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
@@ -80,6 +82,13 @@ interface HubOptions {
    * Seeded into an empty profile once, never over one the box already has.
    */
   profileSeed?: ProfileSeedReader;
+  /**
+   * What a Bot's Eve project ships (`host/bot-template.ts`), for the half of
+   * a template that lives in git rather than on the volume. Absent means a
+   * template exports what the box holds and nothing else, which is right for
+   * a hub with no Eve projects beside it.
+   */
+  templateSource?: TemplateSourceReader;
   /** `false` claims every screen at boot and never releases one. */
   screens?: false;
   /** How long a screen may go unused before it is released. */
@@ -191,6 +200,7 @@ export function createHub(opts: HubOptions): Hub {
     coding,
     conversations,
     provision,
+    templates: new BotTemplateService(opts.templateSource),
     vncUrl: opts.vncUrl,
     wake: opts.wake,
   });

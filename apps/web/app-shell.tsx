@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BotSettings } from "./components/bot-settings";
 import { BotSidebar } from "./components/bot-sidebar";
 import { NewBot } from "./components/new-bot";
+import { ShareTemplate } from "./components/share-template";
 import { ChatPane } from "./components/chat-pane";
 import { ConnectError } from "./components/connect-error";
 import { DesktopPane } from "./components/desktop-pane";
@@ -141,6 +142,7 @@ function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, BotProfile>>({});
   const [newBotOpen, setNewBotOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     captureEvent(connectEvent, { computer_id: computerId });
@@ -349,7 +351,33 @@ function Workspace({
             botId={botId}
             key={botId}
             onSaved={(profile) => setProfiles((prev) => ({ ...prev, [botId]: profile }))}
+            onShare={() => {
+              setSettingsOpen(false);
+              setShareOpen(true);
+            }}
             profile={profiles[botId]}
+            seat={seat}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Its own sheet rather than a panel inside the settings one: what is
+          being decided here is what leaves this computer, and that deserves
+          the whole surface and its own way out. */}
+      <Dialog onOpenChange={setShareOpen} open={shareOpen}>
+        <DialogContent className="max-h-[90svh] max-w-md gap-0 overflow-hidden p-0">
+          <DialogHeader className="px-5 pt-5 pb-4">
+            <DialogTitle>Share as Template</DialogTitle>
+            <DialogDescription>
+              A copy of this Bot’s setup, behind a link. Bots made from it run on the computer of
+              whoever adds them.
+            </DialogDescription>
+          </DialogHeader>
+          <ShareTemplate
+            botId={botId}
+            botName={profiles[botId]?.name ?? botId}
+            computerId={computerId}
+            key={botId}
             seat={seat}
           />
         </DialogContent>

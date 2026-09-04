@@ -12,6 +12,7 @@ function path(service: { typeName: string }, method: { name: string }): string {
 
 export const AgentMethods = {
   Computer: path(Agent, Agent.method.computer),
+  Identity: path(Agent, Agent.method.identity),
   ReadFile: path(Agent, Agent.method.readFile),
   SendMessage: path(Agent, Agent.method.sendMessage),
   Shell: path(Agent, Agent.method.shell),
@@ -20,11 +21,13 @@ export const AgentMethods = {
 } as const;
 
 export const SeatMethods = {
+  ApplyBotTemplate: path(Seat, Seat.method.applyBotTemplate),
   ClipboardGet: path(Seat, Seat.method.clipboardGet),
   ClipboardSet: path(Seat, Seat.method.clipboardSet),
   Conversations: path(Seat, Seat.method.conversations),
   CreateBot: path(Seat, Seat.method.createBot),
   DeleteBot: path(Seat, Seat.method.deleteBot),
+  ExportBotTemplate: path(Seat, Seat.method.exportBotTemplate),
   Occurrences: path(Seat, Seat.method.occurrences),
   Pair: path(Seat, Seat.method.pair),
   Pointer: path(Seat, Seat.method.pointer),

@@ -18,6 +18,11 @@ types live in `packages/shared/src/index.ts`.
 Clipboard is not a model tool. A page that copies a prompt into the
 clipboard would otherwise become an injection path.
 
+`Spec` and `Identity` are on `Agent` and are not tools either. The harness
+calls them with the Bot's token to build its own context, and neither
+appears in the five the model can invoke: `TOOLS` in `packages/shared` is
+the list, and `spec.json` is what a model actually loads.
+
 ## Shape
 
 ```
@@ -31,6 +36,7 @@ Every screen is 1280×800.
 ```
 service Agent {
   rpc Spec
+  rpc Identity          // who this Bot is, for the harness's system prompt
   rpc SendMessage       // the voice: the only thing the human sees
   rpc Computer
   rpc Shell
@@ -51,6 +57,8 @@ service Seat {
   rpc ProvideSecret     // answer a secret_request: value → clipboard only
   rpc CreateBot         // provision: next free screen + minted token
   rpc DeleteBot
+  rpc ExportBotTemplate // a Bot's whole setup as one portable document (owner)
+  rpc ApplyBotTemplate  // write one onto a Bot on this computer (owner)
   rpc Revoke            // end a seat: the caller's own, or (owner) any
   rpc Issue             // hand a named person a seat with a role (owner, issuer)
   rpc WhatsAppAccounts  // the numbers linked to this computer (owner)
@@ -332,6 +340,66 @@ means what it meant. It runs once, marked on the record, and it is a resume
 rather than a second copy if it is interrupted. That file is then read no
 more and written never again; it is not deleted, for the same reason
 deleting a Bot leaves its box state alone. It is the human's record.
+
+## Templates
+
+`Agent.Identity` is the other half of this and the reason any of it reaches
+a model. The hub composes the Bot's profile, its brief and its skill index
+into one string (`BotState.prompt`) and the harness folds that into the
+system prompt each turn (`apps/eve/lib/instructions/identity.ts`). Without
+it the files below would be written and read by nobody: a template would
+install onto the volume and never reach a turn, and the profile a person
+types into the settings sheet would be decoration. Skill _bodies_ are never
+in it; the index names the path and the model opens one with `read_file`
+when the work calls for it.
+
+A **template** is everything that makes a Bot itself, as one document: its
+profile, its brief, what it remembers, its skills, its routines and the
+services it expects. `Seat.ExportBotTemplate` reads one off a Bot;
+`Seat.ApplyBotTemplate` writes one onto a Bot. Both are owner seats only,
+and both are contained by the screen the seat was minted for, like every
+other by-id RPC here.
+
+Export reads two places and apply writes one. A Bot that came with the build
+keeps its brief, its skills and its schedule in its Eve project, in git; a
+Bot made at runtime keeps them on the volume under
+`/workspace/.bots/<id>/` (`instructions.md`, `skills.json` plus
+`skills/<id>.md`, `routines.json`, `plugins.json`). Export prefers the box
+where both answer, the same rule the profile follows, because after the
+first boot the file is the human's. **Apply writes the box and only the
+box.** `/workspace` is box-writable and the Eve projects are what the build
+shipped, so a template that could write one would be a link that edits the
+computer's code.
+
+What travels is what a Bot is, not what it can reach. **No credential is in
+a template**: a plugin is the address of a service and how it authenticates,
+so the person installing signs in as themselves. Neither is anything naming
+the computer it came from: no bot id, no hub, no paths. Memory travels as
+facts without their dates, because a shared memory is something the
+receiving Bot is being told rather than something that happened to it, and
+it is appended to what that Bot already knows rather than written over it.
+
+Every field is clamped on the way out **and** on the way in
+(`BOT_TEMPLATE_MAX`, `parseBotTemplate` in `packages/shared`). A template
+arrives from a computer this one has never met, its ids become filenames and
+its strings become a system prompt, so ids are slugged here rather than
+trusted, a cron `cronMatches` cannot evaluate is dropped rather than
+carried, and control characters are stripped. Installing a template is
+consenting to run its instructions, which is why the page that offers it
+shows every section in full first.
+
+The link is not the hub's. A computer belongs to one account and the point
+of sharing a Bot is that the other person is on a different one, so the
+document is copied to hello.expert, which is the only thing both accounts
+can see, and the install is `CreateBot` then `ApplyBotTemplate` from the
+recipient's own browser with their own seat (`docs/BOTS.md`, "Sharing a
+Bot").
+
+One thing a template carries and cannot yet make run: a **routine**. What
+fires a routine is that Bot's own croner, compiled from
+`agent/schedules/*.ts` in its Eve project, and a Bot made at runtime runs
+the template project, which has none. So an installed routine is recorded,
+shown, and says it is paused rather than quietly never running.
 
 ## Coding sessions
 

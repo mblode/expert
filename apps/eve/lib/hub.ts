@@ -5,6 +5,9 @@
 
 const paths = {
   computer: "/computer.v1.Agent/Computer",
+  // Not a tool: the harness calls it to build the system prompt, the model
+  // never sees it. See `lib/instructions/identity.ts`.
+  identity: "/computer.v1.Agent/Identity",
   readFile: "/computer.v1.Agent/ReadFile",
   sendMessage: "/computer.v1.Agent/SendMessage",
   shell: "/computer.v1.Agent/Shell",

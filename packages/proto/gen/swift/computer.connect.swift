@@ -14,6 +14,16 @@ public protocol Computer_V1_AgentClientInterface: Sendable {
     @available(iOS 13, *)
     func `spec`(request: Computer_V1_SpecRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_SpecResponse>
 
+    /// Who this Bot is, composed by the hub from its own files on the box: the
+    /// profile, the brief, and the index of its skills. The harness calls it and
+    /// folds the answer into the system prompt; it is not a tool and the model
+    /// never sees it, exactly as Spec is not one. It is here rather than on Seat
+    /// because the caller is the Bot, identified by its agent token, and because
+    /// the alternative is every harness composing an identity of its own out of
+    /// read_file and drifting from the hub that writes it.
+    @available(iOS 13, *)
+    func `identity`(request: Computer_V1_IdentityRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_IdentityResponse>
+
     /// The only voice. Plain model text is a private scratchpad; the human
     /// sees nothing the agent did not send here. A widget or secret_request
     /// ends the turn, and a second send in the same turn is rejected.
@@ -47,6 +57,11 @@ public final class Computer_V1_AgentClient: Computer_V1_AgentClientInterface, Se
     }
 
     @available(iOS 13, *)
+    public func `identity`(request: Computer_V1_IdentityRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_IdentityResponse> {
+        return await self.client.unary(path: "/computer.v1.Agent/Identity", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `sendMessage`(request: Computer_V1_SendMessageRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_SendMessageResponse> {
         return await self.client.unary(path: "/computer.v1.Agent/SendMessage", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -74,6 +89,7 @@ public final class Computer_V1_AgentClient: Computer_V1_AgentClientInterface, Se
     public enum Metadata {
         public enum Methods {
             public static let spec = Connect.MethodSpec(name: "Spec", service: "computer.v1.Agent", type: .unary)
+            public static let identity = Connect.MethodSpec(name: "Identity", service: "computer.v1.Agent", type: .unary)
             public static let sendMessage = Connect.MethodSpec(name: "SendMessage", service: "computer.v1.Agent", type: .unary)
             public static let computer = Connect.MethodSpec(name: "Computer", service: "computer.v1.Agent", type: .unary)
             public static let shell = Connect.MethodSpec(name: "Shell", service: "computer.v1.Agent", type: .unary)
@@ -156,6 +172,19 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     /// reshaping it. The request is the whole profile, not a patch.
     @available(iOS 13, *)
     func `setBotProfile`(request: Computer_V1_SetBotProfileRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BotProfile>
+
+    /// A Bot's whole setup as one portable document: its profile, its brief,
+    /// what it remembers, its skills, its routines and the services it expects.
+    /// Export reads the box and the Bot's Eve project; apply writes the box and
+    /// only the box, so a template is never a way to edit the image. Neither
+    /// carries a credential, a token, or the name of the computer it came from:
+    /// a template is published to strangers, and installing one is consenting to
+    /// run its instructions, which is why every section is shown before it does.
+    @available(iOS 13, *)
+    func `exportBotTemplate`(request: Computer_V1_ExportBotTemplateRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BotTemplate>
+
+    @available(iOS 13, *)
+    func `applyBotTemplate`(request: Computer_V1_ApplyBotTemplateRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BotProfile>
 
     /// Drop a seat token: the caller's own (sign-out), any other from an owner
     /// seat, or any unprivileged one from an issuer replacing a grant it made.
@@ -273,6 +302,16 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
+    public func `exportBotTemplate`(request: Computer_V1_ExportBotTemplateRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_BotTemplate> {
+        return await self.client.unary(path: "/computer.v1.Seat/ExportBotTemplate", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `applyBotTemplate`(request: Computer_V1_ApplyBotTemplateRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_BotProfile> {
+        return await self.client.unary(path: "/computer.v1.Seat/ApplyBotTemplate", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `revoke`(request: Computer_V1_RevokeRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_RevokeResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/Revoke", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -324,6 +363,8 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let createBot = Connect.MethodSpec(name: "CreateBot", service: "computer.v1.Seat", type: .unary)
             public static let deleteBot = Connect.MethodSpec(name: "DeleteBot", service: "computer.v1.Seat", type: .unary)
             public static let setBotProfile = Connect.MethodSpec(name: "SetBotProfile", service: "computer.v1.Seat", type: .unary)
+            public static let exportBotTemplate = Connect.MethodSpec(name: "ExportBotTemplate", service: "computer.v1.Seat", type: .unary)
+            public static let applyBotTemplate = Connect.MethodSpec(name: "ApplyBotTemplate", service: "computer.v1.Seat", type: .unary)
             public static let revoke = Connect.MethodSpec(name: "Revoke", service: "computer.v1.Seat", type: .unary)
             public static let issue = Connect.MethodSpec(name: "Issue", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppAccounts = Connect.MethodSpec(name: "WhatsAppAccounts", service: "computer.v1.Seat", type: .unary)
