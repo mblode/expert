@@ -55,7 +55,8 @@ export interface PolicyVerdict {
   reason: string;
 }
 
-type PolicyRequest =
+/** What a rule matches against, and what a `check` command reads on stdin. */
+export type PolicyRequest =
   | { tool: "computer"; action: Action }
   | { tool: "shell"; argv: string[]; cwd: string };
 
@@ -122,6 +123,13 @@ export class PolicyService {
 }
 
 /**
+ * Where the Auto Review `check` lives, relative to the repo root the hub runs
+ * from. Spelled here rather than in the rule so a deployment that moves the
+ * tree changes one line.
+ */
+const AUTO_REVIEW_CHECK = ["npx", "tsx", "apps/hub/src/host/auto-review-cli.ts"];
+
+/**
  * The rules a box runs with when nobody wrote a policy. None of these deny:
  * a shipped deny would surprise an owner who never saw the file. Each one
  * asks, which the model already handles by stopping and telling the human,
@@ -129,9 +137,33 @@ export class PolicyService {
  *
  * `git` and `npm` under /workspace/eve are the self-rebuild path (Phase 3):
  * a Bot editing its own code is exactly the thing an owner approves once.
+ *
+ * The four regexes only catch what somebody named, so when a gateway key is
+ * configured a fifth rule sends every other shell call to Auto Review
+ * (`auto-review.ts`). It is additive and cannot loosen the four, because
+ * `evaluate` takes the strongest decision across every matching rule: an
+ * `allow` from the reviewer never overrules the `ask` on `rm -rf`.
+ *
+ * That rule is the one place in this file that sets `fail_open`, deliberately.
+ * It sits in front of every shell call, so failing closed would make a gateway
+ * outage a box where nothing runs; failing open degrades to exactly the
+ * protection that existed before the reviewer did. The four named rules carry
+ * no check and so cannot fail at all, which is what makes that safe.
  */
-export function defaultPolicyRules(): PolicyRule[] {
+export function defaultPolicyRules(env: NodeJS.ProcessEnv = process.env): PolicyRule[] {
+  const autoReview: PolicyRule[] = env.AI_GATEWAY_API_KEY?.trim()
+    ? [
+        {
+          check: AUTO_REVIEW_CHECK,
+          fail_open: true,
+          id: "auto-review",
+          reason: "a second model reviewed this and wants a person to look",
+          tool: "shell",
+        },
+      ]
+    : [];
   return [
+    ...autoReview,
     {
       argv: String.raw`^(sudo\s+)?(apt|apt-get|dpkg|pip3?|pipx)\s`,
       decision: "ask",
