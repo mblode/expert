@@ -1,9 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { ComputerError } from "@computer/shared";
+import { ComputerError, PRIMARY_DISPLAY } from "@computer/shared";
 import type { BotProfile } from "@computer/shared";
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import type { WindowManager } from "../desk/windows.ts";
+import type { ScreenKeeper } from "./screens.ts";
 import type { Bot, BotConfig, BotRegistry } from "./bots.ts";
 import type { ConversationRegistry } from "./conversations.ts";
 
@@ -103,6 +104,11 @@ export class ProvisionService {
      * projects beside it should do.
      */
     private readonly profileSeed?: (botId: string) => Partial<BotProfile> | undefined,
+    /**
+     * Who claims and releases windows. Absent means the old behaviour: every
+     * roster screen is claimed at boot and never released.
+     */
+    private readonly screens?: ScreenKeeper,
   ) {}
 
   /** Boot: mount the roster, ensure a primary bot exists, claim every window. */
@@ -112,15 +118,25 @@ export class ProvisionService {
       this.store.save(this.bots.configs());
     }
     for (const bot of this.bots.all()) {
-      try {
-        await this.windows.startWindow(bot.display, bot.token, bot.id);
-      } catch (error) {
-        // A claim left by a roster we no longer have must not brick startup:
-        // at boot the hub's roster is the source of truth, so take the window.
-        if (!(error instanceof ComputerError) || error.code !== "CONFLICT") throw error;
-        console.warn(`window ${bot.display}: reclaiming a stale claim for bot ${bot.id}`);
-        await this.windows.startWindow(bot.display, bot.token, bot.id, true);
+      // Only the primary screen comes up with the box. Every other Bot is
+      // registered and left asleep: `ScreenKeeper` claims its window the
+      // first time something touches that display and releases it again when
+      // it goes quiet, because eight claimed windows is eight Chromiums and
+      // this guest has 2 GB. Without a keeper (older wiring, and the tests
+      // that predate it) every screen is claimed at boot as before.
+      const eager = !this.screens || bot.display === PRIMARY_DISPLAY;
+      if (eager) {
+        try {
+          await this.windows.startWindow(bot.display, bot.token, bot.id);
+        } catch (error) {
+          // A claim left by a roster we no longer have must not brick startup:
+          // at boot the hub's roster is the source of truth, so take the window.
+          if (!(error instanceof ComputerError) || error.code !== "CONFLICT") throw error;
+          console.warn(`window ${bot.display}: reclaiming a stale claim for bot ${bot.id}`);
+          await this.windows.startWindow(bot.display, bot.token, bot.id, true);
+        }
       }
+      this.screens?.register({ botId: bot.id, display: bot.display, token: bot.token }, eager);
       await this.mountState(bot);
     }
   }
@@ -187,6 +203,9 @@ export class ProvisionService {
       throw error;
     }
     this.store.save(this.bots.configs());
+    // Claimed above, because a person is standing there: a Bot created by
+    // hand should have a screen to look at without being poked first.
+    this.screens?.register({ botId: bot.id, display: bot.display, token: bot.token }, true);
     await this.mountState(bot);
     return bot;
   }
@@ -204,6 +223,7 @@ export class ProvisionService {
   async remove(id: string): Promise<void> {
     const bot = this.bots.remove(id);
     this.store.save(this.bots.configs());
+    this.screens?.forget(bot.display);
     try {
       await this.windows.stopWindow(bot.display);
     } catch (error) {

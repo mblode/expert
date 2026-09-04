@@ -29,6 +29,7 @@ import { dirname, join, resolve } from "node:path";
 import { userInfo } from "node:os";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
 import { eveProjectIds, planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
+import { watchWake } from "./wake.ts";
 import { Supervisor } from "./supervisor.ts";
 
 /**
@@ -59,6 +60,10 @@ const rosterPath = resolve(env.COMPUTER_DATA ?? "/workspace/.computer/bots.json"
 const dataDir = dirname(rosterPath);
 const runDir = env.COMPUTER_RUN_DIR ?? "/run/computer";
 const statusFile = env.COMPUTER_STATUS_FILE ?? join(runDir, "status.json");
+// Where the hub says which Bots should be awake. Root writes the directory
+// and hands it to the hub group; the hub writes one small file per Bot and
+// this process reads them. See `host/wake.ts`.
+const wakeDir = env.COMPUTER_WAKE_DIR ?? join(runDir, "wake");
 const logDir = env.COMPUTER_LOG_DIR ?? join(dataDir, "logs");
 const bridgePort = env.COMPUTER_BRIDGE_PORT ?? "2100";
 const bridgeDir = join(repoRoot, "apps/whatsapp-bridge");
@@ -204,6 +209,10 @@ if (botsRoot === imageBots || botsRoot === env.COMPUTER_EVE_BOTS) {
 //    and belong to `hub` before the first of them is spawned, not after.
 mkdirSync(logDir, { mode: 0o700, recursive: true });
 own(logDir, hub, 0o700);
+// 0770 and hub-owned: the hub writes the markers, root reads them, and the
+// model (box) sees neither. A Bot cannot vote on whether it is awake.
+mkdirSync(wakeDir, { mode: 0o770, recursive: true });
+own(wakeDir, hub, 0o770);
 mkdirSync(join(dataDir, "home"), { mode: 0o700, recursive: true });
 own(join(dataDir, "home"), hub, 0o700);
 
@@ -244,14 +253,27 @@ sup.start({
   uid: box.uid,
 });
 
+// The primary Bot is always running: it is the desk agent, the default route
+// and the one a human reaches without asking for anyone. Every other Bot is
+// registered asleep and started when the hub says it is wanted, because an
+// Eve is 224 MB and eight of them do not fit beside a desktop on a 2 GB
+// guest. `wakeDir` is the whole conversation between the two processes.
+const primaryBotId = roster.find((b) => b.display === 1)?.id ?? "main";
 const eves = planEveLaunches(roster, { botsRoot });
 superviseEves(sup, eves, {
   env: childEnv({ USER: box.name }, "/home/box"),
   eveSecret,
   gid: box.gid,
   hubUrl,
+  lazy: (botId) => botId !== primaryBotId,
   logDir,
   uid: box.uid,
+});
+const stopWatchingWake = watchWake({
+  botIds: eves.map((e) => e.botId).filter((id) => id !== primaryBotId),
+  dir: wakeDir,
+  onEvent: (line) => console.log(`computer ${line}`),
+  sup,
 });
 if (eves.length === 0) {
   console.warn(`computer init: no Eve project under ${botsRoot}; chat will report DAEMON_DOWN`);
@@ -299,6 +321,7 @@ sup.start({
       COMPUTER_RUN_AS: box.name,
       COMPUTER_SETUP_CODE: setupCode,
       COMPUTER_STATUS_FILE: statusFile,
+      COMPUTER_WAKE_DIR: wakeDir,
       USER: hub.name,
       WHATSAPP_BRIDGE_SECRET: bridgeSecret,
     },
@@ -318,6 +341,7 @@ console.log(
 );
 
 const shutdown = (): void => {
+  stopWatchingWake();
   void sup.stopAll().then(() => process.exit(0));
 };
 process.on("SIGTERM", shutdown);

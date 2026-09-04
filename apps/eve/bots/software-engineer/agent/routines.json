@@ -1,0 +1,6 @@
+[
+  {
+    "cron": "0 21 * * 6",
+    "id": "sunday-hygiene"
+  }
+]

@@ -9,7 +9,9 @@ import {
 } from "./desk/index.ts";
 import { allowedBind, refuseBindMessage } from "./host/bind.ts";
 import { profileSeeds } from "./host/bot-seed.ts";
-import { resolveEveBotsRoot } from "./host/eve.ts";
+import { eveUrlForDisplay, resolveEveBotsRoot } from "./host/eve.ts";
+import { botWaker, keepAwake } from "./host/wake.ts";
+import { readRoutines, routineAlarm } from "./host/routines.ts";
 import { loadPolicy } from "./service/policy.ts";
 import { FileBotStore } from "./service/provision.ts";
 import { FilePrincipalStore } from "./service/principals.ts";
@@ -26,6 +28,12 @@ const botsRoot = resolveEveBotsRoot({
   imageBots: resolve(import.meta.dirname, "../../eve/bots"),
 });
 
+/** Seconds in the environment, milliseconds in the code, unset means default. */
+function idleMs(name: string): number | undefined {
+  const raw = Number(process.env[name]);
+  return Number.isFinite(raw) && raw > 0 ? raw * 1000 : undefined;
+}
+
 const bind = process.env.COMPUTER_BIND ?? "127.0.0.1";
 if (!allowedBind(bind)) {
   console.error(refuseBindMessage(bind));
@@ -40,6 +48,9 @@ const deskMode = process.env.COMPUTER_DESK ?? "fake";
 // Paired seats and policy live beside the roster, wherever the operator put it.
 const rosterPath = resolve(process.env.COMPUTER_DATA ?? "data/bots.json");
 const dataDir = dirname(rosterPath);
+// The guest hands this in (`/run/computer/wake`, hub-owned); off the guest it
+// sits beside the roster, where `npm run up`'s supervisor also looks.
+const wakeDir = process.env.COMPUTER_WAKE_DIR ?? join(dataDir, "wake");
 const eveSecret = ensureEveSecret(join(dataDir, "eve-secret"), process.env.COMPUTER_EVE_SECRET);
 // The bridge's admin secret lives beside the roster and is handed to the
 // bridge child by the supervisor; the hub reads the same file. Same shape as
@@ -77,8 +88,16 @@ const hub = createHub({
     url: process.env.COMPUTER_BRIDGE_URL ?? DEFAULT_BRIDGE_URL,
   }),
   profileSeed: profileSeeds(botsRoot),
+  screenIdleMs: idleMs("COMPUTER_SCREEN_IDLE_SEC"),
   statusFile: process.env.COMPUTER_STATUS_FILE,
   vncUrl,
+  // Sleeping Bots: the hub writes down who should be awake, the supervisor
+  // that owns the children reads it. `host/wake.ts` has the whole protocol.
+  wake: botWaker({
+    awakeMs: idleMs("COMPUTER_BOT_AWAKE_SEC"),
+    dir: wakeDir,
+    eveUrl: (_botId, display) => process.env.COMPUTER_EVE_URL ?? eveUrlForDisplay(display),
+  }),
   vncHost: process.env.COMPUTER_VNC_HOST ?? "127.0.0.1",
   // RFB port for window N is base + N (primary :1 → 5901).
   vncBasePort: Number(process.env.COMPUTER_VNC_PORT ?? 5900),
@@ -86,6 +105,22 @@ const hub = createHub({
 });
 
 await hub.start();
+
+// A sleeping Bot cannot fire its own cron, so the hub wakes it a minute
+// before one is due and its Eve fires the routine itself. `host/routines.ts`
+// explains why the schedule is written down twice and what keeps the two
+// copies honest.
+const alarm = routineAlarm({
+  bots: hub.bots.all().map((bot) => ({ botId: bot.id, routines: readRoutines(botsRoot, bot.id) })),
+  keepAwake: (botId, untilMs) => {
+    try {
+      keepAwake(wakeDir, botId, untilMs);
+    } catch {
+      // Nowhere to write means nothing sleeps here either.
+    }
+  },
+  onEvent: (line) => console.log(`computer ${line}`),
+});
 
 hub.server.listen(port, bind, () => {
   console.log(`computer hub on http://${bind}:${port}`);
@@ -99,6 +134,7 @@ hub.server.listen(port, bind, () => {
 });
 
 const shutdown = (): void => {
+  alarm();
   void hub.close().then(() => process.exit(0));
 };
 process.on("SIGTERM", shutdown);

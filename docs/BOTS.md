@@ -70,6 +70,33 @@ day back: Sunday to Thursday UTC is Monday to Friday there.
 Silence is the design. One "all good" a day from eight Bots is eight
 messages nobody reads, and the ninth one matters.
 
+A routine lives in the Bot's own `agent/schedules/`, and the same cron is
+written again in `agent/routines.json` because a sleeping Bot cannot fire its
+own: the hub reads that file and wakes the Bot a minute before it is due. The
+two copies are pinned together by a test, so adding a schedule without
+declaring it fails the build rather than quietly never running.
+
+## What a Bot costs
+
+Measured idle on this guest: a Bot's Eve is 224 MB, and a claimed screen
+(Xvfb, openbox, x11vnc and a Chromium) is about 430 MB. Eight of each is
+5 GB and the Machine has 2, which is Fly's ceiling for one that can suspend
+to zero. So a Bot sleeps when nobody needs it, and sleeping is complete: no
+process and no screen.
+
+| What wakes one                              | What it costs while awake |
+| ------------------------------------------- | ------------------------- |
+| You open its chat, or a webhook fires       | its Eve, about 224 MB     |
+| It touches its screen, or you open the desk | its window, about 430 MB  |
+| A routine is a minute from due              | the same, for the turn    |
+
+A Bot goes back to sleep 20 minutes after the last thing it did, and its
+screen is released after 30 minutes of nothing touching it. Waking is about
+a second, which you see as the first message of the day taking a beat.
+
+The primary Bot (`main`) never sleeps: it is the desk the box boots with and
+the Bot a human reaches without asking for anyone.
+
 ## Doors
 
 QA has an incident webhook (`agent/channels/incident.ts`). Point an alerting

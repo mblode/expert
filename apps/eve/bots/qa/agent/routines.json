@@ -1,0 +1,10 @@
+[
+  {
+    "cron": "0 2,14 * * *",
+    "id": "prod-smoke"
+  },
+  {
+    "cron": "0 21 * * 0-4",
+    "id": "weekday-health"
+  }
+]

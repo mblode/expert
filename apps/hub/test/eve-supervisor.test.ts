@@ -229,6 +229,7 @@ describe("eve supervisor: N Eves from the roster", () => {
       {
         env: { PATH: "/bin" },
         eveSecret: "secret",
+        exists: () => false,
         gid: 1000,
         hubUrl: "http://127.0.0.1:8080",
         logDir: "/var/log/computer",
@@ -249,6 +250,30 @@ describe("eve supervisor: N Eves from the roster", () => {
     // A supervised child, not a detached one: no `oneShot`, so an Eve that
     // dies is restarted rather than left down until the box reboots.
     expect(specs[0]?.oneShot).toBeUndefined();
+  });
+
+  it("runs the built server itself when the Bot has been built", () => {
+    const specs: ChildSpec[] = [];
+    superviseEves(
+      { start: (spec) => specs.push(spec) },
+      [{ botId: "main", cwd: "/opt/eve/main", display: 1, port: 2000, token: "bot_main" }],
+      {
+        eveSecret: "secret",
+        exists: (path) => path === "/opt/eve/main/.output/server/index.mjs",
+        hubUrl: "http://127.0.0.1:8080",
+        logDir: "/var/log/computer",
+      },
+    );
+    // The CLI would spawn this same server and then sit on 367 MB watching it,
+    // under an npm shim holding another 95. The guest has 2 GB for eight Bots.
+    expect(specs[0]).toMatchObject({
+      args: [".output/server/index.mjs"],
+      cmd: process.execPath,
+      cwd: "/opt/eve/main",
+      // Still the same door: HOST and PORT come from the child environment.
+      healthUrl: "http://127.0.0.1:2000/eve/v1/health",
+    });
+    expect(specs[0]?.env?.PORT).toBe("2000");
   });
 
   it("`npm run up` and the guest init share one Eve launcher", () => {

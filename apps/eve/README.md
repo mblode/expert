@@ -19,8 +19,8 @@ Each bot is its own eve.dev project: `agent/profile.json`,
 (`computer`, `shell`, `read_file`, `write_file`, `send_message`) live in
 `lib/` and are re-exported from the bot.
 
-One **process** per bot. `COMPUTER_BOT_TOKEN` is that bot's identity and
-screen. Port is `2000 + (display - 1)`. The roster ships seven specialists
+One **process** per bot, while that bot is awake. `COMPUTER_BOT_TOKEN` is its
+identity and its screen; the port is `2000 + (display - 1)`. The roster ships seven specialists
 beside `main`; [`docs/BOTS.md`](../../docs/BOTS.md) says who owns what.
 
 ## Add a bot
@@ -32,13 +32,20 @@ beside `main`; [`docs/BOTS.md`](../../docs/BOTS.md) says who owns what.
    `packages/shared`). The hub seeds it into `/workspace/.bots/<id>/` the
    first time that Bot boots and never again, so a later rename by the human
    or by the Bot itself survives every deploy.
-3. Rewrite `agent/instructions.md` and its skills, schedules and channels.
+3. Rewrite `agent/instructions.md` and its skills, schedules and channels. A
+   Bot with schedules also lists them in `agent/routines.json` as
+   `{ id, cron }`: it sleeps when nobody is using it, and that file is how the
+   hub knows to wake it a minute before one is due. A test fails if the two
+   drift.
 4. Add a `COPY` line for its `package.json` in `deploy/fly/Dockerfile` (one
    per bot: a wildcard `COPY` flattens them onto one path) and deploy. The
    image builds every project under `apps/eve/bots`, the guest's init mints a
    roster row and a token for any project that has none, on the lowest free
-   screen, and the supervisor starts `eve start --host 127.0.0.1 --port …`
-   for it.
+   screen, and the supervisor registers it. Production runs the built server
+   (`node .output/server/index.mjs`, 224 MB) rather than `npx eve start`
+   (690 MB for the same agent), and only the primary Bot runs at boot: the
+   rest are started when something asks for them and stopped when they go
+   quiet.
 
 Eight screens is the ceiling (`MAX_DISPLAYS`), so a ninth project boots with
 a warning and no screen. Deleting a Bot whose project is still in the image
