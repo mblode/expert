@@ -1,6 +1,6 @@
 # Coding sessions: what runs the work, who owns the record
 
-Plan date: 2026-09-04. Companion to [`../ARCHITECTURE.md`](../ARCHITECTURE.md) (why the pieces are cut where they are), [`conversations.md`](conversations.md) (the record this builds on) and [`../../api/DESIGN.md`](../../api/DESIGN.md) (the five tools and the shell contract). Nothing here is written yet. This document is an overview and a recommendation, not an implementation plan: it says which of four shapes to buy, what each one actually owns, and what the box forces on any of them.
+Plan date: 2026-09-04. Companion to [`../ARCHITECTURE.md`](../ARCHITECTURE.md) (why the pieces are cut where they are), [`conversations.md`](conversations.md) (the record this builds on), [`../GROK-BOT.md`](../GROK-BOT.md) (what the product being cloned actually does) and [`../../api/DESIGN.md`](../../api/DESIGN.md) (the five tools and the shell contract). Nothing here is written yet. This document is an overview and a recommendation, not an implementation plan: it says which of the available shapes to buy, what each one actually owns, and what the box forces on any of them.
 
 ## 1. The question is three questions
 
@@ -12,15 +12,15 @@ Every product that ships "coding sessions" ships three separable decisions bundl
 
 **The gate.** Who decides a command may run, and where a human gets asked. `PolicyService.evaluate` plus Auto Review plus the seat, Codex's OS-level sandbox, a provider's org settings, or nothing.
 
-Held apart, the four candidates stop competing and start slotting into different rows.
+Held apart, the candidates stop competing and start slotting into different rows.
 
 | Option                                                        | Record                                              | Runtime                                   | Gate                                             | What it costs                                                             |
 | ------------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------ | ------------------------------------------------- | -------------------------------------------------------------------------- |
-| [Cursor cloud agents](https://cursor.com/docs/cloud-agent/api/endpoints) | theirs (`agent` + `run`)                   | theirs (cloud VM)                          | theirs                                            | the box contributes nothing; a second audit trail nobody reads             |
+| [Cursor cloud agents](https://cursor.com/docs/cloud-agent/api/endpoints) | theirs (`agent` + `run`)                   | theirs (cloud VM)                          | theirs, plus ours at the boundaries               | a second activity log to mirror; no box, which is mostly the point         |
 | [Linear agent sessions](https://linear.app/developers/agent-interaction) | theirs, and it is the best-specified one | ours or theirs                             | ours                                              | a connector to build; a 10 s acknowledgement deadline                      |
 | Eve coding session                                            | eve's, already rendered in `chat-pane.tsx`          | the desk Bot's five tools                 | ours, already                                     | a computer-use agent with a repo, capped by a 120 s `shell`                |
-| [AI SDK `HarnessAgent`](https://ai-sdk.dev/providers/ai-sdk-harnesses) | theirs (session + stream)          | Claude Code, Codex, Cursor, OpenCode, Pi | the harness's, unless adapted                     | AI SDK 7 beside eve, and their sandbox providers                           |
-| A CLI on the box                                              | ours (a conversation)                               | Claude Code or Codex                       | ours, but only if the CLI's approvals are adapted | a fifth door if the gate is skipped; a supervised child per session        |
+| [AI SDK `HarnessAgent`](https://ai-sdk.dev/providers/ai-sdk-harnesses) | theirs (session + stream)          | Claude Code, Codex, Cursor, OpenCode, Pi   | the harness's, unless adapted                     | AI SDK 7 beside eve, and their sandbox providers                           |
+| A harness on the box over [ACP](https://docs.openclaw.ai/tools/acp-agents) | ours (a conversation)      | Claude Code, Codex, Cursor CLI, others     | ours, carried as protocol messages                | a supervised child per session; a Machine pinned awake while it runs       |
 
 ## 2. What the box forces before anything is chosen
 
@@ -34,86 +34,91 @@ Six facts, each already in the tree, and each one narrows the field.
 
 **The Machine is the only isolation boundary.** A coding session on the tenant box shares `/workspace`, the `box` uid, the browser profile and the desk agent's screen. A git worktree per session is hygiene, not containment, and it should never be described as more.
 
-**There is no egress policy** ([`ARCHITECTURE.md`](../ARCHITECTURE.md) section 7). A computer-use agent that exfiltrates has to be talked into it; a coding agent pushing to a remote is doing its job. This is the option that turns that absence from a known gap into a live one, and the trade should be taken with eyes open rather than discovered later.
+**There is no egress policy** ([`ARCHITECTURE.md`](../ARCHITECTURE.md) section 7). A computer-use agent that exfiltrates has to be talked into it; a coding agent pushing to a remote is doing its job.
 
-**A tenant Machine suspends when idle** ([`gateway.md`](gateway.md)). A running session pins it awake. Unlike the WhatsApp socket that is bounded by the session's own deadline, so it is a cost per session rather than a permanent floor, but a session with no deadline is a Machine that never sleeps.
+**A tenant Machine suspends when idle** ([`gateway.md`](gateway.md)). A running session pins it awake, bounded by the session's own deadline rather than permanently, but a session with no deadline is a Machine that never sleeps.
 
-One more, smaller and easy to miss. `TurnService` (`apps/hub/src/service/turns.ts`) holds turns in memory with a 150 second TTL, chosen to match Eve's own hub client timeout. A coding session outlives that by orders of magnitude and outlives a hub restart. So the binding a coding session needs is not a turn token: it is a session-scoped capability that is persisted, revocable, and deadlined in hours. Reuse the shape, not the instance.
+Read together those six do not merely constrain an on-box session, they argue against making it the default. Every one of them is a cost that disappears when the coding runs somewhere that is not this box.
 
-## 3. The four options, read honestly
+One smaller fact, easy to miss and load-bearing later. `TurnService` (`apps/hub/src/service/turns.ts`) holds turns in memory with a 150 second TTL, chosen to match Eve's own hub client timeout. A coding session outlives that by orders of magnitude and outlives a hub restart. Whatever binds a session's appends to a conversation is a persisted, revocable, hours-deadlined capability, not a turn token. Reuse the shape, not the instance.
 
-**Cursor cloud agents** own all three rows. `POST /v1/agents` with a prompt and a GitHub URL, `POST /v1/agents/{id}/runs` to enqueue work, a stream endpoint, a cancel, and `autoCreatePR` to land it. Bearer or Basic with an API key. It is the cheapest way to have coding sessions tomorrow and it is genuinely good at the thing it does, which is repo in, pull request out. It is also the option where the computer is a client of somebody else's box: no screen, no `/workspace`, no signed-in browser, no WhatsApp identity, and a second activity log that hello.expert does not render. Correct for fan-out work that only needs a repo and a PR. Wrong as the primary shape, because it makes the box irrelevant to the one workload people most want on it.
+## 3. Prior art, and what each one settled
 
-**Linear is not a runtime to borrow, it is the interaction protocol to copy.** An `AgentSession` is created when the agent is mentioned or delegated an issue, and its states are `pending`, `active`, `error`, `awaitingInput`, `complete` and `stale`. Agents emit `AgentActivity` of type `thought`, `action`, `response`, `elicitation` or `error`, and `prompt` is the user's side, which agents cannot author. Events arrive by webhook as `AgentSessionEvent` with actions `created` and `prompted`, and a `created` event must be answered with an activity within ten seconds or the session is marked unresponsive. Read that against `conversations.md` and the overlap is close to total: `awaitingInput` is the `turnEnded` flag, `elicitation` is `widget` and `secret_request`, `response` is what `send_message` writes today, `action` is what nothing records yet. Linear also runs its own hosted coding sessions, and that half is a competitor to the runtime row rather than something to integrate. The useful move is to treat Linear as a fifth connector kind, inbound, hub-minted secret, exactly as WhatsApp is, and to steal its state and activity vocabulary for the hub's own record so that the connector is later a rename rather than a translation layer.
+Four projects have already answered parts of this, and three of them answered it the same way.
 
-**An eve coding session is the cheapest thing that could work, and its ceiling is low.** One channel file, one skill, and the session already exists with an event stream that `apps/web/components/chat-pane.tsx` already renders. Nothing new in the hub at all. What it buys is a desk agent that can be asked to change a file and redeploy. What it cannot become is a coding agent: the model driving it is tuned for computer use, its `shell` dies at 120 seconds so a test suite or an install is a series of resumptions, and it has no diff, no patch, no repo state and no compaction strategy for a long edit loop. Ship it if the requirement is "fix a typo in the instructions and rebuild". Do not ship it as the answer to "implement this issue".
+**Grok Bot delegates coding off the box, and this repository has already written that down.** [`GROK-BOT.md`](../GROK-BOT.md) records it in one line: "Cursor Cloud Agents can be spawned for coding so repo work does not contend with the bot VM." The product whose shape this repo is chasing runs a persistent computer for computer use and does not do its coding there. The confirming detail is in the iOS client, already screenshotted in `docs/reference/`: a task card carries a title, a status pill, the branch and PR number, the file and line delta, and **View PR / Open in Cursor** actions. The client's coding UI is already the UI of a delegated session. Field reports say it works well, which is the kind of evidence that should move a design.
 
-**`HarnessAgent` is an adapter, and adapters are worth buying when there are at least two things to adapt.** AI SDK 7 exposes `new HarnessAgent({ harness, model, sandbox })` over Claude Code, Codex, Cursor, OpenCode, Pi, Cline, fx, Grok Build and the Agent Client Protocol, with sandbox providers such as `createVercelSandbox` supplying the machine, so nobody scripts a CLI's stdio or babysits a sandbox lifecycle. Real value, in the shape of a dependency. Against it here: eve is already the agent runtime in this tree, the sandbox providers on offer are theirs and not this box, and the whole point of running on the computer is that the sandbox is the tenant's own Machine. The version of this that would be interesting is the box as a sandbox provider behind that interface, which would make harness choice a config line. Whether that interface is public and implementable from outside is unverified and would need a spike before anybody plans around it. Until then, this is a second harness's problem, and there is not yet a first.
+**[Hermes Agent](https://github.com/nousresearch/hermes-agent) made the machine a backend rather than an assumption.** It runs on six terminal backends, local, Docker, SSH, Daytona, Singularity and Modal, and its own docs note that Daytona and Modal hibernate when idle so an environment costs nearly nothing while nothing is running. That is the same economics as Fly suspend, chosen deliberately, and it is the strongest available argument that "where the code runs" should be a setting rather than a fact of the architecture. Its profiles system, one agent per profile with its own config, identity document, memory store, gateway process and cron definitions, is close enough to a Bot here to be worth reading before Phase 7 of the roadmap.
 
-## 4. Codex CLI or Claude Code CLI on the box
+**[OpenClaw's code-agent plugin](https://github.com/goldmar/openclaw-code-agent) is the closest thing to a working version of what section 5 proposes, and it is worth copying rather than re-deriving.** It runs Claude Code, Codex and experimental OpenCode as managed background coding sessions started from chat, each backend with its own adapter and resume substrate behind shared tools, routing and notification pipeline. Three of its decisions are directly transplantable. `defaultWorktreeStrategy` is `delegate`, `ask`, `off`, `auto-merge` or `auto-pr`, so branch follow-through is a policy rather than an improvisation, and in `ask` mode it is a widget with **Merge**, **Open PR**, **Later**, **Discard**, which the hub's existing 1 to 6 option `widget` renders unchanged. The default policy is review-first, `permissionMode: "plan"` with `planApproval: "delegate"`, so a plan is approved before implementation and `Approve`, `Revise` or `Reject` in the same thread continues the same session rather than starting a duplicate. And follow-ups, approvals, interrupts and redirects all take one continuation path, which is the thing that is easy to get wrong and expensive to fix later. OpenClaw 2.0 additionally makes sessions shareable, so a task can be handed from one person to another with its context intact.
 
-The comparison that matters here is not which writes better code. It is which one can be put behind the gate the hub already has.
+**ACP is the part that changes this document's recommendation.** OpenClaw does not parse each CLI's stdout; it speaks the [Agent Client Protocol](https://docs.openclaw.ai/tools/acp-agents), with harness targets including `claude`, `codex`, `copilot`, `cursor`, `gemini`, `droid`, `opencode` and a dozen more, driven through `sessions_spawn()` with `runtime: "acp"`. The division of labour it names is exactly the one section 1 asks for: the caller owns routing, background-task state, delivery, bindings and policy, while the harness keeps provider login, model catalog, filesystem behaviour and native tools. And what the protocol carries is sessions with resume, streaming updates, and **permission requests as structured messages**, including form inputs, URL approval prompts and secret fields. The AI SDK's adapter list names it too. That matters here more than anywhere else: a permission request arriving as a protocol message rather than a CLI-specific hook is the gate seam as a first-class object, and secret fields land straight on `ProvideSecret`, which already exists.
 
-**Claude Code** runs non-interactively with `-p` / `--print` and `--output-format stream-json`, emitting newline-delimited events, with `--resume` for continuing a session, `--allowedTools` to narrow the surface, and `--permission-mode` for unattended runs. The load-bearing feature is that its approvals can be routed to an external decider rather than to a terminal: a `PreToolUse` hook, or `--permission-prompt-tool` pointing at an MCP tool the CLI consults before running anything. That is the seam onto `PolicyService.evaluate`, and through it onto Auto Review and onto the seat's human. Approvals from a coding session then land in the same place the desk agent's approvals already land, which is the whole ballgame.
+## 4. The two runtimes, and the line between them
 
-**Codex** has a purpose-built non-interactive subcommand, `codex exec --json`, emitting newline-delimited events with a real exit code and `--output-last-message` for the final text. Its distinguishing feature is the other one: `--sandbox` with `read-only`, `workspace-write` and `danger-full-access` is OS-level containment that this box does not otherwise have anywhere. But `exec` is designed not to stop and ask, so the gate becomes a policy chosen once at launch rather than a decision a human can answer mid-run.
+The revision this prior art forces: **delegated is the default, on-box is the exception, and the exception is defined by what the work needs rather than by preference.**
 
-So the split is clean. Codex brings containment and a coarse gate; Claude Code brings a fine gate and no containment. The box needs the gate more, because per-session containment on a shared `/workspace` under a shared uid is a claim that would not survive being tested, while a bypassed `PolicyService` is a regression against something that works today. Start with Claude Code as the runtime, and treat Codex's `--sandbox workspace-write` as the specification for what a desk-side sandbox should eventually enforce. Both on the guest image is two credentials and two update paths for one job; pick one.
+Send it to a Cursor cloud agent when the task is repo in, pull request out. `POST /v1/agents` with a prompt and a GitHub URL, `POST /v1/agents/{id}/runs` to enqueue, a stream endpoint, a cancel, and `autoCreatePR` to land it, on Bearer or Basic auth. That is most coding work, it does not contend with the desk, it does not pin a Machine awake, and it cannot bypass a policy gate on a box it never touches. The cost is real and narrow: a second activity log, which the hub mirrors into the conversation so hello.expert and iOS keep reading one record.
 
-There is a credential problem underneath this that is worth stating before it is discovered. `AGENTS.md` says secrets never land in the environment of a child the model can reach, and a coding child started through `asBox` is exactly such a child: the model's `shell` runs as the same uid, so `/proc/<pid>/environ` is readable and the harness's API key is not a secret from the model. The fixes are a third uid for coding children, which is a desk image change, or brokering the model call through the hub so the child never holds a key. Neither is free, and shipping without one means the box's own agent can lift the credential.
+Run it on the box when the work needs the box. Three cases, and they are not hypothetical: this repository itself, where a change is followed by `fly deploy` and a health check; anything that needs the signed-in browser profile or the desk to verify what it built; and anything touching `/workspace` state that exists nowhere else. For those, off-box is not cheaper, it is impossible.
 
-## 5. The shape that fits
+When it is on the box, speak ACP rather than scripting a CLI. The alternative, parsing `claude -p --output-format stream-json` and hanging approvals off a `PreToolUse` hook or `--permission-prompt-tool`, works and was this document's first recommendation, but it buys one harness and a bespoke gate seam for roughly the same effort as buying every harness and a specified one. Codex remains worth noting for the thing it has that nothing else here does, `--sandbox` with `read-only` and `workspace-write` as real OS-level containment, which is the specification for what a desk-side sandbox should eventually enforce even while the box does not have one.
 
-A coding session is a conversation with a new route kind and a supervised child process. No new model tool, no new storage subsystem, no second activity log.
+There is a credential problem underneath the on-box path, worth stating before it is discovered. `AGENTS.md` says secrets never land in the environment of a child the model can reach, and a coding child started through `asBox` is exactly such a child: the model's `shell` runs as the same uid, so `/proc/<pid>/environ` is readable and the harness's API key is not a secret from the model. The fixes are a third uid for coding children, which is a desk image change, or brokering the model call through the hub. Neither is free, and shipping without one means the box's own agent can lift the credential. Delegated sessions do not have this problem at all, which is one more entry on the same side of the ledger.
+
+## 5. One record, one gate, two runtimes
 
 ```mermaid
 flowchart TB
-  seat["Seat RPC: start, prompt, cancel"]
+  seat["Seat RPC: start, prompt, approve, cancel"]
   linear["Linear connector (later)"]
 
   subgraph hub["hub"]
     conv["Conversation, route kind: code<br/>service/conversations.ts"]
     cap["Session capability<br/>persisted, deadlined, revocable"]
     pol["PolicyService.evaluate + Auto Review"]
-    sup["supervisor: one child per session"]
+    sup["supervisor: one ACP child per on-box session"]
   end
 
-  cli["claude -p --output-format stream-json<br/>sudo -u box, cwd a worktree"]
+  cursor["Cursor cloud agent<br/>runs, stream, autoCreatePR"]
+  acp["ACP harness on the box<br/>sudo -u box, cwd a worktree"]
 
   seat --> conv
   linear --> conv
   conv --> cap
+  cap --> cursor
   cap --> sup
-  sup --> cli
-  cli -->|"NDJSON events"| conv
-  cli -->|"permission callback, every Bash"| pol
+  sup --> acp
+  cursor -->|"run events, mirrored"| conv
+  acp -->|"session updates"| conv
+  acp -->|"permission request"| pol
   pol -->|"ask: a widget on the conversation"| conv
 ```
 
-**The record** is the existing conversation store with `route: { kind: "code", repo, ref, worktree }` beside `seat`, `whatsapp` and `peer`. The harness's NDJSON becomes `Message`s in the hub-owned log at `/workspace/.computer/conversations/<id>.jsonl`, which the model cannot write, with the activity kinds named after Linear's so the connector is later a rename. Session state is Linear's six values on the conversation.
+**The record** is the existing conversation store with `route: { kind: "code", … }` beside `seat`, `whatsapp` and `peer`, holding both runtimes. Session state uses Linear's six values (`pending`, `active`, `error`, `awaitingInput`, `complete`, `stale`) and its activity types (`thought`, `action`, `response`, `elicitation`, `error`), so a Linear connector is later a rename rather than a translation layer, and the mapping to what exists is already close: `awaitingInput` is `turnEnded`, `elicitation` is `widget` and `secret_request`, `response` is what `send_message` writes today, `action` is what nothing records yet. Messages land in the hub-owned log at `/workspace/.computer/conversations/<id>.jsonl`, which the model cannot write.
 
-**The runtime** is one child per session under `apps/hub/src/host/supervisor.ts`, the same supervisor that already runs eve and the bridge with backoff and health probes, started through the `asBox` seam with `cwd` a git worktree under `/workspace/code/<session>`.
-
-**The gate** is the harness's permission callback posting back to the hub, which runs the same `PolicyService.evaluate` the model's `shell` goes through. An `ask` verdict becomes a `widget` on the conversation, which is a mechanism that already exists and already reaches a human on whichever surface is watching. A design where the child runs ungated is not a smaller version of this; it is a different and worse system.
+**The gate** stays ours in both runtimes, and it is only the same gate because the record is. On-box, an ACP permission request runs `PolicyService.evaluate` and an `ask` verdict becomes a widget on the conversation. Delegated, the box has no say in what runs inside Cursor's VM, so the gate moves to the boundaries that matter anyway: starting the session, approving the plan, and merging, opening a PR or deploying. Copy OpenClaw's defaults for both, review-first with plan approval, and a worktree or branch strategy that is `ask` until someone chooses otherwise.
 
 **Who may start one.** A Seat RPC for a human, a connector inbound for Linear or WhatsApp. Not a model tool: the desk Bot delegates by speaking into a peer conversation, which is `conversations.md` phase 3, and until that exists the desk Bot cannot start a coding session at all. That is the right default rather than a gap.
 
 ## 6. Order of work
 
-The tracer bullet: one session, started from a seat, against this repo, running `claude -p --output-format stream-json` as a supervised child; its events land as messages in a `code` conversation; every tool call it makes is gated by `PolicyService`; it ends with a diff on a branch. Nothing else. If that does not land clean, the shape is wrong and none of the rest should be written.
+The tracer bullet is now the delegated one, because it is smaller and it is the shape the iOS client already draws. One session started from a seat against a GitHub repo, launched with `POST /v1/agents`, its runs mirrored into a `code` conversation, ending in a task card with a branch, a PR link and a delta. Nothing on the box, no new child process, no policy question. If that does not land clean the record is wrong, and the record is the half that has to be right for both runtimes.
 
-After that, in order: worktrees and cancel and resume; the persisted session capability with a real deadline, and what a Machine suspend does to a running child; PR creation; the Linear connector; and only with a named trigger, fan-out to Cursor cloud for work that does not need the box. The trigger for that last one is a queue of repo-only tasks that would otherwise pin the Machine awake, not a preference.
+Then, in order: the persisted session capability with a real deadline; the on-box ACP runtime behind the same conversation, tracer being `claude` over ACP against this repository with every permission request gated by `PolicyService`; worktree strategy and plan approval as widgets; the Linear connector; and per-session containment only with a trigger, which is a session against a repo the tenant does not own.
 
 ## 7. What is deliberately not there
 
-**`HarnessAgent`.** Trigger: a second harness actually wanted in the same product surface, or a verified way to make the box a sandbox provider behind that interface. One CLI does not need an abstraction over CLIs.
+**`HarnessAgent`.** Once ACP is the wire, an SDK-shaped wrapper over the same harnesses buys a sandbox-provider abstraction whose providers are not this box. Trigger: a verified way to implement that interface for a Fly Machine.
 
-**Per-session isolation.** A worktree is not a sandbox and should not be described as one in the UI. Trigger for real isolation: a session run against a repo whose contents the tenant does not own, at which point it is a second Machine, because that is the only isolation boundary this system has.
+**A Cursor-shaped fallback for the box.** Delegated and on-box are different runtimes for different work, not a failover pair. A task that needs the box and cannot run there fails visibly.
 
-**Egress controls.** Still the honest gap, and coding sessions make it sharper rather than creating it. Named here so that the first tenant whose code is not their own is a decision rather than a surprise.
+**Per-session isolation claims.** A worktree is not a sandbox and should not be described as one in the UI. Real isolation is a second Machine, because that is the only isolation boundary this system has.
+
+**Egress controls.** Still the honest gap. On-box coding sessions sharpen it rather than create it, which is one more reason the default runs off the box.
 
 **A second read RPC.** `Seat.Occurrences` with a `conversation_id` is the read view, for the reason `conversations.md` already gives.
 
 ## 8. How to tell it worked
 
-A session started from a seat produces a branch with a real diff, and every command it ran appears in the hub's log with a policy verdict beside it. An `ask` verdict during a session reaches a human as a widget and blocks the child until answered. Killing the hub mid-session and restarting it leaves the session either resumable or cleanly failed, never silently orphaned holding a Machine awake. And the model's own `shell` cannot read the session's log, its worktree metadata, or the harness credential.
+A session started from a seat produces a branch with a real diff, and hello.expert and iOS render it from the hub's own conversation rather than from a provider's log. An `ask` verdict during an on-box session reaches a human as a widget and blocks the child until answered. A plan is approved before implementation, and `Approve`, `Revise` or `Reject` continues one session rather than starting a second. Killing the hub mid-session leaves the session resumable or cleanly failed, never silently orphaned holding a Machine awake. And the model's own `shell` cannot read the session's log, its worktree metadata, or the harness credential.
