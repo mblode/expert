@@ -62,5 +62,6 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 - System architecture, the seams, and the target shape: `docs/ARCHITECTURE.md`
 - Conversations plan (one record for the model's voice, iOS and bot-to-bot): `docs/plans/conversations.md`
 - Gateway plan (one always-on host for the WhatsApp sockets, tenants that suspend, Fly as the platform): `docs/plans/gateway.md`
+- Coding sessions overview (record vs runtime vs gate; Cursor, Linear, eve, the AI SDK harness, a CLI on the box): `docs/plans/coding-sessions.md`
 - Design rationale and sources: `api/RESEARCH.md`; historical plan: `docs/history/`
 - Eve project layout and adding a bot: `apps/eve/README.md`
