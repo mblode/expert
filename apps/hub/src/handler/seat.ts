@@ -1,7 +1,8 @@
 import { SeatMethods } from "@computer/proto";
 import { ComputerError, DISPLAY, PRIMARY_DISPLAY, parseDisplay } from "@computer/shared";
-import type { BoxStatus, Button } from "@computer/shared";
+import type { BoxStatus, Button, Conversation } from "@computer/shared";
 import type { Bot, BotRegistry } from "../service/bots.ts";
+import type { CodingService, StartCodingSession } from "../service/coding.ts";
 import type { ConversationRegistry } from "../service/conversations.ts";
 import type { ProvisionService } from "../service/provision.ts";
 import { asRole } from "../service/principals.ts";
@@ -14,9 +15,28 @@ import { requireObject } from "./router.ts";
 /** Same cap as the model's `type` action. */
 const MAX_TYPE_CHARS = 4000;
 
+/**
+ * The conversation this seat is allowed to touch, by id.
+ *
+ * Screen containment, in one place because two RPCs need the same rule and a
+ * second copy of it is how they drift: a conversation belongs to a Bot, a Bot
+ * is on a screen, so a seat minted for one screen must not read or drive
+ * another one's thread by naming its id.
+ */
+function requireVisible(deps: SeatDeps, ctx: RpcContext, conversationId: string): Conversation {
+  const conversation = deps.conversations.byId(conversationId);
+  const owner = deps.bots.byId(conversation.bot);
+  if (ctx.principal?.display !== undefined && ctx.principal.display !== owner.display) {
+    throw new ComputerError("UNAUTHENTICATED", `this seat is for screen ${ctx.principal.display}`);
+  }
+  return conversation;
+}
+
 interface SeatDeps {
   auth: AuthRegistry;
   bots: BotRegistry;
+  /** Delegated coding sessions. Unconfigured = the three RPCs answer DAEMON_DOWN. */
+  coding: CodingService;
   conversations: ConversationRegistry;
   provision: ProvisionService;
   vncUrl: string;
@@ -231,14 +251,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
     const cursor = typeof o.cursor === "string" && o.cursor ? o.cursor : undefined;
     const limit = typeof o.limit === "number" ? o.limit : undefined;
     if (typeof o.conversation_id === "string" && o.conversation_id) {
-      const conversation = deps.conversations.byId(o.conversation_id);
-      const owner = deps.bots.byId(conversation.bot);
-      if (ctx.principal?.display !== undefined && ctx.principal.display !== owner.display) {
-        throw new ComputerError(
-          "UNAUTHENTICATED",
-          `this seat is for screen ${ctx.principal.display}`,
-        );
-      }
+      const conversation = requireVisible(deps, ctx, o.conversation_id);
       return deps.conversations.page(conversation.id, cursor, limit);
     }
     return botFor(o, ctx).voice.page(cursor, limit);
@@ -275,6 +288,60 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
           updated_at: c.updated_at,
         })),
     };
+  });
+
+  /**
+   * Coding sessions: hand the work to the runner, keep the thread here.
+   *
+   * Owner only for free, the way `Conversations` is, and contained by the
+   * screen the same way: the session is recorded against a Bot, a Bot is on
+   * a screen, so a seat bound to one screen cannot start work in another
+   * one's thread or read it back.
+   *
+   * Nothing about this reaches the model. A coding session is started by a
+   * person at a seat or, later, by a connector; it is not a sixth tool, for
+   * the reason `api/DESIGN.md` refuses the fifth to be joined by one.
+   */
+  router.rpc(SeatMethods.StartCodingSession, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    if (typeof o.repo !== "string" || !o.repo) {
+      throw new ComputerError("VALIDATION", "repo is required");
+    }
+    if (typeof o.prompt !== "string" || !o.prompt) {
+      throw new ComputerError("VALIDATION", "prompt is required");
+    }
+    const bot = botFor(o, ctx);
+    const req: StartCodingSession = {
+      bot: bot.id,
+      prompt: o.prompt,
+      repo: o.repo,
+      ...(typeof o.auto_create_pr === "boolean" ? { auto_create_pr: o.auto_create_pr } : {}),
+      ...(typeof o.model === "string" && o.model ? { model: o.model } : {}),
+      ...(typeof o.ref === "string" && o.ref ? { ref: o.ref } : {}),
+    };
+    return await deps.coding.start(req);
+  });
+
+  // Poll one. A status that has not moved appends nothing, so a client may
+  // call this as often as it likes without filling the thread with repeats.
+  router.rpc(SeatMethods.RefreshCodingSession, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    if (typeof o.conversation_id !== "string" || !o.conversation_id) {
+      throw new ComputerError("VALIDATION", "conversation_id is required");
+    }
+    requireVisible(deps, ctx, o.conversation_id);
+    return await deps.coding.refresh(o.conversation_id);
+  });
+
+  // The list, for a client that wants the sessions without the threads.
+  router.rpc(SeatMethods.CodingSessions, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    const asked = o.display === undefined || o.display === 0 ? undefined : o.display;
+    const visible =
+      ctx.principal?.display === undefined && asked === undefined
+        ? deps.bots.all()
+        : [deps.bots.byDisplay(displayFor({ display: asked }, ctx.principal))];
+    return { sessions: deps.coding.list(new Set(visible.map((b) => b.id as string))) };
   });
 
   // A masked value for an open secret_request. It goes to the clipboard and

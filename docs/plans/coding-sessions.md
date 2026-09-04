@@ -103,7 +103,9 @@ flowchart TB
 
 ## 6. Order of work
 
-The tracer bullet is now the delegated one, because it is smaller and it is the shape the iOS client already draws. One session started from a seat against a GitHub repo, launched with `POST /v1/agents`, its runs mirrored into a `code` conversation, ending in a task card with a branch, a PR link and a delta. Nothing on the box, no new child process, no policy question. If that does not land clean the record is wrong, and the record is the half that has to be right for both runtimes.
+The tracer bullet was the delegated one, because it is smaller and it is the shape the iOS client already draws, and **it has landed**: `apps/hub/src/service/coding.ts`, a `code` route on the conversation, and three Seat RPCs (`StartCodingSession`, `RefreshCodingSession`, `CodingSessions`) documented in `api/DESIGN.md`. A session started from a seat launches through `POST /v1/agents`, the prompt is recorded as the human's own words, each status change is one `system` line, and a finished run carries its branch and pull request into the same thread `Seat.Occurrences` already pages. No new message body, so every client that renders a conversation renders a coding session. Off without `CURSOR_API_KEY`, and that key is in the supervisor's `DENY` set so it never reaches a child the model shares a uid with.
+
+What the tracer deliberately left: the session is polled rather than streamed, and nothing yet cancels one. Both are small, and both were left because the record is the half that had to be right first.
 
 Then, in order: the persisted session capability with a real deadline; the on-box ACP runtime behind the same conversation, tracer being `claude` over ACP against this repository with every permission request gated by `PolicyService`; worktree strategy and plan approval as widgets; the Linear connector; and per-session containment only with a trigger, which is a session against a repo the tenant does not own.
 

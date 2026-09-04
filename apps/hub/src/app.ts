@@ -10,6 +10,7 @@ import { registerSeat } from "./handler/seat.ts";
 import { handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
 import { handleConnectorIngress, isConnectorPath } from "./handler/connectors.ts";
 import { registerWhatsApp } from "./handler/whatsapp.ts";
+import { CodingService } from "./service/coding.ts";
 import { ConnectorRegistry } from "./service/connectors.ts";
 import type { ConnectorStore } from "./service/connectors.ts";
 import { ConversationRegistry } from "./service/conversations.ts";
@@ -62,6 +63,13 @@ interface HubOptions {
   messageLog?: MessageLog;
   /** The WhatsApp bridge this hub supervises. Absent = the RPCs answer DAEMON_DOWN. */
   bridge?: BridgeClient;
+  /**
+   * Delegated coding sessions. A factory, like `deskFactory`, because the
+   * service records into the hub's own conversation store and that store is
+   * built here: handing in a finished service would hand in one wired to a
+   * different log. Absent = built from the environment.
+   */
+  codingFactory?: (conversations: ConversationRegistry) => CodingService;
   /** The supervisor's status file (init writes it). Absent = /healthz reports the hub alone. */
   statusFile?: string;
 }
@@ -72,6 +80,7 @@ export interface Hub {
   auth: AuthRegistry;
   bots: BotRegistry;
   provision: ProvisionService;
+  coding: CodingService;
   connectors: ConnectorRegistry;
   conversations: ConversationRegistry;
   /** Mints and verifies the per-turn conversation binding the ingress hands to Eve. */
@@ -100,9 +109,13 @@ export function createHub(opts: HubOptions): Hub {
   // survive a restart for. A hub that died mid-turn has already dropped the
   // reply the token was minted for.
   const turns = new TurnService();
+  // A client of the runner, not a runtime: the work happens off this box.
+  // Unconfigured (no CURSOR_API_KEY) is a hub whose coding RPCs answer
+  // DAEMON_DOWN, exactly as the WhatsApp ones do without a bridge.
+  const coding = opts.codingFactory?.(conversations) ?? new CodingService(conversations);
 
   registerAgent(router, { bots, conversations, turns });
-  registerSeat(router, { auth, bots, conversations, provision, vncUrl: opts.vncUrl });
+  registerSeat(router, { auth, bots, coding, conversations, provision, vncUrl: opts.vncUrl });
   registerWhatsApp(router, { bots, bridge: opts.bridge, connectors });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
@@ -212,6 +225,7 @@ export function createHub(opts: HubOptions): Hub {
   return {
     auth,
     bots,
+    coding,
     connectors,
     conversations,
     close: () =>

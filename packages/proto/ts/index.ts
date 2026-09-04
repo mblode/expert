@@ -22,6 +22,7 @@ export const AgentMethods = {
 export const SeatMethods = {
   ClipboardGet: path(Seat, Seat.method.clipboardGet),
   ClipboardSet: path(Seat, Seat.method.clipboardSet),
+  CodingSessions: path(Seat, Seat.method.codingSessions),
   Conversations: path(Seat, Seat.method.conversations),
   CreateBot: path(Seat, Seat.method.createBot),
   DeleteBot: path(Seat, Seat.method.deleteBot),
@@ -29,8 +30,10 @@ export const SeatMethods = {
   Pair: path(Seat, Seat.method.pair),
   Pointer: path(Seat, Seat.method.pointer),
   ProvideSecret: path(Seat, Seat.method.provideSecret),
+  RefreshCodingSession: path(Seat, Seat.method.refreshCodingSession),
   SetBotProfile: path(Seat, Seat.method.setBotProfile),
   SetPresence: path(Seat, Seat.method.setPresence),
+  StartCodingSession: path(Seat, Seat.method.startCodingSession),
   Revoke: path(Seat, Seat.method.revoke),
   Issue: path(Seat, Seat.method.issue),
   Status: path(Seat, Seat.method.status),

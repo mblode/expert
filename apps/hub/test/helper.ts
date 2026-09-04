@@ -7,8 +7,13 @@ import { MemoryPrincipalStore } from "../src/service/principals.ts";
 import type { PrincipalStore } from "../src/service/principals.ts";
 import type { PolicyService } from "../src/service/policy.ts";
 import type { BotConfig } from "../src/service/bots.ts";
+import type { CodingService } from "../src/service/coding.ts";
 import type { ConnectorStore } from "../src/service/connectors.ts";
-import type { ConversationStore, MessageLog } from "../src/service/conversations.ts";
+import type {
+  ConversationRegistry,
+  ConversationStore,
+  MessageLog,
+} from "../src/service/conversations.ts";
 import type { BridgeClient } from "../src/service/whatsapp.ts";
 
 const SETUP_CODE = "setup-code-test";
@@ -47,6 +52,7 @@ export async function startHub(
     conversationStore?: ConversationStore;
     messageLog?: MessageLog;
     bridge?: BridgeClient;
+    codingFactory?: (conversations: ConversationRegistry) => CodingService;
   } = {},
 ): Promise<StartedHub> {
   const configs = opts.bots ?? [{ display: 1, id: "main", token: AGENT_TOKEN }];
@@ -64,6 +70,7 @@ export async function startHub(
       return desk;
     },
     bridge: opts.bridge,
+    codingFactory: opts.codingFactory,
     connectorStore: opts.connectorStore,
     conversationStore: opts.conversationStore,
     messageLog: opts.messageLog,

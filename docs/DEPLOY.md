@@ -221,6 +221,22 @@ one computer, rate-capped at eight in ten minutes per computer
 (`MINT_WINDOW_MAX`), and nothing else. Redeeming one is still a guest seat
 bound to screen 1 that expires with the link.
 
+### Coding sessions (optional)
+
+Off until a key is set, and the three Seat RPCs answer `DAEMON_DOWN` without
+one, exactly as the WhatsApp RPCs do without a bridge.
+
+```bash
+fly secrets set CURSOR_API_KEY=… -a mblode-computer
+```
+
+Unlike `EXPERT_INVITE_SECRET` above, this one must **not** reach a child the
+model can read. It is the hub's own credential and it can write to every
+repository the token can see; the hub calls the runner itself and the key is
+never in an error message. If it is ever handed to an Eve child, it is a key
+the box's own agent can lift out of `/proc`, which is the reason coding
+sessions run off the box in the first place (`docs/plans/coding-sessions.md`).
+
 Confirm, from anywhere:
 
 ```bash

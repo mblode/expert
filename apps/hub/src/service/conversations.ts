@@ -226,6 +226,12 @@ function sameRoute(a: Route, b: Route): boolean {
   if (a.kind === "peer" && b.kind === "peer") {
     return a.bot === b.bot;
   }
+  if (a.kind === "code" && b.kind === "code") {
+    // The runner's agent id, not the repo: two sessions against the same
+    // repository are two pieces of work with two threads, and only the id
+    // tells them apart.
+    return a.agent === b.agent;
+  }
   return true;
 }
 
