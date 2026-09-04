@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { bindComputerSeat } from "@/lib/computer-seat";
 import {
   captureServerEvent,
@@ -26,7 +28,9 @@ export async function POST(request: Request): Promise<Response> {
       { status: seat.denied ? 403 : 502 },
     );
   }
-  await captureServerEvent({
+  // Same flush as reconnect: two seconds of analytics ahead of the seat the
+  // browser is blocked on, so it goes after the response instead.
+  const capture = {
     distinctId: distinctIdFromRequest(request, session.user.id),
     event: "computer_connected",
     properties: {
@@ -34,7 +38,8 @@ export async function POST(request: Request): Promise<Response> {
       source: "server",
       ...sessionPropertiesFromRequest(request),
     },
-  });
+  };
+  after(() => captureServerEvent(capture));
   return Response.json({
     computerId: seat.computerId,
     hubUrl: seat.hubUrl,

@@ -41,6 +41,7 @@ export function BotSidebar({
   computerId,
   computers,
   display,
+  loading,
   onDisplayChange,
   onNewBot,
   onSignOut,
@@ -52,6 +53,8 @@ export function BotSidebar({
   computerId: string;
   computers: { id: string; label: string }[];
   display: number;
+  /** The roster has not answered yet, which is not the same as having none. */
+  loading?: boolean;
   onDisplayChange: (display: number) => void;
   /** Absent on a hub that cannot make one (an older build, or no owner seat). */
   onNewBot?: () => void;
@@ -185,9 +188,11 @@ export function BotSidebar({
         {matches.length === 0 && (
           <output className="flex flex-col items-center gap-2 px-3 py-6 text-center">
             <p className="text-muted-foreground text-sm">
-              {screens.length === 0
-                ? "No bots on this computer yet."
-                : `No bot matches “${query}”.`}
+              {loading
+                ? "Reading the roster from the computer…"
+                : screens.length === 0
+                  ? "No bots on this computer yet."
+                  : `No bot matches “${query}”.`}
             </p>
             {screens.length > 0 && (
               <Button onClick={() => setQuery("")} size="xs" type="button" variant="ghost">
