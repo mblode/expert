@@ -29,9 +29,13 @@ function hash(value: string): number {
 }
 
 const SIZES = {
-  lg: "size-9 text-sm",
-  md: "size-7 text-xs",
-  sm: "size-5 text-[10px]",
+  /** The settings sheet, where the mark is the subject rather than a label. */
+  hero: "size-20",
+  lg: "size-9",
+  md: "size-7",
+  sm: "size-5",
+  /** A roster row: big enough to be scanned down a list of eight. */
+  xl: "size-11",
 } as const;
 
 /**
@@ -49,6 +53,24 @@ const SHAPES = {
   tablet: "[clip-path:inset(14%_2%_14%_2%_round_34%)]",
   wedge: "[clip-path:polygon(2%_2%,98%_2%,98%_66%,50%_98%,2%_66%)]",
 } as const;
+
+/**
+ * Eyes have to contrast with the mark they are on, and one of the palette
+ * colours is black: dark eyes there are a blank face, which reads as a
+ * rendering bug rather than as a Bot. Relative luminance of the sRGB value,
+ * with the threshold low enough that only the near-black end flips, because
+ * dark eyes are the house style everywhere else.
+ *
+ * The hashed default never flips: those hues are mid-tone by construction.
+ */
+function darkMark(hex: string | undefined): boolean {
+  if (!hex) {
+    return false;
+  }
+  const channels = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16) / 255);
+  const [r, g, b] = channels.map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0) < 0.05;
+}
 
 /** A stored value, or nothing when it is not one the client draws. */
 function inPalette<T extends string>(
@@ -75,11 +97,12 @@ export function BotMark({
   const color = inPalette(AVATAR_COLORS, profile?.avatar_color);
   const shape = inPalette(AVATAR_SHAPES, profile?.avatar_shape) ?? "circle";
   const hue = HUES[hash(botId) % HUES.length] ?? HUES[0];
+  const eyes = darkMark(color) ? "bg-white/85" : "bg-black/80";
   return (
     <span
       aria-hidden
       className={cn(
-        "grid shrink-0 place-items-center font-semibold text-white/90 select-none",
+        "flex shrink-0 items-center justify-center gap-[15%] select-none",
         SHAPES[shape],
         SIZES[size],
         className,
@@ -92,7 +115,16 @@ export function BotMark({
           : `linear-gradient(150deg, oklch(0.72 0.15 ${hue}), oklch(0.58 0.16 ${hue + 12}))`,
       }}
     >
-      {(profile?.name || botId).slice(0, 1).toUpperCase()}
+      {/* A face, not an initial. Two Bots whose names start with the same
+          letter used to wear the same mark at a glance, and the letter is the
+          one part of a mark a person cannot change; the shape and the colour
+          are the Bot's own and are what the eye actually sorts on. Percentages
+          rather than pixels so one pair of eyes is right at every size. */}
+      <span className={cn("block w-[11%] rounded-full", eyes)} style={EYE} />
+      <span className={cn("block w-[11%] rounded-full", eyes)} style={EYE} />
     </span>
   );
 }
+
+/** Tall ovals: wider than this reads as a button, narrower as a scratch. */
+const EYE = { aspectRatio: "1 / 2.2" } as const;

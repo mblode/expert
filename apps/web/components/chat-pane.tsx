@@ -1,9 +1,4 @@
-import {
-  ComputerUseIcon,
-  DotGrid1x3VerticalIcon,
-  SettingsGear1Icon,
-  ShareScreenIcon,
-} from "blode-icons-react";
+import { ComputerUseIcon, DotGrid1x3VerticalIcon, ShareScreenIcon } from "blode-icons-react";
 import { useEveAgent } from "eve/react";
 import type { EveMessage } from "eve/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -144,20 +139,18 @@ export function ChatPane({
             <DotGrid1x3VerticalIcon />
           </Button>
         )}
-        <BotMark botId={botId} profile={profile} size="md" />
-        <h2 className="min-w-0 truncate font-semibold text-sm">{profile?.name || botId}</h2>
-        {onOpenSettings && (
-          <Button
-            aria-label={`${profile?.name || botId} settings`}
-            className="-ml-1 size-8 shrink-0 pointer-coarse:size-11"
-            onClick={onOpenSettings}
-            size="icon-xs"
-            type="button"
-            variant="ghost"
-          >
-            <SettingsGear1Icon />
-          </Button>
-        )}
+        {/* Mark, name and the way into settings are one control, not three
+            things that happen to sit together: the header names who you are
+            talking to, so tapping the name is how you look at them. */}
+        <button
+          className="-ml-1 flex min-w-0 items-center gap-2 rounded-full py-1 pr-3 pl-1 text-left transition-colors hover:bg-accent disabled:hover:bg-transparent"
+          disabled={!onOpenSettings}
+          onClick={onOpenSettings}
+          type="button"
+        >
+          <BotMark botId={botId} profile={profile} size="md" />
+          <h2 className="min-w-0 truncate font-semibold text-sm">{profile?.name || botId}</h2>
+        </button>
         {/* The connection error belongs beside the Bot it is about. It used to
             be a viewport-fixed banner, which landed on the composer: the one
             control you reach for when the computer stops answering. */}
@@ -181,22 +174,10 @@ export function ChatPane({
         ) : (
           down && <output className="shrink-0 text-amber-300 text-xs">not running</output>
         )}
-        <Button
-          className="ml-auto pointer-coarse:h-11"
-          onClick={() => {
-            agent.reset();
-            saveSession(undefined, botId);
-          }}
-          size="xs"
-          type="button"
-          variant="ghost"
-        >
-          New chat
-        </Button>
         {onOpenScreen && (
           <Button
             aria-label="Screen"
-            className="relative -mr-1 size-11 lg:hidden"
+            className="relative -mr-1 ml-auto size-11 lg:hidden"
             onClick={onOpenScreen}
             size="icon-sm"
             type="button"
