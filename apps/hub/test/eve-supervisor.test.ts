@@ -318,9 +318,20 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(script).not.toContain("runuser");
     const init = readFileSync(resolve(import.meta.dirname, "../src/host/init.ts"), "utf-8");
     expect(init).toMatch(/desk-up[\s\S]*eve[\s\S]*whatsapp-bridge[\s\S]*--workspace=apps\/hub/);
-    // Secrets reach children as env objects, never on argv, and the setup
-    // code never reaches a box child at all.
-    expect(init).toContain('"COMPUTER_SETUP_CODE", "WHATSAPP_BRIDGE_SECRET"');
+    // Secrets reach children as env objects, never on argv, and the ones a
+    // box child must never hold are named in the deny set. Read out of the
+    // declaration rather than matched as a literal line, so adding a name
+    // to the list is not a formatting question.
+    const deny = /const DENY = new Set\(\[([\s\S]*?)\]\)/.exec(init)?.[1] ?? "";
+    for (const secret of [
+      "COMPUTER_SETUP_CODE",
+      "WHATSAPP_BRIDGE_SECRET",
+      "FLY_API_TOKEN",
+      // The coding runner's key: the hub calls the runner, no child needs it.
+      "CURSOR_API_KEY",
+    ]) {
+      expect(deny).toContain(`"${secret}"`);
+    }
     expect(init).not.toMatch(/args:\s*\[[^\]]*SECRET/);
     const dockerfile = readFileSync(
       resolve(import.meta.dirname, "../../../deploy/fly/Dockerfile"),

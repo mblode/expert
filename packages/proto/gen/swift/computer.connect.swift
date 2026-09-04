@@ -117,6 +117,23 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     @available(iOS 13, *)
     func `conversations`(request: Computer_V1_ConversationsRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_ConversationsResponse>
 
+    /// Coding sessions. The work runs off this computer, on the runner's own
+    /// machine, and the hub keeps the thread: a session is a conversation with
+    /// a `code` route, so the phone and the web read it where they read
+    /// everything else. Delegated on purpose, because a coding harness on this
+    /// box would be a door with no policy in front of it, would outlive the
+    /// 120 s `shell`, and would pin a Machine that should suspend. Work that
+    /// needs the box (this computer's own code, the signed-in browser) is not
+    /// this RPC.
+    @available(iOS 13, *)
+    func `startCodingSession`(request: Computer_V1_StartCodingSessionRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_CodingSession>
+
+    /// Re-read one from the runner and record anything new in its thread.
+    /// There is no list RPC: a coding session is a conversation, so Conversations
+    /// already lists them, with `repo` and `agent` on the route.
+    @available(iOS 13, *)
+    func `refreshCodingSession`(request: Computer_V1_RefreshCodingSessionRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_CodingSession>
+
     /// Deliver a masked value for an open secret_request. The value goes to
     /// the box clipboard and is never stored, logged, or returned.
     @available(iOS 13, *)
@@ -226,6 +243,16 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
+    public func `startCodingSession`(request: Computer_V1_StartCodingSessionRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_CodingSession> {
+        return await self.client.unary(path: "/computer.v1.Seat/StartCodingSession", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `refreshCodingSession`(request: Computer_V1_RefreshCodingSessionRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_CodingSession> {
+        return await self.client.unary(path: "/computer.v1.Seat/RefreshCodingSession", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `provideSecret`(request: Computer_V1_ProvideSecretRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_ProvideSecretResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/ProvideSecret", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -291,6 +318,8 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let clipboardSet = Connect.MethodSpec(name: "ClipboardSet", service: "computer.v1.Seat", type: .unary)
             public static let occurrences = Connect.MethodSpec(name: "Occurrences", service: "computer.v1.Seat", type: .unary)
             public static let conversations = Connect.MethodSpec(name: "Conversations", service: "computer.v1.Seat", type: .unary)
+            public static let startCodingSession = Connect.MethodSpec(name: "StartCodingSession", service: "computer.v1.Seat", type: .unary)
+            public static let refreshCodingSession = Connect.MethodSpec(name: "RefreshCodingSession", service: "computer.v1.Seat", type: .unary)
             public static let provideSecret = Connect.MethodSpec(name: "ProvideSecret", service: "computer.v1.Seat", type: .unary)
             public static let createBot = Connect.MethodSpec(name: "CreateBot", service: "computer.v1.Seat", type: .unary)
             public static let deleteBot = Connect.MethodSpec(name: "DeleteBot", service: "computer.v1.Seat", type: .unary)

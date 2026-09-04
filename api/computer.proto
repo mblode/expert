@@ -32,6 +32,19 @@ service Seat {
   // ask for a thread, and the audit view of a bot-to-bot hop. Owner seat
   // only, and contained by the screen the seat was minted for.
   rpc Conversations(ConversationsRequest) returns (ConversationsResponse);
+  // Coding sessions. The work runs off this computer, on the runner's own
+  // machine, and the hub keeps the thread: a session is a conversation with
+  // a `code` route, so the phone and the web read it where they read
+  // everything else. Delegated on purpose, because a coding harness on this
+  // box would be a door with no policy in front of it, would outlive the
+  // 120 s `shell`, and would pin a Machine that should suspend. Work that
+  // needs the box (this computer's own code, the signed-in browser) is not
+  // this RPC.
+  rpc StartCodingSession(StartCodingSessionRequest) returns (CodingSession);
+  // Re-read one from the runner and record anything new in its thread.
+  // There is no list RPC: a coding session is a conversation, so Conversations
+  // already lists them, with `repo` and `agent` on the route.
+  rpc RefreshCodingSession(RefreshCodingSessionRequest) returns (CodingSession);
   // Deliver a masked value for an open secret_request. The value goes to
   // the box clipboard and is never stored, logged, or returned.
   rpc ProvideSecret(ProvideSecretRequest) returns (ProvideSecretResponse);
@@ -487,10 +500,14 @@ message ConversationsRequest {
 // Where a conversation's messages leave for. Fields are per kind: `acct`
 // and `jid` for whatsapp, `bot` for peer, neither for seat.
 message ConversationRoute {
-  string kind = 1; // seat | whatsapp | peer
+  string kind = 1; // seat | whatsapp | peer | code
   string acct = 2;
   string jid = 3;
   string bot = 4;
+  // code only: the repository the session works on, and the runner's own
+  // durable handle for it. Two sessions on one repository are two threads.
+  string repo = 5;
+  string agent = 6;
 }
 
 // Who is in it. `ref` is the human's identity on the route: a WhatsApp JID,
@@ -514,6 +531,41 @@ message Conversation {
 
 message ConversationsResponse {
   repeated Conversation conversations = 1;
+}
+
+message StartCodingSessionRequest {
+  // Which Bot's thread the session is recorded in. 0/absent = this seat's
+  // screen, the same rule every other Seat RPC follows.
+  int32 display = 1;
+  // https://github.com/<owner>/<name>. The runner takes GitHub and the hub
+  // refuses anything else rather than passing a URL through to be guessed at.
+  string repo = 2;
+  string prompt = 3;
+  // Branch or commit to start from. Absent = the repository's default.
+  string ref = 4;
+  // Ask the runner to open the pull request itself when it finishes.
+  bool auto_create_pr = 5;
+  // Runner model id, passed through. Absent = the account's own default.
+  string model = 6;
+}
+
+message RefreshCodingSessionRequest {
+  string conversation_id = 1;
+}
+
+// One coding session. `state` is the agent-session vocabulary the product
+// speaks everywhere: pending | active | awaitingInput | complete | error |
+// stale. `branch`, `pr_url` and `summary` are empty until the run has them.
+message CodingSession {
+  string conversation_id = 1;
+  string agent = 2;
+  string repo = 3;
+  string state = 4;
+  // The runner's own page for the run, for a human who wants to watch it there.
+  string url = 5;
+  string branch = 6;
+  string pr_url = 7;
+  string summary = 8;
 }
 
 message ProvideSecretRequest {

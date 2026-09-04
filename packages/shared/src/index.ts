@@ -515,14 +515,38 @@ export type ActionType = (typeof ACTION_TYPES)[number];
  * is derived from it, so a new kind is one edit and a file on disk carrying
  * an unknown one is rejected on read rather than silently mounted.
  */
-export const CONVERSATION_ROUTE_KINDS = ["seat", "whatsapp", "peer"] as const;
+export const CONVERSATION_ROUTE_KINDS = ["seat", "whatsapp", "peer", "code"] as const;
 export type ConversationRouteKind = (typeof CONVERSATION_ROUTE_KINDS)[number];
 
-/** Where messages leave for. `peer` is bot-to-bot and has no writer yet. */
+/**
+ * Where messages leave for. `peer` is bot-to-bot and has no writer yet.
+ *
+ * `code` is a coding session, and it is the one route whose other end is not
+ * a person: `repo` is the repository the work runs against and `agent` is the
+ * durable handle the runner gave it. It is a route rather than a table
+ * because the thing a client wants is the thread, and a session that reports
+ * progress into the same log as everything else needs no second reader.
+ */
 export type Route =
   | { kind: "seat" }
   | { kind: "whatsapp"; acct: string; jid: string }
-  | { kind: "peer"; bot: string };
+  | { kind: "peer"; bot: string }
+  | { kind: "code"; repo: string; agent: string };
+
+/**
+ * How a coding session is doing, in the vocabulary Linear's agent sessions
+ * already spell: a client that learns these words here can render a Linear
+ * session later without a translation layer. `stale` covers cancelled and
+ * expired, which are the same thing to someone reading the thread: nobody is
+ * working on it and nothing more is coming.
+ */
+export type CodingSessionState =
+  | "pending"
+  | "active"
+  | "awaitingInput"
+  | "complete"
+  | "error"
+  | "stale";
 
 /**
  * Who is in the conversation. `ref` is the human's identity on the route: a

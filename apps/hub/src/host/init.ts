@@ -238,7 +238,16 @@ const sup = new Supervisor({
  * still to do, and the ordering is the catch: the bridge mints a missing
  * secret at its own boot, which is after the Eve children below are planned.
  */
-const DENY = new Set(["COMPUTER_SETUP_CODE", "WHATSAPP_BRIDGE_SECRET", "FLY_API_TOKEN"]);
+const DENY = new Set([
+  "COMPUTER_SETUP_CODE",
+  "WHATSAPP_BRIDGE_SECRET",
+  "FLY_API_TOKEN",
+  // The coding runner's key. It can write to every repository the token can
+  // see, the hub calls the runner itself, and no child needs it: in an Eve
+  // environ it is a credential the model can lift out of /proc, which is the
+  // same failure delegating the work off the box exists to avoid.
+  "CURSOR_API_KEY",
+]);
 function childEnv(extra: NodeJS.ProcessEnv, home: string): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [k, v] of Object.entries(env)) {

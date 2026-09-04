@@ -278,9 +278,10 @@ by sending a new message through its harness. That is a known gap.
 A **conversation** is one place the Bot's voice speaks: a record
 `{ id, bot, route, participants, last_seq, created_at, updated_at }` the hub
 owns. The route is where messages leave for, `{ kind: "seat" }`,
-`{ kind: "whatsapp", acct, jid }` or `{ kind: "peer", bot }`, and a
-conversation is created by an inbound on a route that already exists or by
-an owner. There is no create-a-route path from the model, in any phase.
+`{ kind: "whatsapp", acct, jid }`, `{ kind: "peer", bot }` or
+`{ kind: "code", repo, agent }`, and a conversation is created by an inbound
+on a route that already exists, by a coding session, or by an owner. There
+is no create-a-route path from the model, in any phase.
 
 Messages are append-only, `seq` monotonic per conversation, each with an
 `author` (`bot`, `human` or `system`) and the same four bodies the Voice
@@ -321,6 +322,61 @@ means what it meant. It runs once, marked on the record, and it is a resume
 rather than a second copy if it is interrupted. That file is then read no
 more and written never again; it is not deleted, for the same reason
 deleting a Bot leaves its box state alone. It is the human's record.
+
+## Coding sessions
+
+Computer use and coding are different jobs, and this computer does one of
+them. A coding session is **delegated**: the hub hands a task and a GitHub
+repository to a runner (Cursor's Cloud Agents API) and keeps the thread, so
+a session is a conversation with a `code` route and hello.expert, the phone
+and WhatsApp read it where they read everything else.
+
+Delegated rather than run here, for reasons that are each written down
+elsewhere and all point the same way. A coding harness started under the
+supervisor has its own shell and never crosses `PolicyService`, Auto Review
+or the seat, which makes it a door this document did not authorise. `shell`
+is capped at 120 s, so a session cannot be an RPC. A worktree is not a
+boundary, because the Machine is the only one there is. A running session
+pins a Machine that should suspend. And a child started as `box` shares that
+uid with the model's own `shell`, so a credential in its environment is
+readable out of `/proc`. Every one of those costs disappears off the box.
+Work that genuinely needs the box (this computer's own code and deploy, the
+signed-in browser, `/workspace` state that exists nowhere else) is not this
+RPC and is not yet built; `docs/plans/coding-sessions.md` says what it takes.
+
+Two Seat RPCs, owner only and contained by the screen exactly as
+`Occurrences` and `Conversations` are:
+
+```
+Seat.StartCodingSession { display?, repo, prompt, ref?, auto_create_pr?, model? }
+Seat.RefreshCodingSession { conversation_id }
+```
+
+There is deliberately no list RPC: a session is a conversation, so
+`Seat.Conversations` already lists them, with `repo` and `agent` on the
+route. Both answer a `CodingSession`
+`{ conversation_id, agent, repo, state, url, branch, pr_url, summary }`.
+`state` is the agent-session vocabulary, `pending | active | awaitingInput |
+complete | error | stale`, chosen to match Linear's so that reading a
+session from an issue tracker later is a rename rather than a translation;
+the runner's `CANCELLED` and `EXPIRED` are both `stale`, because to a person
+reading the thread they are the same fact.
+
+The thread is the record. The prompt is appended as the human's own words,
+each status change as one `system` line, and nothing else: no fifth message
+body, so every client that renders a conversation renders a coding session
+for free. A refresh whose status has not moved appends nothing, so polling
+is free and idempotency comes from the log rather than from memory the hub
+could lose. `repo` must be `https://github.com/<owner>/<name>`; the hub
+refuses anything else rather than passing a URL through to be guessed at.
+
+**Not a model tool.** A session is started by a person at a seat, or later
+by a connector. The five tools are the whole model surface and a sixth for
+this would be the same widening the Voice section refuses; a Bot delegating
+work is bot-to-bot, which is a conversation, not a new tool. Unconfigured
+(no `CURSOR_API_KEY`) is `DAEMON_DOWN` on both, the way the WhatsApp RPCs
+answer without a bridge. The key lives in the hub's environment and
+never in an error message.
 
 ## Connectors
 
