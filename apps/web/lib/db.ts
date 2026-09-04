@@ -4,6 +4,7 @@ import { drizzle } from "drizzle-orm/libsql";
 import { computer } from "../db/computer";
 import { computerSeat } from "../db/computer-seat";
 import { invite } from "../db/invite";
+import { onboarding } from "../db/onboarding";
 import * as schema from "../db/schema";
 
 const url = process.env.TURSO_DATABASE_URL;
@@ -31,5 +32,6 @@ export const db = drizzle(client, {
     computer,
     computerSeat,
     invite,
+    onboarding,
   },
 });
