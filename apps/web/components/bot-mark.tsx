@@ -1,5 +1,5 @@
 import { AVATAR_COLORS, AVATAR_SHAPES } from "@/lib/seat";
-import type { BotProfile } from "@/lib/seat";
+import type { AvatarColor, AvatarShape, BotProfile } from "@/lib/seat";
 import { cn } from "@/lib/utils";
 
 /**
@@ -53,6 +53,39 @@ const SHAPES = {
   tablet: "[clip-path:inset(14%_2%_14%_2%_round_34%)]",
   wedge: "[clip-path:polygon(2%_2%,98%_2%,98%_66%,50%_98%,2%_66%)]",
 } as const;
+
+/**
+ * What the pickers announce. A swatch is a picture, so its button carries no
+ * text, and the accessible name is all a screen reader gets: `#e5484d` is read
+ * out a character at a time and names nothing. Keyed by the palettes, so
+ * appending a shape or a colour without naming it fails the typecheck rather
+ * than shipping a hex code as a label.
+ */
+export const SHAPE_LABEL: Record<AvatarShape, string> = {
+  blob: "Blob",
+  circle: "Circle",
+  diamond: "Diamond",
+  hexagon: "Hexagon",
+  square: "Square",
+  squircle: "Squircle",
+  tablet: "Tablet",
+  wedge: "Wedge",
+};
+
+export const COLOR_LABEL: Record<AvatarColor, string> = {
+  "#000000": "Black",
+  "#0091ff": "Blue",
+  "#00c972": "Mint",
+  "#1084fe": "Azure",
+  "#46a758": "Green",
+  "#777777": "Grey",
+  "#8e4ec6": "Purple",
+  "#9159fe": "Violet",
+  "#e5484d": "Red",
+  "#f5d90a": "Yellow",
+  "#f76b15": "Orange",
+  "#ff6700": "Tangerine",
+};
 
 /**
  * Eyes have to contrast with the mark they are on, and one of the palette
