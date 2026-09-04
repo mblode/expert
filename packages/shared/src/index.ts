@@ -615,3 +615,170 @@ export interface Conversation {
    */
   imported_from?: string;
 }
+
+/**
+ * A routine, and the cron subset that decides when it is due.
+ *
+ * This lives here rather than in the hub because two processes have to agree
+ * on the answer to the minute: the box's own alarm (`apps/hub/src/host/
+ * routines.ts`), which wakes a sleeping Bot, and the clock outside the box
+ * (`apps/clock`), which wakes the Machine so there is an alarm at all. A
+ * second implementation of cron would be a routine that one of them thinks
+ * fires and the other does not, which is silent by construction: nothing
+ * errors, the morning brief simply never comes.
+ */
+export interface Routine {
+  id: string;
+  /** Standard 5-field cron, UTC, as the schedule file has it. */
+  cron: string;
+}
+
+/**
+ * The routines in a Bot's `agent/routines.json`, or none.
+ *
+ * Takes the text rather than the path: the hub reads one file it knows the
+ * name of, the clock walks a directory of them, and neither wants the other's
+ * filesystem. Anything that is not a routine this file can evaluate is
+ * dropped rather than guessed at, because a cron nobody parses is a routine
+ * that silently never runs.
+ */
+export function parseRoutines(raw: string): Routine[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  if (!Array.isArray(parsed)) {
+    return [];
+  }
+  return parsed.filter(
+    (r): r is Routine =>
+      typeof r === "object" &&
+      r !== null &&
+      typeof (r as Routine).id === "string" &&
+      typeof (r as Routine).cron === "string" &&
+      validCron((r as Routine).cron),
+  );
+}
+
+/**
+ * Does this cron fire in the minute containing `at`?
+ *
+ * Five fields, UTC, and the subset of the syntax the schedules here use:
+ * a star, a number, `a-b`, `a,b`, and a step written star-slash-n.
+ * Anything else is refused by `validCron` on the way in rather than guessed
+ * at. Day-of-month and day-of-week are OR'd when both are restricted, which
+ * is the standard rule.
+ */
+export function cronMatches(cron: string, at: Date): boolean {
+  const f = cron.trim().split(/\s+/u);
+  if (f.length !== 5) {
+    return false;
+  }
+  const [minute, hour, dom, month, dow] = f as [string, string, string, string, string];
+  if (
+    !(
+      matchesField(minute, at.getUTCMinutes(), CRON_BOUNDS[0]) &&
+      matchesField(hour, at.getUTCHours(), CRON_BOUNDS[1])
+    )
+  ) {
+    return false;
+  }
+  if (!matchesField(month, at.getUTCMonth() + 1, CRON_BOUNDS[3])) {
+    return false;
+  }
+  const domRestricted = dom !== "*";
+  const dowRestricted = dow !== "*";
+  const domHit = matchesField(dom, at.getUTCDate(), CRON_BOUNDS[2]);
+  // Sunday is 0 and 7 in cron and `getUTCDay()` only ever says 0, so a field
+  // written as `7` still has to match. A step is not tried at 7: counting
+  // from the field minimum already covers Sunday at 0.
+  const dowHit =
+    matchesField(dow, at.getUTCDay(), CRON_BOUNDS[4]) ||
+    (at.getUTCDay() === 0 && matchesField(dow.replaceAll(/\/\d+/gu, ""), 7, CRON_BOUNDS[4]));
+  if (domRestricted && dowRestricted) {
+    return domHit || dowHit;
+  }
+  return domHit && dowHit;
+}
+
+/**
+ * Every field's own bounds, in cron's order. A step counts from the field's
+ * minimum, not from zero, which is why they are here: a step of two in
+ * day-of-month is the 1st, 3rd and 5th, and reading it as "even days" would
+ * fire a routine on the wrong days for the life of the box. Day-of-week
+ * allows 7 for Sunday.
+ */
+const CRON_BOUNDS = [
+  { max: 59, min: 0 },
+  { max: 23, min: 0 },
+  { max: 31, min: 1 },
+  { max: 12, min: 1 },
+  { max: 7, min: 0 },
+] as const;
+
+/**
+ * A cron this file can actually evaluate: five fields, each in range.
+ *
+ * Range-checked rather than shape-checked, because an unmatchable field
+ * (minute 99) is a routine that never fires and says nothing, which is the
+ * exact thing this module exists to prevent.
+ */
+export function validCron(cron: string): boolean {
+  const f = cron.trim().split(/\s+/u);
+  if (f.length !== 5) {
+    return false;
+  }
+  return f.every((field, i) => fieldValid(field, CRON_BOUNDS[i]!));
+}
+
+const CRON_FIELD = /^(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?)(,(\*(\/\d+)?|\d+(-\d+)?(\/\d+)?))*$/u;
+
+interface CronBound {
+  min: number;
+  max: number;
+}
+
+function fieldValid(field: string, bound: CronBound): boolean {
+  if (!CRON_FIELD.test(field)) {
+    return false;
+  }
+  return field.split(",").every((part) => partValid(part, bound));
+}
+
+function partValid(part: string, bound: CronBound): boolean {
+  const [range, stepRaw] = part.split("/");
+  if (stepRaw !== undefined && !(Number(stepRaw) >= 1)) {
+    return false;
+  }
+  if (range === "*") {
+    return true;
+  }
+  const [fromRaw, toRaw] = (range ?? "").split("-");
+  const from = Number(fromRaw);
+  const to = toRaw === undefined ? from : Number(toRaw);
+  return from >= bound.min && from <= bound.max && to >= from && to <= bound.max;
+}
+
+function matchesField(field: string, value: number, bound: CronBound): boolean {
+  return field.split(",").some((part) => matchesPart(part, value, bound));
+}
+
+function matchesPart(part: string, value: number, bound: CronBound): boolean {
+  const [range, stepRaw] = part.split("/");
+  const step = stepRaw === undefined ? 1 : Number(stepRaw);
+  if (!Number.isInteger(step) || step < 1) {
+    return false;
+  }
+  if (range === "*") {
+    return value >= bound.min && value <= bound.max && (value - bound.min) % step === 0;
+  }
+  const [fromRaw, toRaw] = (range ?? "").split("-");
+  const from = Number(fromRaw);
+  const to = toRaw === undefined && stepRaw === undefined ? from : Number(toRaw ?? bound.max);
+  if (!(Number.isInteger(from) && Number.isInteger(to))) {
+    return false;
+  }
+  return value >= from && value <= to && (value - from) % step === 0;
+}

@@ -70,6 +70,16 @@ computer, and later a webhook or Slack, reaches a Bot's Eve (see
 JSON does not need the proto. `GET /roster` (seat) lists Bots and their
 seat states; `GET /healthz` is public.
 
+`GET /healthz` is public for two reasons, not one. It is the platform's
+health check, and it is the door the clock knocks on: a computer suspends
+to zero, a suspended Machine has no clock, and a request through Fly Proxy
+is what starts one, so `apps/clock` wakes a box for its routines by GETting
+this route and nothing else. That is why it stays credential-free and why it
+carries `busy`, which says whether any Bot is at work: waking the Machine is
+not enough on its own, since a routine turn makes no traffic of its own and
+the platform would suspend the guest underneath it. Nothing else about the
+box is readable here, and nothing here can make it do anything.
+
 ## Wire
 
 Every RPC is `POST /computer.v1.<Service>/<Method>` with a JSON body

@@ -16,6 +16,9 @@
       ],
       "ignoreDependencies": ["@novnc/novnc"]
     },
+    "apps/clock": {
+      "entry": ["src/*.test.ts"]
+    },
     "apps/web": {
       "entry": ["lib/**/*.test.ts"],
       "ignoreDependencies": ["postcss"]

@@ -90,6 +90,15 @@ const hub = createHub({
   // A Bot with a live wake marker is at work, whether or not it is touching
   // its screen, so the sweep leaves that screen alone.
   botBusy: (botId) => awakeUntil(wakeDir, botId) > Date.now(),
+  // The same question asked of the whole box, for `/healthz`: `apps/clock`
+  // wakes this Machine for a routine and needs to know when the turn it woke
+  // is over, because Fly Proxy suspends on idle traffic and a routine makes
+  // none. Every Bot, not just the sleeping ones: the primary Bot has no
+  // marker of its own, so its `wake` touches are what say it is working.
+  busy: () => {
+    const at = Date.now();
+    return hub.bots.all().some((bot) => awakeUntil(wakeDir, bot.id) > at);
+  },
   profileSeed: profileSeeds(botsRoot),
   screenIdleMs: idleMs("COMPUTER_SCREEN_IDLE_SEC"),
   statusFile: process.env.COMPUTER_STATUS_FILE,

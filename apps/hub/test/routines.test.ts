@@ -1,7 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { cronMatches, validCron } from "@computer/shared";
 import { describe, expect, it } from "vitest";
-import { cronMatches, readRoutines, routineAlarm, validCron } from "../src/host/routines.ts";
+import { readRoutines, routineAlarm } from "../src/host/routines.ts";
 
 const BOTS_ROOT = resolve(import.meta.dirname, "../../eve/bots");
 

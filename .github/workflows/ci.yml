@@ -57,6 +57,10 @@ jobs:
         with:
           dockerfile: deploy/fly/Dockerfile
           ignore: DL3008
+      - uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: deploy/clock/Dockerfile
+          ignore: DL3008
       - name: Build the local desk image
         run: docker build -t computer-desk apps/desk
       - name: Smoke-test the desk (X up, screenshot is a PNG)

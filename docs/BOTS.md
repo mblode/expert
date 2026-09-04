@@ -81,14 +81,27 @@ own: the hub reads that file and wakes the Bot a minute before it is due. The
 two copies are pinned together by a test, so adding a schedule without
 declaring it fails the build rather than quietly never running.
 
-**A suspended Machine has no clock.** This computer suspends to zero when
-nobody is using it, and neither the hub's alarm nor a Bot's own croner runs
-while it is suspended, so a routine whose time passes on a sleeping box does
-not fire and is not caught up afterwards. That is true today for `main`'s
-daily check and it is true for all seven. Closing it means either keeping one
-Machine running (`min_machines_running = 1`, and the suspend saving goes with
-it) or something outside pinging the box a minute before each routine. Until
-then, treat routines as "runs when the computer is up".
+**A suspended Machine has no clock, so the clock is outside it.** This
+computer suspends to zero when nobody is using it, and nothing inside a
+suspended guest runs: not the hub's alarm, not a Bot's croner. So there are
+two alarms. The outer one is `apps/clock`, a 256 MB always-on Fly app that
+holds no credential and does one thing: three minutes before any routine
+minute it GETs the computer's public `/healthz`, which is a request, and a
+request through Fly Proxy starts the Machine. The inner one is the hub's,
+which then wakes the Bot, and the Bot's own croner fires the routine. The
+clock keeps pinging while the box answers `busy`, so Fly does not suspend the
+guest underneath a turn that is still running.
+
+Three things follow. The clock reads the routine manifests out of its own
+image, so **a routine change is two deploys**: the guest and the clock
+(`docs/DEPLOY.md`). The clock is now the single point of failure for every
+routine on every computer, which is why it has a health check that fails when
+it has no schedule or no targets: read `/healthz` on it to see the next
+firings it is actually waiting for. And a routine whose minute passes while
+the clock itself is down is still missed and still not caught up: firing one
+late would mean telling a Bot to run it, which needs a credential and a route
+into the box, and the clock holds neither on purpose. The failure is rarer,
+not gone.
 
 ## What a Bot costs
 
@@ -103,6 +116,10 @@ process and no screen.
 | You open its chat, or a webhook fires       | its Eve, about 224 MB     |
 | It touches its screen, or you open the desk | its window, about 430 MB  |
 | A routine is a minute from due              | the same, for the turn    |
+
+A routine also costs the Machine itself: the clock holds the guest up for ten
+minutes per wake, and longer while the box says it is busy, capped at an hour.
+Seven routines a day is a few hours of uptime a day, not a day of it.
 
 A Bot goes back to sleep 20 minutes after the last thing it did (30 after a
 routine woke it), and its screen is released after 30 minutes of nothing

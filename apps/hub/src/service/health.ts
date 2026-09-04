@@ -11,6 +11,24 @@ interface HealthChild {
 interface HealthReport {
   ok: boolean;
   hub: true;
+  /**
+   * True while some Bot is awake: a live wake marker, which is what a turn in
+   * progress keeps touching. Absent where nothing can answer that (local dev,
+   * tests).
+   *
+   * This is the box's half of the conversation with `apps/clock`, which is
+   * the only clock a Machine that suspends to zero has. The clock wakes the
+   * Machine before a routine minute with a GET here, and this field is how it
+   * learns whether it still has to hold the Machine up: a routine turn makes
+   * no traffic of its own, so the platform would otherwise suspend the guest
+   * underneath it.
+   *
+   * Deliberately the marker rather than a turn count. A marker is granted for
+   * the length of a routine's window and extended by the Bot's own tool
+   * calls, so it covers the turn and then some, and erring towards awake
+   * costs money where erring towards asleep costs the routine.
+   */
+  busy?: boolean;
   /** Absent when no supervisor status is available (local dev, tests). */
   supervisor?: {
     at: string;
@@ -40,7 +58,25 @@ const UNREADABLE: HealthReport = {
  * a failed check and a restarted Machine: the opposite of the "always answer,
  * report the detail in `ok`" rule this route exists for.
  */
-export function readHealth(statusFile: string | undefined, now = Date.now()): HealthReport {
+export function readHealth(
+  statusFile: string | undefined,
+  now = Date.now(),
+  busy?: () => boolean,
+): HealthReport {
+  const report = fromStatusFile(statusFile, now);
+  let working: boolean | undefined;
+  try {
+    working = busy?.();
+  } catch {
+    // The same rule as the rest of this route: an unreadable answer is still
+    // an answer, never a 500. A missing `busy` reads to the clock as "nothing
+    // to hold the Machine up for", which costs a hold window and nothing else.
+    working = undefined;
+  }
+  return working === undefined ? report : { ...report, busy: working };
+}
+
+function fromStatusFile(statusFile: string | undefined, now: number): HealthReport {
   if (!statusFile) {
     return { hub: true, ok: true };
   }

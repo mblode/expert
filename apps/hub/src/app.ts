@@ -94,6 +94,13 @@ interface HubOptions {
   wake?: (botId: string, display: number) => Promise<void>;
   /** True while this Bot is awake and working; its screen is not swept. */
   botBusy?: (botId: string) => boolean;
+  /**
+   * True while any Bot is awake and working, for `/healthz`. The clock
+   * outside the Machine (`apps/clock`) reads it to decide whether to keep
+   * holding the Machine up, so it is the same question as `botBusy` asked of
+   * the whole box rather than of one screen.
+   */
+  busy?: () => boolean;
 }
 
 export interface Hub {
@@ -186,7 +193,9 @@ export function createHub(opts: HubOptions): Hub {
   // hub's own. Always 200 while the hub answers, so a crash-looping Eve does
   // not make the platform restart the whole Machine; `ok` and `children`
   // carry the detail for the owner page and for a person reading it.
-  router.extra("GET", "/healthz", "public", async () => readHealth(opts.statusFile));
+  router.extra("GET", "/healthz", "public", async () =>
+    readHealth(opts.statusFile, Date.now(), opts.busy),
+  );
   // bot.roster equivalent: ids, screens and profiles, never tokens. Cold on
   // the edge, and one box read per Bot for the profile, so it is the call a
   // client makes when the roster changes rather than the one it polls.

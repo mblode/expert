@@ -3,21 +3,23 @@
 What to run, in what order, and how to tell each step worked. Written from a
 real deploy on 2026-09-03; every check below is one that was run.
 
-Three surfaces, deployed separately and in this order. The web app is safe to
+Four surfaces, deployed separately and in this order. The web app is safe to
 ship first because it degrades against an older hub on purpose; the hub is what
-switches new features on.
+switches new features on. The clock goes after the computers, because it wakes
+them for routines they have to be carrying already.
 
-| Surface        | Where      | Deployed by                   |
-| -------------- | ---------- | ----------------------------- |
-| Control plane  | Vercel     | `git push origin main`        |
-| Blode computer | Fly, `syd` | `fly deploy -c fly.toml`      |
-| Vibey computer | Fly, `syd` | `fly deploy -c fly.vcmc.toml` |
+| Surface        | Where      | Deployed by                    |
+| -------------- | ---------- | ------------------------------ |
+| Control plane  | Vercel     | `git push origin main`         |
+| Blode computer | Fly, `syd` | `fly deploy -c fly.toml`       |
+| Vibey computer | Fly, `syd` | `fly deploy -c fly.vcmc.toml`  |
+| The clock      | Fly, `syd` | `fly deploy -c fly.clock.toml` |
 
 ## 0. Before anything: build the guest image
 
-CI never builds it. It runs `hadolint` over `deploy/fly/Dockerfile` and builds
-the _desk_ image, so a guest image that cannot build is not caught until a
-Machine is already restarting.
+CI never builds it. It runs `hadolint` over `deploy/fly/Dockerfile` and
+`deploy/clock/Dockerfile` and builds the _desk_ image, so a guest image that
+cannot build is not caught until a Machine is already restarting.
 
 ```bash
 docker build -f deploy/fly/Dockerfile -t expert-guest-verify . && \
@@ -140,16 +142,60 @@ past timestamp means it was asked and the window has since closed. Two Bots
 may be awake and two screens up at once; a third request puts the one used
 longest ago back to sleep, which the guest log says out loud.
 
-**Routines do not fire while the Machine is suspended.** Neither the hub's
-alarm nor the croner inside a Bot's Eve has a clock when Fly has suspended the
-guest, and a missed minute is not caught up. That was already true of `main`'s
-daily check; this build adds six more routines with the same caveat. If the
-morning brief has to arrive on a quiet day, either keep a Machine running
-(`min_machines_running = 1`, `auto_stop_machines = "off"`, and the suspend
-saving goes with it) or have something outside GET `/healthz` a minute before
-each routine's UTC minute.
+**Routines need the clock deployed too** (next section). Nothing inside a
+suspended guest has a clock, so the guest alone runs a routine only on a day
+somebody happened to be using the computer.
 
-## 3. The Vibey computer
+## 3. The clock
+
+`apps/clock` is a separate always-on Fly app, one for the whole fleet, whose
+only job is to wake a suspended computer before its routines are due. It reads
+the Bots' `agent/routines.json` out of its own image, so **a routine added,
+moved or removed is two deploys**: the guest, and this. Deploying the guest
+alone ships a routine the clock will never wake anything for, which fails
+silently, which is the whole reason this app exists.
+
+```bash
+fly deploy -c fly.clock.toml --wait-timeout 600
+```
+
+Verify it knows what the guest knows. There is no public port, so read it from
+inside:
+
+```bash
+# The schedule it is running, and the next firings it is waiting for.
+fly ssh console -a expert-clock -C "sh -lc 'curl -s localhost:8080/healthz'"
+
+# Which is the same list the guest has.
+fly ssh console -a mblode-computer \
+  -C "sh -lc 'cat /opt/computer/apps/eve/bots/*/agent/routines.json'"
+```
+
+`ok: false` there means it has no schedule or no targets, and the Machine
+check will be failing: check `CLOCK_TARGETS` in `fly.clock.toml` names each
+computer's **public** hostname (`https://<app>.fly.dev`, never
+`<app>.internal`, which skips Fly Proxy and so never wakes anything).
+
+Watch one wake happen. Pick a routine's UTC minute from that output and:
+
+```bash
+fly logs -a expert-clock          # "waking for <bot>/<routine> at ..."
+fly logs -a mblode-computer       # "routine <id> is due: waking <bot>"
+```
+
+Adding a computer to the fleet means adding it to `CLOCK_TARGETS` and
+redeploying the clock; nothing else on either side changes. Vibey is
+deliberately not a target: its Eve is an overlay on that Machine's volume, so
+its routines are not in this repo and not in the clock's image, and waking it
+on Blode's schedule would wake it at the wrong minutes and still miss its own.
+
+One Machine runs the clock, so it is a single point of failure for every
+routine on every computer, and a routine whose minute passes while it is down
+is missed rather than caught up. `fly scale count 2 -c fly.clock.toml` is safe
+if that matters: the clock holds no state and a wake is a GET, so the second
+one is a no-op.
+
+## 4. The Vibey computer
 
 Same image, different app and volume.
 
@@ -169,7 +215,7 @@ If that Machine holds a linked WhatsApp number, a deploy drops the socket for
 the restart. It suspends when idle, so check whether one is even running before
 worrying about it.
 
-## 4. Provision a connector (only for an inbound channel)
+## 5. Provision a connector (only for an inbound channel)
 
 A connector is the third door: `POST /connectors/<id>/<path>` with
 `x-connector-secret`, forwarded to that Bot's Eve at `/eve/v1/<kind>/<path>`.
@@ -213,7 +259,7 @@ curl -s -X POST https://mblode-computer.fly.dev/connectors/whatsapp/message \
 that only exists if the Bot re-exports the channel at
 `agent/channels/whatsapp.ts`.
 
-## 5. Point the WhatsApp bridge at it
+## 6. Point the WhatsApp bridge at it
 
 In `vcmc-agent`, on Railway. All three or none: a half-configured bridge falls
 back to @vibey rather than posting into a 404.
@@ -248,7 +294,7 @@ their own Machine.
 Confirm from the bridge logs: every forwarded message logs a `target`, `vcmc`
 or `expert`.
 
-## 6. Let a Bot hand out desk links
+## 7. Let a Bot hand out desk links
 
 Without this a Bot in a chat answers "open hello.expert and sign in": it holds
 no mint secret, so `expert_invite` degrades rather than minting. One shared
