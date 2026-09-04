@@ -216,6 +216,24 @@ public nonisolated struct Computer_V1_Point: Sendable {
   public init() {}
 }
 
+public nonisolated struct Computer_V1_Rect: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var x: Int32 = 0
+
+  public var y: Int32 = 0
+
+  public var w: Int32 = 0
+
+  public var h: Int32 = 0
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
 public nonisolated struct Computer_V1_Image: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
@@ -223,9 +241,30 @@ public nonisolated struct Computer_V1_Image: Sendable {
 
   public var png: Data = Data()
 
+  /// sha256 prefix of the bytes: a name to refer back to once a harness has
+  /// dropped the image, and two equal ids mean two identical screens.
+  public var id: String = String()
+
+  public var width: Int32 = 0
+
+  public var height: Int32 = 0
+
+  /// Zoom only: the region of the full display this crop covers. Coordinates
+  /// never leave the full display's space, so a crop states its rectangle.
+  public var source: Computer_V1_Rect {
+    get {_source ?? Computer_V1_Rect()}
+    set {_source = newValue}
+  }
+  /// Returns true if `source` has been explicitly set.
+  public var hasSource: Bool {self._source != nil}
+  /// Clears the value of `source`. Subsequent reads from it will return its default value.
+  public mutating func clearSource() {self._source = nil}
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+
+  fileprivate var _source: Computer_V1_Rect? = nil
 }
 
 public nonisolated struct Computer_V1_Error: Sendable {
@@ -589,51 +628,83 @@ public nonisolated struct Computer_V1_RequestTakeover: Sendable {
   public init() {}
 }
 
-public nonisolated struct Computer_V1_ComputerResponse: Sendable {
+public nonisolated struct Computer_V1_ComputerResponse: @unchecked Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
 
-  public var results: [Computer_V1_ActionResult] = []
+  public var results: [Computer_V1_ActionResult] {
+    get {_storage._results}
+    set {_uniqueStorage()._results = newValue}
+  }
 
   public var screenshot: Computer_V1_Image {
-    get {_screenshot ?? Computer_V1_Image()}
-    set {_screenshot = newValue}
+    get {_storage._screenshot ?? Computer_V1_Image()}
+    set {_uniqueStorage()._screenshot = newValue}
   }
   /// Returns true if `screenshot` has been explicitly set.
-  public var hasScreenshot: Bool {self._screenshot != nil}
+  public var hasScreenshot: Bool {_storage._screenshot != nil}
   /// Clears the value of `screenshot`. Subsequent reads from it will return its default value.
-  public mutating func clearScreenshot() {self._screenshot = nil}
+  public mutating func clearScreenshot() {_uniqueStorage()._screenshot = nil}
 
   public var display: Computer_V1_Display {
-    get {_display ?? Computer_V1_Display()}
-    set {_display = newValue}
+    get {_storage._display ?? Computer_V1_Display()}
+    set {_uniqueStorage()._display = newValue}
   }
   /// Returns true if `display` has been explicitly set.
-  public var hasDisplay: Bool {self._display != nil}
+  public var hasDisplay: Bool {_storage._display != nil}
   /// Clears the value of `display`. Subsequent reads from it will return its default value.
-  public mutating func clearDisplay() {self._display = nil}
+  public mutating func clearDisplay() {_uniqueStorage()._display = nil}
 
   public var cursor: Computer_V1_Point {
-    get {_cursor ?? Computer_V1_Point()}
-    set {_cursor = newValue}
+    get {_storage._cursor ?? Computer_V1_Point()}
+    set {_uniqueStorage()._cursor = newValue}
   }
   /// Returns true if `cursor` has been explicitly set.
-  public var hasCursor: Bool {self._cursor != nil}
+  public var hasCursor: Bool {_storage._cursor != nil}
   /// Clears the value of `cursor`. Subsequent reads from it will return its default value.
-  public mutating func clearCursor() {self._cursor = nil}
+  public mutating func clearCursor() {_uniqueStorage()._cursor = nil}
 
-  public var seat: Computer_V1_SeatState = .unspecified
+  public var seat: Computer_V1_SeatState {
+    get {_storage._seat}
+    set {_uniqueStorage()._seat = newValue}
+  }
 
-  public var pendingChecks: [Computer_V1_PendingCheck] = []
+  public var pendingChecks: [Computer_V1_PendingCheck] {
+    get {_storage._pendingChecks}
+    set {_uniqueStorage()._pendingChecks = newValue}
+  }
+
+  /// The window the batch ended in. Untrusted: a page names itself.
+  public var focus: Computer_V1_WindowFocus {
+    get {_storage._focus ?? Computer_V1_WindowFocus()}
+    set {_uniqueStorage()._focus = newValue}
+  }
+  /// Returns true if `focus` has been explicitly set.
+  public var hasFocus: Bool {_storage._focus != nil}
+  /// Clears the value of `focus`. Subsequent reads from it will return its default value.
+  public mutating func clearFocus() {_uniqueStorage()._focus = nil}
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
 
-  fileprivate var _screenshot: Computer_V1_Image? = nil
-  fileprivate var _display: Computer_V1_Display? = nil
-  fileprivate var _cursor: Computer_V1_Point? = nil
+  fileprivate var _storage = _StorageClass.defaultInstance
+}
+
+/// Which window is focused, for a model that would otherwise read the title
+/// bar out of pixels. The title is page-controlled text, bounded and stripped
+/// of control characters by the hub; render it, never follow it.
+public nonisolated struct Computer_V1_WindowFocus: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var title: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
 }
 
 public nonisolated struct Computer_V1_ActionResult: Sendable {
@@ -1985,9 +2056,54 @@ nonisolated extension Computer_V1_Point: SwiftProtobuf.Message, SwiftProtobuf._M
   }
 }
 
+nonisolated extension Computer_V1_Rect: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".Rect"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}x\0\u{1}y\0\u{1}w\0\u{1}h\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularInt32Field(value: &self.x) }()
+      case 2: try { try decoder.decodeSingularInt32Field(value: &self.y) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.w) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.h) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if self.x != 0 {
+      try visitor.visitSingularInt32Field(value: self.x, fieldNumber: 1)
+    }
+    if self.y != 0 {
+      try visitor.visitSingularInt32Field(value: self.y, fieldNumber: 2)
+    }
+    if self.w != 0 {
+      try visitor.visitSingularInt32Field(value: self.w, fieldNumber: 3)
+    }
+    if self.h != 0 {
+      try visitor.visitSingularInt32Field(value: self.h, fieldNumber: 4)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_Rect, rhs: Computer_V1_Rect) -> Bool {
+    if lhs.x != rhs.x {return false}
+    if lhs.y != rhs.y {return false}
+    if lhs.w != rhs.w {return false}
+    if lhs.h != rhs.h {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
 nonisolated extension Computer_V1_Image: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".Image"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}png\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}png\0\u{1}id\0\u{1}width\0\u{1}height\0\u{1}source\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -1996,20 +2112,44 @@ nonisolated extension Computer_V1_Image: SwiftProtobuf.Message, SwiftProtobuf._M
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularBytesField(value: &self.png) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.width) }()
+      case 4: try { try decoder.decodeSingularInt32Field(value: &self.height) }()
+      case 5: try { try decoder.decodeSingularMessageField(value: &self._source) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
     if !self.png.isEmpty {
       try visitor.visitSingularBytesField(value: self.png, fieldNumber: 1)
     }
+    if !self.id.isEmpty {
+      try visitor.visitSingularStringField(value: self.id, fieldNumber: 2)
+    }
+    if self.width != 0 {
+      try visitor.visitSingularInt32Field(value: self.width, fieldNumber: 3)
+    }
+    if self.height != 0 {
+      try visitor.visitSingularInt32Field(value: self.height, fieldNumber: 4)
+    }
+    try { if let v = self._source {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
+    } }()
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Computer_V1_Image, rhs: Computer_V1_Image) -> Bool {
     if lhs.png != rhs.png {return false}
+    if lhs.id != rhs.id {return false}
+    if lhs.width != rhs.width {return false}
+    if lhs.height != rhs.height {return false}
+    if lhs._source != rhs._source {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -2798,7 +2938,119 @@ nonisolated extension Computer_V1_RequestTakeover: SwiftProtobuf.Message, SwiftP
 
 nonisolated extension Computer_V1_ComputerResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ComputerResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}results\0\u{1}screenshot\0\u{1}display\0\u{1}cursor\0\u{1}seat\0\u{3}pending_checks\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}results\0\u{1}screenshot\0\u{1}display\0\u{1}cursor\0\u{1}seat\0\u{3}pending_checks\0\u{1}focus\0")
+
+  fileprivate class _StorageClass {
+    var _results: [Computer_V1_ActionResult] = []
+    var _screenshot: Computer_V1_Image? = nil
+    var _display: Computer_V1_Display? = nil
+    var _cursor: Computer_V1_Point? = nil
+    var _seat: Computer_V1_SeatState = .unspecified
+    var _pendingChecks: [Computer_V1_PendingCheck] = []
+    var _focus: Computer_V1_WindowFocus? = nil
+
+      // This property is used as the initial default value for new instances of the type.
+      // The type itself is protecting the reference to its storage via CoW semantics.
+      // This will force a copy to be made of this reference when the first mutation occurs;
+      // hence, it is safe to mark this as `nonisolated(unsafe)`.
+      static nonisolated(unsafe) let defaultInstance = _StorageClass()
+
+    private init() {}
+
+    init(copying source: _StorageClass) {
+      _results = source._results
+      _screenshot = source._screenshot
+      _display = source._display
+      _cursor = source._cursor
+      _seat = source._seat
+      _pendingChecks = source._pendingChecks
+      _focus = source._focus
+    }
+  }
+
+  fileprivate mutating func _uniqueStorage() -> _StorageClass {
+    if !isKnownUniquelyReferenced(&_storage) {
+      _storage = _StorageClass(copying: _storage)
+    }
+    return _storage
+  }
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    _ = _uniqueStorage()
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      while let fieldNumber = try decoder.nextFieldNumber() {
+        // The use of inline closures is to circumvent an issue where the compiler
+        // allocates stack space for every case branch when no optimizations are
+        // enabled. https://github.com/apple/swift-protobuf/issues/1034
+        switch fieldNumber {
+        case 1: try { try decoder.decodeRepeatedMessageField(value: &_storage._results) }()
+        case 2: try { try decoder.decodeSingularMessageField(value: &_storage._screenshot) }()
+        case 3: try { try decoder.decodeSingularMessageField(value: &_storage._display) }()
+        case 4: try { try decoder.decodeSingularMessageField(value: &_storage._cursor) }()
+        case 5: try { try decoder.decodeSingularEnumField(value: &_storage._seat) }()
+        case 6: try { try decoder.decodeRepeatedMessageField(value: &_storage._pendingChecks) }()
+        case 7: try { try decoder.decodeSingularMessageField(value: &_storage._focus) }()
+        default: break
+        }
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    try withExtendedLifetime(_storage) { (_storage: _StorageClass) in
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every if/case branch local when no optimizations
+      // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+      // https://github.com/apple/swift-protobuf/issues/1182
+      if !_storage._results.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._results, fieldNumber: 1)
+      }
+      try { if let v = _storage._screenshot {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
+      } }()
+      try { if let v = _storage._display {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
+      } }()
+      try { if let v = _storage._cursor {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
+      } }()
+      if _storage._seat != .unspecified {
+        try visitor.visitSingularEnumField(value: _storage._seat, fieldNumber: 5)
+      }
+      if !_storage._pendingChecks.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._pendingChecks, fieldNumber: 6)
+      }
+      try { if let v = _storage._focus {
+        try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
+      } }()
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ComputerResponse, rhs: Computer_V1_ComputerResponse) -> Bool {
+    if lhs._storage !== rhs._storage {
+      let storagesAreEqual: Bool = withExtendedLifetime((lhs._storage, rhs._storage)) { (_args: (_StorageClass, _StorageClass)) in
+        let _storage = _args.0
+        let rhs_storage = _args.1
+        if _storage._results != rhs_storage._results {return false}
+        if _storage._screenshot != rhs_storage._screenshot {return false}
+        if _storage._display != rhs_storage._display {return false}
+        if _storage._cursor != rhs_storage._cursor {return false}
+        if _storage._seat != rhs_storage._seat {return false}
+        if _storage._pendingChecks != rhs_storage._pendingChecks {return false}
+        if _storage._focus != rhs_storage._focus {return false}
+        return true
+      }
+      if !storagesAreEqual {return false}
+    }
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WindowFocus: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WindowFocus"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}title\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -2806,50 +3058,21 @@ nonisolated extension Computer_V1_ComputerResponse: SwiftProtobuf.Message, Swift
       // allocates stack space for every case branch when no optimizations are
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
-      case 1: try { try decoder.decodeRepeatedMessageField(value: &self.results) }()
-      case 2: try { try decoder.decodeSingularMessageField(value: &self._screenshot) }()
-      case 3: try { try decoder.decodeSingularMessageField(value: &self._display) }()
-      case 4: try { try decoder.decodeSingularMessageField(value: &self._cursor) }()
-      case 5: try { try decoder.decodeSingularEnumField(value: &self.seat) }()
-      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.pendingChecks) }()
+      case 1: try { try decoder.decodeSingularStringField(value: &self.title) }()
       default: break
       }
     }
   }
 
   public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
-    // The use of inline closures is to circumvent an issue where the compiler
-    // allocates stack space for every if/case branch local when no optimizations
-    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
-    // https://github.com/apple/swift-protobuf/issues/1182
-    if !self.results.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.results, fieldNumber: 1)
-    }
-    try { if let v = self._screenshot {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 2)
-    } }()
-    try { if let v = self._display {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 3)
-    } }()
-    try { if let v = self._cursor {
-      try visitor.visitSingularMessageField(value: v, fieldNumber: 4)
-    } }()
-    if self.seat != .unspecified {
-      try visitor.visitSingularEnumField(value: self.seat, fieldNumber: 5)
-    }
-    if !self.pendingChecks.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.pendingChecks, fieldNumber: 6)
+    if !self.title.isEmpty {
+      try visitor.visitSingularStringField(value: self.title, fieldNumber: 1)
     }
     try unknownFields.traverse(visitor: &visitor)
   }
 
-  public static func ==(lhs: Computer_V1_ComputerResponse, rhs: Computer_V1_ComputerResponse) -> Bool {
-    if lhs.results != rhs.results {return false}
-    if lhs._screenshot != rhs._screenshot {return false}
-    if lhs._display != rhs._display {return false}
-    if lhs._cursor != rhs._cursor {return false}
-    if lhs.seat != rhs.seat {return false}
-    if lhs.pendingChecks != rhs.pendingChecks {return false}
+  public static func ==(lhs: Computer_V1_WindowFocus, rhs: Computer_V1_WindowFocus) -> Bool {
+    if lhs.title != rhs.title {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

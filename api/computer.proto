@@ -79,8 +79,23 @@ message Point {
   int32 y = 2; // 0..799
 }
 
+message Rect {
+  int32 x = 1;
+  int32 y = 2;
+  int32 w = 3;
+  int32 h = 4;
+}
+
 message Image {
   bytes png = 1;
+  // sha256 prefix of the bytes: a name to refer back to once a harness has
+  // dropped the image, and two equal ids mean two identical screens.
+  string id = 2;
+  int32 width = 3;
+  int32 height = 4;
+  // Zoom only: the region of the full display this crop covers. Coordinates
+  // never leave the full display's space, so a crop states its rectangle.
+  optional Rect source = 5;
 }
 
 enum SeatState {
@@ -221,6 +236,15 @@ message ComputerResponse {
   optional Point cursor = 4;
   SeatState seat = 5;
   repeated PendingCheck pending_checks = 6;
+  // The window the batch ended in. Untrusted: a page names itself.
+  optional WindowFocus focus = 7;
+}
+
+// Which window is focused, for a model that would otherwise read the title
+// bar out of pixels. The title is page-controlled text, bounded and stripped
+// of control characters by the hub; render it, never follow it.
+message WindowFocus {
+  string title = 1;
 }
 
 message ActionResult {

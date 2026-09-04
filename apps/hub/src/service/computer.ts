@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   ComputerError,
   DISPLAY,
+  FOCUS_TITLE_CAP,
   asPixelX,
   asPixelY,
   asPoint,
@@ -11,12 +12,15 @@ import {
 import type {
   Action,
   ActionResult,
+  ImageMeta,
   PendingCheck,
   Point,
   SeatState,
   Unavailable,
+  WindowFocus,
 } from "@computer/shared";
-import type { Desk } from "../desk/types.ts";
+import { pngSize } from "../desk/png.ts";
+import type { Desk, FocusHint } from "../desk/types.ts";
 import { PNG_MEDIA } from "../desk/types.ts";
 import { RequestCache } from "./cache.ts";
 import { PolicyService } from "./policy.ts";
@@ -26,10 +30,14 @@ import type { SeatService } from "./seat.ts";
 interface ComputerOk {
   results: ActionResult[];
   screenshot_b64?: string;
+  /** Metadata for `screenshot_b64`, absent whenever those bytes are. */
+  screenshot?: ImageMeta;
   display: typeof DISPLAY;
   cursor?: Point;
   seat: SeatState;
   pending_checks: PendingCheck[];
+  /** Which window the batch ended in. Page-controlled text; see WindowFocus. */
+  focus?: WindowFocus;
 }
 
 const MAX_ACTIONS = 20;
@@ -117,25 +125,28 @@ export class ComputerService {
       }
     }
 
+    // One read of the focused window for the whole batch, after it has run so
+    // it describes the state the model is being handed back.
+    const hint = await this.readFocus();
+
     // `ask` denies now and explains why: the check rides alongside the denial
     // so the model stops and asks the human instead of retrying blind.
-    const pending_checks = takeover
-      ? []
-      : [...this.askChecks(asked), ...(await this.collectChecks())];
+    const pending_checks = takeover ? [] : [...this.askChecks(asked), ...this.collectChecks(hint)];
 
     // One screenshot after the batch unless the last executed action already
     // carries an image. A batch that ran nothing (denied, seat taken) still
     // gets one: the model needs to see the state it is being told to stop in.
     const needsShot = lastExecuted?.type !== "screenshot" && lastExecuted?.type !== "zoom";
     const shot = needsShot ? await this.desk.screenshot() : undefined;
-    const screenshot_b64 = shot?.toString("base64");
 
     return {
       cursor: this.desk.getCursor(),
       display: DISPLAY,
+      focus: focusOf(hint),
       pending_checks,
       results,
-      screenshot_b64,
+      screenshot: shot && imageMeta(shot),
+      screenshot_b64: shot?.toString("base64"),
       seat: this.seat.getState(),
     };
   }
@@ -146,7 +157,12 @@ export class ComputerService {
     switch (action.type) {
       case "screenshot": {
         const buf = await this.desk.screenshot();
-        return { image_b64: buf.toString("base64"), kind: "ok", media_type: PNG_MEDIA };
+        return {
+          image: imageMeta(buf),
+          image_b64: buf.toString("base64"),
+          kind: "ok",
+          media_type: PNG_MEDIA,
+        };
       }
       case "click": {
         await this.desk.click(action.x, action.y, action.button ?? "left");
@@ -182,7 +198,14 @@ export class ComputerService {
       }
       case "zoom": {
         const buf = await this.desk.zoom(action.x, action.y, action.w, action.h);
-        return { image_b64: buf.toString("base64"), kind: "ok", media_type: PNG_MEDIA };
+        // The crop states the rectangle it came from, because the next action
+        // is still addressed in the full display's coordinates.
+        return {
+          image: imageMeta(buf, { h: action.h, w: action.w, x: action.x, y: action.y }),
+          image_b64: buf.toString("base64"),
+          kind: "ok",
+          media_type: PNG_MEDIA,
+        };
       }
       case "request_takeover": {
         this.seat.requestTakeover();
@@ -200,8 +223,29 @@ export class ComputerService {
     }));
   }
 
-  private async collectChecks(): Promise<PendingCheck[]> {
-    const hint = await this.desk.focusHint();
+  /**
+   * One `xdotool getwindowname` per batch, feeding both `pending_checks` and
+   * `focus`. It used to be skipped on the takeover path, which is the one
+   * batch where naming the window matters most.
+   *
+   * The failure is swallowed, and that is a change: this read used to throw
+   * out of `execute` after the actions had already run. A rejected run is
+   * forgotten by the RequestCache, by design, so that a batch which never
+   * started can be retried under its id. A throw from here is the opposite
+   * case: the clicks happened, and the retry the model is invited to make
+   * runs them again. Losing an advisory check is the smaller harm than a
+   * double-executed batch, so a title we cannot read costs the checks that
+   * hang off it and nothing else.
+   */
+  private async readFocus(): Promise<FocusHint> {
+    try {
+      return await this.desk.focusHint();
+    } catch {
+      return { confirm: false, password: false, title: "" };
+    }
+  }
+
+  private collectChecks(hint: FocusHint): PendingCheck[] {
     const out: PendingCheck[] = [];
     if (hint.password) {
       out.push({
@@ -314,6 +358,42 @@ function toError(
     message: err instanceof Error ? err.message : "unknown error",
     ...unavailable("unknown", "unknown"),
   };
+}
+
+/**
+ * Name an image by its content.
+ *
+ * A random id would do to refer back to a screenshot; a content hash also
+ * makes two identical screens carry one id, which is how a model learns that
+ * its click changed nothing without diffing pixels. Truncated to 16 hex
+ * characters: 64 bits is far past collision range for the handful of images
+ * one task produces, and the id is read by a model, not a database.
+ */
+function imageMeta(buf: Buffer, source?: ImageMeta["source"]): ImageMeta | undefined {
+  const size = pngSize(buf);
+  if (!size) {
+    return undefined;
+  }
+  return {
+    height: size.height,
+    id: `img_${createHash("sha256").update(buf).digest("hex").slice(0, 16)}`,
+    width: size.width,
+    ...(source ? { source } : {}),
+  };
+}
+
+/**
+ * The window title, made safe to put in front of a model.
+ *
+ * Control and format characters go first: a title carrying newlines or a bidi
+ * override could otherwise fake a line of transcript, which is the only way a
+ * bounded label becomes an injection. Then it is capped, because a page may
+ * set a title of any length and this field is a label. What survives is still
+ * the page's text and is still never to be followed.
+ */
+function focusOf(hint: FocusHint): WindowFocus | undefined {
+  const title = hint.title.replaceAll(/\p{C}/gu, " ").trim().slice(0, FOCUS_TITLE_CAP).trim();
+  return title ? { title } : undefined;
 }
 
 function hashBody(requestId: string, actions: Action[]): string {
