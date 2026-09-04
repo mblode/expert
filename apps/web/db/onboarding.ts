@@ -1,7 +1,5 @@
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-import { user } from "./schema";
-
 /**
  * What the first run learned, one row per user.
  *
@@ -17,7 +15,13 @@ import { user } from "./schema";
 export const onboarding = sqliteTable("onboarding", {
   completedAt: integer("completed_at", { mode: "timestamp_ms" }).notNull(),
   tools: text("tools").notNull(),
-  userId: text("user_id")
-    .primaryKey()
-    .references(() => user.id, { onDelete: "cascade" }),
+  /**
+   * No foreign key, like `invite` and `bot_template`: this table is created
+   * at runtime by `CREATE TABLE IF NOT EXISTS` on a database that may never
+   * have run a migration, and a reference declared here but absent there is a
+   * claim the code would go on to rely on. It also made the first write
+   * depend on `user` already existing, which is a second table's problem
+   * standing in front of this one's.
+   */
+  userId: text("user_id").primaryKey(),
 });
