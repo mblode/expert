@@ -54,6 +54,19 @@ export function ShareTemplate({
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [exported, setExported] = useState<BotTemplate | undefined>();
+  /**
+   * Rewrite it for a stranger, on by default.
+   *
+   * A working Bot is full of one person: its brief names their product, its
+   * skills name their repository, its memory is a list of facts about them.
+   * Sharing that verbatim is both useless to whoever installs it and a leak,
+   * so the default is the version someone else can actually use, and the
+   * verbatim one is the deliberate choice.
+   */
+  const [generic, setGeneric] = useState(true);
+  const [note, setNote] = useState("");
+  /** False when the rewrite was asked for and did not run. Say so, loudly. */
+  const [rewritten, setRewritten] = useState(true);
   const [shared, setShared] = useState<TemplateView | undefined>();
   const [detail, setDetail] = useState(false);
   const [sections, setSections] = useState<TemplateSections>({
@@ -92,11 +105,18 @@ export function ShareTemplate({
     };
   }, [botId]);
 
-  const build = async () => {
+  const build = async (wanted = generic) => {
     setBusy(true);
     setFailure(null);
     try {
-      setExported(await seat.exportBotTemplate(botId));
+      const answer = await seat.exportBotTemplate(botId, wanted);
+      setExported(answer.template);
+      setGeneric(wanted);
+      setNote(answer.note);
+      setRewritten(!wanted || answer.generic);
+      // The rewrite drops memory on purpose: a fact a Bot kept about the
+      // person it works for is the one thing that cannot be made generic.
+      setSections((prev) => ({ ...prev, memories: wanted ? false : prev.memories }));
       setStep("review");
     } catch (error) {
       setFailure(message(error, "Your computer would not read that Bot."));
@@ -140,10 +160,12 @@ export function ShareTemplate({
     setBusy(true);
     setFailure(null);
     try {
-      const template = await seat.exportBotTemplate(botId);
+      const answer = await seat.exportBotTemplate(botId, generic);
+      setNote(answer.note);
+      setRewritten(!generic || answer.generic);
       setShared(
         await post<TemplateView>(`/api/templates/${shared.id}`, "PUT", {
-          template: pickSections(template, sections),
+          template: pickSections(answer.template, sections),
         }),
       );
     } catch (error) {
@@ -190,6 +212,33 @@ export function ShareTemplate({
             <Badge variant="secondary">Unpublished</Badge>
           </div>
 
+          {/* The one switch that changes the document rather than trimming
+              it, so it sits above the sections and re-reads the Bot when it
+              moves. */}
+          <div className="flex flex-col gap-2 rounded-xl border border-border p-4">
+            <label className="flex items-center gap-3 text-sm" htmlFor="share-generic">
+              <span className="flex-1 font-medium">Make it generic</span>
+              <Switch
+                checked={generic}
+                disabled={busy}
+                id="share-generic"
+                onCheckedChange={(next: boolean) => void build(next)}
+              />
+            </label>
+            <p className="text-muted-foreground text-xs">
+              {generic
+                ? "The same Bot with you taken out of it: no names, no products, no repositories, and nothing it remembers about you."
+                : "Your Bot exactly as it is. Read every section before you publish: whatever it knows about you goes with it."}
+            </p>
+            {note && (
+              <p
+                className={rewritten ? "text-muted-foreground text-xs" : "text-destructive text-xs"}
+              >
+                {note}
+              </p>
+            )}
+          </div>
+
           <div className="flex flex-col divide-y divide-border rounded-xl border border-border">
             {(Object.keys(SECTION_LABEL) as (keyof TemplateSections)[]).map((key) => (
               <label
@@ -201,7 +250,7 @@ export function ShareTemplate({
                 <span className="text-muted-foreground text-xs">{count(exported, key)}</span>
                 <Switch
                   checked={sections[key]}
-                  disabled={count(exported, key) === 0}
+                  disabled={count(exported, key) === 0 || (generic && key === "memories")}
                   id={`share-${key}`}
                   onCheckedChange={(next: boolean) =>
                     setSections((prev) => ({ ...prev, [key]: next }))
@@ -226,7 +275,9 @@ export function ShareTemplate({
           with it.
         </p>
         <p className="text-muted-foreground text-sm">
-          Whoever opens the link can add a copy of {botName} to their own computer.
+          Whoever opens the link can add a copy of {botName} to their own computer. By default the
+          computer rewrites it for a stranger first, so what you hand out is the job rather than
+          your version of it.
         </p>
       </div>
     );

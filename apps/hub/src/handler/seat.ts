@@ -436,9 +436,12 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
   };
 
   router.rpc(SeatMethods.ExportBotTemplate, "seat", async (ctx) => {
-    const bot = templateBot(ctx, requireObject(ctx.body));
+    const o = requireObject(ctx.body);
+    const bot = templateBot(ctx, o);
     await bot.desk.ping();
-    return deps.templates.export(bot.id, bot.state);
+    // `generic` is the difference between a copy of your Bot and a Bot
+    // someone else can use: the rewrite that takes the person out of it.
+    return deps.templates.export(bot.id, bot.state, { generic: o.generic === true });
   });
 
   router.rpc(SeatMethods.ApplyBotTemplate, "seat", async (ctx) => {

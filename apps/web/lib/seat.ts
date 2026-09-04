@@ -111,6 +111,15 @@ export interface BotTemplatePlugin {
   auth: "static" | "oauth";
 }
 
+/** What `Seat.ExportBotTemplate` answers with. */
+interface ExportedTemplate {
+  template: BotTemplate;
+  /** Whether the rewrite ran. False under a generic request means read it. */
+  generic: boolean;
+  /** One sentence: what was left out, or why the rewrite did not happen. */
+  note: string;
+}
+
 export interface BotTemplate {
   version: number;
   name: string;
@@ -303,8 +312,15 @@ export function createSeat(hubUrl: string, token: string) {
      * on. Owner-only, and it carries what the Bot remembers, so what is
      * published from it is ticked by the person looking at it rather than
      * decided here.
+     *
+     * `generic` asks the computer to rewrite it for a stranger: the same
+     * assistant with the person taken out of it. The reply says whether that
+     * rewrite actually ran, because a document that still names you, handed
+     * back under a flag that says it does not, is the one answer worse than
+     * refusing.
      */
-    exportBotTemplate: (id: string) => call<BotTemplate>("ExportBotTemplate", { id }),
+    exportBotTemplate: (id: string, generic = false) =>
+      call<ExportedTemplate>("ExportBotTemplate", { generic, id }),
     /**
      * Write a template onto a Bot on this computer. Replaces that Bot's
      * brief, skills, routines and plugin list, and appends to its memory, so

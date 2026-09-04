@@ -15,6 +15,7 @@ import type {
   MessageLog,
 } from "../src/service/conversations.ts";
 import type { BridgeClient } from "../src/service/whatsapp.ts";
+import type { GenericConfig } from "../src/service/template-generic.ts";
 
 const SETUP_CODE = "setup-code-test";
 const AGENT_TOKEN = "agent-token-test";
@@ -53,6 +54,8 @@ export async function startHub(
     messageLog?: MessageLog;
     bridge?: BridgeClient;
     codingFactory?: (conversations: ConversationRegistry) => CodingService;
+    /** The template rewriter. Null by default: no test may reach a gateway. */
+    templateGeneric?: GenericConfig | null;
   } = {},
 ): Promise<StartedHub> {
   const configs = opts.bots ?? [{ display: 1, id: "main", token: AGENT_TOKEN }];
@@ -80,6 +83,7 @@ export async function startHub(
     principalStore,
     setupCode: SETUP_CODE,
     store,
+    templateGeneric: opts.templateGeneric ?? null,
     vncBasePort: opts.vncBasePort,
     vncUrl: "http://127.0.0.1/vnc/index.html?view_only=1",
     windows,

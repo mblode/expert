@@ -68,8 +68,13 @@ describe("a Bot template", () => {
     return h;
   }
 
-  const exportFor = (h: Opened, id: string, seat: string) =>
-    rpc(h.url, "/computer.v1.Seat/ExportBotTemplate", { id }, seat) as Promise<Template>;
+  /** The RPC answers with the document plus whether a rewrite ran; these are about the document. */
+  const exportFor = async (h: Opened, id: string, seat: string): Promise<Template> => {
+    const answer = (await rpc(h.url, "/computer.v1.Seat/ExportBotTemplate", { id }, seat)) as {
+      template: Template;
+    };
+    return answer.template;
+  };
 
   const apply = (h: Opened, id: string, template: unknown, seat: string) =>
     rpc(h.url, "/computer.v1.Seat/ApplyBotTemplate", { id, template }, seat);

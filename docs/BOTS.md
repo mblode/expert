@@ -185,11 +185,18 @@ reads its whole setup off the computer (`Seat.ExportBotTemplate`), shows it
 with a switch beside each section, and publishes what you tick to a link on
 hello.expert: `/bot/<id>`.
 
-Three things about what travels. **No credential does**: a plugin is the
+**It is made generic first, by default.** Your Bot is full of you: its brief
+names your product, its skills name your repository, its memory is a list of
+facts about you. So the computer rewrites it for a stranger before you see
+it, keeping the job and dropping the parts that only make sense for you, and
+says in one line what it left out. Turn it off and you share your Bot exactly
+as it is, which is what a backup wants and not what a link does.
+
+Three more things about what travels. **No credential does**: a plugin is the
 address of a service and how it authenticates, so whoever installs it signs
-in as themselves. **Memory starts off**, because it is the Bot's record of
-the person it works for, and it is the one section that is a decision rather
-than a default. And nothing names the computer it came from.
+in as themselves. **Memory never travels in a generic template**, and starts
+off even in a verbatim one, because it is the Bot's record of the person it
+works for. And nothing names the computer it came from.
 
 Opening the link shows the same detail the publisher saw: the instructions in
 full, the facts, the skills and their triggers, the routines and their

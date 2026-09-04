@@ -1,4 +1,6 @@
 import { BOT_TEMPLATE_VERSION, parseBotTemplate } from "@computer/shared";
+import { generaliseTemplate, scrubTemplate } from "./template-generic.ts";
+import type { GenericConfig } from "./template-generic.ts";
 import type {
   BotProfile,
   BotTemplate,
@@ -40,8 +42,30 @@ export interface TemplateSource {
  */
 export type TemplateSourceReader = (botId: string) => TemplateSource | undefined;
 
+/**
+ * What an export answers with.
+ *
+ * `generic` is whether the rewrite actually ran, and it is separate from
+ * having asked for it on purpose: a person who ticked "make it generic" and
+ * was handed their own name back, because the gateway was down, is the one
+ * failure worth this extra field. `note` is the sentence they should read.
+ */
+interface ExportedTemplate {
+  template: BotTemplate;
+  generic: boolean;
+  note: string;
+}
+
 export class BotTemplateService {
-  constructor(private readonly source?: TemplateSourceReader) {}
+  constructor(
+    private readonly source?: TemplateSourceReader,
+    /**
+     * The model that rewrites a template for a stranger. Absent (no
+     * `AI_GATEWAY_API_KEY`) means an export can still be scrubbed but never
+     * rewritten, and says so rather than pretending.
+     */
+    private readonly generic?: GenericConfig | null,
+  ) {}
 
   /**
    * Who this Bot is, as a document someone else could install.
@@ -51,8 +75,17 @@ export class BotTemplateService {
    * a decision made in front of a person who can see the list, not one the
    * hub can make for them. hello.expert shows every section with a tick
    * beside it before anything is stored.
+   *
+   * `generic` asks for the other half of that (`service/template-generic.ts`):
+   * the same Bot with the person taken out of it, which is what makes a
+   * template worth sending to someone who does not have your products, your
+   * repositories or your colleagues. Memory never survives it.
    */
-  async export(botId: string, state: BotState): Promise<BotTemplate> {
+  async export(
+    botId: string,
+    state: BotState,
+    opts: { generic?: boolean } = {},
+  ): Promise<ExportedTemplate> {
     const shipped = this.source?.(botId);
     const profile = await state.profile();
     const [instructions, skills, routines, plugins, memories] = await Promise.all([
@@ -62,7 +95,7 @@ export class BotTemplateService {
       state.plugins(),
       state.memories(),
     ]);
-    return parseBotTemplate({
+    const verbatim = parseBotTemplate({
       avatar_color: profile.avatar_color,
       avatar_shape: profile.avatar_shape,
       description: profile.description,
@@ -75,6 +108,35 @@ export class BotTemplateService {
       title: profile.title,
       version: BOT_TEMPLATE_VERSION,
     });
+    if (!opts.generic) {
+      return { generic: false, note: "", template: verbatim };
+    }
+    if (!this.generic) {
+      // Scrubbed but not rewritten, and named as such. The addresses and
+      // phone numbers are gone; whose product this is, is not.
+      return {
+        generic: false,
+        note: "This computer has no model to rewrite the template with, so it is your Bot as it is, with email addresses and phone numbers removed. Read it before you publish it.",
+        template: scrubTemplate(verbatim),
+      };
+    }
+    try {
+      const { dropped, template } = await generaliseTemplate(verbatim, this.generic);
+      return {
+        generic: true,
+        note: dropped,
+        template,
+      };
+    } catch (error) {
+      // Never the verbatim document under the generic flag: say the rewrite
+      // did not happen and hand back the one thing that is still true, which
+      // is the scrub.
+      return {
+        generic: false,
+        note: `The rewrite did not run (${(error as Error).message}), so this is your Bot with email addresses and phone numbers removed. Read it before you publish it.`,
+        template: scrubTemplate(verbatim),
+      };
+    }
   }
 
   /**

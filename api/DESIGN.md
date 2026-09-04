@@ -395,6 +395,32 @@ can see, and the install is `CreateBot` then `ApplyBotTemplate` from the
 recipient's own browser with their own seat (`docs/BOTS.md`, "Sharing a
 Bot").
 
+**A shared template is rewritten for a stranger**, and that is the difference
+between a copy of your Bot and a Bot someone else can use.
+`ExportBotTemplate { generic: true }` is what the share sheet asks for by
+default. A working Bot is full of one person: its brief names their product,
+its skills name their repository, its memory is a list of facts about them.
+Published verbatim that is both useless (half the procedures reference things
+the reader does not have) and a leak. The rewrite is two layers, and only one
+of them is a promise (`service/template-generic.ts`):
+
+- **The scrub is deterministic and always runs**: email addresses, phone
+  numbers and home directories, out of every string. Narrow enough to be sure
+  of, and it does not depend on a model being reachable or right.
+- **The rewrite is a model's judgement**, because judgement is what is
+  wanted: which skills are about the job and which are about this person's
+  product. It can only ever narrow. It returns prose and a list of ids, never
+  entries, so it cannot invent a skill the Bot does not have; what it returns
+  goes back through `parseBotTemplate`; and memory never survives it at all,
+  because a fact a Bot kept about the person it works for is about that
+  person.
+
+`generic` on the response is whether the rewrite **ran**, not whether it was
+asked for. With no `AI_GATEWAY_API_KEY`, or a gateway that fails, the answer
+is the scrubbed document with `generic: false` and a `note` saying so: a
+person who ticked the box and was handed their own name back is the failure
+that field exists to prevent.
+
 One thing a template carries and cannot yet make run: a **routine**. What
 fires a routine is that Bot's own croner, compiled from
 `agent/schedules/*.ts` in its Eve project, and a Bot made at runtime runs

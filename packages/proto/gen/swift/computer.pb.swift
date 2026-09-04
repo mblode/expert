@@ -1759,9 +1759,46 @@ public nonisolated struct Computer_V1_ExportBotTemplateRequest: Sendable {
 
   public var id: String = String()
 
+  /// Rewrite the export for a stranger: the same assistant with the person
+  /// taken out of it. A working Bot's brief names their product and its skills
+  /// name their repository, which is both useless to whoever installs it and a
+  /// leak. Off exports the Bot verbatim, which is what a backup wants.
+  public var generic: Bool = false
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public init() {}
+}
+
+public nonisolated struct Computer_V1_ExportBotTemplateResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var template: Computer_V1_BotTemplate {
+    get {_template ?? Computer_V1_BotTemplate()}
+    set {_template = newValue}
+  }
+  /// Returns true if `template` has been explicitly set.
+  public var hasTemplate: Bool {self._template != nil}
+  /// Clears the value of `template`. Subsequent reads from it will return its default value.
+  public mutating func clearTemplate() {self._template = nil}
+
+  /// Whether the rewrite actually ran. Asking for `generic` and getting false
+  /// means the document is this Bot as it is (with addresses and phone numbers
+  /// removed) and `note` says why: a person who ticked the box and was handed
+  /// their own name back is the failure this field exists to prevent.
+  public var generic: Bool = false
+
+  /// One sentence for the person publishing: what was left out, or why the
+  /// rewrite did not happen. Empty on a verbatim export.
+  public var note: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+
+  fileprivate var _template: Computer_V1_BotTemplate? = nil
 }
 
 public nonisolated struct Computer_V1_ApplyBotTemplateRequest: Sendable {
@@ -5535,7 +5572,7 @@ nonisolated extension Computer_V1_BotProfile: SwiftProtobuf.Message, SwiftProtob
 
 nonisolated extension Computer_V1_ExportBotTemplateRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".ExportBotTemplateRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}id\0\u{1}generic\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -5544,6 +5581,7 @@ nonisolated extension Computer_V1_ExportBotTemplateRequest: SwiftProtobuf.Messag
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.id) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.generic) }()
       default: break
       }
     }
@@ -5553,11 +5591,59 @@ nonisolated extension Computer_V1_ExportBotTemplateRequest: SwiftProtobuf.Messag
     if !self.id.isEmpty {
       try visitor.visitSingularStringField(value: self.id, fieldNumber: 1)
     }
+    if self.generic != false {
+      try visitor.visitSingularBoolField(value: self.generic, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   public static func ==(lhs: Computer_V1_ExportBotTemplateRequest, rhs: Computer_V1_ExportBotTemplateRequest) -> Bool {
     if lhs.id != rhs.id {return false}
+    if lhs.generic != rhs.generic {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_ExportBotTemplateResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".ExportBotTemplateResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}template\0\u{1}generic\0\u{1}note\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularMessageField(value: &self._template) }()
+      case 2: try { try decoder.decodeSingularBoolField(value: &self.generic) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.note) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    // The use of inline closures is to circumvent an issue where the compiler
+    // allocates stack space for every if/case branch local when no optimizations
+    // are enabled. https://github.com/apple/swift-protobuf/issues/1034 and
+    // https://github.com/apple/swift-protobuf/issues/1182
+    try { if let v = self._template {
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 1)
+    } }()
+    if self.generic != false {
+      try visitor.visitSingularBoolField(value: self.generic, fieldNumber: 2)
+    }
+    if !self.note.isEmpty {
+      try visitor.visitSingularStringField(value: self.note, fieldNumber: 3)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_ExportBotTemplateResponse, rhs: Computer_V1_ExportBotTemplateResponse) -> Bool {
+    if lhs._template != rhs._template {return false}
+    if lhs.generic != rhs.generic {return false}
+    if lhs.note != rhs.note {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

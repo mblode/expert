@@ -181,7 +181,7 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     /// a template is published to strangers, and installing one is consenting to
     /// run its instructions, which is why every section is shown before it does.
     @available(iOS 13, *)
-    func `exportBotTemplate`(request: Computer_V1_ExportBotTemplateRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BotTemplate>
+    func `exportBotTemplate`(request: Computer_V1_ExportBotTemplateRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_ExportBotTemplateResponse>
 
     @available(iOS 13, *)
     func `applyBotTemplate`(request: Computer_V1_ApplyBotTemplateRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BotProfile>
@@ -302,7 +302,7 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
-    public func `exportBotTemplate`(request: Computer_V1_ExportBotTemplateRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_BotTemplate> {
+    public func `exportBotTemplate`(request: Computer_V1_ExportBotTemplateRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_ExportBotTemplateResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/ExportBotTemplate", idempotencyLevel: .unknown, request: request, headers: headers)
     }
 

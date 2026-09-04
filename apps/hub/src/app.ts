@@ -28,6 +28,8 @@ import { ProvisionService } from "./service/provision.ts";
 import type { BotStore } from "./service/provision.ts";
 import { BotTemplateService } from "./service/templates.ts";
 import type { TemplateSourceReader } from "./service/templates.ts";
+import { genericConfig } from "./service/template-generic.ts";
+import type { GenericConfig } from "./service/template-generic.ts";
 import type { PrincipalStore } from "./service/principals.ts";
 import type { WindowManager } from "./desk/windows.ts";
 import { loadSpecJson } from "./service/spec.ts";
@@ -89,6 +91,12 @@ interface HubOptions {
    * a hub with no Eve projects beside it.
    */
   templateSource?: TemplateSourceReader;
+  /**
+   * The model that rewrites a template for a stranger. Absent reads the
+   * environment (`AI_GATEWAY_API_KEY`, as Auto Review does); `null` is a hub
+   * that will only ever scrub, which is what the tests want by default.
+   */
+  templateGeneric?: GenericConfig | null;
   /** `false` claims every screen at boot and never releases one. */
   screens?: false;
   /** How long a screen may go unused before it is released. */
@@ -200,7 +208,10 @@ export function createHub(opts: HubOptions): Hub {
     coding,
     conversations,
     provision,
-    templates: new BotTemplateService(opts.templateSource),
+    templates: new BotTemplateService(
+      opts.templateSource,
+      opts.templateGeneric === undefined ? genericConfig() : opts.templateGeneric,
+    ),
     vncUrl: opts.vncUrl,
     wake: opts.wake,
   });
