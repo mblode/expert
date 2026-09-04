@@ -240,6 +240,18 @@ export function createSeat(hubUrl: string, token: string) {
     click: (button: Button, display?: number) =>
       call<unknown>("Pointer", { type: "click", button, display }),
     clipboardGet: (display?: number) => call<{ text: string }>("ClipboardGet", { display }),
+    /**
+     * Make a Bot on the computer. Owner-only, and the id is what the box
+     * calls it forever: the name a person typed is the profile, written
+     * straight after this with `setBotProfile`.
+     *
+     * The token in the reply is minted once and is the new Bot's own
+     * credential. Nothing in this app keeps it: the guest hands it to that
+     * Bot's Eve, and a client holding an agent token would be a client that
+     * can act as the Bot.
+     */
+    createBot: (id: string) =>
+      call<{ display: number; id: string; token: string }>("CreateBot", { id }),
     clipboardSet: (text: string, display?: number) =>
       call<{ text: string }>("ClipboardSet", { text, display }),
     hubUrl,

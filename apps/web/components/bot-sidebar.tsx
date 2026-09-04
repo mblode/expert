@@ -1,6 +1,6 @@
 "use client";
 
-import { SearchIcon } from "blode-icons-react";
+import { PlusIcon, SearchIcon } from "blode-icons-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
@@ -34,6 +34,7 @@ export function BotSidebar({
   computers,
   display,
   onDisplayChange,
+  onNewBot,
   onSignOut,
   onSwitchComputer,
   profiles,
@@ -44,6 +45,8 @@ export function BotSidebar({
   computers: { id: string; label: string }[];
   display: number;
   onDisplayChange: (display: number) => void;
+  /** Absent on a hub that cannot make one (an older build, or no owner seat). */
+  onNewBot?: () => void;
   onSignOut: () => void;
   onSwitchComputer: (id: string) => void;
   /** By Bot id, from the roster. Empty until it answers. */
@@ -92,6 +95,18 @@ export function BotSidebar({
           ) : (
             <span className="truncate font-semibold text-sm">{current?.label ?? "Computer"}</span>
           )}
+          {onNewBot && (
+            <Button
+              aria-label="New Bot"
+              className="-mr-1 ml-auto size-8 shrink-0 pointer-coarse:size-11"
+              onClick={onNewBot}
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            >
+              <PlusIcon />
+            </Button>
+          )}
         </div>
 
         <div className="relative">
@@ -116,7 +131,7 @@ export function BotSidebar({
                 <button
                   aria-current={active ? "true" : undefined}
                   className={cn(
-                    "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left transition-colors",
+                    "flex w-full items-center gap-3 rounded-xl px-2 py-2.5 text-left transition-colors",
                     active
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/60",
@@ -124,13 +139,21 @@ export function BotSidebar({
                   onClick={() => onDisplayChange(screen.display)}
                   type="button"
                 >
-                  <BotMark botId={screen.bot_id} profile={profiles[screen.bot_id]} size="lg" />
-                  <span className="grid min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className="truncate font-medium text-sm">
+                  <BotMark botId={screen.bot_id} profile={profiles[screen.bot_id]} size="xl" />
+                  <span className="grid min-w-0 flex-1 gap-0.5">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="truncate font-semibold text-[15px] leading-tight">
                         {profiles[screen.bot_id]?.name || screen.bot_id}
                       </span>
-                      <span className="shrink-0 text-muted-foreground text-xs">
+                      {/* The Bot's own label, as a chip: on a roster of eight
+                          specialists "SEO and growth" is what tells them
+                          apart, and it is already in the profile. */}
+                      {profiles[screen.bot_id]?.title && (
+                        <span className="shrink-0 truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                          {profiles[screen.bot_id]?.title}
+                        </span>
+                      )}
+                      <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
                         screen {screen.display}
                       </span>
                     </span>

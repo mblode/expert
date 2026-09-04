@@ -30,6 +30,8 @@ import { userInfo } from "node:os";
 import { ensureEveSecret, ensureRosterAt } from "./ensure-roster.ts";
 import { eveProjectIds, planEveLaunches, resolveEveBotsRoot, superviseEves } from "./eve.ts";
 import { watchWake } from "./wake.ts";
+import { watchRoster } from "./adopt.ts";
+import { FileBotStore } from "../service/provision.ts";
 import { Supervisor } from "./supervisor.ts";
 
 /**
@@ -288,11 +290,43 @@ superviseEves(sup, eves, {
   logDir,
   uid: box.uid,
 });
+// Every Bot that sleeps, which is every Bot but the primary one. A set
+// rather than a list because it grows: a Bot made from `Seat.CreateBot`
+// after boot is adopted into it below.
+const sleeping = new Set(eves.map((e) => e.botId).filter((id) => id !== primaryBotId));
 const stopWatchingWake = watchWake({
-  botIds: eves.map((e) => e.botId).filter((id) => id !== primaryBotId),
+  botIds: () => [...sleeping],
   dir: wakeDir,
   onEvent: (line) => console.log(`computer ${line}`),
   sup,
+});
+// A Bot can also be made while the computer is running, and that Bot has no
+// directory in the image: it runs the template project, and its name, label
+// and description, which the hub folds into its prompt, are what make it
+// itself. Without this it is a roster row with no process, answering
+// DAEMON_DOWN forever.
+const stopWatchingRoster = watchRoster({
+  onAdopt: (bot) => {
+    const launches = planEveLaunches([bot], { botsRoot });
+    if (launches.length === 0) {
+      console.warn(`computer roster: bot ${bot.id} has no project and no template; it cannot run`);
+      return;
+    }
+    superviseEves(sup, launches, {
+      env: childEnv({ USER: box.name }, "/home/box"),
+      eveSecret,
+      gid: box.gid,
+      hubUrl,
+      lazy: () => true,
+      logDir,
+      uid: box.uid,
+    });
+    sleeping.add(bot.id);
+    console.log(`computer roster: adopted bot ${bot.id} on screen ${bot.display}`);
+  },
+  onEvent: (line) => console.log(`computer ${line}`),
+  read: () => new FileBotStore(rosterPath).load(),
+  seen: roster.map((r) => r.id),
 });
 if (eves.length === 0) {
   console.warn(`computer init: no Eve project under ${botsRoot}; chat will report DAEMON_DOWN`);
@@ -361,6 +395,7 @@ console.log(
 
 const shutdown = (): void => {
   stopWatchingWake();
+  stopWatchingRoster();
   void sup.stopAll().then(() => process.exit(0));
 };
 process.on("SIGTERM", shutdown);

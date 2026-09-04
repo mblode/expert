@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { BotSettings } from "./components/bot-settings";
 import { BotSidebar } from "./components/bot-sidebar";
+import { NewBot } from "./components/new-bot";
 import { ChatPane } from "./components/chat-pane";
 import { ConnectError } from "./components/connect-error";
 import { DesktopPane } from "./components/desktop-pane";
@@ -139,6 +140,7 @@ function Workspace({
   const [screenOpen, setScreenOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, BotProfile>>({});
+  const [newBotOpen, setNewBotOpen] = useState(false);
 
   useEffect(() => {
     captureEvent(connectEvent, { computer_id: computerId });
@@ -253,6 +255,9 @@ function Workspace({
       computers={computers}
       display={display}
       onDisplayChange={pickDisplay}
+      // Same gate as the settings sheet: a hub that cannot serve the roster
+      // read cannot serve the write either, so the button is not offered.
+      onNewBot={Object.keys(profiles).length > 0 ? () => setNewBotOpen(true) : undefined}
       onSignOut={onSignOut}
       onSwitchComputer={switchComputer}
       profiles={profiles}
@@ -305,6 +310,30 @@ function Workspace({
             <DialogTitle>Bots</DialogTitle>
           </DialogHeader>
           {sidebar}
+        </DialogContent>
+      </Dialog>
+
+      {/* Making a Bot is the one thing here that adds to the computer rather
+          than driving it, so it says what it costs: a screen, and a mind that
+          starts out generic and is shaped by what you tell it. */}
+      <Dialog onOpenChange={setNewBotOpen} open={newBotOpen}>
+        <DialogContent className="max-h-[90svh] max-w-md gap-0 overflow-hidden p-0">
+          <DialogHeader className="px-5 pt-5 pb-4">
+            <DialogTitle>New Bot</DialogTitle>
+            <DialogDescription>
+              It gets its own screen on {computerId} and its own thread. Tell it what it is for and
+              it starts as that.
+            </DialogDescription>
+          </DialogHeader>
+          <NewBot
+            existingIds={screens.map((s) => s.bot_id)}
+            onCreated={({ display: made, id, profile }) => {
+              setProfiles((prev) => ({ ...prev, [id]: profile }));
+              setNewBotOpen(false);
+              pickDisplay(made);
+            }}
+            seat={seat}
+          />
         </DialogContent>
       </Dialog>
 

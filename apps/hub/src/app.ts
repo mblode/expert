@@ -185,7 +185,15 @@ export function createHub(opts: HubOptions): Hub {
   const coding = opts.codingFactory?.(conversations) ?? new CodingService(conversations);
 
   registerAgent(router, { bots, conversations, turns, wake: opts.wake });
-  registerSeat(router, { auth, bots, coding, conversations, provision, vncUrl: opts.vncUrl });
+  registerSeat(router, {
+    auth,
+    bots,
+    coding,
+    conversations,
+    provision,
+    vncUrl: opts.vncUrl,
+    wake: opts.wake,
+  });
   registerWhatsApp(router, { bots, bridge: opts.bridge, connectors });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());

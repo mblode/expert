@@ -66,8 +66,15 @@ export function awakeUntil(dir: string, botId: string): number {
 const MAX_AWAKE = 2;
 
 interface SleepWatchOptions {
-  /** The lazy children, by Bot id. The primary Bot is not one of them. */
-  botIds: readonly string[];
+  /**
+   * The lazy children, by Bot id. The primary Bot is not one of them.
+   *
+   * Read on every tick rather than captured, because a Bot can be made while
+   * the computer is running (`Seat.CreateBot`): a list fixed at boot would
+   * leave a new Bot registered and never woken, which is a Bot that exists in
+   * the roster and answers DAEMON_DOWN forever.
+   */
+  botIds: () => readonly string[];
   dir: string;
   sup: Pick<Supervisor, "ensure" | "stop">;
   /** How many of them may run at once. */
@@ -96,10 +103,11 @@ export function watchWake(opts: SleepWatchOptions): () => void {
   const maxAwake = opts.maxAwake ?? MAX_AWAKE;
   const tick = (): void => {
     const at = now();
+    const botIds = opts.botIds();
     // Latest marker first: the Bot asked for most recently is the one a
     // person is most likely looking at, and the ones past the cap sleep
     // whatever their marker says.
-    const wanted = opts.botIds
+    const wanted = botIds
       .map((botId) => ({ botId, until: awakeUntil(opts.dir, botId) }))
       .filter((b) => b.until > at)
       .toSorted((a, b) => b.until - a.until);
@@ -112,7 +120,7 @@ export function watchWake(opts: SleepWatchOptions): () => void {
           .join(", ")} stay asleep`,
       );
     }
-    for (const botId of opts.botIds) {
+    for (const botId of botIds) {
       // Every branch is guarded: this runs inside PID 1's interval, and an
       // exception out of a timer callback there ends the computer.
       try {

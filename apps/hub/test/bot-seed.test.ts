@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { AVATAR_COLORS, AVATAR_SHAPES, BOT_PROFILE_MAX } from "@computer/shared";
 import type { BotProfile } from "@computer/shared";
@@ -91,9 +91,16 @@ describe("a Bot ships with a profile", () => {
  * runtime (the hashed default, in the wrong colour), so it is caught here.
  */
 describe("the profiles this build ships", () => {
+  // `template` is the project a Bot made from `Seat.CreateBot` runs, not a
+  // Bot: it has no roster row, so a shipped profile for it is one nothing
+  // would ever read. The assertion below is that it stays that way.
   const ids = readdirSync(BOTS_ROOT, { withFileTypes: true })
-    .filter((e) => e.isDirectory())
+    .filter((e) => e.isDirectory() && e.name !== "template")
     .map((e) => e.name);
+
+  it("ships no profile for the template, which is not a Bot", () => {
+    expect(existsSync(join(BOTS_ROOT, "template", "agent", "profile.json"))).toBe(false);
+  });
 
   it("covers every Bot in the tree", () => {
     expect(ids.length).toBeGreaterThan(1);

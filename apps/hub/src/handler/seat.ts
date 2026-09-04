@@ -40,6 +40,13 @@ interface SeatDeps {
   conversations: ConversationRegistry;
   provision: ProvisionService;
   vncUrl: string;
+  /**
+   * Wake a Bot (`host/wake.ts`). Called the moment one is made, so the
+   * supervisor has its Eve running by the time the person who made it types:
+   * the marker is the only way this process can ask for a child it does not
+   * own, and without it a new Bot's first message races its own boot.
+   */
+  wake?: (botId: string, display: number) => Promise<void>;
 }
 
 /**
@@ -359,6 +366,12 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
       throw new ComputerError("VALIDATION", 'id is required, e.g. {"id":"night"}');
     }
     const bot = await deps.provision.create(o.id);
+    // A Bot made here has no directory in the image, so PID 1 adopts it onto
+    // the template project within the second (`host/adopt.ts`); the marker
+    // this writes is what tells it to start rather than register and wait.
+    // Never fatal: a Bot that exists is the answer, and the wake is what
+    // makes it quick.
+    await deps.wake?.(bot.id, bot.display).catch(() => undefined);
     // The token appears exactly once, here.
     return { display: bot.display, id: bot.id, token: bot.token };
   });

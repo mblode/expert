@@ -5,7 +5,7 @@ import type { Server } from "node:net";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ComputerError } from "@computer/shared";
+import { ComputerError, MAX_DISPLAYS } from "@computer/shared";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { ownerHash } from "../src/desk/windows.ts";
 import { BotRegistry } from "../src/service/bots.ts";
@@ -209,7 +209,9 @@ describe("bots: one shared box, one screen per Bot", () => {
         { display: 2, id: "b", token: "t1" },
       ]),
     ).toThrow(/token already in use/);
-    expect(() => make([{ display: 9, id: "a", token: "t1" }])).toThrow(/display must be/);
+    expect(() => make([{ display: MAX_DISPLAYS + 1, id: "a", token: "t1" }])).toThrow(
+      /display must be/,
+    );
     expect(() => make([{ display: 1, id: "Bad Name!", token: "t1" }])).toThrow(/bot id must be/);
   });
 
@@ -313,11 +315,14 @@ describe("provisioning: computer as a service", () => {
     });
   });
 
-  it("caps the box at 8 screens with a CONFLICT that names the fix", async () => {
+  it("caps the box at its last screen with a CONFLICT that names the fix", async () => {
     const h = await startHub();
     opened.push(h);
     const token = await h.pair();
-    for (let i = 2; i <= 8; i++) {
+    // Counted from the ceiling: the number of screens is allowed to move
+    // (`Seat.CreateBot` was unusable while it equalled the number of Bots the
+    // build ships), and this test is about the refusal, not about eight.
+    for (let i = 2; i <= MAX_DISPLAYS; i++) {
       await rpc(h.url, "/computer.v1.Seat/CreateBot", { id: `bot-${i}` }, token);
     }
     await expect(

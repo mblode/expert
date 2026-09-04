@@ -54,7 +54,27 @@ export function resolveEveBotsRoot(opts: {
   return opts.envBots ?? opts.imageBots;
 }
 
-/** Nested `bots/<id>` or, for roster `main`, a standalone Eve project at botsRoot. */
+/**
+ * The project every Bot made at runtime runs.
+ *
+ * A Bot shipped by the build is a directory: its instructions, its skills and
+ * its schedules are files in git. A Bot made from `Seat.CreateBot` has no
+ * directory and cannot be given one without a deploy, so it runs this one.
+ * That is not a stub: a Bot's identity is its profile, and the hub folds the
+ * name, the label and the description into the system prompt before the turn,
+ * so two Bots on this project are two different agents. What they share is
+ * their code, which is the part a person was never editing anyway.
+ *
+ * It is deliberately not a roster row of its own (`eveProjectIds` skips it):
+ * a template that shows up in the sidebar as a Bot called "template" is a
+ * Bot nobody made and nobody wants.
+ */
+const TEMPLATE_PROJECT = "template";
+
+/**
+ * Nested `bots/<id>`, the template for a Bot made at runtime, or, for roster
+ * `main`, a standalone Eve project at botsRoot.
+ */
 function eveProjectCwd(
   botsRoot: string,
   botId: string,
@@ -66,6 +86,10 @@ function eveProjectCwd(
   }
   if (botId === "main" && isEveProject(botsRoot, exists)) {
     return botsRoot;
+  }
+  const template = join(botsRoot, TEMPLATE_PROJECT);
+  if (botId !== TEMPLATE_PROJECT && exists(join(template, "package.json"))) {
+    return template;
   }
   return undefined;
 }
@@ -106,7 +130,7 @@ export function eveProjectIds(
   // this mints and the Eves the supervisor launches are the same set. A row
   // with no Eve behind it is a Bot that answers DAEMON_DOWN.
   const ids = names
-    .filter((name) => exists(join(botsRoot, name, "package.json")))
+    .filter((name) => name !== TEMPLATE_PROJECT && exists(join(botsRoot, name, "package.json")))
     .toSorted((a, b) => a.localeCompare(b));
   // `main` is the primary Bot and owns display 1, so it is claimed first when
   // a fresh roster is seeded from an image that ships several projects.

@@ -66,6 +66,10 @@ COPY --chown=box:box apps/eve/bots/pm/package.json apps/eve/bots/pm/
 COPY --chown=box:box apps/eve/bots/seo/package.json apps/eve/bots/seo/
 COPY --chown=box:box apps/eve/bots/gtm/package.json apps/eve/bots/gtm/
 COPY --chown=box:box apps/eve/bots/designer/package.json apps/eve/bots/designer/
+# Not a Bot: the project a Bot made with `Seat.CreateBot` runs, since it has
+# no directory of its own. `eveProjectIds` skips it, so it never gets a roster
+# row; it still has to be built like every other project here.
+COPY --chown=box:box apps/eve/bots/template/package.json apps/eve/bots/template/
 COPY --chown=box:box apps/whatsapp-bridge/package.json apps/whatsapp-bridge/
 COPY --chown=box:box packages/shared/package.json packages/shared/
 COPY --chown=box:box packages/proto/package.json packages/proto/

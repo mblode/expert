@@ -105,6 +105,14 @@ export function BotSettings({
   return (
     <form className="flex min-h-0 flex-col" onSubmit={(event) => void save(event)}>
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+        {/* The mark first and large, because this sheet is about who the Bot
+            is and the mark is the part a person recognises before they read
+            anything. It updates as the shapes and colours below are picked,
+            so the preview is the subject rather than a swatch in a form. */}
+        <div className="flex justify-center py-6">
+          <BotMark botId={botId} profile={draft} size="hero" />
+        </div>
+
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="bot-name">Name</FieldLabel>
@@ -153,43 +161,52 @@ export function BotSettings({
           </Field>
 
           <Field>
-            <FieldLabel>Mark</FieldLabel>
-            <div className="flex items-center gap-4">
-              <BotMark botId={botId} profile={draft} size="lg" />
-              <div className="flex flex-wrap gap-1.5">
+            <FieldLabel>Character</FieldLabel>
+            {/* One card, shapes over colours, each drawn as itself rather than
+                as a labelled button: the thing being chosen is a picture, so a
+                row of words with a picture attached puts the label in front of
+                the choice. The name is still on the button for a screen
+                reader, which is where the word belongs. */}
+            <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4">
+              <div className="flex flex-wrap justify-center gap-3">
+                {AVATAR_SHAPES.map((shape) => (
+                  <button
+                    aria-label={SHAPE_LABEL[shape]}
+                    aria-pressed={draft.avatar_shape === shape}
+                    className={cn(
+                      "grid size-11 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      draft.avatar_shape === shape && "ring-2 ring-foreground/60",
+                    )}
+                    key={shape}
+                    onClick={() => edit({ avatar_shape: shape })}
+                    type="button"
+                  >
+                    <BotMark botId={botId} profile={{ ...draft, avatar_shape: shape }} size="lg" />
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap justify-center gap-3">
                 {AVATAR_COLORS.map((color) => (
                   <button
                     aria-label={color}
                     aria-pressed={draft.avatar_color === color}
                     className={cn(
-                      "size-7 rounded-full border border-border/60 outline-none transition-transform focus-visible:ring-2 focus-visible:ring-ring",
-                      draft.avatar_color === color
-                        ? "ring-2 ring-ring ring-offset-2 ring-offset-background"
-                        : "hover:scale-105",
+                      "grid size-11 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      draft.avatar_color === color && "ring-2 ring-foreground/60",
                     )}
                     key={color}
                     onClick={() => edit({ avatar_color: color })}
-                    style={{ backgroundColor: color }}
                     type="button"
-                  />
+                  >
+                    <span
+                      className="size-7 rounded-full border border-border/60"
+                      style={{ backgroundColor: color }}
+                    />
+                  </button>
                 ))}
               </div>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {AVATAR_SHAPES.map((shape) => (
-                <Button
-                  aria-pressed={draft.avatar_shape === shape}
-                  key={shape}
-                  onClick={() => edit({ avatar_shape: shape })}
-                  size="xs"
-                  type="button"
-                  variant={draft.avatar_shape === shape ? "secondary" : "outline"}
-                >
-                  <BotMark botId={botId} profile={{ ...draft, avatar_shape: shape }} size="sm" />
-                  {SHAPE_LABEL[shape]}
-                </Button>
-              ))}
-            </div>
+            <FieldDescription>How this Bot’s mark looks everywhere.</FieldDescription>
           </Field>
 
           {failure && <FieldError>{failure}</FieldError>}

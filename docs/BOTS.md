@@ -1,6 +1,6 @@
 # The Bots on this computer
 
-One computer, eight screens, eight Bots. Each one is a directory under
+One computer, sixteen screens, and eight Bots that arrive with the build. Each of those is a directory under
 [`apps/eve/bots`](../apps/eve/bots): its profile, its instructions, its
 skills, its schedules, and any door something outside can knock on. The
 directory is the agent, so a Bot arrives with a deploy and not with a form.
@@ -24,6 +24,25 @@ scope, not trust: see `api/DESIGN.md`.
 
 Screens are assigned in the order the roster is seeded (`main` first, then
 alphabetically), and a Bot keeps its screen once it has one.
+
+## Making one
+
+The eight above arrive with a deploy, because each is a directory in git.
+A ninth is made from hello.expert: **New Bot** in the roster, a name, what it
+is for, a mark. It gets the next free screen, its own thread and its own
+agent token, exactly like the shipped ones.
+
+What it does not get is a directory, and it cannot: that would be a deploy.
+It runs `apps/eve/bots/template` instead, which is the same five tools and
+the same box, and what makes it itself is its profile. The hub folds the
+name, the label and the description into its system prompt before every
+turn, so "what is it for" is the brief rather than a note: write it as an
+instruction and rewrite it whenever from the Bot's own sheet.
+
+The trade is real and worth saying: a made Bot has no skills of its own, no
+routines and no webhook, because all three are files. When one earns them,
+give it a directory and it becomes a shipped Bot under the same id, keeping
+its screen, its thread and its token.
 
 The four that touch code (`software-engineer`, `qa`, `pm`, `seo`) open
 **draft** pull requests and merge nothing; `designer` hands its work to them
