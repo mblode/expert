@@ -30,6 +30,8 @@ export class FakeDesk implements Desk {
   failPing: boolean;
   /** A keypress containing this key throws, to exercise the skip-the-rest rule. */
   failKeys: string | undefined;
+  /** focusHint throws, to exercise the batch surviving a title read it cannot do. */
+  failFocus = false;
 
   constructor(opts: FakeDeskOptions = {}) {
     this.failPing = opts.failPing ?? false;
@@ -168,6 +170,13 @@ export class FakeDesk implements Desk {
   }
 
   async focusHint(): Promise<FocusHint> {
+    if (this.failFocus) {
+      throw new ComputerError(
+        "DAEMON_DOWN",
+        "xdotool is dead",
+        unavailable("instance_gone", "attach"),
+      );
+    }
     return this.hint;
   }
 }

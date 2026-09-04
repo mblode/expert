@@ -398,7 +398,7 @@ No `form_input`. That is a browser product, not a desktop.
 6. `request_takeover` is terminal. Anything after it is `skipped`.
 
 ```
-{ kind: "ok",      duration_ms, image_b64?, media_type? }
+{ kind: "ok",      duration_ms, image_b64?, media_type?, image? }
 { kind: "error",   duration_ms, code, message, reason?, phase?, retryable? }
 { kind: "denied",  rule, reason }   // a hub policy refused it before it ran
 { kind: "skipped", reason }         // prior_failed | after_takeover | after_denied | seat_taken
@@ -408,6 +408,48 @@ Closed on the way in, additive on the way out: a client must degrade a
 result `kind` or skip `reason` it does not know to the generic case
 rather than hard-fail on it.
 
+### Images
+
+Bytes are not a name. Every image the hub returns carries an `image`
+block beside its base64, and the response's trailing screenshot carries
+the same block as `screenshot` beside `screenshot_b64`.
+
+```
+image?: { id: string, width: number, height: number, source?: {x,y,w,h} }
+```
+
+`id` is a sha256 prefix of the PNG. It is content-addressed rather than
+random for two reasons: a harness that has dropped the bytes out of the
+transcript can still let the model refer to the image, and two equal ids
+mean two identical screens, which is the cheapest possible answer to
+"did my click do anything". `width` and `height` are this image's
+pixels, so a full capture reports the display and a `zoom` reports its
+crop. `source` is set only by `zoom`; see **Coordinates**.
+
+The block is absent when the bytes are, and also when the PNG header
+cannot be read: a screenshot must never be lost to a metadata failure.
+
+### Focus
+
+```
+focus?: { title: string }
+```
+
+The focused window's name, as X reports it. The one thing a model
+reading only pixels reliably gets wrong is which window it is in, and
+the hub already reads this string every batch to build `pending_checks`,
+so naming it costs no new exec and opens no new door.
+
+It is untrusted, and the field name does not say so on its own: a page
+sets its own title, so this is the page talking. The hub strips control
+and format characters and caps it at 200 characters, which is what stops
+a title from faking a line of transcript, and nothing in the hub ever
+branches on it. This is the whole of the environment context the model
+gets: no URL, no tab list, no page text. A window's name is a label the
+model may read. Anything richer is the page handing the model
+instructions through a side door, which is the same refusal as the
+clipboard.
+
 ### Coordinates
 
 Invariant: **every `x`,`y` is an integer pixel of the last full-display
@@ -415,7 +457,9 @@ screenshot.** Origin top-left. Display is 1280×800. Scale is 1.
 
 `zoom` returns a crop. The next action's coordinates are still in
 the full 1280×800 space, not the crop. It is the only rule that does
-not punish a model for zooming.
+not punish a model for zooming. The crop's result states the rectangle
+it came from in `image.source`, so the projection back is read rather
+than remembered.
 
 Never normalize to 0–999. It looks portable and is a footgun the
 moment two displays or a zoom exist.

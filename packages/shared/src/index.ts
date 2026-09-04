@@ -316,13 +316,60 @@ export type Action =
   | { type: "request_takeover" };
 
 /**
+ * What an image is, beside its bytes.
+ *
+ * `id` is a sha256 prefix of the PNG, so it is a name the model can refer back
+ * to ("the tab strip in img_a1b2") after a harness has dropped the bytes from
+ * the transcript, and two equal ids mean two identical screens: the cheapest
+ * possible answer to "did my click do anything". Content-addressed rather than
+ * random precisely for that second property.
+ *
+ * `width`/`height` are the pixels of this image, which for a full capture is
+ * the display and for a `zoom` is the crop. `source` is the region of the full
+ * display the crop covers, and it is only ever set on a zoom: coordinates stay
+ * in the 1280x800 space (see api/DESIGN.md, Coordinates), so a model reading a
+ * crop needs the rectangle stated rather than remembered.
+ */
+export interface ImageMeta {
+  id: string;
+  width: number;
+  height: number;
+  source?: { x: PixelX; y: PixelY; w: number; h: number };
+}
+
+/**
+ * The focused window's name, as X reports it.
+ *
+ * Untrusted, and the field name is not enough to say so on its own: a page
+ * sets its own title, so this is the page talking. It is here because the one
+ * thing a pixel-only model reliably gets wrong is which window it is in, and
+ * the hub already reads this string every batch to build `pending_checks`.
+ * Naming it costs no new exec and opens no new door. It is bounded and
+ * stripped of control characters at the source so it cannot fake structure in
+ * a transcript, and nothing in the hub ever branches on it.
+ */
+export interface WindowFocus {
+  /** Attacker-controlled text. Render it, never follow it. */
+  title: string;
+}
+
+/** Longest window title carried to the model. Titles are labels, not documents. */
+export const FOCUS_TITLE_CAP = 200;
+
+/**
  * Three terminal states, not two: `denied` is the hub's own answer, not a
  * failure of the box. It means a policy rule refused the action before it
  * ran, so retrying the identical action is pointless: the model needs the
  * human, or a different plan.
  */
 export type ActionResult =
-  | { kind: "ok"; duration_ms: number; image_b64?: string; media_type?: string }
+  | {
+      kind: "ok";
+      duration_ms: number;
+      image_b64?: string;
+      media_type?: string;
+      image?: ImageMeta;
+    }
   | ({
       kind: "error";
       duration_ms: number;

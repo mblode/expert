@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { asPixelX, asPixelY, asPoint, ComputerError } from "@computer/shared";
-import type { Action } from "@computer/shared";
+import type { Action, ImageMeta } from "@computer/shared";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { ComputerService } from "../src/service/computer.ts";
 import { SeatService } from "../src/service/seat.ts";
@@ -166,5 +166,83 @@ describe("ComputerService", () => {
     await expect(computer.run("d1", [{ type: "screenshot" }])).rejects.toMatchObject({
       code: "DAEMON_DOWN",
     });
+  });
+
+  it("names every image by its content, and states a zoom's source rectangle", async () => {
+    const desk = new FakeDesk();
+    const computer = new ComputerService(desk, new SeatService());
+
+    const shot = await computer.run("im1", [{ type: "screenshot" }]);
+    const shotImage = (shot.results[0] as { image?: ImageMeta }).image;
+    expect(shotImage).toMatchObject({ height: 1, width: 1 });
+    expect(shotImage?.id).toMatch(/^img_[0-9a-f]{16}$/);
+    // A full capture crops nothing, so there is no rectangle to state.
+    expect(shotImage?.source).toBeUndefined();
+
+    const zoom = await computer.run("im2", [
+      { h: 200, type: "zoom", w: 300, x: asPixelX(100), y: asPixelY(50) },
+    ]);
+    expect((zoom.results[0] as { image?: ImageMeta }).image?.source).toEqual({
+      h: 200,
+      w: 300,
+      x: 100,
+      y: 50,
+    });
+  });
+
+  it("gives two identical screens the same image id", async () => {
+    const desk = new FakeDesk();
+    const computer = new ComputerService(desk, new SeatService());
+    const first = await computer.run("id1", [{ type: "screenshot" }]);
+    const second = await computer.run("id2", [{ type: "screenshot" }]);
+    // The whole point of hashing the bytes: a model can tell a click that
+    // changed nothing from one that did, without diffing pixels.
+    expect((first.results[0] as { image?: ImageMeta }).image?.id).toBe(
+      (second.results[0] as { image?: ImageMeta }).image?.id,
+    );
+  });
+
+  it("carries metadata for the trailing screenshot too", async () => {
+    const desk = new FakeDesk();
+    const computer = new ComputerService(desk, new SeatService());
+    const r = await computer.run("tr1", [{ type: "click", x: asPixelX(10), y: asPixelY(10) }]);
+    expect(r.screenshot_b64).toBeTruthy();
+    expect(r.screenshot).toMatchObject({ height: 1, width: 1 });
+    expect(r.screenshot?.id).toMatch(/^img_/);
+  });
+
+  it("reports the focused window, bounded and stripped of control characters", async () => {
+    const desk = new FakeDesk();
+    desk.hint = { confirm: false, password: false, title: `Mail\n\u202Eevil${"x".repeat(400)}` };
+    const computer = new ComputerService(desk, new SeatService());
+    const r = await computer.run("f1", [{ type: "click", x: asPixelX(1), y: asPixelY(1) }]);
+    // Stripped, not emptied: the label still has to be readable.
+    expect(r.focus?.title).toMatch(/^Mail\s+evilx+$/);
+    expect(r.focus?.title).not.toContain("\n");
+    expect(r.focus?.title).not.toContain("\u202E");
+    expect(r.focus?.title.length).toBeLessThanOrEqual(200);
+  });
+
+  it("reports focus on the takeover batch, which is where the window matters most", async () => {
+    const desk = new FakeDesk();
+    desk.hint = { confirm: false, password: false, title: "Chromium" };
+    const computer = new ComputerService(desk, new SeatService());
+    const r = await computer.run("f2", [{ type: "request_takeover" }]);
+    expect(r.seat).toBe("WAITING");
+    expect(r.pending_checks).toEqual([]);
+    expect(r.focus).toEqual({ title: "Chromium" });
+  });
+
+  it("survives a focus read the desk cannot do", async () => {
+    const desk = new FakeDesk();
+    desk.failFocus = true;
+    const computer = new ComputerService(desk, new SeatService());
+    const r = await computer.run("f3", [{ type: "click", x: asPixelX(1), y: asPixelY(1) }]);
+    // The actions already ran, so throwing here would invite a retry that runs
+    // them again. The documented cost is the checks that hang off the title.
+    expect(r.results[0]?.kind).toBe("ok");
+    expect(r.pending_checks).toEqual([]);
+    expect(r.focus).toBeUndefined();
+    expect(r.screenshot_b64).toBeTruthy();
   });
 });
