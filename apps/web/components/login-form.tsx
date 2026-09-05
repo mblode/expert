@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 import { authClient } from "@/lib/auth-client";
-import { captureEvent, identifyUser } from "@/lib/posthog-client";
+import { identifyUser } from "@/lib/posthog-client";
 import { userFromSignIn } from "@/lib/sign-in-user";
 
 const OTP_LENGTH = 6;
@@ -129,7 +129,8 @@ export function LoginForm({
       if (user) {
         identifyUser(user.id, user.email ?? email.trim().toLowerCase());
       }
-      captureEvent("login_completed", { method: "email_otp" });
+      // The server's session-create hook owns login_completed. Capturing it
+      // here as well counts one successful login twice.
     } catch {
       // Analytics must not unlock the form or paint a network error.
     }
