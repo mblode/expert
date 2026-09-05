@@ -448,3 +448,20 @@ The final DM through that binding returned the exact requested phrase,
 `Expert connected`, in the real WhatsApp chat.
 New customers still require prepared capacity, their own Cursor key, and a clock
 registration. Invitation creation does not provision any of those automatically.
+
+### Automatic WhatsApp signup
+
+New DMs can allocate private computers without invitations. See
+`docs/plans/automatic-whatsapp-onboarding.md` for the tested flow and limits.
+The web needs `EXPERT_FLY_TOKEN`, `EXPERT_FLY_ORG`, `EXPERT_COMPUTER_IMAGE`,
+`EXPERT_MODEL_KEYS` (JSON array of distinct, budgeted Gateway keys),
+`EXPERT_SIGNUP_CAPACITY`, and `EXPERT_AUTOMATIC_SIGNUP=on`.
+The web and outer clock share `EXPERT_PROVISION_SECRET`; the clock additionally
+uses `EXPERT_PLATFORM_URL=https://hello.expert`. It retries unfinished provisioning
+and discovers tenant wake registrations without a per-tenant deployment.
+
+Disable `EXPERT_AUTOMATIC_SIGNUP` to stop new allocation. Existing private routes,
+queued messages and provisioning rows remain, so already accepted work can finish.
+Preserve the phone tables and `/data/platform-targets.json` during recovery.
+Never deploy a Fly administration key or another customer's Cursor key into a
+new guest. The guest image remains pinned to the verified digest above.

@@ -1117,3 +1117,12 @@ export interface WhatsAppConnectResponse {
   connector_secret: string;
   delivery_secret: string;
 }
+
+export {
+  machineConfig,
+  COMPUTER_REGION,
+  COMPUTER_VOLUME_GB,
+  PROCESS_GROUP,
+  WORKSPACE_PATH,
+} from "./fly-computer.ts";
+export type { ComputerSpec } from "./fly-computer.ts";

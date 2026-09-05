@@ -1,3 +1,5 @@
+import { phoneComputer } from "./phone-account";
+import { ensurePhoneAccounts, ensureEnrollmentTable } from "./account-tables";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 
@@ -6,30 +8,6 @@ import { computersFromEnv } from "./computers";
 import type { ComputerRecord } from "./computers";
 
 /** A claim and its ownership are one row, so there is no dual-write window. */
-let ready: Promise<void> | undefined;
-function ensureTable(): Promise<void> {
-  ready ??= db
-    .run(sql`CREATE TABLE IF NOT EXISTS computer_enrollment (
-    id TEXT PRIMARY KEY NOT NULL,
-    hub_url TEXT NOT NULL UNIQUE,
-    label TEXT NOT NULL,
-    setup_code TEXT NOT NULL,
-    email TEXT NOT NULL,
-    token_hash TEXT NOT NULL UNIQUE,
-    expires_at INTEGER NOT NULL,
-    created_at INTEGER NOT NULL,
-    created_by TEXT NOT NULL,
-    user_id TEXT UNIQUE,
-    claimed_at INTEGER
-  )`)
-    .then(() => undefined)
-    .catch((error: unknown) => {
-      ready = undefined;
-      throw error;
-    });
-  return ready;
-}
-
 const digest = (token: string) => createHash("sha256").update(token).digest("hex");
 const emailKey = (email: string) => email.trim().toLowerCase();
 
@@ -40,7 +18,7 @@ interface OwnedComputer {
 
 /** Never serialise this object to a client: it includes the pairing credential. */
 export async function ownedComputer(userId: string): Promise<OwnedComputer | undefined> {
-  await ensureTable();
+  await ensureEnrollmentTable();
   const rows = await db.all<{
     id: string;
     hub_url: string;
@@ -58,12 +36,12 @@ export async function ownedComputer(userId: string): Promise<OwnedComputer | und
         },
         setupCode: row.setup_code,
       }
-    : undefined;
+    : phoneComputer(userId);
 }
 
 /** Invitations permit registration, not access to a computer before redemption. */
 export async function hasComputerInvitation(email: string): Promise<boolean> {
-  await ensureTable();
+  await ensureEnrollmentTable();
   const rows = await db.all(sql`SELECT id FROM computer_enrollment
     WHERE email = ${emailKey(email)} AND (user_id IS NOT NULL OR expires_at > ${Date.now()}) LIMIT 1`);
   return rows.length > 0;
@@ -88,7 +66,7 @@ export async function createComputerEnrollment(input: {
   const label = input.label.trim();
   if (!label || label.length > 64 || input.setupCode.length < 16 || input.setupCode.length > 512)
     throw new Error("Enter a name and the computer's setup credential.");
-  await ensureTable();
+  await ensureEnrollmentTable();
   const token = randomBytes(32).toString("base64url");
   const now = Date.now();
   const expires = now + 7 * 24 * 60 * 60 * 1000;
@@ -115,7 +93,8 @@ export async function claimComputerEnrollment(input: {
   emailVerified: boolean;
 }): Promise<boolean> {
   if (!input.emailVerified || !/^[A-Za-z0-9_-]{43}$/u.test(input.token)) return false;
-  await ensureTable();
+  await ensureEnrollmentTable();
+  await ensurePhoneAccounts();
   const hash = digest(input.token);
   const email = emailKey(input.email);
   // One conditional write, including the one-computer-per-user check. SQLite
@@ -123,7 +102,8 @@ export async function claimComputerEnrollment(input: {
   await db.run(sql`UPDATE computer_enrollment SET user_id = ${input.userId}, claimed_at = ${Date.now()}
     WHERE token_hash = ${hash} AND email = ${email} AND user_id IS NULL
       AND expires_at > ${Date.now()}
-      AND NOT EXISTS (SELECT 1 FROM computer_enrollment WHERE user_id = ${input.userId})`);
+      AND NOT EXISTS (SELECT 1 FROM computer_enrollment WHERE user_id = ${input.userId})
+      AND NOT EXISTS (SELECT 1 FROM phone_account WHERE user_id = ${input.userId})`);
   const rows = await db.all(sql`SELECT id FROM computer_enrollment
     WHERE token_hash = ${hash} AND email = ${email} AND user_id = ${input.userId}`);
   return rows.length === 1;

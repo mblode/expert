@@ -21,6 +21,15 @@ export default async function StartPage({
     typeof params.invite === "string" && /^[A-Za-z0-9_-]{43}$/u.test(params.invite)
       ? params.invite
       : "";
+  const phoneToken =
+    typeof params.claim === "string" && /^[A-Za-z0-9_-]{43}$/u.test(params.claim)
+      ? params.claim
+      : "";
+  const destination = phoneToken
+    ? `/start?claim=${phoneToken}`
+    : token
+      ? `/start?invite=${token}`
+      : "/start";
   const session = await getSessionCached();
   return (
     <main className="mx-auto min-h-dvh max-w-lg space-y-6 px-6 py-16">
@@ -31,6 +40,8 @@ export default async function StartPage({
       {session ? (
         session.seatToken ? (
           <SetupReady />
+        ) : phoneToken ? (
+          <ClaimComputer token={phoneToken} phone />
         ) : token ? (
           <ClaimComputer token={token} />
         ) : (
@@ -38,7 +49,7 @@ export default async function StartPage({
             <p>
               {session.computerId
                 ? "Your computer is not responding yet. Your workspace is still reserved."
-                : "Expert is opening in small batches. Use your personal setup invitation to claim a computer."}
+                : "Message Vibey on WhatsApp to start your private assistant. Send “workspace” in the chat whenever you want to connect it here."}
             </p>
             {session.computerId && (
               <Link href="/" className="inline-flex min-h-12 items-center underline">
@@ -49,10 +60,22 @@ export default async function StartPage({
         )
       ) : (
         <div className="space-y-4">
-          <p>Sign in with your invited email to set up your private workspace.</p>
+          <p>
+            {phoneToken
+              ? "Sign in to open your WhatsApp assistant’s workspace."
+              : "Message Vibey on WhatsApp. Your private assistant is set up automatically."}
+          </p>
+          {!phoneToken && !token && (
+            <Link
+              className="inline-flex min-h-12 items-center underline"
+              href="https://wa.me/message/O7KCFC6HSFCPM1"
+            >
+              Message Vibey
+            </Link>
+          )}
           <Link
             className="inline-flex min-h-12 items-center underline"
-            href={`/login?next=${encodeURIComponent(token ? `/start?invite=${token}` : "/start")}`}
+            href={`/login?next=${encodeURIComponent(destination)}`}
           >
             Sign in to continue
           </Link>

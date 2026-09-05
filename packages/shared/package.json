@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./fly-computer": "./src/fly-computer.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

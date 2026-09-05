@@ -1,3 +1,4 @@
+import { PlatformTargets } from "./platform.ts";
 import { Registrations } from "./registrations.ts";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
@@ -97,12 +98,39 @@ if (routineCount === 0 || tenants.length === 0) {
 
 const registrationPath = process.env.CLOCK_REGISTRATION_PATH;
 const registrationSecrets = process.env.CLOCK_REGISTRATION_SECRETS;
+const wakeSecrets: Record<string, string> = registrationSecrets
+  ? JSON.parse(registrationSecrets)
+  : {};
+const platform =
+  process.env.EXPERT_PROVISION_SECRET && process.env.EXPERT_PLATFORM_URL
+    ? new PlatformTargets(
+        "/data/platform-targets.json",
+        process.env.EXPERT_PLATFORM_URL,
+        process.env.EXPERT_PROVISION_SECRET,
+      )
+    : undefined;
 const registrations =
   registrationPath && registrationSecrets
-    ? new Registrations(registrationPath, JSON.parse(registrationSecrets) as Record<string, string>)
+    ? new Registrations(registrationPath, wakeSecrets)
     : undefined;
 
 const tick = (): void => {
+  for (const row of platform?.current() ?? []) {
+    wakeSecrets[row.app] = row.clock_secret;
+    if (!tenants.some((tenant) => tenant.name === row.app))
+      tenants.push(
+        new Tenant({
+          busyGraceMs,
+          holdMs,
+          log,
+          maxHoldMs,
+          name: row.app,
+          timeoutMs,
+          url: `https://${row.app}.fly.dev`,
+        }),
+      );
+  }
+  void platform?.refresh();
   const at = Date.now();
   const due = dueSoon(schedule, at, leadMs);
   for (const tenant of tenants) {

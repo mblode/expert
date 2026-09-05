@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ConnectWhatsApp } from "./whatsapp";
 
 /** A claim is an explicit action, never a side effect of a link preview. */
-export function ClaimComputer({ token }: { token: string }) {
+export function ClaimComputer({ token, phone = false }: { token: string; phone?: boolean }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
@@ -21,7 +21,7 @@ export function ClaimComputer({ token }: { token: string }) {
         method: "POST",
         signal: AbortSignal.timeout(45_000),
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ action: "claim", token }),
+        body: JSON.stringify({ action: phone ? "claim-phone" : "claim", token }),
       });
       const body = await response.json();
       if (!response.ok) {
@@ -41,7 +41,9 @@ export function ClaimComputer({ token }: { token: string }) {
   return (
     <div className="space-y-4">
       <p className="text-muted-foreground">
-        Your assistant has a private computer. Claim it to start chatting and connect WhatsApp.
+        {phone
+          ? "Open the private workspace for your WhatsApp assistant."
+          : "Your assistant has a private computer. Claim it to start chatting and connect WhatsApp."}
       </p>
       {message && (
         <p role="alert" className="text-sm text-destructive">
@@ -50,11 +52,11 @@ export function ClaimComputer({ token }: { token: string }) {
       )}
       <Button
         className="min-h-12"
-        aria-label="Create my workspace"
+        aria-label={phone ? "Open my workspace" : "Create my workspace"}
         loading={pending}
         onClick={() => void claim()}
       >
-        Create my workspace
+        {phone ? "Open my workspace" : "Create my workspace"}
       </Button>
     </div>
   );

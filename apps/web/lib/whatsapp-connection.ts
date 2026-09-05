@@ -1,3 +1,4 @@
+import { ensurePhoneAccounts } from "./phone-account";
 import { createHash, randomBytes } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
@@ -42,8 +43,10 @@ interface Connection {
 
 export async function connectionStatus(userId: string) {
   await ensureTable();
+  await ensurePhoneAccounts();
   const [row] = await db.all<Connection>(
-    sql`SELECT state, jid, expires_at FROM whatsapp_connection WHERE user_id = ${userId}`,
+    sql`SELECT state, jid, expires_at FROM whatsapp_connection WHERE user_id = ${userId}
+      OR user_id IN (SELECT id FROM phone_account WHERE user_id = ${userId})`,
   );
   return row
     ? {
@@ -126,4 +129,33 @@ export async function deliveryRecipient(secret: string, acct: string): Promise<s
   const [row] = await db.all<{ jid: string }>(sql`SELECT jid FROM whatsapp_connection
     WHERE delivery_hash = ${hash(secret)} AND acct = ${acct} AND state = 'active'`);
   return row?.jid;
+}
+
+/** A transport-created private computer needs no second phone challenge. */
+export async function activatePhoneConnection(
+  accountId: string,
+  hubUrl: string,
+  jid: string,
+  credentials: WhatsAppConnectResponse,
+) {
+  if (
+    credentials.jid !== jid ||
+    credentials.acct !== accountId ||
+    typeof credentials.connector_id !== "string" ||
+    !credentials.connector_id ||
+    typeof credentials.connector_secret !== "string" ||
+    credentials.connector_secret.length < 32 ||
+    typeof credentials.delivery_secret !== "string" ||
+    credentials.delivery_secret.length < 32
+  )
+    throw new Error("Private connection identity mismatch");
+  await ensureTable();
+  await db.run(sql`INSERT INTO whatsapp_connection
+    (user_id, hub_url, acct, connector_id, connector_secret, delivery_hash, code_hash, expires_at, jid, state)
+    VALUES (${accountId}, ${hubUrl}, ${accountId}, ${credentials.connector_id}, ${credentials.connector_secret},
+      ${hash(credentials.delivery_secret)}, ${hash(randomBytes(32).toString("hex"))}, 0, ${jid}, 'active')
+    ON CONFLICT(user_id) DO NOTHING`);
+  const route = await connectionForSender(jid);
+  if (route?.user_id !== accountId || route.hub_url !== hubUrl)
+    throw new Error("Private connection conflict");
 }

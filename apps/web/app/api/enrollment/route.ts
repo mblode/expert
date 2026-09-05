@@ -1,3 +1,4 @@
+import { claimPhone } from "@/lib/phone-account";
 import { claimComputerEnrollment, createComputerEnrollment } from "@/lib/computer-enrollment";
 import { boundComputerId, isComputerOperator } from "@/lib/computers";
 import { getSessionCached } from "@/lib/session";
@@ -49,6 +50,20 @@ export async function POST(request: Request): Promise<Response> {
         { status: 400 },
       );
     }
+  }
+  if (body.action === "claim-phone" && typeof body.token === "string") {
+    if (!session.user.emailVerified || boundComputerId(session.user.email, process.env))
+      return Response.json(
+        { error: "Use a verified account without an existing computer." },
+        { status: 409 },
+      );
+    const claimed = await claimPhone(body.token, session.user.id);
+    return Response.json(
+      claimed
+        ? { claimed: true }
+        : { error: "This link expired or is already used. Message Vibey: workspace" },
+      { status: claimed ? 200 : 403, headers: { "cache-control": "no-store" } },
+    );
   }
   if (body.action !== "claim" || typeof body.token !== "string")
     return Response.json({ error: "Open your setup invitation." }, { status: 400 });

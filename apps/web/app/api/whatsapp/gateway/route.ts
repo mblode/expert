@@ -1,3 +1,6 @@
+import { after } from "next/server";
+import { automaticSignupEnabled, provisionNextPhone } from "@/lib/phone-provision";
+import { phoneAccount, reservePhone, queuePhoneMessage, phoneClaimLink } from "@/lib/phone-account";
 import { timingSafeEqual } from "node:crypto";
 import {
   connectionForSender,
@@ -50,7 +53,46 @@ export async function POST(request: Request) {
     }
     const route = await connectionForSender(jid);
     if (body.action === "resolve")
-      return json({ bound: Boolean(route) || (await reservedSender(jid)) });
+      return json({
+        bound:
+          Boolean(route) ||
+          (await reservedSender(jid)) ||
+          automaticSignupEnabled() ||
+          Boolean(await phoneAccount(jid)),
+      });
+    if (
+      body.action === "message" &&
+      typeof body.messageId === "string" &&
+      body.messageId &&
+      typeof body.message === "string"
+    ) {
+      let account = await phoneAccount(jid);
+      if (
+        account &&
+        /^(workspace|open workspace)$/iu.test(body.message.trim()) &&
+        account.stage === "ready"
+      )
+        return json({ reply: `Open your private workspace: ${await phoneClaimLink(account)}` });
+      if (!route && !(await reservedSender(jid))) {
+        account ??= automaticSignupEnabled()
+          ? await reservePhone(jid, Number(process.env.EXPERT_SIGNUP_CAPACITY ?? 25))
+          : undefined;
+        if (!account)
+          return json({
+            reply: "New assistants are at capacity right now. Please try again later.",
+          });
+        await queuePhoneMessage(account, {
+          messageId: body.messageId,
+          message: body.message,
+          media: body.media,
+        });
+        after(provisionNextPhone);
+        return json({
+          reply:
+            "Hi! I’m getting your private assistant ready. I’ve saved your message and will reply here shortly.",
+        });
+      }
+    }
     if (body.action === "message" && !route && (await reservedSender(jid)))
       return json({
         reply: "Open Expert and finish connecting this number before chatting with your assistant.",
