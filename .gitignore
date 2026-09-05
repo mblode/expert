@@ -6,10 +6,6 @@ dist/
 .env.local
 coverage/
 *.log
-apps/ios/build/
-apps/ios/DerivedData/
-xcuserdata/
-*.xcuserstate
 .idea/
 data/
 

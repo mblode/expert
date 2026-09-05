@@ -15,7 +15,6 @@ data
 # ignores it, so only a deploy from a working tree hits it: exactly the tree
 # anyone has after running Eve locally, and exactly when a deploy matters.
 **/.output
-apps/ios
 # Product web is Vercel-only. The guest image is Eve + hub + desk; do not
 # ship the Next tree. The Dockerfile drops apps/web from workspaces before
 # npm ci, so this exclude is enough (no stub, no COPY of package.json).
@@ -25,4 +24,3 @@ docs
 **/.DS_Store
 **/coverage
 **/*.tsbuildinfo
-packages/proto/gen/swift

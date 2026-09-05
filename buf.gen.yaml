@@ -6,15 +6,3 @@ plugins:
     include_imports: true
     opt:
       - target=ts
-  - remote: buf.build/apple/swift
-    out: packages/proto/gen/swift
-    opt:
-      - Visibility=Public
-      - FileNaming=PathToUnderscores
-  - remote: buf.build/connectrpc/swift
-    out: packages/proto/gen/swift
-    opt:
-      - Visibility=Public
-      - GenerateAsyncMethods=true
-      - GenerateCallbackMethods=false
-      - FileNaming=PathToUnderscores

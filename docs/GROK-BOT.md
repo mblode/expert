@@ -2,6 +2,10 @@
 
 Research date: 2026-09-02. Sources are xAI's docs and launch post, Cursor's help pages, press coverage, and the community reconstructions already cited in [`api/RESEARCH.md`](../api/RESEARCH.md). Where something is not public it is marked unknown rather than guessed. The second half maps the product onto this repository and lays out the order of work for a web client.
 
+The Expert iOS app was removed on 2026-09-05. References to it below describe
+the earlier design; screenshots remain in `docs/reference/`. The supported
+interfaces are now WhatsApp and hello.expert.
+
 ## 1. The product
 
 **Pitch.** "Grok Bot is your team of always-on agents. They have their own computer, work inside tools and apps like you do, and keep working 24/7." Bots are framed as teammates, not tasks: you message them like a coworker, they sign into your tools, finish multi-step jobs, and come back only when something needs approval. ([x.ai/news/introducing-grok-bot](https://x.ai/news/introducing-grok-bot))

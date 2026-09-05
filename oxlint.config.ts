@@ -13,7 +13,7 @@ import react from "ultracite/oxlint/react";
  */
 export default defineConfig({
   extends: [core, next, react],
-  ignorePatterns: [...core.ignorePatterns, "packages/proto/gen/**", "apps/ios/**", "**/.eve/**"],
+  ignorePatterns: [...core.ignorePatterns, "packages/proto/gen/**", "**/.eve/**"],
   rules: {
     // Style the repo takes the other way.
     "func-style": "off",

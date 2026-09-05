@@ -8,6 +8,9 @@ Sign in, watch the screen, take over when the agent gets stuck, hand it back.
 
 </div>
 
+The supported interfaces are WhatsApp and [hello.expert](https://hello.expert).
+The native iOS app was removed; the web workspace works on mobile.
+
 ## Demo
 
 Sign in at [hello.expert](https://hello.expert) to watch the desk and talk to the agent. One Fly Machine per tenant: Blode stays `mblode-computer`; Vibey is a second computer (`vcmc-computer`).
