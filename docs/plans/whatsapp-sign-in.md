@@ -25,3 +25,8 @@ code delivery and browser sign-in through the owner's real WhatsApp account.
 Email recovery enrollment and one-tap magic links are not part of this change.
 Rollback restores the email-first UI and removes the WhatsApp auth plugin; keep
 phone ownership rows and user records so existing computers remain attached.
+
+Production verification, 2026-09-05: full `npm run check` passed. Chrome
+confirmed code delivery through Vibey and successful sign-in to the existing
+owner workspace after signing out. New phone-user creation, origin rejection
+and replay protection were verified through a real Better Auth handler test.

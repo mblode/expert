@@ -27,7 +27,7 @@ import type { AvatarColor, AvatarShape } from "./seat";
  */
 export const howItWorks = [
   {
-    body: "An email code. Nothing to install, and the computer is already awake.",
+    body: "A code from your WhatsApp chat opens the same private workspace. Nothing to install.",
     step: "01",
     title: "Sign in",
   },
@@ -189,7 +189,8 @@ export const faqs = [
     question: "What is this?",
   },
   {
-    answer: "Open hello.expert and sign in with an email code. The computer is already waiting.",
+    answer:
+      "Message Vibey on WhatsApp to set up your assistant. When you want web access, message sign in and enter your code at hello.expert.",
     question: "How do I start?",
   },
   {
@@ -222,7 +223,8 @@ export const faqs = [
     question: "Does it keep my files?",
   },
   {
-    answer: "Same sign-in, same computer, same conversations.",
-    question: "What about the iPhone app?",
+    answer:
+      "Use WhatsApp for conversation and hello.expert in your browser for the computer, files and coding sessions. No app download needed.",
+    question: "Can I use it on my iPhone?",
   },
 ];

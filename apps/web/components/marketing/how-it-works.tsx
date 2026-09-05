@@ -170,11 +170,11 @@ const SignInCard = ({ scrollYProgress: p }: { scrollYProgress: MotionValue<numbe
         className="rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 py-2.5 text-sm text-white/80 sm:px-4"
         style={{ opacity: email }}
       >
-        you@example.com
+        Your WhatsApp number
       </motion.div>
 
       <motion.div className="text-white/60 text-xs" style={{ opacity: codeLabel }}>
-        We sent a six digit code.
+        Your code arrives in WhatsApp.
       </motion.div>
 
       <motion.div className="flex gap-1.5 sm:gap-2" style={{ opacity: digits }}>
@@ -309,7 +309,7 @@ export const HowItWorksSection = () => {
             </TweenElement>
           </div>
 
-          {/* Step 1: an email code, and the computer is already up */}
+          {/* Step 1: a WhatsApp code opens the existing computer */}
           <StepGroup
             description={howItWorks[0].body}
             range={[0.1, 0.15, 0.19, 0.23]}
