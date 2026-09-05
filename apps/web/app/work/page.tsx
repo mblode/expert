@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { readOnboarding } from "@/lib/onboarding-store";
 import { App } from "@/app-shell";
 import { getSessionCached } from "@/lib/session";
 import { parseWorkTarget, workTargetMatches } from "@/lib/work-target";
@@ -35,5 +36,6 @@ export default async function WorkPage({
       </div>
     );
   }
-  return <App initialTarget={target} />;
+  const { tools } = await readOnboarding(session.user.id);
+  return <App initialTarget={target} tools={tools} />;
 }

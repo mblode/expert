@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { revokeSeat } from "@/lib/computers";
 import { writeConnectionFile } from "@/lib/connection-guest";
 import { installConnection } from "@/lib/connection-install";
@@ -87,16 +89,20 @@ export async function POST(request: Request): Promise<Response> {
     if (!token) {
       result.plugin.path = `/workspace/eve/bots/${bot}/agent/connections/${result.plugin.filename}`;
     }
-    await captureServerEvent({
-      distinctId: distinctIdFromRequest(request, granted.computerId),
-      event: "plugin_added",
-      properties: {
-        auth_kind: result.plugin.authKind,
-        computer_id: granted.computerId,
-        installed: result.installed,
-        source: token ? "invite" : "owner",
-      },
-    });
+    // Awaited, this held the install response behind a two-second analytics
+    // flush and delayed the `finally` that ends the plugins seat.
+    after(() =>
+      captureServerEvent({
+        distinctId: distinctIdFromRequest(request, granted.computerId),
+        event: "plugin_added",
+        properties: {
+          auth_kind: result.plugin.authKind,
+          computer_id: granted.computerId,
+          installed: result.installed,
+          source: token ? "invite" : "owner",
+        },
+      }),
+    );
     return Response.json(result);
   } finally {
     // The plugins seat exists to write one file. It expires on its own in

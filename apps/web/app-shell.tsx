@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { BotSettings } from "./components/bot-settings";
 import { BotSidebar } from "./components/bot-sidebar";
 import { NewBot } from "./components/new-bot";
+import { ShareTemplate } from "./components/share-template";
 import { ChatPane } from "./components/chat-pane";
 import { ConnectError } from "./components/connect-error";
 import { DesktopPane } from "./components/desktop-pane";
@@ -50,8 +51,13 @@ function signOut(seat?: { hubUrl: string; seatToken: string }): void {
   );
 }
 
+const NO_TOOLS: string[] = [];
+
 /** The server page already required a session; this only reads the seat off it. */
-export function App({ initialTarget }: { initialTarget?: WorkTarget } = {}): React.ReactElement {
+export function App({
+  initialTarget,
+  tools = NO_TOOLS,
+}: { initialTarget?: WorkTarget; tools?: string[] } = {}): React.ReactElement {
   const { data: session, isPending } = authClient.useSession();
   const [recovered, setRecovered] = useState<BoundSeat | null>(null);
 
@@ -102,6 +108,7 @@ export function App({ initialTarget }: { initialTarget?: WorkTarget } = {}): Rea
       onRecovered={setRecovered}
       onSignOut={() => signOut({ hubUrl: seat.hubUrl, seatToken: seat.seatToken })}
       seatToken={seat.seatToken}
+      tools={tools}
       userEmail={session?.user?.email}
     />
   );
@@ -128,6 +135,7 @@ function Workspace({
   onRecovered,
   onSignOut,
   seatToken,
+  tools,
   userEmail,
 }: {
   initialTarget?: WorkTarget;
@@ -138,6 +146,8 @@ function Workspace({
   onRecovered: (seat: BoundSeat) => void;
   onSignOut: () => void;
   seatToken: string;
+  /** What this account said it lives in, at the first run. Empty is normal. */
+  tools: string[];
   userEmail?: string;
 }): React.ReactElement {
   const seat = useMemo(() => createSeat(hubUrl, seatToken), [hubUrl, seatToken]);
@@ -151,6 +161,7 @@ function Workspace({
   const [newBotOpen, setNewBotOpen] = useState(false);
   const [targetReady, setTargetReady] = useState(!initialTarget);
   const [targetError, setTargetError] = useState<string | null>(null);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     captureEvent(connectEvent, { computer_id: computerId });
@@ -275,9 +286,17 @@ function Workspace({
       computerId={computerId}
       computers={computers}
       display={display}
+      // Undefined until the first poll answers. An empty roster and a roster
+      // that has not arrived yet are different sentences in the sidebar, and
+      // on a suspended Machine the wake is seconds long, so the wrong one is
+      // what an operator sees on most cold loads.
+      loading={status === undefined}
       onDisplayChange={pickDisplay}
       // Same gate as the settings sheet: a hub that cannot serve the roster
       // read cannot serve the write either, so the button is not offered.
+      // `profiles` and not `status`: the roster is owner-only, so its rows are
+      // what prove this seat may also write. `status` would offer the button
+      // to a seat whose `CreateBot` comes back UNAUTHENTICATED.
       onNewBot={Object.keys(profiles).length > 0 ? () => setNewBotOpen(true) : undefined}
       onSignOut={onSignOut}
       onSwitchComputer={switchComputer}
@@ -363,6 +382,7 @@ function Workspace({
         screenNeedsYou={waitingElsewhere}
         seat={seat}
         seatState={screens.find((s) => s.display === display)?.state}
+        tools={tools}
       />
 
       <div className="hidden min-h-0 border-border border-l lg:block">{rail}</div>
@@ -412,7 +432,33 @@ function Workspace({
             botId={botId}
             key={botId}
             onSaved={(profile) => setProfiles((prev) => ({ ...prev, [botId]: profile }))}
+            onShare={() => {
+              setSettingsOpen(false);
+              setShareOpen(true);
+            }}
             profile={profiles[botId]}
+            seat={seat}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Its own sheet rather than a panel inside the settings one: what is
+          being decided here is what leaves this computer, and that deserves
+          the whole surface and its own way out. */}
+      <Dialog onOpenChange={setShareOpen} open={shareOpen}>
+        <DialogContent className="max-h-[90svh] max-w-md gap-0 overflow-hidden p-0">
+          <DialogHeader className="px-5 pt-5 pb-4">
+            <DialogTitle>Share as Template</DialogTitle>
+            <DialogDescription>
+              A copy of this Bot’s setup, behind a link. Bots made from it run on the computer of
+              whoever adds them.
+            </DialogDescription>
+          </DialogHeader>
+          <ShareTemplate
+            botId={botId}
+            botName={profiles[botId]?.name ?? botId}
+            computerId={computerId}
+            key={botId}
             seat={seat}
           />
         </DialogContent>

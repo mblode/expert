@@ -3,12 +3,21 @@ import {
   AVATAR_COLORS,
   AVATAR_SHAPES,
   BOT_PROFILE_MAX,
+  BOT_TEMPLATE_MAX,
   ComputerError,
   MEMORY_MAX_CHARS,
-  MEMORY_IN_PROMPT,
+  memoryId,
   parseMemory,
+  templateSlug,
+  validCron,
 } from "@computer/shared";
-import type { BotProfile, MessageBody } from "@computer/shared";
+import type {
+  BotProfile,
+  BotTemplatePlugin,
+  BotTemplateRoutine,
+  BotTemplateSkill,
+  MessageBody,
+} from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 
 /**
@@ -80,6 +89,43 @@ export class BotState {
   }
 
   /**
+   * The Bot's brief, its procedures, its schedule and the services it expects,
+   * as four files beside the profile.
+   *
+   * A Bot that came with the build has all of this in its Eve project, in git,
+   * where changing it is a deploy. A Bot made at runtime runs the template
+   * project, so until now it had nothing but its description: two Bots on one
+   * project differed by a paragraph. These are that difference made writable.
+   * They are read on every prompt, they are under `/workspace` so the Bot can
+   * rewrite them itself with `write_file`, and they are what a template is
+   * made of, which is the same fact from the other end: applying a template is
+   * writing these files.
+   *
+   * The project still seeds them. Box wins where both exist, exactly as the
+   * profile does, because after the first boot the file is the human's.
+   */
+  get instructionsPath(): string {
+    return `${this.dir}/instructions.md`;
+  }
+
+  get skillsPath(): string {
+    return `${this.dir}/skills.json`;
+  }
+
+  get routinesPath(): string {
+    return `${this.dir}/routines.json`;
+  }
+
+  get pluginsPath(): string {
+    return `${this.dir}/plugins.json`;
+  }
+
+  /** One skill's body. The id is slugged by the caller, never a path from a document. */
+  skillBodyPath(id: string): string {
+    return `${this.dir}/skills/${id}.md`;
+  }
+
+  /**
    * JSONL, like Grok's, and now read once and never written again.
    *
    * The hub appended a line here per bubble until conversations landed. The
@@ -122,11 +168,16 @@ export class BotState {
    * Who this Bot is, clamped.
    *
    * The agent can edit this file (it is under `/workspace`, so `write_file`
-   * reaches it), and this is where the profile leaves the box: for the
-   * prompt, for `/roster`, and from there into a client that renders the
-   * colour as an inline style. So every field is untrusted on the way out,
-   * not only on the way in: an unknown shape or colour falls back to the
-   * seeded one and the strings are truncated rather than dropped.
+   * reaches it), and this is where the profile leaves the box for `/roster`
+   * and from there into a client that renders the colour as an inline style.
+   * So every field is untrusted on the way out, not only on the way in: an
+   * unknown shape or colour falls back to the seeded one and the strings are
+   * truncated rather than dropped.
+   *
+   * The system prompt does not come through here. A Bot's Eve reads the same
+   * file on the box at the start of each turn (`apps/eve/lib/profile.ts`),
+   * because the hub's only seam in front of a turn is a byte pass-through
+   * proxy and a prompt the hub rendered would have nowhere to go.
    */
   async profile(): Promise<BotProfile> {
     const raw = await this.read(this.profilePath);
@@ -178,6 +229,173 @@ export class BotState {
   }
 
   /**
+   * Every fact this Bot remembers, as the lines a template carries. The
+   * dates are dropped deliberately: a shared memory is a fact the receiving
+   * Bot is being told, not a thing that happened to it on a day it was not
+   * running.
+   */
+  async memories(): Promise<string[]> {
+    const entries = await this.memory();
+    return entries.map((entry) => entry.text);
+  }
+
+  /**
+   * Add facts this Bot does not already have, oldest first, dated today.
+   *
+   * Appended rather than written, and by content, because memory is the one
+   * part of a Bot that is genuinely its own: installing a template must not
+   * erase what the Bot on the receiving computer already knows. `parseMemory`
+   * identifies an entry by its text, so a fact it already holds is a no-op.
+   */
+  async addMemories(facts: readonly string[], today = new Date()): Promise<number> {
+    const entries = await this.memory();
+    const have = new Set(entries.map((entry) => entry.id));
+    const date = today.toISOString().slice(0, 10);
+    const lines: string[] = [];
+    for (const fact of facts) {
+      const text = fact.replaceAll(/\s+/g, " ").trim().slice(0, MEMORY_MAX_CHARS);
+      const id = memoryId(text);
+      if (!text || have.has(id)) {
+        continue;
+      }
+      have.add(id);
+      lines.push(`- (${date}) [note] ${text}`);
+    }
+    if (lines.length === 0) {
+      return 0;
+    }
+    const existing = (await this.read(this.memoryPath)) ?? MEMORY_HEADER;
+    await this.desk.writeFile(
+      this.memoryPath,
+      `${existing.replace(/\n+$/, "")}\n${lines.join("\n")}\n`,
+    );
+    return lines.length;
+  }
+
+  /** The Bot's own brief, clamped to what a prompt may carry. */
+  async instructions(): Promise<string> {
+    return clamp(await this.read(this.instructionsPath), BOT_TEMPLATE_MAX.instructions) ?? "";
+  }
+
+  async setInstructions(markdown: string): Promise<void> {
+    await this.desk.writeFile(this.instructionsPath, `${markdown.trimEnd()}\n`);
+  }
+
+  /**
+   * The skills this Bot has: an index beside one markdown file each.
+   *
+   * Two files rather than one because of what each is for. The index is read
+   * on every prompt, so it stays small; a body is read by the model with
+   * `read_file` when it decides it wants the procedure, which is the same
+   * shape a skill has in an Eve project and the reason the index carries the
+   * "use when" line at all.
+   */
+  async skills(): Promise<BotTemplateSkill[]> {
+    const index = jsonArray(await this.read(this.skillsPath));
+    const out: BotTemplateSkill[] = [];
+    for (const [i, entry] of index.slice(0, BOT_TEMPLATE_MAX.skills).entries()) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const o = entry as Record<string, unknown>;
+      const id = templateSlug(o.id, BOT_TEMPLATE_MAX.skill_id, `skill-${i + 1}`);
+      out.push({
+        body: clamp(await this.read(this.skillBodyPath(id)), BOT_TEMPLATE_MAX.skill_body) ?? "",
+        id,
+        name: clamp(o.name, BOT_TEMPLATE_MAX.skill_name) ?? id,
+        use_when: clamp(o.use_when, BOT_TEMPLATE_MAX.skill_use_when) ?? "",
+      });
+    }
+    return out;
+  }
+
+  async setSkills(skills: readonly BotTemplateSkill[]): Promise<void> {
+    for (const skill of skills) {
+      await this.desk.writeFile(this.skillBodyPath(skill.id), `${skill.body.trimEnd()}\n`);
+    }
+    // The index is written last, so a run that dies part way through leaves
+    // bodies nothing points at rather than an index pointing at nothing.
+    await this.writeJson(
+      this.skillsPath,
+      skills.map((skill) => ({ id: skill.id, name: skill.name, use_when: skill.use_when })),
+    );
+  }
+
+  /**
+   * The routines declared for this Bot.
+   *
+   * Declared, and on a Bot made at runtime that is all they are: what fires a
+   * routine is that Bot's own croner, compiled from `agent/schedules/*.ts` in
+   * its project, and the template project has none. So a routine that arrives
+   * with a template is recorded, shown, and honest about being paused rather
+   * than quietly never running. `host/routines.ts` is the other half of that
+   * story and reads the same shape out of the image.
+   */
+  async routines(): Promise<BotTemplateRoutine[]> {
+    const out: BotTemplateRoutine[] = [];
+    for (const [i, entry] of jsonArray(await this.read(this.routinesPath))
+      .slice(0, BOT_TEMPLATE_MAX.routines)
+      .entries()) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const o = entry as Record<string, unknown>;
+      const cron = typeof o.cron === "string" ? o.cron.trim() : "";
+      if (!validCron(cron)) {
+        continue;
+      }
+      const id = templateSlug(o.id, BOT_TEMPLATE_MAX.routine_id, `routine-${i + 1}`);
+      out.push({
+        cron,
+        id,
+        prompt: clamp(o.prompt, BOT_TEMPLATE_MAX.routine_prompt) ?? "",
+        title: clamp(o.title, BOT_TEMPLATE_MAX.routine_title) ?? id,
+      });
+    }
+    return out;
+  }
+
+  async setRoutines(routines: readonly BotTemplateRoutine[]): Promise<void> {
+    await this.writeJson(this.routinesPath, routines);
+  }
+
+  /**
+   * The services this Bot expects to reach. A declaration, never a
+   * credential: the plugin itself is installed from hello.expert by the human
+   * whose accounts they are.
+   */
+  async plugins(): Promise<BotTemplatePlugin[]> {
+    const out: BotTemplatePlugin[] = [];
+    for (const entry of jsonArray(await this.read(this.pluginsPath)).slice(
+      0,
+      BOT_TEMPLATE_MAX.plugins,
+    )) {
+      if (!entry || typeof entry !== "object") {
+        continue;
+      }
+      const o = entry as Record<string, unknown>;
+      const name = clamp(o.name, BOT_TEMPLATE_MAX.plugin_name);
+      if (!name) {
+        continue;
+      }
+      out.push({
+        auth: o.auth === "oauth" ? "oauth" : "static",
+        name,
+        url: typeof o.url === "string" ? o.url : "",
+      });
+    }
+    return out;
+  }
+
+  async setPlugins(plugins: readonly BotTemplatePlugin[]): Promise<void> {
+    await this.writeJson(this.pluginsPath, plugins);
+  }
+
+  private async writeJson(path: string, value: unknown): Promise<void> {
+    await this.desk.writeFile(path, `${JSON.stringify(value, null, 2)}\n`);
+  }
+
+  /**
    * The transcript as the hub left it, or `undefined` when it could not be
    * read at all. Oldest first, and `seq` is carried through untouched.
    *
@@ -206,30 +424,6 @@ export class BotState {
       }
     }
     return out;
-  }
-
-  /**
-   * Who this Bot is, for the system prompt. A fresh Bot with a default
-   * profile and no memory still gets its directory, because that path is how
-   * the agent reaches the memory file to write to it.
-   */
-  async prompt(): Promise<string> {
-    const p = await this.profile();
-    const lines = [`You are ${p.name}${p.title ? `, ${p.title}` : ""}.`];
-    if (p.description) {
-      lines.push(p.description);
-    }
-    lines.push(
-      `Your own files are in ${this.dir}. ${this.memoryPath} is your memory, read it, and write_file a new "- (date) [note] fact" line when something is worth keeping.`,
-    );
-    const entries = await this.memory();
-    if (entries.length) {
-      lines.push("What you remember:");
-      for (const e of entries.slice(-MEMORY_IN_PROMPT)) {
-        lines.push(`- (${e.date}) [${e.kind}] ${e.text}`);
-      }
-    }
-    return lines.join("\n");
   }
 
   /** Missing file, unreadable box: both are "nothing there yet" to every caller here. */
@@ -273,6 +467,19 @@ function defaultProfile(id: string): BotProfile {
     name: id,
     title: "",
   };
+}
+
+/** A JSON array from the box, or none. A file the model may rewrite never throws here. */
+function jsonArray(raw: string | undefined): unknown[] {
+  if (!raw) {
+    return [];
+  }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
 }
 
 /** A member of a closed set, or nothing. The read side never throws. */

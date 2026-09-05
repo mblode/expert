@@ -60,10 +60,12 @@ export function resolveEveBotsRoot(opts: {
  * A Bot shipped by the build is a directory: its instructions, its skills and
  * its schedules are files in git. A Bot made from `Seat.CreateBot` has no
  * directory and cannot be given one without a deploy, so it runs this one.
- * That is not a stub: a Bot's identity is its profile, and the hub folds the
- * name, the label and the description into the system prompt before the turn,
- * so two Bots on this project are two different agents. What they share is
- * their code, which is the part a person was never editing anyway.
+ * That is not a stub: a Bot's identity is its profile, and the template reads
+ * the name, the label and the description off `/workspace/.bots/<id>` at the
+ * start of every turn (`agent/instructions/profile.ts`, which is why
+ * `COMPUTER_BOT_ID` is in the child's environment), so two Bots on this
+ * project are two different agents. What they share is their code, which is
+ * the part a person was never editing anyway.
  *
  * It is deliberately not a roster row of its own (`eveProjectIds` skips it):
  * a template that shows up in the sidebar as a Bot called "template" is a
@@ -198,6 +200,10 @@ export function eveChildEnv(
 ): NodeJS.ProcessEnv {
   return {
     ...opts.env,
+    // Which Bot this is, in the clear. The token is the identity on the wire
+    // and the hub never hands it back a name, so without this a Bot made at
+    // runtime cannot find its own profile and the template project has no way
+    // to know which of several agents it is being.
     COMPUTER_BOT_ID: launch.botId,
     COMPUTER_BOT_TOKEN: launch.token,
     COMPUTER_EVE_SECRET: opts.eveSecret,

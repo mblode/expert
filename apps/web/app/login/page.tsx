@@ -14,16 +14,30 @@ export const metadata: Metadata = {
   title: "Sign in",
 };
 
+/**
+ * Where to go after signing in.
+ *
+ * A path on this site and nothing else: `next` arrives in a link someone was
+ * sent, so anything that could be read as an origin is dropped rather than
+ * followed. A protocol-relative `//host` is the one that looks relative and
+ * is not.
+ */
+function safeNext(value: string | string[] | undefined): string {
+  const raw = typeof value === "string" ? value : "";
+  return raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("\\") ? raw : "/";
+}
+
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ returnTo?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const params = await searchParams;
-  const returnTo = workReturnTo(params.returnTo);
+  const query = await searchParams;
+  const next =
+    typeof query.returnTo === "string" ? workReturnTo(query.returnTo) : safeNext(query.next);
   const session = await getSessionCached();
   if (session) {
-    redirect(returnTo);
+    redirect(next);
   }
 
   const social = socialProvidersAvailable();
@@ -39,11 +53,7 @@ export default async function LoginPage({
               New or returning: email a code. The computer connects.
             </p>
           </div>
-          <LoginForm
-            appleEnabled={social.apple}
-            googleEnabled={social.google}
-            returnTo={returnTo}
-          />
+          <LoginForm appleEnabled={social.apple} googleEnabled={social.google} next={next} />
         </div>
       </main>
     </div>

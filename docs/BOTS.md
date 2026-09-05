@@ -34,15 +34,27 @@ agent token, exactly like the shipped ones.
 
 What it does not get is a directory, and it cannot: that would be a deploy.
 It runs `apps/eve/bots/template` instead, which is the same five tools and
-the same box, and what makes it itself is its profile. The hub folds the
-name, the label and the description into its system prompt before every
-turn, so "what is it for" is the brief rather than a note: write it as an
-instruction and rewrite it whenever from the Bot's own sheet.
+the same box, and what makes it itself is its profile. The template reads
+that profile off the box at the start of every turn and folds the name, the
+label and the description into its own system prompt, so "what is it for" is
+the brief rather than a note: write it as an instruction and rewrite it
+whenever from the Bot's own sheet.
 
-The trade is real and worth saying: a made Bot has no skills of its own, no
-routines and no webhook, because all three are files. When one earns them,
-give it a directory and it becomes a shipped Bot under the same id, keeping
-its screen, its thread and its token.
+What it does get, and did not before templates, is the rest of a setup on
+the volume: `/workspace/.bots/<id>/instructions.md` is a brief the hub folds
+into its prompt, `skills.json` plus `skills/<id>.md` are procedures it opens
+when it wants them, and `routines.json` and `plugins.json` record its
+schedule and the services it expects. Those are written by installing a
+template, or by the Bot itself with `write_file`, and they win over anything
+its project ships.
+
+Two trades are still real. A routine on a made Bot is **declared, not
+running**: what fires one is that Bot's own croner, compiled from
+`agent/schedules/*.ts`, and the template project has none, so an installed
+routine is recorded and shown as paused. And a made Bot has no webhook,
+because a channel is code. When one earns either, give it a directory and it
+becomes a shipped Bot under the same id, keeping its screen, its thread and
+its token.
 
 The four that touch code (`software-engineer`, `qa`, `pm`, `seo`) open
 **draft** pull requests and merge nothing; `designer` hands its work to them
@@ -166,6 +178,43 @@ npm run bot -- connector add <id> incident qa
 The payload is treated as a stranger's text: fenced, never obeyed. See
 [`apps/eve/README.md`](../apps/eve/README.md) for the shape and the rules.
 
+## Sharing a Bot
+
+A Bot you have shaped is worth handing to someone else, and describing it is
+not the same as handing it over. **Share as Template** in a Bot's settings
+reads its whole setup off the computer (`Seat.ExportBotTemplate`), shows it
+with a switch beside each section, and publishes what you tick to a link on
+hello.expert: `/bot/<id>`.
+
+**The Bot makes it generic first, by default.** Your Bot is full of you: its
+brief names your product, its skills name your repository, its memory is a
+list of facts about you. So the Bot itself rewrites its setup for a stranger
+before you see it, on its own model, keeping the job and dropping the parts
+that only make sense for you, and says in one line what it left out. Turn it
+off and you share your Bot exactly as it is, which is what a backup wants and
+not what a link does. If its Eve cannot answer, the sheet says the rewrite
+did not run rather than calling the document generic.
+
+Three more things about what travels. **No credential does**: a plugin is the
+address of a service and how it authenticates, so whoever installs it signs
+in as themselves. **Memory never travels in a generic template**, and starts
+off even in a verbatim one, because it is the Bot's record of the person it
+works for. And nothing names the computer it came from.
+
+Opening the link shows the same detail the publisher saw: the instructions in
+full, the facts, the skills and their triggers, the routines and their
+schedules, the plugins it wants. **Add Bot** then makes a Bot on the
+reader's own computer, from their own browser with their own seat:
+`CreateBot`, then `ApplyBotTemplate`, which is the New Bot sheet plus a
+document. hello.expert stores the template and counts the installs; it never
+holds a seat on someone's behalf to write to a hub.
+
+The link is the whole credential, so it is unlisted rather than public, and
+it stays yours: **Update from this Bot** re-reads the Bot into the same link,
+and deleting the template turns the link off. Bots already made from it are
+untouched, because a Bot on someone else's computer is theirs from the
+moment it is made.
+
 ## Changing one
 
 Three places, and they are not interchangeable:
@@ -176,7 +225,11 @@ Three places, and they are not interchangeable:
   `/opt/computer` and compiled into its build, so those are a deploy.
 - **The settings panel** at hello.expert writes the profile
   (`/workspace/.bots/<id>/profile.json`): name, label, description, mark.
-  That file wins over the shipped seed forever after.
+  That file wins over the shipped seed forever after. **Share as Template**
+  on the same panel is the other direction: it reads the whole setup out.
+- **Installing a template** writes the brief, the skills, the routines and
+  the plugin list into `/workspace/.bots/<id>/`, and those win over what the
+  Bot's project ships, for the same reason the profile does.
 - **This repository** is where instructions, skills, schedules and channels
   live. Those need a build and a deploy, which is the point: they are the
   Bot, not its preferences.

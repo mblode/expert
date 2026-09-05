@@ -22,7 +22,26 @@ export interface MintedInvite {
   url: string;
 }
 
-async function ensureInviteTable(): Promise<void> {
+/**
+ * Once per warm instance, not once per lookup.
+ *
+ * All three statements are idempotent and the ALTER always throws, so running
+ * them in front of every invite read bought nothing and cost three round trips
+ * to Turso before the row was even selected. The first caller's promise is the
+ * answer for every later one. A failure is not cached: the promise is dropped
+ * so the next call retries rather than inheriting it forever.
+ */
+let inviteTableReady: Promise<void> | undefined;
+
+function ensureInviteTable(): Promise<void> {
+  inviteTableReady ??= createInviteTable().catch((error: unknown) => {
+    inviteTableReady = undefined;
+    throw error;
+  });
+  return inviteTableReady;
+}
+
+async function createInviteTable(): Promise<void> {
   await db.run(sql`
     CREATE TABLE IF NOT EXISTS invite (
       id TEXT PRIMARY KEY NOT NULL,

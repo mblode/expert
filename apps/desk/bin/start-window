@@ -17,8 +17,15 @@ BOT_ID="${3:-}"
 # The hub's roster is authoritative at boot; the box's file is a cache.
 FORCE=0
 [[ "${4:-}" == "--force" ]] && FORCE=1
-if ! [[ "$N" =~ ^[0-9]+$ ]] || (( N < 1 || N > 8 )); then
-  echo "window index must be 1..8" >&2
+# `MAX_DISPLAYS` in packages/shared, duplicated because a bash script cannot
+# import it, and kept honest by apps/hub/test/desk-displays.test.ts. It said 8
+# while the hub said 16, so `Seat.CreateBot` allocated screen 9, the roster
+# accepted it and this script refused it: making a Bot failed on a box that had
+# screens free. A ceiling is two numbers here whether anyone likes it or not,
+# so the test is what stops them drifting again.
+MAX_WINDOWS=16
+if ! [[ "$N" =~ ^[0-9]+$ ]] || (( N < 1 || N > MAX_WINDOWS )); then
+  echo "window index must be 1..$MAX_WINDOWS" >&2
   exit 2
 fi
 

@@ -77,7 +77,10 @@ describe("per-Bot state on the box", () => {
     await boot(desks);
     const after = JSON.parse(h.desk.files.get("/workspace/.bots/main/profile.json")!.content);
     expect(after.name).toBe("Ada");
-    expect(await h.hub.bots.byId("main").state.prompt()).toContain("You are Ada, night shift.");
+    expect(await h.hub.bots.byId("main").state.profile()).toMatchObject({
+      name: "Ada",
+      title: "night shift",
+    });
   });
 
   it("keeps every token off the box", async () => {
@@ -412,14 +415,15 @@ describe("memory", () => {
     expect(entry!.text).toHaveLength(500);
   });
 
-  it("hands the agent its memory and the path to add to it", async () => {
+  it("keeps the memory file where the Bot's own prompt says it is", async () => {
     const desk = new FakeDesk();
     const state = new BotState(desk, "night");
     await state.init();
     await desk.writeFile(state.memoryPath, "- (2026-09-01) [note] the wifi drops at 3am\n");
-    const prompt = await state.prompt();
-    expect(prompt).toContain("You are night.");
-    expect(prompt).toContain("/workspace/.bots/night/memory/profile.md");
-    expect(prompt).toContain("- (2026-09-01) [note] the wifi drops at 3am");
+    // The path the identity block names (`apps/eve/lib/profile.ts`) is built
+    // from the same two constants, so a move here has to move it there.
+    expect(state.memoryPath).toBe("/workspace/.bots/night/memory/profile.md");
+    const memory = await state.memory();
+    expect(memory.map((m) => m.text)).toEqual(["the wifi drops at 3am"]);
   });
 });

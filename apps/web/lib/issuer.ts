@@ -71,13 +71,27 @@ const dbIssuerStore: IssuerStore = {
 /**
  * The catalog table predates these two columns and SQLite has no
  * ADD COLUMN IF NOT EXISTS, so a duplicate-column error here is the normal
- * path on every deploy after the first. Same shape as `ensureInviteTable`.
+ * path on every deploy after the first. Same shape as `ensureInviteTable`,
+ * including the memo: both statements throw every time and both ran in front
+ * of every issuer read and write, so redeeming one invite spent four round
+ * trips catching the same two errors.
  */
-async function ensureIssuerColumns(): Promise<void> {
-  await db.run(sql`ALTER TABLE computer ADD COLUMN issuer_token TEXT`).catch(() => undefined);
-  await db
-    .run(sql`ALTER TABLE computer ADD COLUMN issuer_updated_at INTEGER`)
-    .catch(() => undefined);
+let issuerColumnsReady: Promise<void> | undefined;
+
+function ensureIssuerColumns(): Promise<void> {
+  issuerColumnsReady ??= addIssuerColumns().catch((error: unknown) => {
+    issuerColumnsReady = undefined;
+    throw error;
+  });
+  return issuerColumnsReady;
+}
+
+async function addIssuerColumns(): Promise<void> {
+  // Independent statements against the same table, so one round trip, not two.
+  await Promise.all([
+    db.run(sql`ALTER TABLE computer ADD COLUMN issuer_token TEXT`).catch(() => undefined),
+    db.run(sql`ALTER TABLE computer ADD COLUMN issuer_updated_at INTEGER`).catch(() => undefined),
+  ]);
 }
 
 /** The options both issuer entry points take. @public */

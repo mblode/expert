@@ -5,29 +5,18 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 
 import { AssistantSettings } from "@/components/assistant-settings";
-import { BotMark } from "@/components/bot-mark";
+import { BotMark, COLOR_LABEL, SHAPE_LABEL } from "@/components/bot-mark";
 import { Button } from "@/components/ui/button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AVATAR_COLORS, AVATAR_SHAPES, SeatError } from "@/lib/seat";
-import type { AvatarShape, BotProfile, Seat } from "@/lib/seat";
+import type { BotProfile, Seat } from "@/lib/seat";
 import { cn } from "@/lib/utils";
 
 /** The hub's caps, so a long name is caught while typing rather than on save. */
 const MAX = { description: 500, name: 48, title: 64 } as const;
-
-const SHAPE_LABEL: Record<AvatarShape, string> = {
-  blob: "Blob",
-  circle: "Circle",
-  diamond: "Diamond",
-  hexagon: "Hexagon",
-  square: "Square",
-  squircle: "Squircle",
-  tablet: "Tablet",
-  wedge: "Wedge",
-};
 
 /**
  * Who a Bot is, edited by the human whose computer it runs on.
@@ -43,11 +32,18 @@ const SHAPE_LABEL: Record<AvatarShape, string> = {
 export function BotSettings({
   botId,
   onSaved,
+  onShare,
   profile,
   seat,
 }: {
   botId: string;
   onSaved: (profile: BotProfile) => void;
+  /**
+   * Open the share sheet. Absent on a hub too old to export a template, the
+   * way the settings gear itself is absent on one too old to serve profiles:
+   * a button whose first call is a 404 is worse than no button.
+   */
+  onShare?: () => void;
   /** Absent until the roster answers; the form waits rather than guessing. */
   profile?: BotProfile;
   seat: Seat;
@@ -116,7 +112,9 @@ export function BotSettings({
           <Field>
             <FieldLabel htmlFor="bot-name">Name</FieldLabel>
             <Input
+              aria-describedby={nameMissing ? "bot-name-error" : undefined}
               autoComplete="off"
+              hasError={nameMissing}
               id="bot-name"
               maxLength={MAX.name}
               onChange={(event) => edit({ name: event.target.value })}
@@ -126,6 +124,11 @@ export function BotSettings({
             <FieldDescription>
               What it calls itself. Its id on the computer stays {botId}.
             </FieldDescription>
+            {/* Save is disabled without one, and a dead button at the foot of
+                a sheet does not say which field it is waiting on. */}
+            {nameMissing && (
+              <FieldError id="bot-name-error">A Bot needs a name to be called by.</FieldError>
+            )}
           </Field>
 
           <Field>
@@ -187,7 +190,7 @@ export function BotSettings({
               <div className="flex flex-wrap justify-center gap-3">
                 {AVATAR_COLORS.map((color) => (
                   <button
-                    aria-label={color}
+                    aria-label={COLOR_LABEL[color]}
                     aria-pressed={draft.avatar_color === color}
                     className={cn(
                       "grid size-11 place-items-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring",
@@ -211,6 +214,30 @@ export function BotSettings({
           <AssistantSettings botId={botId} seat={seat} />
           {failure && <FieldError>{failure}</FieldError>}
         </FieldGroup>
+
+        {/* Last, and outside the form: sharing is not a field of the Bot, it
+            is a thing you do with one. What it hands out is everything above
+            plus what this Bot has learned and been taught, which is why the
+            sheet it opens shows all of that with a switch beside each part
+            rather than publishing on this click. */}
+        {onShare && (
+          <div className="mt-6 flex flex-col gap-2 rounded-xl border border-border p-4">
+            <p className="font-medium text-sm">Share as Template</p>
+            <p className="text-muted-foreground text-sm">
+              Hand someone a link that adds a copy of {draft.name || botId} to their own computer.
+              No key, token or account travels with it.
+            </p>
+            <Button
+              className="self-start"
+              onClick={onShare}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              Share as Template
+            </Button>
+          </div>
+        )}
       </div>
 
       <DialogFooter className="border-border border-t px-5 py-3">

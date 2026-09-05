@@ -16,9 +16,17 @@ import { cn } from "@/lib/utils";
  * This is the row's only subtitle, and it is deliberately the truth the hub
  * reports rather than a preview of the last message: the roster is screens and
  * seat states, and a message preview would have to be invented.
+ *
+ * `AGENT` says who holds the seat, which is not the same as who is running.
+ * It read "Working" back when every Bot's Eve started at boot, so the two were
+ * the same sentence. Bots sleep now, and the wire carries no liveness, so on a
+ * roster of eight that word claimed eight running agents when one was up and
+ * seven were stopped. Saying what the state actually is costs nothing and is
+ * true whether the Bot is mid-turn or asleep; a roster that can say "asleep"
+ * needs the hub to report it, which is a contract change, not a label.
  */
 const STATE_LABEL: Record<SeatState, string> = {
-  AGENT: "Working",
+  AGENT: "Has the seat",
   HUMAN: "You have the seat",
   WAITING: "Needs you",
 };
@@ -33,6 +41,7 @@ export function BotSidebar({
   computerId,
   computers,
   display,
+  loading,
   onDisplayChange,
   onNewBot,
   onSignOut,
@@ -44,6 +53,8 @@ export function BotSidebar({
   computerId: string;
   computers: { id: string; label: string }[];
   display: number;
+  /** The roster has not answered yet, which is not the same as having none. */
+  loading?: boolean;
   onDisplayChange: (display: number) => void;
   /** Absent on a hub that cannot make one (an older build, or no owner seat). */
   onNewBot?: () => void;
@@ -147,9 +158,12 @@ export function BotSidebar({
                       </span>
                       {/* The Bot's own label, as a chip: on a roster of eight
                           specialists "SEO and growth" is what tells them
-                          apart, and it is already in the profile. */}
+                          apart, and it is already in the profile. Capped and
+                          shrinkable, because the label runs to 64 characters
+                          and an unshrinkable chip pushed the screen number out
+                          of the row rather than truncating itself. */}
                       {profiles[screen.bot_id]?.title && (
-                        <span className="shrink-0 truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
+                        <span className="min-w-0 max-w-24 truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
                           {profiles[screen.bot_id]?.title}
                         </span>
                       )}
@@ -169,16 +183,31 @@ export function BotSidebar({
             );
           })}
         </ul>
+        {/* An `output`, so a search that empties the list is announced:
+            filtering happens while typing, and focus never leaves the field. */}
         {matches.length === 0 && (
-          <p className="px-3 py-6 text-center text-muted-foreground text-sm">
-            {screens.length === 0 ? "No bots on this computer yet." : `No bot matches “${query}”.`}
-          </p>
+          <output className="flex flex-col items-center gap-2 px-3 py-6 text-center">
+            <p className="text-muted-foreground text-sm">
+              {loading
+                ? "Reading the roster from the computer…"
+                : screens.length === 0
+                  ? "No bots on this computer yet."
+                  : `No bot matches “${query}”.`}
+            </p>
+            {screens.length > 0 && (
+              <Button onClick={() => setQuery("")} size="xs" type="button" variant="ghost">
+                Clear search
+              </Button>
+            )}
+          </output>
         )}
       </nav>
 
       <div className="flex flex-col gap-1 border-sidebar-border border-t p-2">
+        {/* The sidebar is a drawer below `lg`, so the footer is thumbed rather
+            than clicked: both controls grow to the touch floor there. */}
         <Button
-          className="justify-start"
+          className="justify-start pointer-coarse:h-11"
           render={<Link href="/channels/whatsapp" />}
           size="sm"
           variant="ghost"
@@ -189,7 +218,13 @@ export function BotSidebar({
           <span className="min-w-0 flex-1 truncate text-muted-foreground text-xs">
             {userEmail ?? "Signed in"}
           </span>
-          <Button onClick={onSignOut} size="xs" type="button" variant="ghost">
+          <Button
+            className="pointer-coarse:h-11"
+            onClick={onSignOut}
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
             Sign out
           </Button>
         </div>

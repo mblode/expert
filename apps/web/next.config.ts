@@ -23,6 +23,11 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_HUB_PROXY_TARGET: isDev ? HUB : "",
   },
   experimental: {
+    // Eighteen files import named icons from this package's root, and it is
+    // not on Next's built-in list, so without this the whole barrel is pulled
+    // in at each import site, in dev and in the trace. Next rewrites them to
+    // per-icon paths at build time and the named-export types stay.
+    optimizePackageImports: ["blode-icons-react"],
     turbopackRustReactCompiler: true,
   },
   headers: async () => [{ source: "/(.*)", headers: securityHeaders }],

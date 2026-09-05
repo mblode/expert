@@ -119,7 +119,6 @@ apply. Enforceable guarantees are tested through existing local/CI gates; live
 provider semantics, OAuth consent and Fly persistence remain explicit gates,
 not guarantees inferred from types or mocked tests.
 
-
 ## Gateway rollout, 2026-09-05
 
 - `../vcmc-agent/bridge` now forwards stable message IDs, account `vcmc` and

@@ -1,3 +1,5 @@
+import { after } from "next/server";
+
 import { refreshComputerSeat } from "@/lib/computer-seat";
 import {
   captureServerEvent,
@@ -18,7 +20,12 @@ export async function POST(request: Request): Promise<Response> {
       { status: 502 },
     );
   }
-  await captureServerEvent({
+  // The PostHog client is flushed with `shutdown(2000)`, so awaiting this put
+  // up to two seconds of analytics in front of the seat the browser is waiting
+  // on, and this is the call the workspace makes when the hub has already
+  // rejected its seat. The properties are read here, while the request is
+  // live; only the send waits for the response to go out.
+  const capture = {
     distinctId: distinctIdFromRequest(request, session.user.id),
     event: "computer_reconnected",
     properties: {
@@ -26,7 +33,8 @@ export async function POST(request: Request): Promise<Response> {
       source: "server",
       ...sessionPropertiesFromRequest(request),
     },
-  });
+  };
+  after(() => captureServerEvent(capture));
   return Response.json({
     computerId: seat.computerId,
     hubUrl: seat.hubUrl,

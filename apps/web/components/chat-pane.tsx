@@ -23,12 +23,16 @@ import {
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller";
 import { ThinkingIndicator } from "@/components/ui/thinking-indicator";
+import { signInPrompt, toolLabel } from "@/lib/onboarding";
 import { apiBase } from "../lib/seat";
 import type { BotProfile, Seat, SeatState } from "../lib/seat";
 import { loadSession, saveSession } from "../lib/storage";
 import { ChatComposer } from "./chat-composer";
 import { ChatMessage } from "./chat-message";
 import type { Answer } from "./chat-message";
+
+/** Openers, not a menu: past three the empty state is a form to fill in. */
+const OPENERS = 3;
 
 const hasVisibleContent = (message: EveMessage): boolean =>
   message.parts.some((part) =>
@@ -65,6 +69,7 @@ export function ChatPane({
   screenNeedsYou = false,
   seatState,
   seat,
+  tools,
 }: {
   botId: string;
   /** The hub is unreachable. Reported here, not over the composer. */
@@ -81,6 +86,14 @@ export function ChatPane({
   /** This Bot's own screen, so the conversation can say when it is stuck. */
   seatState?: SeatState;
   seat: Seat;
+  /**
+   * The tools this account named at the first run. They become the empty
+   * conversation's openers, which is the whole reason that question is asked:
+   * a new computer's Chrome is signed into nothing, and signing into one thing
+   * with the human at the keyboard is both the most useful first turn and the
+   * one that teaches what the seat is for.
+   */
+  tools: string[];
 }): React.ReactElement {
   // Read once: the hook builds its store on first render and keeps it.
   // Remount this pane (`key={botId}`) when the selected Bot changes.
@@ -228,6 +241,21 @@ export function ChatPane({
                       there would be an affordance that does not work. */}
                   {!down && (
                     <EmptyContent>
+                      {tools.length > 0 && (
+                        <div className="flex flex-wrap justify-center gap-2">
+                          {tools.slice(0, OPENERS).map((tool) => (
+                            <Button
+                              key={tool}
+                              onClick={() => send(signInPrompt(tool))}
+                              size="sm"
+                              type="button"
+                              variant="outline"
+                            >
+                              Sign in to {toolLabel(tool)}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
                       <Button
                         onClick={() => send("Take a screenshot and tell me what is on the screen.")}
                         size="sm"

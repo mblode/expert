@@ -10,6 +10,7 @@ import {
 } from "./desk/index.ts";
 import { allowedBind, refuseBindMessage } from "./host/bind.ts";
 import { profileSeeds } from "./host/bot-seed.ts";
+import { templateSources } from "./host/bot-template.ts";
 import { eveUrlForDisplay, resolveEveBotsRoot } from "./host/eve.ts";
 import { awakeUntil, botWaker, keepAwake } from "./host/wake.ts";
 import { readRoutines, routineAlarm } from "./host/routines.ts";
@@ -134,6 +135,9 @@ const hub = createHub({
   profileSeed: profileSeeds(botsRoot),
   screenIdleMs: idleMs("COMPUTER_SCREEN_IDLE_SEC"),
   statusFile: process.env.COMPUTER_STATUS_FILE,
+  // The half of a template that is in git: a shipped Bot's brief, skills,
+  // routines and connections. Read from the same root the seeds come from.
+  templateSource: templateSources(botsRoot),
   vncUrl,
   // Sleeping Bots: the hub writes down who should be awake, the supervisor
   // that owns the children reads it. `host/wake.ts` has the whole protocol.

@@ -160,6 +160,19 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     @available(iOS 13, *)
     func `configureAssistant`(request: Computer_V1_ConfigureAssistantRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_RuntimeConfiguration>
 
+    /// A Bot's whole setup as one portable document: its profile, its brief,
+    /// what it remembers, its skills, its routines and the services it expects.
+    /// Export reads the box and the Bot's Eve project; apply writes the box and
+    /// only the box, so a template is never a way to edit the image. Neither
+    /// carries a credential, a token, or the name of the computer it came from:
+    /// a template is published to strangers, and installing one is consenting to
+    /// run its instructions, which is why every section is shown before it does.
+    @available(iOS 13, *)
+    func `exportBotTemplate`(request: Computer_V1_ExportBotTemplateRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_ExportBotTemplateResponse>
+
+    @available(iOS 13, *)
+    func `applyBotTemplate`(request: Computer_V1_ApplyBotTemplateRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_BotProfile>
+
     /// Drop a seat token: the caller's own (sign-out), any other from an owner
     /// seat, or any unprivileged one from an issuer replacing a grant it made.
     /// Guest seats from invites expire on their own; this is early.
@@ -281,6 +294,16 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
+    public func `exportBotTemplate`(request: Computer_V1_ExportBotTemplateRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_ExportBotTemplateResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/ExportBotTemplate", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
+    public func `applyBotTemplate`(request: Computer_V1_ApplyBotTemplateRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_BotProfile> {
+        return await self.client.unary(path: "/computer.v1.Seat/ApplyBotTemplate", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `revoke`(request: Computer_V1_RevokeRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_RevokeResponse> {
         return await self.client.unary(path: "/computer.v1.Seat/Revoke", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -333,6 +356,8 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let deleteBot = Connect.MethodSpec(name: "DeleteBot", service: "computer.v1.Seat", type: .unary)
             public static let setBotProfile = Connect.MethodSpec(name: "SetBotProfile", service: "computer.v1.Seat", type: .unary)
             public static let configureAssistant = Connect.MethodSpec(name: "ConfigureAssistant", service: "computer.v1.Seat", type: .unary)
+            public static let exportBotTemplate = Connect.MethodSpec(name: "ExportBotTemplate", service: "computer.v1.Seat", type: .unary)
+            public static let applyBotTemplate = Connect.MethodSpec(name: "ApplyBotTemplate", service: "computer.v1.Seat", type: .unary)
             public static let revoke = Connect.MethodSpec(name: "Revoke", service: "computer.v1.Seat", type: .unary)
             public static let issue = Connect.MethodSpec(name: "Issue", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppAccounts = Connect.MethodSpec(name: "WhatsAppAccounts", service: "computer.v1.Seat", type: .unary)

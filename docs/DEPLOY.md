@@ -303,13 +303,16 @@ member's phone (`apps/eve/lib/tools/expert_invite.ts`, `POST /api/invite`).
 ```bash
 # The control plane. Either name works; the same value goes on the computer.
 vercel env add EXPERT_INVITE_SECRET production   # a fresh random string
-# Which computer that secret may mint for. Unset means `vibey`, so set it
-# explicitly on any deployment where that is not the answer.
-vercel env add INVITE_MINT_COMPUTER_ID production
+# Which computer that secret may mint for. Unset means `vibey`, and the Bot
+# that hands links out is `main` on Blode, so unset is the wrong answer here:
+# a mint would return a link to the other tenant's computer rather than fail.
+vercel env add INVITE_MINT_COMPUTER_ID production   # blode
 
-# The computer whose Bot hands the link out. `EXPERT_ORIGIN` only needs
-# setting if the control plane is not https://hello.expert.
-fly secrets set EXPERT_INVITE_SECRET=… -a vcmc-computer
+# The computer whose Bot hands the link out. `main` on Blode is the only Bot
+# in the image with both `expert_invite` and a `whatsapp` channel, so it is
+# the one that needs the secret. `EXPERT_ORIGIN` only needs setting if the
+# control plane is not https://hello.expert.
+fly secrets set EXPERT_INVITE_SECRET=… -a mblode-computer
 ```
 
 The secret is not in the hub's `DENY` list, so it reaches the Eve child like
@@ -341,7 +344,7 @@ Confirm, from anywhere:
 curl -s -X POST https://hello.expert/api/invite \
   -H 'content-type: application/json' -H "x-invite-secret: $SECRET" \
   -d '{"kind":"desk"}'
-# {"computerId":"vibey","purpose":"desk","url":"https://hello.expert/desk/…"}
+# {"computerId":"blode","purpose":"desk","url":"https://hello.expert/desk/…"}
 ```
 
 Open that URL on a phone: it should show the screen with a bottom bar (the

@@ -253,11 +253,14 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(readFileSync(path, "utf-8").trim()).toBe("from-env");
   });
 
-  it("gives each Eve its own bot token and the shared hub secret", () => {
+  it("gives each Eve its own id, its own bot token and the shared hub secret", () => {
     const env = eveChildEnv(
       { botId: "main", cwd: "/opt/eve/main", display: 1, port: 2000, token: "bot_abc" },
       { env: { PATH: "/bin" }, eveSecret: "secret", hubUrl: "http://127.0.0.1:8080" },
     );
+    // Without the id the template project cannot find its own profile, and
+    // every Bot made at runtime is the same nameless agent.
+    expect(env.COMPUTER_BOT_ID).toBe("main");
     expect(env.COMPUTER_BOT_TOKEN).toBe("bot_abc");
     expect(env.COMPUTER_URL).toBe("http://127.0.0.1:8080");
     expect(env.COMPUTER_EVE_SECRET).toBe("secret");
