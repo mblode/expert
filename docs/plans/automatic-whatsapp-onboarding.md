@@ -54,3 +54,17 @@ claim link; a signed-in, verified email account may explicitly claim that same
 computer, never an existing account's computer. Plugins requiring login still
 use the existing authenticated setup surfaces. Automatic signup does not connect
 another person's Cursor subscription or other third-party accounts for them.
+
+Production release: Vercel `dpl_H1KMrK8SfFmpsJ2VkSkwUDkWXUT2` serves
+`hello.expert`; clock image `deployment-01M1R2PV10CP89DP6FV20CX6BT` is healthy.
+The provisioning endpoint returned 401 without its credential and 200 with it.
+The clock refreshed its persisted tenant registry after deployment. The public
+signup page returned 200 with the WhatsApp entry link and automatic setup copy.
+A Chrome WhatsApp check through the existing owner account received the exact
+requested response, `Still connected`, at 16:18 Melbourne time. The disposable
+canary and temporary credential files were removed after verification.
+
+Verification limit: the live canary exercised actual computer provisioning and
+phone binding without sending a message. A second person's first WhatsApp DM was
+not exercised live; reservation, queued delivery and claims have automated test
+coverage. The existing owner's WhatsApp path was verified live after deployment.

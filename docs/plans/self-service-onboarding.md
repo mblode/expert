@@ -1,5 +1,9 @@
 # Self-service onboarding
 
+The first-message entry flow is now implemented by
+[automatic WhatsApp onboarding](automatic-whatsapp-onboarding.md). This document
+records the earlier web-first flow and its account connection decisions.
+
 ## Outcome
 
 A person signs in, claims their private computer, connects WhatsApp and completes
