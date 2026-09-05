@@ -1,3 +1,4 @@
+import { whatsappAuth } from "./whatsapp-auth";
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { customSession, emailOTP } from "better-auth/plugins";
@@ -110,6 +111,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    whatsappAuth(),
     emailOTP({
       sendVerificationOTP: async ({ email, otp, type }) => {
         if (!isAllowed(email) && !(await hasComputerInvitation(email))) {

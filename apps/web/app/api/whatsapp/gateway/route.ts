@@ -1,6 +1,7 @@
+import { issueWhatsAppCode } from "@/lib/whatsapp-login";
 import { after } from "next/server";
 import { automaticSignupEnabled, provisionNextPhone } from "@/lib/phone-provision";
-import { phoneAccount, reservePhone, queuePhoneMessage, phoneClaimLink } from "@/lib/phone-account";
+import { phoneAccount, reservePhone, queuePhoneMessage } from "@/lib/phone-account";
 import { timingSafeEqual } from "node:crypto";
 import {
   connectionForSender,
@@ -51,6 +52,12 @@ export async function POST(request: Request) {
           : "That code has expired or cannot be used. Open Expert to get a new one.",
       });
     }
+    if (
+      body.action === "message" &&
+      typeof body.message === "string" &&
+      /^(sign in|signin|login)$/iu.test(body.message.trim())
+    )
+      return json({ reply: await issueWhatsAppCode(jid) });
     const route = await connectionForSender(jid);
     if (body.action === "resolve")
       return json({
@@ -68,11 +75,13 @@ export async function POST(request: Request) {
     ) {
       let account = await phoneAccount(jid);
       if (
-        account &&
         /^(workspace|open workspace)$/iu.test(body.message.trim()) &&
-        account.stage === "ready"
+        (route || account?.stage === "ready")
       )
-        return json({ reply: `Open your private workspace: ${await phoneClaimLink(account)}` });
+        return json({
+          reply:
+            "Open your private workspace: https://hello.expert/login. If asked for a code, message me sign in.",
+        });
       if (!route && !(await reservedSender(jid))) {
         account ??= automaticSignupEnabled()
           ? await reservePhone(jid, Number(process.env.EXPERT_SIGNUP_CAPACITY ?? 25))

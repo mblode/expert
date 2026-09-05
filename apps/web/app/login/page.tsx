@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
-import { LoginForm } from "@/components/login-form";
+import { WhatsAppLoginForm } from "@/components/whatsapp-login-form";
 import { Navbar } from "@/components/shared/navbar";
 import { socialProvidersAvailable } from "@/lib/social-providers";
 import { getSessionCached } from "@/lib/session";
@@ -50,10 +50,14 @@ export default async function LoginPage({
           <div>
             <h1 className="font-display text-3xl font-light tracking-tight">Sign in</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Sign in or create an account with a one-time email code.
+              Use a code from your private WhatsApp chat.
             </p>
           </div>
-          <LoginForm appleEnabled={social.apple} googleEnabled={social.google} next={next} />
+          <WhatsAppLoginForm
+            appleEnabled={social.apple}
+            googleEnabled={social.google}
+            next={next}
+          />
         </div>
       </main>
     </div>
