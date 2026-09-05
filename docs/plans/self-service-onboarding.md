@@ -63,14 +63,14 @@ Live allocation is not verified by mocked provider calls.
 
 ## Review
 
-The first slice is implementation-ready. The whole platform is not yet ready to
-ship: live shared-number routing and automatic provisioning remain unimplemented.
+The prepared-computer invitation slice is deployed. Automatic provisioning
+remains unimplemented, so this is an invitation beta rather than open allocation.
 Prepared capacity avoids unbounded provisioning costs while the beta is developed.
 Rollback disables invitation creation and retains ownership rows and user data.
 
 ## Implementation evidence, 2026-09-05
 
-The prepared-computer invitation slice is implemented locally in
+The prepared-computer invitation slice is implemented in
 `apps/web/lib/computer-enrollment.ts`, `/api/enrollment`, and `/start`.
 Dynamic ownership is resolved by `accountComputers` before session pairing or
 template creation. Unbound signups now reach setup instead of a broken workspace.
@@ -83,9 +83,10 @@ isolation. The production Next build passed. Browser verification confirmed the
 signed-out setup page and sign-in return path. The live local API returned 401
 without a session and 403 for a foreign-origin write.
 
-No invitation was issued to another person, no new machine was provisioned, and
-this slice has not been deployed. Existing local routine work remains separate.
-Full signup-to-WhatsApp acceptance still requires the remaining platform slices.
+No invitation was issued to another person and no new machine was provisioned.
+The web slice was deployed to `hello.expert` on 2026-09-05, with operator access
+enabled for the existing owner. Full new-customer signup acceptance still needs
+a separately prepared computer and its clock registration.
 
 Chrome verification confirmed the existing WhatsApp computer link preserves the
 computer, bot and conversation parameters. The remote desktop rendered, taking
@@ -94,7 +95,7 @@ This verifies the existing owner path, not multi-tenant shared-number onboarding
 
 ## Single-number implementation
 
-The shared-number flow is implemented locally. `/api/whatsapp/connection` creates
+The shared-number flow is implemented. `/api/whatsapp/connection` creates
 an expiring code and confirms a transport-verified phone for the signed-in
 account. The gateway endpoint resolves that phone to a hub connector. Pending
 phones are reserved and cannot fall back to the community agent. A failed hub
@@ -109,8 +110,12 @@ connected bridge account. Each prepared computer uses `COMPUTER_SHARED_WHATSAPP=
 the durable clock configuration. It needs no phone owner until setup binds one.
 The gateway credential belongs only to web and bridge, never to a tenant guest.
 
-This is not live yet. Deploy web and hub support before enabling the gateway.
-Keep the existing static Blode route until its shared binding is verified. A new
+Web and bridge support are deployed; the Blode guest release is
+`mblode-computer:expert-live-1d8a5db`. Chrome WhatsApp Web sent the generated
+connection code through Vibey, the gateway confirmed the phone, and the signed-in
+setup page confirmed the existing owner's number. The page now reports WhatsApp
+connected, and the guest persisted the same owner in `whatsapp-owner.json`.
+The original static Blode route remains a fallback for compatibility. A new
 customer still needs prepared capacity and a clock registration; automatic Fly
 provisioning remains a separate, incomplete slice.
 

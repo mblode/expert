@@ -417,3 +417,34 @@ model, the production WhatsApp channel and the production runtime instruction
 reader. It verifies account isolation, current-turn replies, instruction updates
 and continuation after restarting Eve. This does not substitute for a real phone,
 a Cursor account, a suspended Fly Machine or the seven-day pilot.
+
+### Live Cursor acceptance, 2026-09-05
+
+The Blode account has its own Cursor Cloud Agents key in Fly secrets. No Cursor
+key was added to the Vibey computer. The allowed repositories are
+`mblode/expert`, `donebear/donebear`, `mblode/captain`, and `mblode/vcmc-agent`.
+The key expires on 2027-03-04; rotate it on Blode before that date.
+
+A real Chrome WhatsApp Web message to the existing Vibey contact launched
+Cursor agent `bc-f1c5ed46-f096-4b4e-9753-a46f143278ee`. The authenticated Expert
+coding breakout rendered its running state and provider link. Cursor finished
+the read-only package inspection, reporting Node `24.x` and hub `vitest run`.
+The completion notification returned to the same WhatsApp conversation without
+an open browser polling the coding page. No PR was created.
+
+Web production is `dpl_UZTUkiaKnTFQjWfGVTYCc3KESqQw` on `hello.expert`. The
+shared bridge release is Railway `39684374-b386-42c5-b6b7-497da2190639`, from
+VCMC commit `217d64e`; its health endpoint confirmed WhatsApp `open`. The clock
+is `expert-clock:deployment-01M1QY78HXTGFJENEEH8508B67`. Full `npm run check`
+passed for Expert commit `1d8a5db` before deployment. These observations verify
+one owner's live path, not automatic computer provisioning for new customers.
+
+The final Blode guest is `mblode-computer:expert-live-1d8a5db`, image digest
+`sha256:45aed38cf26619bd798fdad2904cc4d3d46268fd4f3dfef814c5f146fb8d75ad`.
+Its public health endpoint reports a healthy hub and main Eve child. Chrome
+completed code generation, WhatsApp transport verification, and signed-in phone
+confirmation on `/start`; the existing owner's binding is active and persisted.
+The final DM through that binding returned the exact requested phrase,
+`Expert connected`, in the real WhatsApp chat.
+New customers still require prepared capacity, their own Cursor key, and a clock
+registration. Invitation creation does not provision any of those automatically.
