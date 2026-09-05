@@ -1,3 +1,4 @@
+import { ClockClient } from "./service/clock.ts";
 import { dirname, join, resolve } from "node:path";
 import { createHub } from "./app.ts";
 import { ensureEveSecret } from "./host/ensure-roster.ts";
@@ -17,6 +18,7 @@ import { FileBotStore } from "./service/provision.ts";
 import { FilePrincipalStore } from "./service/principals.ts";
 import { FileConnectorStore } from "./service/connectors.ts";
 import { FileConversationStore, FileMessageLog } from "./service/conversations.ts";
+import { FileCodingIntentStore } from "./service/coding-intents.ts";
 import { BridgeClient, DEFAULT_BRIDGE_URL } from "./service/whatsapp.ts";
 import { PixelRegistry } from "./service/pixels.ts";
 
@@ -67,7 +69,33 @@ const windows =
       ? new LocalWindowManager()
       : new NoopWindowManager();
 
+const paAccount = process.env.COMPUTER_PA_ACCOUNT?.trim();
+const paJid = process.env.COMPUTER_PA_OWNER_JID?.trim();
+if (
+  (paAccount || paJid) &&
+  (!paAccount ||
+    !/^[a-z0-9][a-z0-9-]{0,31}$/.test(paAccount) ||
+    !paJid ||
+    !/^[0-9]+@(s\.whatsapp\.net|lid)$/.test(paJid))
+) {
+  throw new Error("configure both COMPUTER_PA_ACCOUNT and the exact COMPUTER_PA_OWNER_JID");
+}
+const clockUrl = process.env.COMPUTER_CLOCK_URL;
+const clockTenant = process.env.COMPUTER_CLOCK_TENANT;
+const clockSecret = process.env.COMPUTER_CLOCK_SECRET;
+if (paAccount && (!clockUrl || !clockTenant || !clockSecret || clockSecret.length < 32)) {
+  throw new Error("personal assistant mode requires a configured durable wake clock");
+}
 const hub = createHub({
+  paRepos: (process.env.COMPUTER_PA_REPOS ?? "")
+    .split(/[,\n]/u)
+    .map((repo) => repo.trim())
+    .filter(Boolean),
+  clock:
+    clockUrl && clockTenant && clockSecret
+      ? new ClockClient(clockUrl, clockTenant, clockSecret)
+      : undefined,
+  paOwner: paAccount && paJid ? { acct: paAccount, jid: paJid } : undefined,
   setupCode: process.env.COMPUTER_SETUP_CODE ?? "",
   deskFactory: createDesk,
   windows,
@@ -82,6 +110,10 @@ const hub = createHub({
   // Hub-owned, beside the roster. Deliberately not `/workspace/.bots`, which
   // the model's `shell` and `write_file` run as `box` can rewrite.
   conversationStore: new FileConversationStore(join(dataDir, "conversations.json")),
+  assistantStorePath: join(dataDir, "assistant-revisions.json"),
+  inboundStorePath: join(dataDir, "inbound.json"),
+  turnStorePath: join(dataDir, "turns.json"),
+  codingIntents: new FileCodingIntentStore(join(dataDir, "coding-intents.json")),
   messageLog: new FileMessageLog(join(dataDir, "conversations")),
   bridge: new BridgeClient({
     secret: bridgeSecret,

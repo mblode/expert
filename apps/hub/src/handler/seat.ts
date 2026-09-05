@@ -1,6 +1,7 @@
 import { SeatMethods } from "@computer/proto";
 import { ComputerError, DISPLAY, PRIMARY_DISPLAY, parseDisplay } from "@computer/shared";
 import type { BoxStatus, Button, Conversation } from "@computer/shared";
+import type { AssistantState } from "../service/assistant.ts";
 import type { Bot, BotRegistry } from "../service/bots.ts";
 import type { CodingService, StartCodingSession } from "../service/coding.ts";
 import type { ConversationRegistry } from "../service/conversations.ts";
@@ -33,6 +34,7 @@ function requireVisible(deps: SeatDeps, ctx: RpcContext, conversationId: string)
 }
 
 interface SeatDeps {
+  assistant: AssistantState;
   auth: AuthRegistry;
   bots: BotRegistry;
   /** Delegated coding sessions. Unconfigured = the three RPCs answer DAEMON_DOWN. */
@@ -289,6 +291,7 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
         .filter((c) => ids.has(c.bot))
         .map((c) => ({
           id: c.id,
+          bot: c.bot,
           last_seq: c.last_seq,
           participants: c.participants,
           route: c.route,
@@ -318,7 +321,21 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
       throw new ComputerError("VALIDATION", "prompt is required");
     }
     const bot = botFor(o, ctx);
+    if (o.request_id !== undefined && (typeof o.request_id !== "string" || !o.request_id)) {
+      throw new ComputerError("VALIDATION", "request_id must be a nonempty string");
+    }
+    let source: string | undefined;
+    if (o.source_conversation_id !== undefined) {
+      if (typeof o.source_conversation_id !== "string")
+        throw new ComputerError("VALIDATION", "source_conversation_id must be a string");
+      const conversation = requireVisible(deps, ctx, o.source_conversation_id);
+      if (conversation.bot !== bot.id)
+        throw new ComputerError("DENIED", "the source belongs to a different bot");
+      source = conversation.id;
+    }
     const req: StartCodingSession = {
+      ...(source ? { source_conversation_id: source } : {}),
+      ...(typeof o.request_id === "string" ? { request_id: o.request_id } : {}),
       bot: bot.id,
       prompt: o.prompt,
       repo: o.repo,
@@ -389,6 +406,18 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
    * one screen may only edit that screen's Bot, the containment
    * `Occurrences` and `Conversations` already apply by id.
    */
+  router.rpc(SeatMethods.ConfigureAssistant, "seat", async (ctx) => {
+    const o = requireObject(ctx.body);
+    const selected = typeof o.id === "string" ? deps.bots.byId(o.id) : botFor(o, ctx);
+    if (ctx.principal?.display !== undefined && ctx.principal.display !== selected.display)
+      throw new ComputerError("DENIED", "this seat cannot configure another screen");
+    return deps.assistant.edit(
+      selected.id,
+      requireObject(o.configuration),
+      ctx.principal!.subject ?? "paired owner",
+    );
+  });
+
   router.rpc(SeatMethods.SetBotProfile, "seat", async (ctx) => {
     const o = requireObject(ctx.body);
     if (typeof o.id !== "string" || o.id.length === 0) {

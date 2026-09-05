@@ -10,6 +10,11 @@ import { ChatPane } from "./components/chat-pane";
 import { ConnectError } from "./components/connect-error";
 import { DesktopPane } from "./components/desktop-pane";
 import { ScreenRail } from "./components/screen-rail";
+import { CodingWork } from "./components/coding-work";
+import { InvitePlugins } from "./components/invite-plugins";
+import type { WorkTarget } from "./lib/work-target";
+import { workTargetMatches } from "./lib/work-target";
+import Link from "next/link";
 import {
   Dialog,
   DialogContent,
@@ -46,7 +51,7 @@ function signOut(seat?: { hubUrl: string; seatToken: string }): void {
 }
 
 /** The server page already required a session; this only reads the seat off it. */
-export function App(): React.ReactElement {
+export function App({ initialTarget }: { initialTarget?: WorkTarget } = {}): React.ReactElement {
   const { data: session, isPending } = authClient.useSession();
   const [recovered, setRecovered] = useState<BoundSeat | null>(null);
 
@@ -88,6 +93,7 @@ export function App(): React.ReactElement {
 
   return (
     <Workspace
+      initialTarget={initialTarget}
       computerId={seat.computerId}
       computers={session?.computers ?? []}
       connectEvent={recovered ? "computer_reconnected" : "computer_connected"}
@@ -114,6 +120,7 @@ export function App(): React.ReactElement {
  * and reaches the roster and the screen from the header.
  */
 function Workspace({
+  initialTarget,
   computerId,
   computers,
   connectEvent,
@@ -123,6 +130,7 @@ function Workspace({
   seatToken,
   userEmail,
 }: {
+  initialTarget?: WorkTarget;
   computerId: string;
   computers: { id: string; label: string }[];
   connectEvent: "computer_connected" | "computer_reconnected";
@@ -141,6 +149,8 @@ function Workspace({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, BotProfile>>({});
   const [newBotOpen, setNewBotOpen] = useState(false);
+  const [targetReady, setTargetReady] = useState(!initialTarget);
+  const [targetError, setTargetError] = useState<string | null>(null);
 
   useEffect(() => {
     captureEvent(connectEvent, { computer_id: computerId });
@@ -169,6 +179,15 @@ function Workspace({
       try {
         const { bots } = await seat.roster();
         if (live) {
+          if (initialTarget) {
+            const selected = bots.find((row) => row.id === initialTarget.bot);
+            if (!workTargetMatches(initialTarget, hubUrl) || !selected)
+              setTargetError("This work is not available on the selected computer.");
+            else {
+              setDisplay(selected.display);
+              setTargetReady(true);
+            }
+          }
           // `bot.profile` is absent on a hub older than `Seat.SetBotProfile`.
           // Keeping only the entries that arrived is what makes the settings
           // gate below honest: a hub that cannot answer the read cannot serve
@@ -180,6 +199,8 @@ function Workspace({
           );
         }
       } catch {
+        if (live && initialTarget)
+          setTargetError("Could not open this work. Return to your workspace and reconnect.");
         // A mark falls back to the id's own colour and every name to its id,
         // so a roster that will not answer costs polish, not the workspace.
       }
@@ -188,7 +209,7 @@ function Workspace({
     return () => {
       live = false;
     };
-  }, [seat]);
+  }, [seat, initialTarget, hubUrl]);
 
   const switchComputer = useCallback(
     async (nextId: string) => {
@@ -276,6 +297,48 @@ function Workspace({
       status={status}
     />
   );
+
+  if (initialTarget) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <nav className="flex shrink-0 items-center justify-between gap-3 border-border border-b px-4 py-3 text-sm">
+          <Link href="/">Open workspace</Link>
+          <span className="text-muted-foreground">Close this page to return to WhatsApp</span>
+        </nav>
+        {targetError ? (
+          <p className="p-5" role="alert">
+            {targetError}
+          </p>
+        ) : targetReady ? (
+          initialTarget.view === "computer" ? (
+            <DesktopPane
+              display={display}
+              layout="phone"
+              onDisplayChange={setDisplay}
+              onStatus={setStatus}
+              readable
+              seat={seat}
+              status={status}
+            />
+          ) : (
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {initialTarget.view === "code" ? (
+                <CodingWork
+                  seat={seat}
+                  display={display}
+                  sourceConversation={initialTarget.conversation}
+                />
+              ) : (
+                <InvitePlugins computerId={computerId} label={computerId} bot={initialTarget.bot} />
+              )}
+            </div>
+          )
+        ) : (
+          <p className="p-5">Opening your work…</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="grid h-full min-h-0 lg:grid-cols-[17rem_minmax(0,1fr)_20rem] xl:grid-cols-[18rem_minmax(0,1fr)_22rem]">

@@ -651,3 +651,43 @@ from each other: same `box`, shared `/workspace`.
 
 `computer.v1`. Additive fields are fine. New actions require v2.
 `GET /spec` reports `version`.
+
+## Owner work links
+
+`Agent.SendMessage` accepts `kind: "link"` with `destination: "computer" | "plugins" | "code"`. The hub constructs an HTTPS `/work` URL for the authenticated Bot and bound conversation and records it as an ordinary text occurrence. No model-supplied URL, Bot, conversation, or credential participates. The web checks the signed-in account and matching hub before resolving the Bot display. The link itself grants no access. `COMPUTER_PUBLIC_URL` identifies the issuing hub; `COMPUTER_WEB_URL` defaults to hello.expert.
+
+`Seat.StartCodingSession` accepts optional `request_id`. Reusing it with the same brief reuses a persisted provider identity and result; changed input returns CONFLICT. Persisted intents live beside the roster. A provider 409 is reconciled by reading that identity. Provider error bodies never reach the model or browser. Legacy callers without request_id retain their original behavior.
+
+## Personal assistant dispatch and recovery
+
+The operator explicitly binds `COMPUTER_PA_ACCOUNT` and `COMPUTER_PA_OWNER_JID`; exact sender and DM destination must match the authenticated account connector. Group membership and `owner_jids` are not grants. `send_message` accepts `kind: "code"`, `repo`, and `text` only on an owner-bound turn and only for `COMPUTER_PA_REPOS`. The server derives the launch identity from that turn; model arguments cannot select a grant or another source conversation. The response includes `coding_session` and an authenticated work `url`.
+
+PA ingress persists a receipt and obtains a durable outside-clock lease before returning 202. Its driver records the result and sends it through the account bridge with a stable delivery identity. Interrupted unknown outcomes are reported as uncertain rather than repeated. Legacy groups retain synchronous delivery. Turn tokens persist with their original deadlines; only the trusted active driver extends a lease, and stopping that driver lets it expire.
+
+### Approved assistant configuration
+
+`Agent.Spec` includes `runtime`, the authenticated Bot's current configuration
+revision. `send_message` kind `configure` accepts `configuration` with operation
+`read`, `replace` or `undo`. Mutations require the exact configured PA owner on
+the server-bound turn and its current `base_revision`. `Seat.ConfigureAssistant`
+exposes the same operation to owner seats, contained to their assigned screen.
+The JSON wire uses ordinary arrays for `memory` and `skills`; proto wrappers
+represent optional lists and are not Connect binary request shapes.
+
+Approved revisions live in the hub-owned store. They are read at each Eve turn
+boundary, including continued conversations. Instructions are bounded to 10,000
+characters; memory to 50 facts of 500 characters; procedures to 20 entries and
+16,000 combined markdown characters. Procedures are loaded inline within that
+budget. No additional loader tool, permission grant or executable source edit
+is implied. Undo activates the previous content as a new revision. It does not
+undo past external actions. Configuration responses return `runtime` without
+creating a message occurrence; the caller must still send its human reply.
+
+Coding launches from the owner web breakout may include `source_conversation_id`.
+The hub requires that source to belong to the selected Bot and visible screen.
+The background driver sends completion only when the source route matches the
+currently configured PA account and owner. `Conversations` includes each row's
+Bot id. The modern WhatsApp ingress delivers the recorded `send_message` voice
+when present, with the same outbound redaction as Eve; final prose is a fallback
+only for a turn that made no send. This keeps the conversation and delivery from
+selecting different answers.

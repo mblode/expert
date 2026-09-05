@@ -23,7 +23,9 @@
       "entry": ["lib/**/*.test.ts"],
       "ignoreDependencies": ["postcss"]
     },
-    "apps/eve": {},
+    "apps/eve": {
+      "entry": ["test-fixtures/runtime/agent/agent.ts"]
+    },
     "apps/eve/bots/*": {
       "entry": ["agent/**/*.ts"]
     }

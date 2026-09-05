@@ -96,13 +96,15 @@ COPY --chown=box:box api api
 # the next boot, so building the list rather than naming it keeps the image
 # and the roster from drifting apart.
 #
-# The `node_modules` test is the other half of that: the COPY lines above are
+# The workspace symlink test is the other half: the COPY lines above are
 # hand-written, and a Bot added without one is invisible to `npm ci`, builds
-# from hoisted dependencies and ships subtly wrong. `|| exit 1` because the
+# from hoisted dependencies and ships subtly wrong. Per-Bot node_modules is
+# not evidence of installation: npm may hoist every dependency to the root.
+# `|| exit 1` because the
 # loop's status is the last iteration's, so without it a Bot that fails to
 # build would ship as an image whose supervisor restarts it forever.
 RUN for bot in apps/eve/bots/*/; do \
-      test -d "${bot}node_modules" \
+      node -e 'const fs=require("fs");const p=process.argv[1];const name=JSON.parse(fs.readFileSync(p+"package.json")).name;if(fs.realpathSync("node_modules/"+name)!==fs.realpathSync(p))process.exit(1)' "$bot" \
         || { echo "no npm ci for ${bot}: add its COPY line above" >&2; exit 1; }; \
       npm run build --workspace="${bot%/}" || exit 1; \
     done

@@ -10,7 +10,7 @@
 # always-on app that pokes the app that sleeps.
 #
 # This is that app, one per fleet rather than one per tenant: it wakes every
-# computer in CLOCK_TARGETS. It holds no credential. `/healthz` on a tenant is
+# computer in CLOCK_TARGETS. It holds only wake-registration credentials. `/healthz` on a tenant is
 # public, unauthenticated, and the only route it calls, so the worst this app
 # can do to a computer is start it.
 #
@@ -42,6 +42,11 @@ dockerfile = "deploy/clock/Dockerfile"
 CLOCK_TARGETS = "mblode-computer=https://mblode-computer.fly.dev"
 CLOCK_BOTS = "/opt/clock/apps/eve/bots"
 CLOCK_PORT = "8080"
+CLOCK_REGISTRATION_PATH = "/data/registrations.json"
+
+[[mounts]]
+source = "clock_data"
+destination = "/data"
 
 # No [http_service] and no [[services]] on purpose. Nothing needs to reach the
 # clock from the internet, and a Machine with no services is one Fly Proxy
@@ -50,10 +55,8 @@ CLOCK_PORT = "8080"
 #
 # 256 MB and one shared CPU: the process is a timer, a fetch and a JSON page.
 #
-# One Machine, and this app is therefore a single point of failure for every
-# routine on every computer. `fly scale count 2 -c fly.clock.toml` is safe
-# whenever that matters: the clock holds no state, and a wake is a GET, so two
-# of them wake the same box twice and the second is a no-op.
+# One Machine owns the registration volume. Do not scale this file-backed
+# registry to multiple writers. Replication needs a shared durable store.
 [[vm]]
 cpu_kind = "shared"
 cpus = 1

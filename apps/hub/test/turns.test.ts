@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import { ComputerError } from "@computer/shared";
 import { TurnService } from "../src/service/turns.ts";
 
@@ -68,4 +71,45 @@ describe("turn tokens", () => {
     turns.expire(Date.now() + 2000);
     expect(() => turns.verify(turn.id, "main")).toThrow(/unknown turn/);
   });
+});
+
+describe("persisted turn authorization", () => {
+  it("survives restart without extending its deadline or changing its bot", () => {
+    const directory = mkdtempSync(join(tmpdir(), "expert-turns-"));
+    try {
+      const path = join(directory, "turns.json");
+      const original = new TurnService(60_000, path).mint({
+        bot: "main",
+        conversation_id: "conv_a",
+      });
+      const restarted = new TurnService(60_000, path);
+      expect(restarted.verify(original.id, "main")).toEqual(original);
+      expect(() => restarted.verify(original.id, "other")).toThrow(/belongs to bot/);
+      restarted.expire(original.deadline_at);
+      expect(() => new TurnService(60_000, path).verify(original.id, "main")).toThrow(
+        /unknown turn/,
+      );
+      writeFileSync(path, '[{"id":"turn_bad"}]');
+      expect(() => new TurnService(60_000, path)).toThrow(/invalid turn store/);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+it("keeps a driver-owned execution alive beyond the transport TTL, then expires", () => {
+  vi.useFakeTimers();
+  try {
+    const turns = new TurnService(150_000);
+    const turn = turns.mint({ bot: "main", conversation_id: "conv_a" });
+    const release = turns.keepAlive(turn.id, "main");
+    vi.advanceTimersByTime(600_000);
+    expect(turns.verify(turn.id, "main").conversation_id).toBe("conv_a");
+    expect(() => turns.keepAlive(turn.id, "other")).toThrow(/belongs to bot/);
+    release();
+    vi.advanceTimersByTime(150_001);
+    expect(() => turns.verify(turn.id, "main")).toThrow(/expired/);
+  } finally {
+    vi.useRealTimers();
+  }
 });

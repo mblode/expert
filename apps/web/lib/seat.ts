@@ -8,6 +8,14 @@
 
 import { DEFAULT_HUB_URL, trimSlashes } from "./config";
 
+export interface RuntimeConfiguration {
+  revision: number;
+  instructions: string;
+  memory_set: boolean;
+  memory: string[];
+  skills: { id: string; description: string; markdown: string }[];
+}
+
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
 
 /**
@@ -232,11 +240,46 @@ function rpc<T>(hubUrl: string, method: string, body: unknown, token: string): P
 
 export type Seat = ReturnType<typeof createSeat>;
 
+interface WorkConversation {
+  id: string;
+  bot: string;
+  updated_at: string;
+  last_seq: number;
+  route: { kind: string; repo?: string; agent?: string; jid?: string };
+}
+export interface CodingSession {
+  conversation_id: string;
+  agent: string;
+  repo: string;
+  state: "pending" | "active" | "awaitingInput" | "complete" | "error" | "stale";
+  url: string;
+  branch: string;
+  pr_url: string;
+  summary: string;
+}
+
 export function createSeat(hubUrl: string, token: string) {
   const call = <T>(method: string, body: Record<string, unknown>): Promise<T> =>
     rpc<T>(hubUrl, method, body, token);
 
   return {
+    conversations: (display?: number) =>
+      call<{ conversations: WorkConversation[] }>("Conversations", { display }),
+    occurrences: (conversation_id: string, cursor?: string) =>
+      call<{ entries: { id: string; kind: string; text?: string; prompt?: string }[] }>(
+        "Occurrences",
+        { conversation_id, cursor, limit: 100 },
+      ),
+    startCoding: (input: {
+      source_conversation_id?: string;
+      display: number;
+      repo: string;
+      prompt: string;
+      request_id: string;
+      auto_create_pr: boolean;
+    }) => call<CodingSession>("StartCodingSession", input),
+    refreshCoding: (conversation_id: string) =>
+      call<CodingSession>("RefreshCodingSession", { conversation_id }),
     click: (button: Button, display?: number) =>
       call<unknown>("Pointer", { type: "click", button, display }),
     clipboardGet: (display?: number) => call<{ text: string }>("ClipboardGet", { display }),
@@ -276,6 +319,15 @@ export function createSeat(hubUrl: string, token: string) {
     roster: () => send<{ bots: RosterBot[] }>(hubUrl, "/roster", token),
     /** The whole profile, not a patch: an empty title or description clears it. */
     setBotProfile: (profile: BotProfile) => call<BotProfile>("SetBotProfile", { ...profile }),
+    configureAssistant: (
+      id: string,
+      configuration: {
+        operation: "read" | "replace" | "undo";
+        base_revision?: number;
+        instructions?: string;
+        memory?: string[];
+      },
+    ) => call<RuntimeConfiguration>("ConfigureAssistant", { id, configuration }),
     whatsappAccounts: () => call<{ accounts: WhatsAppAccount[] }>("WhatsAppAccounts", {}),
     /** Get when `config` is absent, set when present; either way the stored config comes back. */
     whatsappConfig: (acct: string) => call<{ config: WhatsAppConfig }>("WhatsAppConfig", { acct }),

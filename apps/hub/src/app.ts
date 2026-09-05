@@ -1,3 +1,6 @@
+import { AssistantState } from "./service/assistant.ts";
+import { workLink } from "./service/work-links.ts";
+import type { ClockClient } from "./service/clock.ts";
 import { createServer } from "node:http";
 import type { IncomingMessage, Server } from "node:http";
 import { resolve } from "node:path";
@@ -11,10 +14,12 @@ import { handleEveProxy, isEvePath } from "./handler/eve-proxy.ts";
 import { handleConnectorIngress, isConnectorPath } from "./handler/connectors.ts";
 import { registerWhatsApp } from "./handler/whatsapp.ts";
 import { CodingService } from "./service/coding.ts";
+import type { CodingIntentStore } from "./service/coding-intents.ts";
 import { ConnectorRegistry } from "./service/connectors.ts";
 import type { ConnectorStore } from "./service/connectors.ts";
 import { ConversationRegistry } from "./service/conversations.ts";
 import type { ConversationStore, MessageLog } from "./service/conversations.ts";
+import { InboundService } from "./service/inbound.ts";
 import { TurnService } from "./service/turns.ts";
 import type { BridgeClient } from "./service/whatsapp.ts";
 import { eveUrlForDisplay } from "./host/eve.ts";
@@ -33,7 +38,7 @@ import type { PixelRegistry } from "./service/pixels.ts";
 import { attachVncProxy } from "./vnc-proxy.ts";
 import { readHealth } from "./service/health.ts";
 
-interface HubOptions {
+export interface HubOptions {
   setupCode: string;
   /** Builds the per-screen desk driver; the registry mounts one per Bot. */
   deskFactory: (display: number) => Desk;
@@ -73,6 +78,13 @@ interface HubOptions {
    * different log. Absent = built from the environment.
    */
   codingFactory?: (conversations: ConversationRegistry) => CodingService;
+  codingIntents?: CodingIntentStore;
+  turnStorePath?: string;
+  inboundStorePath?: string;
+  assistantStorePath?: string;
+  paOwner?: { acct: string; jid: string };
+  clock?: ClockClient;
+  paRepos?: string[];
   /** The supervisor's status file (init writes it). Absent = /healthz reports the hub alone. */
   statusFile?: string;
   /**
@@ -175,17 +187,29 @@ export function createHub(opts: HubOptions): Hub {
   });
   const router = new ConnectRouter(auth);
   const connectors = new ConnectorRegistry(opts.connectorStore);
-  // In-process: a turn is one inbound message long, so it has nothing to
-  // survive a restart for. A hub that died mid-turn has already dropped the
-  // reply the token was minted for.
-  const turns = new TurnService();
+  // An Eve turn can outlive a hub restart. Its original deadline still applies.
+  const turns = new TurnService(undefined, opts.turnStorePath);
+  const inbound = new InboundService(opts.inboundStorePath);
+  const assistant = new AssistantState(opts.assistantStorePath);
   // A client of the runner, not a runtime: the work happens off this box.
   // Unconfigured (no CURSOR_API_KEY) is a hub whose coding RPCs answer
   // DAEMON_DOWN, exactly as the WhatsApp ones do without a bridge.
-  const coding = opts.codingFactory?.(conversations) ?? new CodingService(conversations);
+  const coding =
+    opts.codingFactory?.(conversations) ??
+    new CodingService(conversations, undefined, undefined, opts.codingIntents, opts.clock);
 
-  registerAgent(router, { bots, conversations, turns, wake: opts.wake });
+  registerAgent(router, {
+    bots,
+    conversations,
+    turns,
+    coding,
+    paOwner: opts.paOwner,
+    assistant,
+    paRepos: opts.paRepos,
+    wake: opts.wake,
+  });
   registerSeat(router, {
+    assistant,
     auth,
     bots,
     coding,
@@ -261,6 +285,9 @@ export function createHub(opts: HubOptions): Hub {
       // The other door: a connector secret, not a seat. Same Eve, same hub secret.
       if (isConnectorPath(url.pathname)) {
         await handleConnectorIngress(req, res, {
+          inbound,
+          paOwner: opts.bridge && opts.clock ? opts.paOwner : undefined,
+          clock: opts.clock,
           bots,
           connectors,
           conversations,
@@ -317,6 +344,52 @@ export function createHub(opts: HubOptions): Hub {
   // Release what nobody has touched. A minute is often enough to be timely
   // and rare enough to cost nothing; the keeper decides what is idle.
   let sweeper: NodeJS.Timeout | undefined;
+  const delivery =
+    opts.bridge && opts.paOwner
+      ? setInterval(() => {
+          void inbound
+            .flush(async (acct, jid, text, key) => {
+              if (
+                acct !== opts.paOwner!.acct ||
+                jid !== opts.paOwner!.jid ||
+                !connectors
+                  .list()
+                  .some((row) => row.id === `whatsapp-${acct}` && row.kind === "whatsapp")
+              ) {
+                return { sent: false };
+              }
+              return opts.bridge!.send(acct, jid, text, key);
+            }, opts.clock)
+            .catch(() => {
+              console.error("WhatsApp delivery state could not be persisted");
+            });
+        }, 2000)
+      : undefined;
+  delivery?.unref();
+  const codingPoll = opts.clock
+    ? setInterval(() => {
+        void coding.poll(async (session, source) => {
+          if (!source || !opts.paOwner) return;
+          const conversation = conversations.byId(source);
+          const { route } = conversation;
+          if (
+            route.kind !== "whatsapp" ||
+            route.acct !== opts.paOwner.acct ||
+            route.jid !== opts.paOwner.jid
+          )
+            return;
+          const link = workLink("code", conversation.bot, session.conversation_id);
+          const status = session.state === "complete" ? "Coding result ready" : "Coding stopped";
+          await inbound.publish(
+            `coding:${session.agent}`,
+            opts.paOwner,
+            `${status}: ${session.repo}\n${link}`,
+            opts.clock!,
+          );
+        });
+      }, 30_000)
+    : undefined;
+  codingPoll?.unref();
 
   return {
     auth,
@@ -327,6 +400,8 @@ export function createHub(opts: HubOptions): Hub {
     close: () =>
       new Promise((resolveClose) => {
         clearInterval(sweeper);
+        clearInterval(delivery);
+        clearInterval(codingPoll);
         wss.close();
         server.close(() => resolveClose());
       }),

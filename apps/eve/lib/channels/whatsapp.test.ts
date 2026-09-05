@@ -8,6 +8,7 @@ import {
   buildContext,
   buildUserMessage,
   drainStream,
+  serialTurn,
   EMPTY_REPLY_FALLBACK,
   MAX_IMAGES_PER_MESSAGE,
 } from "./whatsapp.ts";
@@ -180,7 +181,7 @@ describe("buildContext", () => {
     expect(block).toContain("sender_jid: 1@s.whatsapp.net");
     expect(block).toContain("plain text");
     expect(block).toContain(
-      "hello.expert link is only for taking the mouse or OAuth plugin consent",
+      "authenticated hello.expert links for computer takeover, coding conversations and plugin setup",
     );
     expect(block).not.toContain("account:");
     // No id from the bridge means no line, so a tool cannot quote a handle the
@@ -402,5 +403,22 @@ describe("buildAuth", () => {
       turn: "turn_abc",
       via: "hub",
     });
+  });
+});
+
+describe("WhatsApp cursor ownership", () => {
+  it("serializes one chat and releases the next turn after failure", async () => {
+    const seen: string[] = [];
+    const first = serialTurn("chat", async () => {
+      seen.push("first");
+      throw new Error("failed");
+    });
+    const second = serialTurn("chat", async () => {
+      seen.push("second");
+      return "second reply";
+    });
+    await expect(first).rejects.toThrow("failed");
+    await expect(second).resolves.toBe("second reply");
+    expect(seen).toEqual(["first", "second"]);
   });
 });

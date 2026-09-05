@@ -118,6 +118,19 @@ export class BridgeClient {
     return this.call("PUT", `/accounts/${encodeURIComponent(acct)}/config`, { config });
   }
 
+  send(
+    acct: string,
+    jid: string,
+    text: string,
+    idempotencyKey: string,
+  ): Promise<{ sent: boolean }> {
+    return this.call("POST", `/send?acct=${encodeURIComponent(acct)}`, {
+      jid,
+      text,
+      idempotencyKey,
+    });
+  }
+
   private async call<T>(method: string, path: string, body?: unknown): Promise<T> {
     let res: Response;
     try {

@@ -403,3 +403,128 @@ describe("connector ingress", () => {
     }
   });
 });
+
+describe("WhatsApp retry through the connector", () => {
+  it("records and executes one turn for concurrent copies of a bridge message", async () => {
+    const eve = await fakeEve();
+    const h = await startHub({ eveUrls: { main: eve.url } });
+    try {
+      const connector = h.hub.connectors.add({ id: "retry", kind: "whatsapp", bot: "main" });
+      const send = (message: string) =>
+        fetch(`${h.url}/connectors/retry/message`, {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-connector-secret": connector.secret },
+          body: JSON.stringify({
+            token: "owner@s.whatsapp.net",
+            messageId: "message-one",
+            message,
+            sender: "owner@s.whatsapp.net",
+            surface: "dm",
+          }),
+        });
+      const replies = await Promise.all([send("hello"), send("hello")]);
+      expect(await Promise.all(replies.map((reply) => reply.json()))).toEqual([
+        { reply: "hi" },
+        { reply: "hi" },
+      ]);
+      expect(eve.seen).toHaveLength(1);
+      expect(routed(h)).toHaveLength(1);
+      expect(h.hub.conversations.page(routed(h)[0]!.id).entries).toHaveLength(2);
+      const conflict = await send("different instructions");
+      expect(conflict.status).toBe(409);
+      expect(eve.seen).toHaveLength(1);
+    } finally {
+      await h.close();
+      await eve.close();
+    }
+  });
+});
+
+it("accepts the owner DM before completion and delivers the recorded voice once", async () => {
+  const { ClockClient } = await import("../src/service/clock.ts");
+  const { BridgeClient } = await import("../src/service/whatsapp.ts");
+  const clock = new ClockClient("http://unused", "one", "fixture-clock");
+  vi.spyOn(clock, "hold").mockResolvedValue();
+  vi.spyOn(clock, "checkAt").mockResolvedValue();
+  const bridge = new BridgeClient({ url: "http://unused", secret: "fixture-bridge" });
+  const sent = vi.spyOn(bridge, "send").mockResolvedValue({ sent: true });
+  let release!: () => void;
+  const work = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let runs = 0;
+  const server = createServer(async (req, res) => {
+    runs += 1;
+    await work;
+    const response = await fetch(`${h.url}/computer.v1.Agent/SendMessage`, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${h.agent}`,
+        "content-type": "application/json",
+        "x-computer-turn": String(req.headers["x-computer-turn"]),
+      },
+      body: JSON.stringify({ kind: "text", text: "The recorded result." }),
+    });
+    expect(response.status).toBe(200);
+    res.setHeader("content-type", "application/json");
+    res.end(JSON.stringify({ reply: "Private final prose must not replace the result." }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("no address");
+  const h = await startHub({
+    clock,
+    bridge,
+    paOwner: { acct: "one", jid: "123@s.whatsapp.net" },
+    eveUrls: { main: `http://127.0.0.1:${address.port}` },
+  });
+  try {
+    const connector = h.hub.connectors.add({ id: "whatsapp-one", kind: "whatsapp", bot: "main" });
+    const send = () =>
+      fetch(`${h.url}/connectors/whatsapp-one/message`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-connector-secret": connector.secret },
+        body: JSON.stringify({
+          acct: "one",
+          token: "123@s.whatsapp.net",
+          sender: "123@s.whatsapp.net",
+          surface: "dm",
+          messageId: "durable-one",
+          message: "Do the work",
+        }),
+      });
+    const accepted = await send();
+    expect(accepted.status).toBe(202);
+    await vi.waitFor(
+      () =>
+        expect(sent).toHaveBeenCalledWith(
+          "one",
+          "123@s.whatsapp.net",
+          "On it. I’ll send the result here.",
+          expect.stringMatching(/:accepted$/),
+        ),
+      { timeout: 4000 },
+    );
+    release();
+    await vi.waitFor(
+      () =>
+        expect(sent).toHaveBeenCalledWith(
+          "one",
+          "123@s.whatsapp.net",
+          "The recorded result.",
+          expect.stringMatching(/:result$/),
+        ),
+      { timeout: 4000 },
+    );
+    const repeated = await send();
+    expect(repeated.status).toBe(202);
+    expect(runs).toBe(1);
+    expect(h.hub.conversations.page(routed(h)[0]!.id).entries.at(-1)).toMatchObject({
+      text: "The recorded result.",
+    });
+  } finally {
+    release();
+    await h.close();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  }
+}, 10_000);

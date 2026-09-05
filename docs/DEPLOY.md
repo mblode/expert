@@ -191,9 +191,8 @@ on Blode's schedule would wake it at the wrong minutes and still miss its own.
 
 One Machine runs the clock, so it is a single point of failure for every
 routine on every computer, and a routine whose minute passes while it is down
-is missed rather than caught up. `fly scale count 2 -c fly.clock.toml` is safe
-if that matters: the clock holds no state and a wake is a GET, so the second
-one is a no-op.
+is missed rather than caught up. The PA wake registry now has one volume and
+one writer; do not scale it to two independent registries.
 
 ## 4. The Vibey computer
 
@@ -359,3 +358,55 @@ fly deploy -c fly.toml --image <image>   # from `fly releases --image`
 The volume is not touched by a deploy, so `/workspace` (the roster, seats,
 connector secrets, Bot profiles, memory, Chromium profiles) survives a
 rollback. A connector secret minted in step 4 survives too.
+
+## WhatsApp PA pilot, opt-in
+
+The PA path is off until the operator supplies both `COMPUTER_PA_ACCOUNT` and
+`COMPUTER_PA_OWNER_JID` on the tenant. Use the exact dedicated account id and
+owner JID read from the bridge, not a number suffix or group participant list.
+Its connector must be `whatsapp-<account>` and point to the intended Bot. The
+bridge's proactive recipient allowlist must include that exact owner destination.
+No public or group-wide owner grant is inferred from these settings.
+
+Prepare the clock before enabling the tenant:
+
+1. Create one `clock_data` volume in the clock's region and attach it at `/data`
+   using `fly.clock.toml`. Keep one clock writer.
+2. Set `CLOCK_REGISTRATION_SECRETS` as a Fly secret containing a JSON map from
+   configured tenant name to a distinct random secret of at least 32 characters.
+   Never put the secret in a command committed to the repository or in a model
+   child's environment.
+3. Deploy the clock and verify `/healthz`. Register a test wake through the private
+   network, restart the clock Machine, and verify the registration still wakes
+   the configured public tenant hostname. Cancel that test registration.
+4. On the tenant, set `COMPUTER_CLOCK_URL` to the clock's private HTTP endpoint
+   (normally `http://expert-clock.internal:8080`), `COMPUTER_CLOCK_TENANT` to its
+   configured target name, and `COMPUTER_CLOCK_SECRET` to the matching secret.
+   The clock is always on. Its tenant targets must remain public Fly hostnames
+   because those requests need Fly Proxy to wake suspended Machines.
+5. Set `COMPUTER_PUBLIC_URL`, the PA account and owner JID, and
+   `COMPUTER_PA_REPOS` to an explicit comma-separated list of GitHub repository
+   URLs. `CURSOR_API_KEY` stays a tenant secret. No key means coding is unavailable.
+6. Back up hub-owned state before deploying the guest. An existing real
+   `.eve/workflow-state` directory must be migrated with the runtime stopped;
+   startup refuses to discard it or silently use ephemeral state.
+
+Hub state now includes `turns.json`, `inbound.json`, `assistant-revisions.json`
+and `coding-intents.json` under the existing hub-owned data directory. Bridge
+send receipts live under each account's `deliveries/` directory. Preserve them
+on rollback. Do not route accepted PA messages through the old synchronous
+sender or delete uncertain receipts to force a retry.
+
+The clock supports both short execution leases and persistent due checks.
+A due check remains registered across outages until explicitly advanced or
+cancelled. Coding checks back off from one minute to fifteen minutes on errors.
+Successful result delivery is persisted before its wake is cancelled.
+Configuration revisions activate instructions, memories and bounded procedures
+at the next turn. User-created routine registration and dynamic plugin activation
+are not enabled by this deployment procedure yet.
+
+Local acceptance: `npm run check` includes a built Eve fixture using a deterministic
+model, the production WhatsApp channel and the production runtime instruction
+reader. It verifies account isolation, current-turn replies, instruction updates
+and continuation after restarting Eve. This does not substitute for a real phone,
+a Cursor account, a suspended Fly Machine or the seven-day pilot.

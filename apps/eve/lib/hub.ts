@@ -4,6 +4,7 @@
  */
 
 const paths = {
+  spec: "/computer.v1.Agent/Spec",
   computer: "/computer.v1.Agent/Computer",
   readFile: "/computer.v1.Agent/ReadFile",
   sendMessage: "/computer.v1.Agent/SendMessage",

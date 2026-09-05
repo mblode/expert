@@ -1,3 +1,4 @@
+import { Registrations } from "./registrations.ts";
 import { createServer } from "node:http";
 import { resolve } from "node:path";
 import { dueSoon, nextDue, readSchedule } from "./schedule.ts";
@@ -15,14 +16,16 @@ import { parseTargets, Tenant } from "./tenant.ts";
  * own guidance for anything that has to happen at a time is a separate,
  * always-on app that pokes the app that sleeps, and this is that app.
  *
- * It is as small as the job allows: no credential, no database, no state that
- * outlives the process. It reads the Bots' routine manifests out of its own
+ * It reads the Bots' routine manifests out of its own
  * image, and a few minutes before any routine minute it GETs the tenant's
  * public `/healthz`, which Fly Proxy serves by starting the Machine. From
  * there the box's own alarm (`apps/hub/src/host/routines.ts`) wakes the Bot
  * and the Bot's croner fires the routine, exactly as it does for a box that
  * happened to be awake. The clock never runs a routine and cannot: it does
  * not know what one is.
+ *
+ * Optional authenticated wake leases are persisted on a volume. Their keys
+ * authorize wake registrations only, never access to a tenant or its tools.
  *
  * It costs about $2 a month, against $10 or more for the 2 GB guest simply
  * never suspending, which was the only other honest fix.
@@ -92,10 +95,18 @@ if (routineCount === 0 || tenants.length === 0) {
   );
 }
 
+const registrationPath = process.env.CLOCK_REGISTRATION_PATH;
+const registrationSecrets = process.env.CLOCK_REGISTRATION_SECRETS;
+const registrations =
+  registrationPath && registrationSecrets
+    ? new Registrations(registrationPath, JSON.parse(registrationSecrets) as Record<string, string>)
+    : undefined;
+
 const tick = (): void => {
   const at = Date.now();
   const due = dueSoon(schedule, at, leadMs);
   for (const tenant of tenants) {
+    if (registrations?.active(tenant.name, at)) tenant.wake("registered background work", 60_000);
     if (due.length > 0) {
       tenant.wake(
         due.map((d) => `${d.botId}/${d.routineId} at ${new Date(d.atMs).toISOString()}`).join(", "),
@@ -109,12 +120,40 @@ const tick = (): void => {
 tick();
 const timer = setInterval(tick, tickMs);
 
-// The clock is not a service: it publishes no port to the internet and the
-// only thing that talks to it is the Machine check in `fly.clock.toml`.
+// The clock publishes no port to the internet. Tenant hubs can register
+// authenticated wake leases over Fly private networking.
 // It answers not ok when it has no schedule or no targets, because a clock
 // that is up and doing nothing is the exact failure this app exists to stop
 // being invisible.
-const server = createServer((req, res) => {
+const server = createServer(async (req, res) => {
+  if (req.method === "POST" && req.url === "/registrations") {
+    if (!registrations) {
+      res.writeHead(503);
+      res.end();
+      return;
+    }
+    try {
+      let body = "";
+      for await (const chunk of req) {
+        body += chunk.toString();
+        if (Buffer.byteLength(body) > 4096) throw new Error("registration too large");
+      }
+      const secret = req.headers["x-clock-secret"];
+      registrations.put(
+        JSON.parse(body),
+        typeof secret === "string" ? secret : "",
+        tenants.map((t) => t.name),
+      );
+      tick();
+      res.writeHead(204);
+      res.end();
+    } catch {
+      res.writeHead(403);
+      res.end("registration refused");
+    }
+    return;
+  }
+
   const now = Date.now();
   const ok = routineCount > 0 && tenants.length > 0;
   const body = JSON.stringify(

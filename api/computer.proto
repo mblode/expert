@@ -60,6 +60,7 @@ service Seat {
   // owner's edit rather than an operator's, who drives the box without
   // reshaping it. The request is the whole profile, not a patch.
   rpc SetBotProfile(SetBotProfileRequest) returns (BotProfile);
+  rpc ConfigureAssistant(ConfigureAssistantRequest) returns (RuntimeConfiguration);
   // Drop a seat token: the caller's own (sign-out), any other from an owner
   // seat, or any unprivileged one from an issuer replacing a grant it made.
   // Guest seats from invites expire on their own; this is early.
@@ -159,6 +160,7 @@ message SpecResponse {
   Display display = 3;
   string workspace = 4;
   repeated string tools = 5;
+  RuntimeConfiguration runtime = 6;
 }
 
 message ComputerRequest {
@@ -333,7 +335,21 @@ message SendMessageRequest {
     MessageText text = 1;
     MessageWidget widget = 2;
     MessageSecretRequest secret_request = 3;
+    MessageWorkLink link = 4;
+    MessageCoding code = 5;
+    MessageConfiguration configure = 6;
   }
+}
+
+// Owner navigation only, recorded as a text occurrence. No seat credential.
+message MessageWorkLink {
+  string destination = 1; // computer | plugins | code
+}
+
+// Dispatch is allowed only from the bound PA owner to an enabled repository.
+message MessageCoding {
+  string repo = 1;
+  string text = 2;
 }
 
 message MessageText {
@@ -363,6 +379,10 @@ message SendMessageResponse {
   // The conversation this send landed in. With no turn binding that is the
   // Bot's own seat conversation, which is where it has always gone.
   string conversation_id = 3;
+  // Only for kind=link. Navigation context, never an access credential.
+  string url = 4;
+  CodingSession coding_session = 5;
+  RuntimeConfiguration runtime = 6;
 }
 
 // --- Seat ---
@@ -547,6 +567,9 @@ message StartCodingSessionRequest {
   bool auto_create_pr = 5;
   // Runner model id, passed through. Absent = the account's own default.
   string model = 6;
+  // Reuse for the same launch after a timeout. Different input is CONFLICT.
+  string request_id = 7;
+  optional string source_conversation_id = 9;
 }
 
 message RefreshCodingSessionRequest {
@@ -721,4 +744,34 @@ message WhatsAppConfigRequest {
 
 message WhatsAppConfigResponse {
   WhatsAppAccountConfig config = 1;
+}
+
+// Approved data is versioned separately from the built agent source.
+message RuntimeSkill {
+  string id = 1;
+  string description = 2;
+  string markdown = 3;
+}
+message RuntimeConfiguration {
+  int32 revision = 1;
+  string instructions = 2;
+  bool memory_set = 3;
+  repeated string memory = 4;
+  repeated RuntimeSkill skills = 5;
+}
+// Wrappers distinguish an omitted list from an intentional empty replacement.
+message RuntimeMemory { repeated string values = 1; }
+message RuntimeSkills { repeated RuntimeSkill values = 1; }
+message ConfigurationChange {
+  string operation = 1; // read | replace | undo
+  optional int32 base_revision = 2;
+  optional string instructions = 3;
+  RuntimeMemory memory = 4;
+  RuntimeSkills skills = 5;
+}
+message MessageConfiguration { ConfigurationChange configuration = 1; }
+message ConfigureAssistantRequest {
+  optional int32 display = 1;
+  ConfigurationChange configuration = 2;
+  optional string id = 3;
 }

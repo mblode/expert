@@ -5,6 +5,7 @@ import { LoginForm } from "@/components/login-form";
 import { Navbar } from "@/components/shared/navbar";
 import { socialProvidersAvailable } from "@/lib/social-providers";
 import { getSessionCached } from "@/lib/session";
+import { workReturnTo } from "@/lib/work-target";
 
 export const dynamic = "force-dynamic";
 
@@ -13,10 +14,16 @@ export const metadata: Metadata = {
   title: "Sign in",
 };
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ returnTo?: string }>;
+}) {
+  const params = await searchParams;
+  const returnTo = workReturnTo(params.returnTo);
   const session = await getSessionCached();
   if (session) {
-    redirect("/");
+    redirect(returnTo);
   }
 
   const social = socialProvidersAvailable();
@@ -32,7 +39,11 @@ export default async function LoginPage() {
               New or returning: email a code. The computer connects.
             </p>
           </div>
-          <LoginForm appleEnabled={social.apple} googleEnabled={social.google} />
+          <LoginForm
+            appleEnabled={social.apple}
+            googleEnabled={social.google}
+            returnTo={returnTo}
+          />
         </div>
       </main>
     </div>

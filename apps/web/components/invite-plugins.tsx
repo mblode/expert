@@ -15,16 +15,17 @@ export function InvitePlugins({
   computerId,
   inviteToken,
   label,
+  bot = "main",
 }: {
   computerId: string;
-  inviteToken: string;
+  inviteToken?: string;
   label: string;
+  bot?: string;
 }): React.ReactElement {
   const [plugins, setPlugins] = useState<ConnectionView[]>([]);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [authKind, setAuthKind] = useState<AuthKind>("static");
-  const [key, setKey] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -39,12 +40,15 @@ export function InvitePlugins({
       const res = await fetch("/api/connections", {
         body: JSON.stringify({
           authKind,
-          ...(authKind === "static" && key ? { credential: key } : {}),
           invite: inviteToken,
+          bot,
           name,
           url,
         }),
-        headers: { "content-type": "application/json", [INVITE_HEADER]: inviteToken },
+        headers: {
+          "content-type": "application/json",
+          ...(inviteToken ? { [INVITE_HEADER]: inviteToken } : {}),
+        },
         method: "POST",
       });
       const body: unknown = await res.json().catch(() => null);
@@ -66,7 +70,6 @@ export function InvitePlugins({
       }
       setName("");
       setUrl("");
-      setKey("");
     } catch {
       // A phone on a dead connection throws out of fetch rather than
       // answering, which used to leave the form looking like it had saved.
@@ -83,9 +86,14 @@ export function InvitePlugins({
           <p className="text-xs text-mute">{label}</p>
           <h1 className="text-2xl font-semibold">Plugins</h1>
           <p className="text-sm text-mute">
-            Add a tool Eve can use. Chat stays in WhatsApp. Skills stay as files on the computer.
+            Save a plugin configuration. Chat stays in WhatsApp. Activation and sign-in must be
+            completed before the assistant can use it.
           </p>
         </header>
+        <p className="text-sm text-muted-foreground">
+          Saving this form does not connect an account. Credentials and runtime activation still
+          require operator setup.
+        </p>
 
         {plugins.length > 0 && (
           <ul className="flex flex-col gap-3">
@@ -148,26 +156,13 @@ export function InvitePlugins({
                 onChange={(event) => setAuthKind(event.target.value as AuthKind)}
                 value={authKind}
               >
-                <NativeSelectOption value="static">A key I paste</NativeSelectOption>
-                <NativeSelectOption value="oauth">Sign in with the tool</NativeSelectOption>
+                <NativeSelectOption value="static">
+                  API key (configure separately)
+                </NativeSelectOption>
+                <NativeSelectOption value="oauth">OAuth (activate separately)</NativeSelectOption>
               </NativeSelect>
             </Field>
-            {authKind === "static" && (
-              <Field>
-                <FieldLabel htmlFor="plugin-key">Key</FieldLabel>
-                <Input
-                  autoComplete="off"
-                  id="plugin-key"
-                  onChange={(event) => setKey(event.target.value)}
-                  placeholder="Paste once. It is not shown again."
-                  type="password"
-                  value={key}
-                />
-                <FieldDescription>
-                  Stored as a secret on the computer. The page never shows it back.
-                </FieldDescription>
-              </Field>
-            )}
+
             {authKind === "oauth" && (
               <FieldDescription>
                 Sign-in happens in the browser. Eve keeps the result as a connection file.

@@ -1,3 +1,4 @@
+import { ensureWorkflowState } from "./workflow-state.ts";
 /**
  * The Fly guest's init: root under tini, the only process on the box that
  * changes uid. It owns the volume fixups, the secrets, the roster, and the
@@ -18,11 +19,9 @@ import { randomBytes } from "node:crypto";
 import {
   chownSync,
   existsSync,
-  lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
-  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -190,26 +189,7 @@ if (trustedBots) {
     own(target, box, 0o755);
     mkdirSync(dirname(link), { recursive: true });
     own(dirname(link), box);
-    let existing;
-    try {
-      existing = lstatSync(link);
-    } catch {
-      try {
-        symlinkSync(target, link);
-      } catch (error) {
-        // Parking Eve state on the volume is a convenience. Letting the
-        // symlink throw out of here is PID 1 refusing to boot the computer
-        // over it, so it warns like every other degradation in this block.
-        console.warn(
-          `computer init: could not link ${link} to the volume (${(error as Error).message})`,
-        );
-      }
-      continue;
-    }
-    if (!existing.isSymbolicLink()) {
-      // A real directory from an earlier boot: leave it, say so, move on.
-      console.warn(`computer init: ${link} is a directory, not linking it to the volume`);
-    }
+    ensureWorkflowState(link, target);
   }
 }
 
@@ -249,6 +229,7 @@ const DENY = new Set([
   // environ it is a credential the model can lift out of /proc, which is the
   // same failure delegating the work off the box exists to avoid.
   "CURSOR_API_KEY",
+  "COMPUTER_CLOCK_SECRET",
 ]);
 function childEnv(extra: NodeJS.ProcessEnv, home: string): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
@@ -369,7 +350,9 @@ sup.start({
   cwd: repoRoot,
   env: childEnv(
     {
-      COMPUTER_BRIDGE_URL: `http://127.0.0.1:${bridgePort}`,
+      COMPUTER_BRIDGE_URL: env.COMPUTER_BRIDGE_URL ?? `http://127.0.0.1:${bridgePort}`,
+      COMPUTER_CLOCK_SECRET: env.COMPUTER_CLOCK_SECRET,
+      CURSOR_API_KEY: env.CURSOR_API_KEY,
       COMPUTER_EVE_SECRET: eveSecret,
       COMPUTER_RUN_AS: box.name,
       COMPUTER_SETUP_CODE: setupCode,

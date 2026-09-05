@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach } from "vitest";
-import { ComputerError } from "@computer/shared";
+import { ComputerError, memoryId, parseMemory } from "@computer/shared";
 import { FakeDesk } from "../src/desk/fake.ts";
-import { BotState, memoryId, parseMemory } from "../src/service/state.ts";
+import { BotState } from "../src/service/state.ts";
 import type { Occurrence } from "../src/service/state.ts";
 import { MemoryConversationStore, MemoryMessageLog } from "../src/service/conversations.ts";
 import { rpc, startHub } from "./helper.ts";

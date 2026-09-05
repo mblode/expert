@@ -1,5 +1,5 @@
 import { createHub } from "../src/app.ts";
-import type { Hub } from "../src/app.ts";
+import type { Hub, HubOptions } from "../src/app.ts";
 import { FakeDesk } from "../src/desk/fake.ts";
 import { NoopWindowManager } from "../src/desk/windows.ts";
 import { MemoryBotStore } from "../src/service/provision.ts";
@@ -40,6 +40,9 @@ export interface StartedHub {
  */
 export async function startHub(
   opts: {
+    paOwner?: HubOptions["paOwner"];
+    clock?: HubOptions["clock"];
+    paRepos?: HubOptions["paRepos"];
     bots?: BotConfig[];
     desks?: Map<number, FakeDesk>;
     vncBasePort?: number;
@@ -70,6 +73,9 @@ export async function startHub(
       return desk;
     },
     bridge: opts.bridge,
+    paOwner: opts.paOwner,
+    clock: opts.clock,
+    paRepos: opts.paRepos,
     codingFactory: opts.codingFactory,
     connectorStore: opts.connectorStore,
     conversationStore: opts.conversationStore,

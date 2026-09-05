@@ -95,6 +95,10 @@ export const SPEC_ID = "computer.v1" as const;
 export const SPEC_VERSION = "1.0.0" as const;
 export const TOOLS = ["send_message", "computer", "shell", "read_file", "write_file"] as const;
 
+/** Owner-authenticated navigation, never a grant to the holder of a link. */
+export const WORK_DESTINATIONS = ["computer", "plugins", "code"] as const;
+export type WorkDestination = (typeof WORK_DESTINATIONS)[number];
+
 /** Widget options the seat will render. 1..6, per the 0.18 card contract. */
 export const MAX_WIDGET_OPTIONS = 6 as const;
 
@@ -793,3 +797,18 @@ function matchesPart(part: string, value: number, bound: CronBound): boolean {
   }
   return value >= from && value <= to && (value - from) % step === 0;
 }
+
+export { memoryId, parseMemory, MEMORY_MAX_CHARS, MEMORY_IN_PROMPT } from "./memory.ts";
+
+export const AGENT_MESSAGE_KINDS = [
+  "text",
+  "widget",
+  "secret_request",
+  "link",
+  "code",
+  "configure",
+] as const;
+
+export type { RuntimeConfiguration, RuntimeSkill } from "./assistant.ts";
+
+export { cleanReply, sanitizeOutbound, outboundReply } from "./format-reply.ts";

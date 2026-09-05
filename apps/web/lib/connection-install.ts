@@ -1,4 +1,4 @@
-import { acceptedStaticKey, connectionView, planConnectionFile } from "./connection-file";
+import { connectionView, planConnectionFile } from "./connection-file";
 import type { ConnectionFailure, ConnectionView } from "./connection-file";
 
 /** The success half of what `installConnection` resolves to. @public */
@@ -27,7 +27,9 @@ export async function installConnection(input: {
   if ("error" in planned) {
     return planned;
   }
-  const hasCredential = acceptedStaticKey(planned.authKind, input.credential);
+  // A pasted key is not persisted by this path. Calling it connected would
+  // falsely imply a working credential even though the generated file reads env.
+  const hasCredential = false;
   let installed = false;
   if (input.write) {
     installed = await input.write(planned.guestPath, planned.source);

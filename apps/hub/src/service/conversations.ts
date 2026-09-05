@@ -354,6 +354,24 @@ export class ConversationRegistry {
     return spoken ? undefined : this.append(conversationId, author, body, { turn_id: turnId });
   }
 
+  /** The tool's recorded voice is what the transport delivers, not private final prose. */
+  deliveryText(conversationId: string, turnId: string): string | undefined {
+    this.byId(conversationId);
+    const messages = this.log
+      .load(conversationId)
+      .filter((m) => m.turn_id === turnId && m.author.kind === "bot");
+    if (!messages.length) return undefined;
+    return messages
+      .map(({ body }) => {
+        if (body.kind === "text") return body.text;
+        if (body.kind === "widget") return [body.prompt, ...body.options].join("\n");
+        if (body.kind === "secret_request") return body.prompt;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n\n");
+  }
+
   /**
    * Append one message and return it. The line lands before the index moves,
    * so the log is never behind what a caller was told.

@@ -89,14 +89,14 @@ export class Tenant {
    * than restarting it, so a burst of routines in one minute is one hold and
    * one deadline.
    */
-  wake(reason: string): void {
+  wake(reason: string, holdMs = this.opts.holdMs): void {
     const at = this.now();
     if (at >= this.until) {
       this.deadline = at + this.opts.maxHoldMs;
       this.wakes += 1;
       this.opts.log?.(`${this.name}: waking for ${reason}`);
     }
-    this.until = Math.min(Math.max(this.until, at + this.opts.holdMs), this.deadline);
+    this.until = Math.min(Math.max(this.until, at + holdMs), this.deadline);
   }
 
   /**

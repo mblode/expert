@@ -153,3 +153,12 @@ describe("never interpolate tokens into outbound WhatsApp text", () => {
     );
   });
 });
+
+it("redacts hub-only coding and wake credentials when the hub formats a tool reply", () => {
+  expect(
+    sanitizeOutbound("coding-fixture-secret clock-fixture-secret", {
+      CURSOR_API_KEY: "coding-fixture-secret",
+      COMPUTER_CLOCK_SECRET: "clock-fixture-secret",
+    }),
+  ).toBe("[redacted] [redacted]");
+});

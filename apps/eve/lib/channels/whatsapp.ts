@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { ChannelSource } from "eve/channels";
 import { defineChannel, POST } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
@@ -89,7 +88,7 @@ export function bridgeAuthConfigured(env: NodeJS.ProcessEnv = process.env): bool
  * words (tokens, VNC) are named so the model knows what not to say.
  */
 const RESPONSE_RULE =
-  "Reply in plain text suitable for WhatsApp. Keep it concise, avoid Markdown tables/headings/code fences, and ask at most one short follow-up question. When they ask you to change how you work (instructions, skills, routines, plugins, computer-use), edit those files on disk and say you did. A hello.expert link is only for taking the mouse or OAuth plugin consent, never for an edit, never tokens, never VNC.";
+  "Reply in plain text suitable for WhatsApp. Keep it concise, avoid Markdown tables/headings/code fences, and ask at most one short follow-up question. When they ask you to change how you work, distinguish saved files from active behavior. Only claim a memory, instruction, skill, routine or plugin is active after the runtime confirms it; otherwise state what remains. Use authenticated hello.expert links for computer takeover, coding conversations and plugin setup. Never include credentials or VNC URLs.";
 
 const buildContextBlock = (payload: BridgePayload): string => {
   // Every value below is interpolated into the block the model is told to
@@ -270,7 +269,7 @@ export const drainStream = async (stream: ReadableStream<ReplyStreamEvent>): Pro
 
 export default defineChannel({
   routes: [
-    POST("/eve/v1/whatsapp/message", async (req, { from }) => {
+    POST("/eve/v1/whatsapp/message", async (req, { from, resolveSession }) => {
       if (!bridgeAuthConfigured()) {
         return Response.json(
           { error: "neither COMPUTER_EVE_SECRET nor WHATSAPP_BRIDGE_SECRET is configured" },
@@ -295,27 +294,19 @@ export default defineChannel({
       const { token, message, media } = parsed;
       const auth = buildAuth(parsed, via, req.headers.get(TURN_HEADER) ?? undefined);
 
-      // Fresh session per message. getEventStream replays from index 0 and is a
-      // live tail that never emits `done`, so drainStream must break on the
-      // first `turn.completed`; on a reused continuation token that first one
-      // is a PRIOR turn, returning a stale reply (the same line forever). A
-      // unique token gives the stream exactly one turn, so the first
-      // `turn.completed` is this message's. Trade-off: no in-thread
-      // conversational memory; the agent grounds answers in the bridge's
-      // recent-messages context and its own notes instead. `groupJid` stays
-      // the real chat JID in auth attributes, so those still resolve.
-      const continuationToken = `${token}#${randomUUID()}`;
-
-      const session = await from(continuationToken).send(buildUserMessage(message, media), {
-        auth,
-        context: buildContext(parsed),
+      // Serialize the snapshot/send/read sequence. A queued concurrent request
+      // must not mistake the previous request's terminal event for its own.
+      const continuationToken = JSON.stringify([parsed.acct ?? "default", token]);
+      const finalMessage = await serialTurn(continuationToken, async () => {
+        const previous = await resolveSession(continuationToken);
+        const startIndex = previous ? await previous.getStreamTailIndex() : 0;
+        const session = await from(continuationToken).send(buildUserMessage(message, media), {
+          auth,
+          context: buildContext(parsed),
+        });
+        const stream = await session.getEventStream({ startIndex });
+        return drainStream(stream as unknown as ReadableStream<ReplyStreamEvent>);
       });
-
-      const stream = await session.getEventStream();
-      // getEventStream's element type is the full protocol union; drainStream
-      // reads only `type` and `data.message`, which every member carries or
-      // omits compatibly, so the widening cast is sound.
-      const finalMessage = await drainStream(stream as unknown as ReadableStream<ReplyStreamEvent>);
 
       // Deterministic guardrail: the model drifts toward em dashes and Markdown
       // emphasis that WhatsApp renders wrong, so normalise on the way out, then
@@ -332,3 +323,22 @@ export default defineChannel({
   // reads as a crash; queue keeps every message answered in order.
   turnPolicy: "queue",
 });
+
+const pendingTurns = new Map<string, Promise<void>>();
+
+/** One cursor belongs to one send. Different chats continue independently. */
+export async function serialTurn<T>(key: string, work: () => Promise<T>): Promise<T> {
+  const previous = pendingTurns.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  pendingTurns.set(key, current);
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+    if (pendingTurns.get(key) === current) pendingTurns.delete(key);
+  }
+}

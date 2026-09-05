@@ -23,8 +23,8 @@ describe("installConnection", () => {
       return;
     }
     expect(result.installed).toBe(true);
-    expect(result.plugin.hasCredential).toBe(true);
-    expect(result.plugin.oauthStatus).toBe("connected");
+    expect(result.plugin.hasCredential).toBe(false);
+    expect(result.plugin.oauthStatus).toBe("none");
     expect(JSON.stringify(result)).not.toContain(secret);
     expect(write).toHaveBeenCalledOnce();
   });

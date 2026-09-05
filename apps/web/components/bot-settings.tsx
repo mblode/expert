@@ -4,6 +4,7 @@ import { CheckIcon } from "blode-icons-react";
 import { useState } from "react";
 import type { FormEvent } from "react";
 
+import { AssistantSettings } from "@/components/assistant-settings";
 import { BotMark } from "@/components/bot-mark";
 import { Button } from "@/components/ui/button";
 import { DialogClose, DialogFooter } from "@/components/ui/dialog";
@@ -37,9 +38,7 @@ const SHAPE_LABEL: Record<AvatarShape, string> = {
  * so, because a field that quietly rewrites an agent's identity should say
  * that it does.
  *
- * What is deliberately not here: instructions, skills and schedules live in
- * `apps/eve/bots/<id>/agent/` in git and need a build and a restart, so they
- * are a deploy rather than a form. Memory is the Bot's own file to write.
+ * Approved runtime instructions and memory are edited in the section below.
  */
 export function BotSettings({
   botId,
@@ -209,6 +208,7 @@ export function BotSettings({
             <FieldDescription>How this Bot’s mark looks everywhere.</FieldDescription>
           </Field>
 
+          <AssistantSettings botId={botId} seat={seat} />
           {failure && <FieldError>{failure}</FieldError>}
         </FieldGroup>
       </div>

@@ -1,3 +1,4 @@
+import { DeliveryReceipts } from "./delivery.ts";
 // ARCHITECTURE: one of these per linked number. It owns that account's Baileys
 // socket, its stores under `<data>/<acct>/`, its creds under `<state>/<acct>/auth`,
 // and the whole inbound pipeline (classify, record, trigger, attachments, ask
@@ -218,7 +219,6 @@ const LID_CAP = 5000;
 const PROCESSED_CAP = 1000;
 const REPLIED_CAP = 1000;
 const REPORTED_CAP = 200;
-const SENT_KEY_CAP = 500;
 // Short message ids the Bot may quote or react to. Two thousand covers a busy
 // group's last day or two; past that an id falls off and the envelope refuses,
 // which is the trade this index is bounded for.
@@ -429,7 +429,7 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
   // Idempotency keys already delivered via POST /send. An eve turn is a durable
   // workflow whose steps replay after an interruption; without this, a replay
   // is a duplicate WhatsApp message.
-  const sentKeys = boundedSet(SENT_KEY_CAP);
+  const deliveries = new DeliveryReceipts(path.join(env.dataDir, acct, "deliveries"));
   const mediaSendCounter = createDailyCounter(() => cfg().image_sends_per_day);
   // Every outbound envelope costs one write, whatever verb it carries: a
   // reaction is cheap to send and still a write into someone's group.
@@ -1691,10 +1691,6 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
     text: string,
     idempotencyKey?: string,
   ): Promise<{ sent: boolean; deduped?: boolean }> => {
-    if (idempotencyKey && sentKeys.has(idempotencyKey)) {
-      logger.info({ idempotencyKey, jid }, "skipping duplicate proactive send");
-      return { deduped: true, sent: true };
-    }
     const maintainer = cfg().maintainer_jid;
     const allowed =
       Boolean(maintainer && jid === maintainer) ||
@@ -1705,17 +1701,16 @@ export const createAccountRuntime = (deps: AccountRuntimeDeps): AccountRuntime =
       return { sent: false };
     }
     const sock = requireSock();
-    // Marked before the send, not after: a send that succeeds and then fails to
-    // record would otherwise replay into a duplicate message, and a duplicate is
-    // worse than a missing store entry.
+    const deliver = async () => {
+      const sent = await sendText(sock, jid, text);
+      void setPresence(sock, jid, "paused");
+      await recordOutbound(sock, jid, sent, text);
+    };
     if (idempotencyKey) {
-      sentKeys.add(idempotencyKey);
+      const deduped = await deliveries.send(idempotencyKey, jid, text, deliver);
+      return { sent: true, deduped };
     }
-    const sent = await sendText(sock, jid, text);
-    // The reply landing is what ends "typing" on a proactive send: there is no
-    // request-response turn behind it to clear the indicator.
-    void setPresence(sock, jid, "paused");
-    await recordOutbound(sock, jid, sent, text);
+    await deliver();
     return { sent: true };
   };
 

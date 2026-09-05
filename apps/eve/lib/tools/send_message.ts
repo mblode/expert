@@ -1,10 +1,11 @@
+import { AGENT_MESSAGE_KINDS } from "@computer/shared";
 import { defineTool } from "eve/tools";
 import { z } from "zod";
 import { hubRpc } from "../hub.ts";
 
 export default defineTool({
   description:
-    "Say something to the human. This is the ONLY thing they see, all your other text is a private scratchpad, so a turn that ends without a send is silence. Reply with a short text send before you start work, then send again with the result: acknowledging is not delivering. A widget or secret_request ENDS the turn, stop and wait; sending again before they answer fails.",
+    "Say something to the human. Reply briefly before work and with the result. kind=link opens owner-authenticated computer control, plugin setup or cloud coding. Repeat the returned URL in a WhatsApp final reply; it grants no access without sign-in. A widget or secret_request ENDS the turn; stop and wait. Never ask for credentials in chat.",
   // `ctx.session.auth.current` is the verified inbound principal, which is
   // route auth and not a prompt: eve's own multi-tenant guidance is that a
   // prompt asking for another tenant cannot change it. Absent (the eve TUI,
@@ -18,7 +19,33 @@ export default defineTool({
     }>("sendMessage", input, typeof turn === "string" ? turn : undefined);
   },
   inputSchema: z.object({
-    kind: z.enum(["text", "widget", "secret_request"]),
+    configuration: z
+      .object({
+        operation: z.enum(["read", "replace", "undo"]),
+        base_revision: z.number().int().nonnegative().optional(),
+        instructions: z.string().max(10_000).optional(),
+        memory: z.array(z.string().max(500)).max(50).optional(),
+        skills: z
+          .array(
+            z.object({ id: z.string(), description: z.string(), markdown: z.string() }).strict(),
+          )
+          .max(20)
+          .optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        "kind=configure. Read the current revision before replacing owner instructions, memory or procedures. Undo creates a new revision.",
+      ),
+    kind: z.enum(AGENT_MESSAGE_KINDS),
+    repo: z
+      .string()
+      .optional()
+      .describe("kind=code. Exact GitHub repository URL enabled by the owner. text is the brief."),
+    destination: z
+      .enum(["computer", "plugins", "code"])
+      .optional()
+      .describe("kind=link. Opens this Bot's work on the owner's authenticated account."),
     text: z
       .string()
       .optional()

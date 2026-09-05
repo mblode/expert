@@ -106,14 +106,15 @@
         "WhatsAppLink",
         "WhatsAppGroups",
         "WhatsAppJoinGroup",
-        "WhatsAppConfig"
+        "WhatsAppConfig",
+        "ConfigureAssistant"
       ]
     }
   },
   "tools": [
     {
       "name": "send_message",
-      "description": "Say something to the human. This is the ONLY thing they see \u2014 your other text is a private scratchpad, so a turn that ends without a send is silence. Reply with a short text send before you start work, and send again when the work is done: acknowledging is not delivering. A widget or secret_request ENDS the turn \u2014 stop and wait for the answer; a second send after one is rejected with CONFLICT.",
+      "description": "Say something to the human. This is the ONLY thing they see \u2014 your other text is a private scratchpad, so a turn that ends without a send is silence. Reply with a short text send before you start work, and send again when the work is done: acknowledging is not delivering. A widget or secret_request ENDS the turn \u2014 stop and wait for the answer; a second send after one is rejected with CONFLICT. Use kind=link with destination=computer, plugins or code for an owner-authenticated breakout. It does not end the turn or grant access. kind=code launches one cloud coding session for this verified owner turn. It requires an enabled repo and a text brief; retrying with changed input is a conflict. kind=configure reads or replaces approved instructions, memory and procedures for the bound PA owner. Supply configuration.operation and the current base_revision when editing; undo creates another revision. Changes apply on the next turn, never grant tools or permissions.",
       "input": {
         "type": "object",
         "required": ["kind"],
@@ -121,7 +122,7 @@
         "properties": {
           "kind": {
             "type": "string",
-            "enum": ["text", "widget", "secret_request"]
+            "enum": ["text", "widget", "secret_request", "link", "code", "configure"]
           },
           "text": {
             "type": "string",
@@ -154,6 +155,18 @@
             "type": "string",
             "minLength": 1,
             "description": "kind=secret_request. What the masked field holds, e.g. 'GitHub 2FA code'. The value is delivered to the clipboard and never reaches you \u2014 paste it, do not expect to read it."
+          },
+          "destination": {
+            "type": "string",
+            "enum": ["computer", "plugins", "code"],
+            "description": "kind=link. Owner-authenticated navigation for this Bot and current conversation. No access is granted by forwarding the URL."
+          },
+          "repo": {
+            "type": "string",
+            "description": "kind=code. Exact GitHub repository URL in the owner coding allowlist. text is the brief."
+          },
+          "configuration": {
+            "$ref": "#/$defs/configurationChange"
           }
         }
       }
@@ -563,6 +576,58 @@
           }
         }
       ]
+    },
+    "configurationChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation"],
+      "properties": {
+        "operation": {
+          "enum": ["read", "replace", "undo"]
+        },
+        "base_revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "instructions": {
+          "type": "string",
+          "maxLength": 10000
+        },
+        "memory": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "skills": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "description", "markdown"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,47}$"
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 300
+              },
+              "markdown": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 16000
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

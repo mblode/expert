@@ -1,3 +1,4 @@
+import type { ClockClient } from "./clock.ts";
 /**
  * Coding sessions, delegated off the box.
  *
@@ -27,7 +28,10 @@
  * has a dependency list that is part of its threat model.
  */
 
+import { createHash, randomUUID } from "node:crypto";
 import { ComputerError } from "@computer/shared";
+import { MemoryCodingIntentStore } from "./coding-intents.ts";
+import type { CodingIntentStore } from "./coding-intents.ts";
 import type { CodingSessionState, Conversation } from "@computer/shared";
 import { SEAT_HUMAN_REF } from "./conversations.ts";
 import type { ConversationRegistry } from "./conversations.ts";
@@ -56,6 +60,8 @@ export interface CodingSession {
 }
 
 export interface StartCodingSession {
+  request_id?: string;
+  source_conversation_id?: string;
   bot: string;
   repo: string;
   prompt: string;
@@ -104,6 +110,7 @@ const REPO_RE = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/;
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>;
 
 export class CodingService {
+  private readonly launching = new Map<string, Promise<CodingSession>>();
   /**
    * No key means no coding sessions on this computer, and both RPCs answer
    * `DAEMON_DOWN` the way the WhatsApp ones do without a bridge. Deliberately
@@ -114,6 +121,8 @@ export class CodingService {
     private readonly conversations: ConversationRegistry,
     private readonly apiKey: string | undefined = process.env.CURSOR_API_KEY?.trim(),
     private readonly fetchImpl: FetchLike = fetch,
+    private readonly intents: CodingIntentStore = new MemoryCodingIntentStore(),
+    private readonly clock?: ClockClient,
   ) {}
 
   /**
@@ -125,6 +134,69 @@ export class CodingService {
    * what it is: the person at the seat asked for this.
    */
   async start(req: StartCodingSession): Promise<CodingSession> {
+    if (!req.request_id) return this.launch(req);
+    if (!/^[A-Za-z0-9_-]{1,128}$/.test(req.request_id)) {
+      throw new ComputerError(
+        "VALIDATION",
+        "request_id must be 1-128 letters, digits, underscores or hyphens",
+      );
+    }
+    this.require();
+    const key = `${req.bot}:${req.request_id}`;
+    const hash = createHash("sha256")
+      .update(
+        JSON.stringify({
+          repo: req.repo,
+          source_conversation_id: req.source_conversation_id ?? "",
+          prompt: req.prompt,
+          ref: req.ref ?? "",
+          model: req.model ?? "",
+          auto_create_pr: req.auto_create_pr ?? false,
+        }),
+      )
+      .digest("hex");
+    const rows = this.intents.load();
+    let intent = rows.find((row) => row.key === key);
+    if (intent && intent.hash !== hash)
+      throw new ComputerError("CONFLICT", "this request_id belongs to a different coding brief");
+    if (intent?.result) return intent.result;
+    const running = this.launching.get(key);
+    if (running) return running;
+    if (!intent) {
+      intent = {
+        key,
+        hash,
+        agent: `bc-${randomUUID()}`,
+        ...(req.source_conversation_id
+          ? { source_conversation_id: req.source_conversation_id }
+          : {}),
+      };
+      this.intents.save([...rows, intent]);
+    }
+    const agentId = intent.agent;
+    const pending = Promise.resolve()
+      .then(async () => {
+        await this.clock?.checkAt(
+          createHash("sha256").update(agentId).digest("hex"),
+          Date.now() + 60_000,
+        );
+        return this.launch(req, agentId);
+      })
+      .then((result) => {
+        // Reload after the await: another independent launch may have completed.
+        this.intents.save(
+          this.intents.load().map((row) => (row.key === key ? { ...row, result } : row)),
+        );
+        return result;
+      })
+      .finally(() => {
+        this.launching.delete(key);
+      });
+    this.launching.set(key, pending);
+    return pending;
+  }
+
+  private async launch(req: StartCodingSession, agentId?: string): Promise<CodingSession> {
     const key = this.require();
     const repo = req.repo
       .trim()
@@ -137,13 +209,27 @@ export class CodingService {
       throw new ComputerError("VALIDATION", "prompt is required");
     }
     const body = {
+      ...(agentId ? { agentId } : {}),
       autoCreatePR: req.auto_create_pr ?? false,
       ...(req.model ? { model: { id: req.model } } : {}),
       prompt: { text: req.prompt },
       repos: [{ url: repo, ...(req.ref ? { startingRef: req.ref } : {}) }],
     };
-    const created = await this.call(key, "POST", "/v1/agents", body);
+    let created: unknown;
+    try {
+      created = await this.call(key, "POST", "/v1/agents", body);
+    } catch (error) {
+      // Never launch a different identity after acknowledgement loss. A duplicate
+      // create is reconciled against the exact provider identity persisted above.
+      if (!(agentId && error instanceof ComputerError && error.code === "CONFLICT")) throw error;
+      created = await this.call(key, "GET", `/v1/agents/${encodeURIComponent(agentId)}`);
+    }
     const agent = readAgent(created);
+    if (agentId && agent.id !== agentId)
+      throw new ComputerError(
+        "DAEMON_DOWN",
+        "the coding runner returned a different session identity",
+      );
     const conversation = this.conversations.resolve(
       req.bot,
       { agent: agent.id, kind: "code", repo },
@@ -155,11 +241,12 @@ export class CodingService {
     // `append`, not `send`: the model's turn rules are about the model's
     // voice, and nothing here is the model speaking. A widget waiting on the
     // human in this thread must not stop a run's status from being recorded.
-    this.conversations.append(
-      conversation.id,
-      { kind: "human", ref: SEAT_HUMAN_REF },
-      { kind: "human", text: req.prompt },
-    );
+    if (conversation.last_seq === 0)
+      this.conversations.append(
+        conversation.id,
+        { kind: "human", ref: SEAT_HUMAN_REF },
+        { kind: "human", text: req.prompt },
+      );
     const run = readRun(created) ?? (await this.latestRun(key, agent));
     return this.record(conversation.id, repo, agent, run);
   }
@@ -187,6 +274,64 @@ export class CodingService {
     );
     const run = await this.latestRun(key, agent);
     return this.record(conversation.id, conversation.route.repo, agent, run);
+  }
+
+  private polling = false;
+
+  /** One independent driver follows persisted launches after clients close or the hub restarts. */
+  async poll(completed: (session: CodingSession, source?: string) => Promise<void>): Promise<void> {
+    if (this.polling || !this.apiKey) return;
+    this.polling = true;
+    try {
+      for (const intent of this.intents.load()) {
+        if (!intent.result || intent.notified || (intent.next_check_at ?? 0) > Date.now()) continue;
+        const identity = createHash("sha256").update(intent.agent).digest("hex");
+        try {
+          const result = await this.refresh(intent.result.conversation_id);
+          if (!["complete", "error", "stale"].includes(result.state)) {
+            const next = Date.now() + 60_000;
+            await this.clock?.checkAt(identity, next);
+            this.intents.save(
+              this.intents
+                .load()
+                .map((row) =>
+                  row.key === intent.key
+                    ? { ...row, result, next_check_at: next, failures: 0 }
+                    : row,
+                ),
+            );
+            continue;
+          }
+          await completed(result, intent.source_conversation_id);
+          await this.clock?.hold(identity, 0);
+          this.intents.save(
+            this.intents
+              .load()
+              .map((row) => (row.key === intent.key ? { ...row, result, notified: true } : row)),
+          );
+        } catch {
+          // The persisted launch remains pending. A provider or clock outage
+          // does not turn an unobserved result into a reported success.
+          const failures = (intent.failures ?? 0) + 1;
+          const next = Date.now() + Math.min(15 * 60_000, 60_000 * 2 ** Math.min(failures - 1, 4));
+          try {
+            await this.clock?.checkAt(identity, next);
+            this.intents.save(
+              this.intents
+                .load()
+                .map((row) =>
+                  row.key === intent.key ? { ...row, failures, next_check_at: next } : row,
+                ),
+            );
+          } catch {
+            /* The previous due registration remains live until the clock recovers. */
+          }
+          console.warn("coding session refresh deferred");
+        }
+      }
+    } finally {
+      this.polling = false;
+    }
   }
 
   private async latestRun(apiKey: string, agent: AgentSnapshot): Promise<RunSnapshot | undefined> {
@@ -275,12 +420,12 @@ export class CodingService {
       throw new ComputerError("DAEMON_DOWN", `the coding runner ${why}`);
     }
     if (!res.ok) {
-      const raw = await res.text().catch(() => "");
-      const text = raw.slice(0, 500);
+      if (res.status === 409)
+        throw new ComputerError("CONFLICT", "the coding runner already has this session identity");
       if (res.status >= 400 && res.status < 500) {
         throw new ComputerError(
           "VALIDATION",
-          `the coding runner refused it: ${res.status} ${text}`,
+          `the coding runner refused the request (${res.status})`,
         );
       }
       throw new ComputerError("DAEMON_DOWN", `the coding runner answered ${res.status}`);

@@ -1,11 +1,13 @@
+import type { ClockClient } from "../service/clock.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
-import { ComputerError } from "@computer/shared";
+import { ComputerError, outboundReply } from "@computer/shared";
 import type { Participant, Route } from "@computer/shared";
 import type { BotRegistry } from "../service/bots.ts";
 import type { ConnectorRecord, ConnectorRegistry } from "../service/connectors.ts";
 import type { ConversationRegistry } from "../service/conversations.ts";
+import type { InboundService } from "../service/inbound.ts";
 import type { TurnService } from "../service/turns.ts";
 import { EVE_HUB_SECRET_HEADER } from "../host/eve.ts";
 import { firstHeader } from "./auth.ts";
@@ -27,6 +29,9 @@ interface ConnectorIngressDeps {
   bots: BotRegistry;
   conversations: ConversationRegistry;
   turns: TurnService;
+  inbound?: InboundService;
+  paOwner?: { acct: string; jid: string };
+  clock?: ClockClient;
   /** Where this Bot's Eve listens. Empty string means it has no Eve. */
   eveUrl: (botId: string, display: number) => string;
   /** Shared secret the Eve channel expects on loopback (`eve start`). */
@@ -91,6 +96,84 @@ export async function handleConnectorIngress(
       throw new ComputerError("VALIDATION", `body over ${MAX_BODY} bytes`);
     }
     const body = await readBody(req);
+    const inboundId = whatsappMessageId(record.kind, target, body);
+    if (inboundId && deps.inbound) {
+      const work = async () => {
+        const bound = bindTurn(deps, record, bot.id, target, body);
+        if (!bound) throw new ComputerError("VALIDATION", "invalid WhatsApp conversation");
+        if (bound.human)
+          deps.conversations.append(
+            bound.conversationId,
+            { kind: "human", ref: bound.speaker },
+            { kind: "human", text: bound.human },
+            { turn_id: bound.turnId },
+          );
+        const release = deps.turns.keepAlive(bound.turnId, bot.id);
+        let upstream: Response;
+        try {
+          upstream = await fetch(`${base}${target}${url.search}`, {
+            body,
+            headers: {
+              "content-type": "application/json",
+              ...(deps.eveSecret ? { [EVE_HUB_SECRET_HEADER]: deps.eveSecret } : {}),
+              [TURN_HEADER]: bound.turnId,
+            },
+            method: "POST",
+            redirect: "manual",
+            signal: AbortSignal.timeout(30 * 60_000),
+          });
+        } finally {
+          release();
+        }
+        let text = await upstream.text();
+        if (Buffer.byteLength(text) > REPLY_CAPTURE_MAX) {
+          throw new ComputerError("DAEMON_DOWN", "WhatsApp reply exceeds the response limit");
+        }
+        if (upstream.ok) {
+          const payload = JSON.parse(text) as { reply?: unknown };
+          if (typeof payload.reply !== "string")
+            throw new ComputerError("DAEMON_DOWN", "invalid WhatsApp reply");
+          const delivery = outboundReply(
+            deps.conversations.deliveryText(bound.conversationId, bound.turnId) ?? payload.reply,
+          );
+          text = JSON.stringify({ reply: delivery });
+          deps.conversations.recordDelivery(
+            bound.conversationId,
+            { bot: bot.id, kind: "bot" },
+            { images: [], kind: "text", text: delivery },
+            bound.turnId,
+          );
+        }
+        return { status: upstream.status, body: text };
+      };
+      const owner = deps.paOwner;
+      const payload = JSON.parse(Buffer.from(body).toString("utf-8")) as Record<string, unknown>;
+      const personal =
+        owner &&
+        record.id === `whatsapp-${owner.acct}` &&
+        payload.acct === owner.acct &&
+        payload.surface === "dm" &&
+        payload.sender === owner.jid &&
+        payload.token === owner.jid;
+      if (personal && deps.clock) {
+        await deps.inbound.accept(`${record.id}:${inboundId}`, body, owner, work, deps.clock);
+        res.writeHead(202, {
+          "content-type": "application/json",
+          "cache-control": "no-store",
+          ...deps.cors,
+        });
+        res.end(JSON.stringify({ accepted: true, reply: "" }));
+        return;
+      }
+      const reply = await deps.inbound.execute(`${record.id}:${inboundId}`, body, work);
+      res.writeHead(reply.status, {
+        "content-type": "application/json",
+        "cache-control": "no-store",
+        ...deps.cors,
+      });
+      res.end(reply.body);
+      return;
+    }
     const bound = bindTurn(deps, record, bot.id, target, body);
     // What the person said, recorded before the Bot is asked anything. The
     // conversation was resolved and then left empty until now: it held the
@@ -243,7 +326,18 @@ function bindTurn(
     conversationId: conversation.id,
     human: route.human,
     speaker: route.speaker,
-    turnId: deps.turns.mint({ bot: botId, conversation_id: conversation.id }).id,
+    turnId: deps.turns.mint({
+      bot: botId,
+      conversation_id: conversation.id,
+      ...(route.route.kind === "whatsapp" &&
+      deps.paOwner &&
+      route.route.acct === deps.paOwner.acct &&
+      route.route.jid === deps.paOwner.jid &&
+      route.speaker === deps.paOwner.jid &&
+      record.id === `whatsapp-${deps.paOwner.acct}`
+        ? { owner: deps.paOwner }
+        : {}),
+    }).id,
   };
 }
 
@@ -343,4 +437,20 @@ async function readBody(req: IncomingMessage): Promise<Uint8Array<ArrayBuffer>> 
     chunks.push(c as Buffer);
   }
   return new Uint8Array(Buffer.concat(chunks));
+}
+
+/** Older bridge traffic has no stable identity and keeps its existing path. */
+function whatsappMessageId(kind: string, target: string, body: Uint8Array): string | undefined {
+  if (kind !== "whatsapp" || target !== "/eve/v1/whatsapp/message") return undefined;
+  try {
+    const value = JSON.parse(Buffer.from(body).toString("utf-8")) as {
+      messageId?: unknown;
+      token?: unknown;
+    };
+    return typeof value.messageId === "string" && value.messageId && typeof value.token === "string"
+      ? JSON.stringify([value.token, value.messageId])
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }

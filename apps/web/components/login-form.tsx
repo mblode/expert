@@ -27,9 +27,11 @@ type Step = "email" | "otp";
 export function LoginForm({
   appleEnabled = false,
   googleEnabled = false,
+  returnTo = "/",
 }: {
   appleEnabled?: boolean;
   googleEnabled?: boolean;
+  returnTo?: string;
 }): React.ReactElement {
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
@@ -133,7 +135,7 @@ export function LoginForm({
     } catch {
       // Analytics must not unlock the form or paint a network error.
     }
-    window.location.assign("/");
+    window.location.assign(returnTo);
   };
 
   const social = async (provider: "google" | "apple") => {
@@ -143,7 +145,7 @@ export function LoginForm({
     setPending(true);
     setError(null);
     try {
-      await authClient.signIn.social({ callbackURL: "/", provider });
+      await authClient.signIn.social({ callbackURL: returnTo, provider });
     } catch {
       setError(NETWORK_ERROR);
       setPending(false);

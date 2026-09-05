@@ -198,6 +198,7 @@ export function eveChildEnv(
 ): NodeJS.ProcessEnv {
   return {
     ...opts.env,
+    COMPUTER_BOT_ID: launch.botId,
     COMPUTER_BOT_TOKEN: launch.token,
     COMPUTER_EVE_SECRET: opts.eveSecret,
     COMPUTER_URL: opts.hubUrl,

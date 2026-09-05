@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { ComputerError } from "@computer/shared";
+import { readTokenFile, writeTokenFile } from "./provision.ts";
 
 /**
  * Turn tokens: how the hub knows which conversation a `send_message` belongs
@@ -23,6 +24,7 @@ interface Turn {
   bot: string;
   /** Peer hops still allowed. Minted full, decremented when peers land. */
   hops_left: number;
+  owner?: { acct: string; jid: string };
   deadline_at: number;
 }
 
@@ -44,21 +46,55 @@ export class TurnService {
   private readonly turns = new Map<string, Turn>();
 
   /** `ttlMs` is injectable so tests do not wait out the real window. */
-  constructor(private readonly ttlMs: number = TURN_TTL_MS) {}
+  constructor(
+    private readonly ttlMs: number = TURN_TTL_MS,
+    private readonly path?: string,
+  ) {
+    for (const row of path ? (readTokenFile(path, "turns") ?? []) : []) {
+      const turn = row as Turn;
+      if (
+        !turn ||
+        typeof turn.id !== "string" ||
+        !/^turn_[A-Za-z0-9_-]+$/.test(turn.id) ||
+        typeof turn.bot !== "string" ||
+        typeof turn.conversation_id !== "string" ||
+        !Number.isFinite(turn.deadline_at) ||
+        !Number.isInteger(turn.hops_left) ||
+        (turn.owner !== undefined &&
+          (!turn.owner ||
+            typeof turn.owner.acct !== "string" ||
+            typeof turn.owner.jid !== "string"))
+      ) {
+        throw new Error("invalid turn store");
+      }
+      if (turn.deadline_at > Date.now()) this.turns.set(turn.id, turn);
+    }
+  }
 
-  mint(opts: { conversation_id: string; bot: string; hops_left?: number }): Turn {
+  private save(): void {
+    if (this.path) writeTokenFile(this.path, [...this.turns.values()]);
+  }
+
+  mint(opts: {
+    conversation_id: string;
+    bot: string;
+    hops_left?: number;
+    owner?: Turn["owner"];
+  }): Turn {
     // No timer: an expired turn is swept the next time one is minted, and
     // refused on sight either way. A pending sweep is not a reason to keep
     // the hub alive, and the map only grows at the rate of inbound messages.
     this.expire();
     const turn: Turn = {
       bot: opts.bot,
+      ...(opts.owner ? { owner: opts.owner } : {}),
       conversation_id: opts.conversation_id,
       deadline_at: Date.now() + this.ttlMs,
       hops_left: opts.hops_left ?? MAX_HOPS,
       id: `turn_${randomBytes(18).toString("base64url")}`,
     };
     this.turns.set(turn.id, turn);
+    this.save();
     return turn;
   }
 
@@ -79,6 +115,7 @@ export class TurnService {
     }
     if (turn.deadline_at <= Date.now()) {
       this.turns.delete(token);
+      this.save();
       throw new ComputerError("UNAUTHENTICATED", "this turn has expired");
     }
     if (turn.bot !== bot) {
@@ -87,12 +124,34 @@ export class TurnService {
     return turn;
   }
 
+  /** Only the trusted request driver may keep a live execution authorized. */
+  keepAlive(token: string, bot: string): () => void {
+    this.verify(token, bot);
+    const timer = setInterval(
+      () => {
+        try {
+          const turn = this.verify(token, bot);
+          turn.deadline_at = Date.now() + this.ttlMs;
+          this.save();
+        } catch {
+          clearInterval(timer);
+        }
+      },
+      Math.max(1, Math.floor(this.ttlMs / 3)),
+    );
+    timer.unref();
+    return () => clearInterval(timer);
+  }
+
   /** Drop everything past its deadline. */
   expire(now: number = Date.now()): void {
+    let changed = false;
     for (const [id, turn] of this.turns) {
       if (turn.deadline_at <= now) {
         this.turns.delete(id);
+        changed = true;
       }
     }
+    if (changed) this.save();
   }
 }

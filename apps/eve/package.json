@@ -16,6 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@computer/shared": "1.0.0",
     "eve": "^0.49.0",
     "zod": "4.5.4"
   },

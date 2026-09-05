@@ -376,6 +376,7 @@ describe("eve supervisor: N Eves from the roster", () => {
       "FLY_API_TOKEN",
       // The coding runner's key: the hub calls the runner, no child needs it.
       "CURSOR_API_KEY",
+      "COMPUTER_CLOCK_SECRET",
     ]) {
       expect(deny).toContain(`"${secret}"`);
     }
