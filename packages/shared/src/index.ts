@@ -1103,8 +1103,17 @@ export const AGENT_MESSAGE_KINDS = [
   "link",
   "code",
   "configure",
+  "routine",
 ] as const;
 
 export type { RuntimeConfiguration, RuntimeSkill } from "./assistant.ts";
 
 export { cleanReply, sanitizeOutbound, outboundReply } from "./format-reply.ts";
+/** Owner-only shared-number setup; credentials stay in the control plane. */
+export interface WhatsAppConnectResponse {
+  acct: string;
+  jid: string;
+  connector_id: string;
+  connector_secret: string;
+  delivery_secret: string;
+}

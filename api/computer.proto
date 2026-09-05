@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package computer.v1;
 
+import "google/protobuf/struct.proto";
+
 // Source of truth for behaviour: DESIGN.md
 // Agent-loadable JSON: spec.json
 
@@ -83,6 +85,7 @@ service Seat {
   // pairing code or QR, a socket on this computer, groups the owner ticks.
   // Owner seat only. The hub proxies these to the bridge process it runs.
   rpc WhatsAppAccounts(WhatsAppAccountsRequest) returns (WhatsAppAccountsResponse);
+  rpc WhatsAppConnect(WhatsAppConnectRequest) returns (WhatsAppConnectResponse);
   rpc WhatsAppLink(WhatsAppLinkRequest) returns (WhatsAppLinkState);
   rpc WhatsAppGroups(WhatsAppGroupsRequest) returns (WhatsAppGroupsResponse);
   rpc WhatsAppJoinGroup(WhatsAppJoinGroupRequest) returns (WhatsAppJoinGroupResponse);
@@ -347,6 +350,7 @@ message SendMessageRequest {
     MessageWorkLink link = 4;
     MessageCoding code = 5;
     MessageConfiguration configure = 6;
+    google.protobuf.Struct routine = 7;
   }
 }
 
@@ -392,6 +396,7 @@ message SendMessageResponse {
   string url = 4;
   CodingSession coding_session = 5;
   RuntimeConfiguration runtime = 6;
+  repeated google.protobuf.Struct routines = 7;
 }
 
 // --- Seat ---
@@ -756,6 +761,18 @@ message IssueResponse {
 // --- WhatsApp channel (owner seat) ---
 
 message WhatsAppAccountsRequest {}
+
+message WhatsAppConnectRequest {
+  string action = 1; // prepare | bind, owner seat only
+  string jid = 2; // transport-verified phone, bind only
+}
+message WhatsAppConnectResponse {
+  string acct = 1;
+  string jid = 2;
+  string connector_id = 3;
+  string connector_secret = 4;
+  string delivery_secret = 5;
+}
 
 message WhatsAppAccount {
   string acct = 1;          // account id on this computer, e.g. "main"

@@ -50,7 +50,7 @@ export default async function LoginPage({
           <div>
             <h1 className="font-display text-3xl font-light tracking-tight">Sign in</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              New or returning: email a code. The computer connects.
+              Sign in or create an account with a one-time email code.
             </p>
           </div>
           <LoginForm appleEnabled={social.apple} googleEnabled={social.google} next={next} />

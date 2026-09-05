@@ -2,7 +2,8 @@ import type { ClockClient } from "../service/clock.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
-import { ComputerError, outboundReply } from "@computer/shared";
+import { runEveTurn } from "../service/eve-turn.ts";
+import { ComputerError } from "@computer/shared";
 import type { Participant, Route } from "@computer/shared";
 import type { BotRegistry } from "../service/bots.ts";
 import type { ConnectorRecord, ConnectorRegistry } from "../service/connectors.ts";
@@ -108,43 +109,16 @@ export async function handleConnectorIngress(
             { kind: "human", text: bound.human },
             { turn_id: bound.turnId },
           );
-        const release = deps.turns.keepAlive(bound.turnId, bot.id);
-        let upstream: Response;
-        try {
-          upstream = await fetch(`${base}${target}${url.search}`, {
-            body,
-            headers: {
-              "content-type": "application/json",
-              ...(deps.eveSecret ? { [EVE_HUB_SECRET_HEADER]: deps.eveSecret } : {}),
-              [TURN_HEADER]: bound.turnId,
-            },
-            method: "POST",
-            redirect: "manual",
-            signal: AbortSignal.timeout(30 * 60_000),
-          });
-        } finally {
-          release();
-        }
-        let text = await upstream.text();
-        if (Buffer.byteLength(text) > REPLY_CAPTURE_MAX) {
-          throw new ComputerError("DAEMON_DOWN", "WhatsApp reply exceeds the response limit");
-        }
-        if (upstream.ok) {
-          const payload = JSON.parse(text) as { reply?: unknown };
-          if (typeof payload.reply !== "string")
-            throw new ComputerError("DAEMON_DOWN", "invalid WhatsApp reply");
-          const delivery = outboundReply(
-            deps.conversations.deliveryText(bound.conversationId, bound.turnId) ?? payload.reply,
-          );
-          text = JSON.stringify({ reply: delivery });
-          deps.conversations.recordDelivery(
-            bound.conversationId,
-            { bot: bot.id, kind: "bot" },
-            { images: [], kind: "text", text: delivery },
-            bound.turnId,
-          );
-        }
-        return { status: upstream.status, body: text };
+        return runEveTurn({
+          url: `${base}${target}${url.search}`,
+          secret: deps.eveSecret,
+          body,
+          bot: bot.id,
+          conversation: bound.conversationId,
+          turn: bound.turnId,
+          turns: deps.turns,
+          conversations: deps.conversations,
+        });
       };
       const owner = deps.paOwner;
       const payload = JSON.parse(Buffer.from(body).toString("utf-8")) as Record<string, unknown>;

@@ -16,3 +16,4 @@ data/
 # built web assets
 apps/web/.next/
 apps/web/out/
+.vercel

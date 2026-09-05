@@ -4,7 +4,7 @@
 
 Implementation is authorized. The changes below are implemented locally and
 verified. The whole seven-slice plan is not complete. The Railway gateway and
-persistent clock have been deployed; Blode deployment is in progress. No paid
+persistent clock, Blode computer and authenticated web breakouts are deployed. No paid
 coding job has been dispatched.
 
 ## Implemented
@@ -67,17 +67,11 @@ coding job has been dispatched.
 
 ## Remaining work and external gates
 
-1. Existing gateway integration: on 2026-09-05 the user identified `61456455551`.
-   Read-only Railway inspection confirmed `EXPERT_DM_JIDS=+61456455551`,
-   `EXPERT_URL=https://mblode-computer.fly.dev`, connector `whatsapp`, and a
-   configured connector secret on `vcmc-bridge` in production. Reuse the existing
-   `../vcmc-agent/bridge` gateway. Its routing code sends selected owner DMs to
-   Expert and keeps groups and other member DMs with Vibey. This proves configured
-   routing, not an end-to-end delivery test or the new PA owner binding. The legacy
-   payload lacks `acct` and `messageId`, and its owner matcher accepts phone
-   suffixes. Adapt durable ingress, exact owner identity and asynchronous delivery
-   before enabling PA mode; do not weaken the owner gate or provision a second
-   WhatsApp socket. A test GitHub repository remains unspecified.
+1. Coding provider setup: the gateway integration is live for the existing owner
+   number. No Cursor API key is configured on Blode. The user has been asked to
+   choose subscription-backed Codex on a separate coding VM or Cursor Cloud
+   Agents. No coding provider launch is claimed while that choice and login are
+   unresolved.
 2. Clock migration completed: `clock_data` volume `vol_r68dl2nxmpjmxpn4` is
    attached to the single running writer `080e396be7d998`. A real authenticated
    due registration survived restart and woke Blode successfully (HTTP 200). The
@@ -133,3 +127,31 @@ not guarantees inferred from types or mocked tests.
   of npm's actual workspace symlink. Supervisor tests pass with the clock secret
   excluded from model children and hub-only credentials restored only to the hub.
 - Railway deployment `6325f48c-2422-436b-9a71-f5d9e6bd3d5a` is successful.
+
+- Merged current upstream bot templates and onboarding before release. Commit
+  `34c4206` passed CI and deployed to Vercel project `blode/expert`, production
+  alias `hello.expert`. The merged guest image built and deployed to Blode.
+- Verified real desktop pixels in the signed-in browser, took the human seat and
+  returned it to Eve. Corrected `COMPUTER_PUBLIC_URL` to the Fly computer origin;
+  `COMPUTER_WEB_URL` is the separate `hello.expert` origin.
+- The private clock must listen on IPv6 (`CLOCK_BIND=::`). A hub-to-clock health
+  probe now returns HTTP 200. Removed the obsolete stopped, volume-free standby
+  so clock secret updates do not try to create a second independent registry.
+- The operator smoke request to the existing owner's DM was accepted with HTTP 202. Its receipt subsequently recorded acknowledged, delivered and released.
+
+## WhatsApp Web E2E, 2026-09-05
+
+- Sent an actual message through signed-in Chrome WhatsApp Web to the existing
+  Vibey direct chat at 13:06 Melbourne time. The PA acknowledged the message and
+  delivered a computer link at 13:07, targeting Blode, `main` and the existing
+  conversation `conv__bFdFg--u7k4`.
+- Sent a follow-up asking for the previous check phrase without repeating it.
+  The PA returned exactly `blue lantern 905` at 13:08. This verifies the real
+  browser-to-WhatsApp-to-gateway-to-PA round trip and conversation continuity.
+- Clicking the delivered link opened an Expert tab. The final takeover check
+  for this particular browser-originated exchange was interrupted by browser
+  debugger detachment and foreground changes. The earlier live desktop takeover
+  and return-to-Eve check above remains separate evidence.
+- The first response returned the link but omitted the requested check phrase.
+  Combined prose and structured-link delivery is not a passing acceptance case.
+  No code session, plugin connection or routine was exercised by this test.

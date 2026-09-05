@@ -2,10 +2,12 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 
 import { botTemplate } from "../db/bot-template";
+import { computerEnrollment } from "../db/computer-enrollment";
 import { computer } from "../db/computer";
 import { computerSeat } from "../db/computer-seat";
 import { invite } from "../db/invite";
 import { onboarding } from "../db/onboarding";
+import { whatsappConnection } from "../db/whatsapp-connection";
 import * as schema from "../db/schema";
 
 const url = process.env.TURSO_DATABASE_URL;
@@ -32,8 +34,10 @@ export const db = drizzle(client, {
     ...schema,
     botTemplate,
     computer,
+    computerEnrollment,
     computerSeat,
     invite,
     onboarding,
+    whatsappConnection,
   },
 });

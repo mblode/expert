@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { App } from "@/app-shell";
 import { MarketingHome } from "@/components/marketing/home-page";
 import { Onboarding } from "@/components/onboarding/onboarding";
@@ -11,6 +12,7 @@ export default async function Page() {
   if (!session) {
     return <MarketingHome />;
   }
+  if (!session.computerId) redirect("/start");
   // The first run is a row, not a cookie: someone who answered on their phone
   // does not answer again on their laptop, and someone who skipped stays
   // skipped. Read here so the workspace never renders behind it for a frame.

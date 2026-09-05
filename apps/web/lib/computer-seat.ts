@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { computer } from "../db/computer";
 import { computerSeat } from "../db/computer-seat";
@@ -6,12 +6,13 @@ import type { ComputerChoice, ComputerRecord } from "./computers";
 import {
   accessibleComputers,
   choicesOf,
-  computerById,
   computersFromEnv,
   boundComputerId,
   pairComputer,
+  revokeSeat,
 } from "./computers";
 import { db } from "./db";
+import { ownedComputer } from "./computer-enrollment";
 
 /** Every seat call here resolves to one, so a route can name what it holds. @public */
 export interface ComputerSeat {
@@ -30,24 +31,35 @@ export interface ComputerSeat {
   denied?: boolean;
 }
 
-function catalog(email: string): ComputerRecord[] {
-  return accessibleComputers(email, process.env);
+export async function accountComputers(userId: string, email: string): Promise<ComputerRecord[]> {
+  const seeded = accessibleComputers(email, process.env);
+  const owned = await ownedComputer(userId);
+  return owned ? [owned.record, ...seeded] : seeded;
 }
 
-function viewFor(
+async function viewFor(
+  userId: string,
   email: string,
   target: ComputerRecord,
   extra: Partial<ComputerSeat> = {},
-): ComputerSeat {
+): Promise<ComputerSeat> {
   return {
     computerId: target.id,
-    computers: choicesOf(catalog(email)),
+    computers: choicesOf(await accountComputers(userId, email)),
     hubUrl: target.hubUrl,
     ...extra,
   };
 }
 
 export async function ensureComputerCatalog(): Promise<void> {
+  await db.run(sql`CREATE TABLE IF NOT EXISTS computer (
+    id TEXT PRIMARY KEY NOT NULL, hub_url TEXT NOT NULL, label TEXT NOT NULL,
+    setup_code_env TEXT NOT NULL, issuer_token TEXT, issuer_updated_at INTEGER
+  )`);
+  await db.run(sql`CREATE TABLE IF NOT EXISTS computer_seat (
+    user_id TEXT PRIMARY KEY NOT NULL, computer_id TEXT NOT NULL,
+    hub_url TEXT NOT NULL, seat_token TEXT NOT NULL, updated_at INTEGER NOT NULL
+  )`);
   for (const row of computersFromEnv(process.env)) {
     await db
       .insert(computer)
@@ -82,12 +94,18 @@ async function pairAndPersist(
   email: string,
   target: ComputerRecord,
 ): Promise<ComputerSeat> {
-  const paired = await pairComputer(target, process.env);
+  const owned = await ownedComputer(userId);
+  const env =
+    owned?.record.id === target.id
+      ? { ...process.env, [target.setupCodeEnv]: owned.setupCode }
+      : process.env;
+  const paired = await pairComputer(target, env);
   if ("error" in paired) {
-    return viewFor(email, target, { seatError: paired.error });
+    return viewFor(userId, email, target, { seatError: paired.error });
   }
   try {
     await ensureComputerCatalog();
+    await db.insert(computer).values(target).onConflictDoNothing();
     await db
       .insert(computerSeat)
       .values({
@@ -107,16 +125,24 @@ async function pairAndPersist(
         target: computerSeat.userId,
       });
   } catch {
-    // The next getSession will Pair again; the token is still good now.
+    // An unrecorded owner would be minted again on every session read.
+    // Refuse and revoke rather than handing out an untracked credential.
+    await revokeSeat(target, paired.token);
+    return viewFor(userId, email, target, {
+      seatError: "Could not save your connection. Try again.",
+    });
   }
-  return viewFor(email, target, { seatToken: paired.token });
+  return viewFor(userId, email, target, { seatToken: paired.token });
 }
 
-function pickBound(email: string, storedId: string | undefined): ComputerRecord | undefined {
-  const allowed = catalog(email);
+async function pickBound(
+  userId: string,
+  email: string,
+  storedId: string | undefined,
+): Promise<ComputerRecord | undefined> {
+  const allowed = await accountComputers(userId, email);
   if (storedId) {
-    const wanted = computerById(storedId, process.env);
-    const kept = wanted && allowed.find((row) => row.id === wanted.id);
+    const kept = allowed.find((row) => row.id === storedId);
     if (kept) {
       return kept;
     }
@@ -125,10 +151,10 @@ function pickBound(email: string, storedId: string | undefined): ComputerRecord 
   return allowed.find((row) => row.id === fallbackId) ?? allowed[0];
 }
 
-function noneConfigured(email: string): ComputerSeat {
+async function noneConfigured(userId: string, email: string): Promise<ComputerSeat> {
   return {
     computerId: "",
-    computers: choicesOf(catalog(email)),
+    computers: choicesOf(await accountComputers(userId, email)),
     hubUrl: "",
     seatError: "No computer is configured for this account.",
   };
@@ -145,10 +171,10 @@ export async function getOrCreateComputerSeat(
       .where(eq(computerSeat.userId, userId))
       .limit(1);
     if (row?.seatToken) {
-      const bound = pickBound(email, row.computerId);
+      const bound = await pickBound(userId, email, row.computerId);
       if (bound && bound.id === row.computerId) {
-        return viewFor(email, bound, {
-          hubUrl: row.hubUrl || bound.hubUrl,
+        return viewFor(userId, email, bound, {
+          hubUrl: bound.hubUrl,
           seatToken: row.seatToken,
         });
       }
@@ -159,8 +185,8 @@ export async function getOrCreateComputerSeat(
   } catch {
     // Table may not exist yet on a fresh Turso: Pair still works.
   }
-  const bound = pickBound(email, undefined);
-  return bound ? pairAndPersist(userId, email, bound) : noneConfigured(email);
+  const bound = await pickBound(userId, email, undefined);
+  return bound ? pairAndPersist(userId, email, bound) : noneConfigured(userId, email);
 }
 
 /** The hub forgot this token (a wiped seats.json): pair the bound computer again. */
@@ -176,8 +202,8 @@ export async function refreshComputerSeat(userId: string, email: string): Promis
   } catch {
     // Pair the default binding.
   }
-  const bound = pickBound(email, storedId);
-  return bound ? pairAndPersist(userId, email, bound) : noneConfigured(email);
+  const bound = await pickBound(userId, email, storedId);
+  return bound ? pairAndPersist(userId, email, bound) : noneConfigured(userId, email);
 }
 
 /** Bind this session to a computer the account may open, then Pair that hub. */
@@ -186,14 +212,14 @@ export async function bindComputerSeat(
   email: string,
   computerId: string,
 ): Promise<ComputerSeat> {
-  const wanted = computerById(computerId, process.env);
-  const target = wanted && catalog(email).find((row) => row.id === wanted.id);
+  const allowed = await accountComputers(userId, email);
+  const target = allowed.find((row) => row.id === computerId);
   if (!target) {
-    const fallback = pickBound(email, undefined);
+    const fallback = await pickBound(userId, email, undefined);
     if (!fallback) {
-      return noneConfigured(email);
+      return noneConfigured(userId, email);
     }
-    return viewFor(email, fallback, {
+    return viewFor(userId, email, fallback, {
       denied: true,
       seatError: "That computer is not available for this account.",
     });

@@ -786,3 +786,25 @@ Bot id. The modern WhatsApp ingress delivers the recorded `send_message` voice
 when present, with the same outbound redaction as Eve; final prose is a fallback
 only for a turn that made no send. This keeps the conversation and delivery from
 selecting different answers.
+
+# Shared WhatsApp setup
+
+`Seat.WhatsAppConnect` is owner-only and available only when shared WhatsApp
+is configured. `prepare` returns `acct`, `jid`, `connector_id`, `connector_secret`
+and `delivery_secret` to the control plane. These credentials never appear in
+model tools, browser setup links or WhatsApp messages. `bind` accepts an exact
+transport-verified phone JID, persists it before activating it, and refuses to
+replace an established owner. Repeating the same bind is safe. The shared number
+does not imply shared conversations or access to the gateway's community archive.
+
+## Durable owner routines
+
+`send_message` with `kind=routine` accepts `routine.operation` of `list`, `save`,
+`pause` or `resume`. Changes require the current `base_revision`; save accepts a
+prompt, supported five-field cron and IANA timezone. Only the verified PA owner
+turn may change routines. The response reports routine records including their
+revision, next local occurrence and pending wake-publication state. A pending
+schedule is not confirmed active. Pausing prevents future occurrences, not an
+already running side effect. Interrupted runs become uncertain and are reported
+rather than silently replayed. These are durable hub records, not model-written
+schedule files, and require the outer clock.

@@ -42,6 +42,7 @@ export const SeatMethods = {
   Type: path(Seat, Seat.method.type),
   WhatsAppAccounts: path(Seat, Seat.method.whatsAppAccounts),
   WhatsAppConfig: path(Seat, Seat.method.whatsAppConfig),
+  WhatsAppConnect: path(Seat, Seat.method.whatsAppConnect),
   WhatsAppGroups: path(Seat, Seat.method.whatsAppGroups),
   WhatsAppJoinGroup: path(Seat, Seat.method.whatsAppJoinGroup),
   WhatsAppLink: path(Seat, Seat.method.whatsAppLink),

@@ -3,6 +3,7 @@ import { ComputerError } from "@computer/shared";
 import type { BotRegistry } from "../service/bots.ts";
 import type { ConnectorRegistry } from "../service/connectors.ts";
 import type { BridgeClient, WhatsAppAccountConfig } from "../service/whatsapp.ts";
+import type { WhatsAppOwner } from "../service/whatsapp-owner.ts";
 import type { ConnectRouter, RpcContext } from "./router.ts";
 import { requireObject } from "./router.ts";
 
@@ -11,6 +12,7 @@ interface WhatsAppDeps {
   connectors: ConnectorRegistry;
   /** Absent = no bridge on this computer; every call is DAEMON_DOWN. */
   bridge?: BridgeClient;
+  shared?: { owner: WhatsAppOwner; deliverySecret: string };
 }
 
 const ACCT_RE = /^[a-z0-9][a-z0-9-]{0,31}$/;
@@ -66,6 +68,37 @@ export function connectorIdFor(acct: string): string {
 }
 
 export function registerWhatsApp(router: ConnectRouter, deps: WhatsAppDeps): void {
+  router.rpc(SeatMethods.WhatsAppConnect, "seat", async (ctx) => {
+    requireOwner(ctx);
+    const input = requireObject(ctx.body);
+    const { shared } = deps;
+    if (!shared) throw new ComputerError("DAEMON_DOWN", "shared WhatsApp setup is not configured");
+    if (input.action === "bind") {
+      if (typeof input.jid !== "string") throw new ComputerError("VALIDATION", "jid is required");
+      shared.owner.bind(input.jid);
+    } else if (input.action !== "prepare") {
+      throw new ComputerError("VALIDATION", "action must be prepare or bind");
+    }
+    const { acct } = shared.owner.identity;
+    const id = connectorIdFor(acct);
+    const record =
+      deps.connectors.byId(id) ??
+      deps.connectors.add({
+        bot: deps.bots.primary().id,
+        id,
+        kind: "whatsapp",
+        paths: WHATSAPP_EVE_PATHS,
+      });
+    // This is an owner-only control-plane response. Never include it in a
+    // model tool result or send these credentials to the WhatsApp user.
+    return {
+      acct,
+      jid: shared.owner.identity.jid,
+      connector_id: record.id,
+      connector_secret: record.secret,
+      delivery_secret: shared.deliverySecret,
+    };
+  });
   router.rpc(SeatMethods.WhatsAppAccounts, "seat", async (ctx) => {
     requireOwner(ctx);
     return requireBridge(deps).accounts();

@@ -42,6 +42,7 @@ export interface StartedHub {
 export async function startHub(
   opts: {
     paOwner?: HubOptions["paOwner"];
+    sharedWhatsApp?: HubOptions["sharedWhatsApp"];
     clock?: HubOptions["clock"];
     paRepos?: HubOptions["paRepos"];
     bots?: BotConfig[];
@@ -77,6 +78,7 @@ export async function startHub(
     },
     bridge: opts.bridge,
     paOwner: opts.paOwner,
+    sharedWhatsApp: opts.sharedWhatsApp,
     clock: opts.clock,
     paRepos: opts.paRepos,
     codingFactory: opts.codingFactory,

@@ -37,7 +37,7 @@ build succeeds first, so the error reads as unrelated to whatever you changed.
 
 ```bash
 npm run check          # typecheck x7, layer lint, ultracite, knip, tests, proto
-git push origin main   # Vercel project `expert-computer` deploys on push
+git push origin main   # Vercel project `expert` in team `blode` deploys on push
 ```
 
 `npm run check` runs `proto:check`, which diffs `packages/proto/gen` against
@@ -48,13 +48,13 @@ Confirm:
 
 ```bash
 gh run list --limit 1                       # CI green on your SHA
-vercel ls expert-computer --yes | sed -n 4,6p
+vercel ls expert --scope blode | sed -n 4,6p
 vercel inspect <deployment-url> | grep -A4 Aliases   # must list hello.expert
 ```
 
-There are two Vercel projects with the `hello.expert` domain attached,
-`expert-computer` (serves it) and `expert-web` (preview deployments only).
-Check the alias landed on the deployment you just made.
+As verified on 2026-09-05, `blode/expert` serves `hello.expert`. Earlier notes
+named `expert-computer`; that project name no longer resolves. Check the
+production alias landed on the deployment you just made.
 
 ## 2. The Blode computer
 
@@ -387,7 +387,11 @@ Prepare the clock before enabling the tenant:
    configured target name, and `COMPUTER_CLOCK_SECRET` to the matching secret.
    The clock is always on. Its tenant targets must remain public Fly hostnames
    because those requests need Fly Proxy to wake suspended Machines.
-5. Set `COMPUTER_PUBLIC_URL`, the PA account and owner JID, and
+5. Set `COMPUTER_PUBLIC_URL` to the tenant Fly origin, such as
+   `https://mblode-computer.fly.dev`, and `COMPUTER_WEB_URL` to
+   `https://hello.expert`. The public computer URL serves pixels and identifies
+   the tenant in work links; setting it to the web app breaks both. Set the PA
+   account and owner JID, and
    `COMPUTER_PA_REPOS` to an explicit comma-separated list of GitHub repository
    URLs. `CURSOR_API_KEY` stays a tenant secret. No key means coding is unavailable.
 6. Back up hub-owned state before deploying the guest. An existing real

@@ -1001,6 +1001,14 @@ public nonisolated struct Computer_V1_SendMessageRequest: Sendable {
     set {body = .configure(newValue)}
   }
 
+  public var routine: SwiftProtobuf.Google_Protobuf_Struct {
+    get {
+      if case .routine(let v)? = body {return v}
+      return SwiftProtobuf.Google_Protobuf_Struct()
+    }
+    set {body = .routine(newValue)}
+  }
+
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
   public nonisolated enum OneOf_Body: Equatable, Sendable {
@@ -1010,6 +1018,7 @@ public nonisolated struct Computer_V1_SendMessageRequest: Sendable {
     case link(Computer_V1_MessageWorkLink)
     case code(Computer_V1_MessageCoding)
     case configure(Computer_V1_MessageConfiguration)
+    case routine(SwiftProtobuf.Google_Protobuf_Struct)
 
   }
 
@@ -1138,6 +1147,11 @@ public nonisolated struct Computer_V1_SendMessageResponse: @unchecked Sendable {
   public var hasRuntime: Bool {_storage._runtime != nil}
   /// Clears the value of `runtime`. Subsequent reads from it will return its default value.
   public mutating func clearRuntime() {_uniqueStorage()._runtime = nil}
+
+  public var routines: [SwiftProtobuf.Google_Protobuf_Struct] {
+    get {_storage._routines}
+    set {_uniqueStorage()._routines = newValue}
+  }
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -2094,6 +2108,42 @@ public nonisolated struct Computer_V1_WhatsAppAccountsRequest: Sendable {
   // SwiftProtobuf.Message conformance is added in an extension below. See the
   // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
   // methods supported on all messages.
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppConnectRequest: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  /// prepare | bind, owner seat only
+  public var action: String = String()
+
+  /// transport-verified phone, bind only
+  public var jid: String = String()
+
+  public var unknownFields = SwiftProtobuf.UnknownStorage()
+
+  public init() {}
+}
+
+public nonisolated struct Computer_V1_WhatsAppConnectResponse: Sendable {
+  // SwiftProtobuf.Message conformance is added in an extension below. See the
+  // `Message` and `Message+*Additions` files in the SwiftProtobuf library for
+  // methods supported on all messages.
+
+  public var acct: String = String()
+
+  public var jid: String = String()
+
+  public var connectorID: String = String()
+
+  public var connectorSecret: String = String()
+
+  public var deliverySecret: String = String()
 
   public var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -4115,7 +4165,7 @@ nonisolated extension Computer_V1_WriteFileResponse: SwiftProtobuf.Message, Swif
 
 nonisolated extension Computer_V1_SendMessageRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendMessageRequest"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}widget\0\u{3}secret_request\0\u{1}link\0\u{1}code\0\u{1}configure\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}text\0\u{1}widget\0\u{3}secret_request\0\u{1}link\0\u{1}code\0\u{1}configure\0\u{1}routine\0")
 
   public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
     while let fieldNumber = try decoder.nextFieldNumber() {
@@ -4201,6 +4251,19 @@ nonisolated extension Computer_V1_SendMessageRequest: SwiftProtobuf.Message, Swi
           self.body = .configure(v)
         }
       }()
+      case 7: try {
+        var v: SwiftProtobuf.Google_Protobuf_Struct?
+        var hadOneofValue = false
+        if let current = self.body {
+          hadOneofValue = true
+          if case .routine(let m) = current {v = m}
+        }
+        try decoder.decodeSingularMessageField(value: &v)
+        if let v = v {
+          if hadOneofValue {try decoder.handleConflictingOneOf()}
+          self.body = .routine(v)
+        }
+      }()
       default: break
       }
     }
@@ -4235,6 +4298,10 @@ nonisolated extension Computer_V1_SendMessageRequest: SwiftProtobuf.Message, Swi
     case .configure?: try {
       guard case .configure(let v)? = self.body else { preconditionFailure() }
       try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
+    }()
+    case .routine?: try {
+      guard case .routine(let v)? = self.body else { preconditionFailure() }
+      try visitor.visitSingularMessageField(value: v, fieldNumber: 7)
     }()
     case nil: break
     }
@@ -4420,7 +4487,7 @@ nonisolated extension Computer_V1_MessageSecretRequest: SwiftProtobuf.Message, S
 
 nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
   public static let protoMessageName: String = _protobuf_package + ".SendMessageResponse"
-  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}occurrence_id\0\u{3}turn_ended\0\u{3}conversation_id\0\u{1}url\0\u{3}coding_session\0\u{1}runtime\0")
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{3}occurrence_id\0\u{3}turn_ended\0\u{3}conversation_id\0\u{1}url\0\u{3}coding_session\0\u{1}runtime\0\u{1}routines\0")
 
   fileprivate class _StorageClass {
     var _occurrenceID: String = String()
@@ -4429,6 +4496,7 @@ nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, Sw
     var _url: String = String()
     var _codingSession: Computer_V1_CodingSession? = nil
     var _runtime: Computer_V1_RuntimeConfiguration? = nil
+    var _routines: [SwiftProtobuf.Google_Protobuf_Struct] = []
 
       // This property is used as the initial default value for new instances of the type.
       // The type itself is protecting the reference to its storage via CoW semantics.
@@ -4445,6 +4513,7 @@ nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, Sw
       _url = source._url
       _codingSession = source._codingSession
       _runtime = source._runtime
+      _routines = source._routines
     }
   }
 
@@ -4469,6 +4538,7 @@ nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, Sw
         case 4: try { try decoder.decodeSingularStringField(value: &_storage._url) }()
         case 5: try { try decoder.decodeSingularMessageField(value: &_storage._codingSession) }()
         case 6: try { try decoder.decodeSingularMessageField(value: &_storage._runtime) }()
+        case 7: try { try decoder.decodeRepeatedMessageField(value: &_storage._routines) }()
         default: break
         }
       }
@@ -4499,6 +4569,9 @@ nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, Sw
       try { if let v = _storage._runtime {
         try visitor.visitSingularMessageField(value: v, fieldNumber: 6)
       } }()
+      if !_storage._routines.isEmpty {
+        try visitor.visitRepeatedMessageField(value: _storage._routines, fieldNumber: 7)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -4514,6 +4587,7 @@ nonisolated extension Computer_V1_SendMessageResponse: SwiftProtobuf.Message, Sw
         if _storage._url != rhs_storage._url {return false}
         if _storage._codingSession != rhs_storage._codingSession {return false}
         if _storage._runtime != rhs_storage._runtime {return false}
+        if _storage._routines != rhs_storage._routines {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -6492,6 +6566,91 @@ nonisolated extension Computer_V1_WhatsAppAccountsRequest: SwiftProtobuf.Message
   }
 
   public static func ==(lhs: Computer_V1_WhatsAppAccountsRequest, rhs: Computer_V1_WhatsAppAccountsRequest) -> Bool {
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppConnectRequest: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppConnectRequest"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}action\0\u{1}jid\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.action) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.jid) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.action.isEmpty {
+      try visitor.visitSingularStringField(value: self.action, fieldNumber: 1)
+    }
+    if !self.jid.isEmpty {
+      try visitor.visitSingularStringField(value: self.jid, fieldNumber: 2)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppConnectRequest, rhs: Computer_V1_WhatsAppConnectRequest) -> Bool {
+    if lhs.action != rhs.action {return false}
+    if lhs.jid != rhs.jid {return false}
+    if lhs.unknownFields != rhs.unknownFields {return false}
+    return true
+  }
+}
+
+nonisolated extension Computer_V1_WhatsAppConnectResponse: SwiftProtobuf.Message, SwiftProtobuf._MessageImplementationBase, SwiftProtobuf._ProtoNameProviding {
+  public static let protoMessageName: String = _protobuf_package + ".WhatsAppConnectResponse"
+  public static let _protobuf_nameMap = SwiftProtobuf._NameMap(bytecode: "\0\u{1}acct\0\u{1}jid\0\u{3}connector_id\0\u{3}connector_secret\0\u{3}delivery_secret\0")
+
+  public mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
+    while let fieldNumber = try decoder.nextFieldNumber() {
+      // The use of inline closures is to circumvent an issue where the compiler
+      // allocates stack space for every case branch when no optimizations are
+      // enabled. https://github.com/apple/swift-protobuf/issues/1034
+      switch fieldNumber {
+      case 1: try { try decoder.decodeSingularStringField(value: &self.acct) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.jid) }()
+      case 3: try { try decoder.decodeSingularStringField(value: &self.connectorID) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.connectorSecret) }()
+      case 5: try { try decoder.decodeSingularStringField(value: &self.deliverySecret) }()
+      default: break
+      }
+    }
+  }
+
+  public func traverse<V: SwiftProtobuf.Visitor>(visitor: inout V) throws {
+    if !self.acct.isEmpty {
+      try visitor.visitSingularStringField(value: self.acct, fieldNumber: 1)
+    }
+    if !self.jid.isEmpty {
+      try visitor.visitSingularStringField(value: self.jid, fieldNumber: 2)
+    }
+    if !self.connectorID.isEmpty {
+      try visitor.visitSingularStringField(value: self.connectorID, fieldNumber: 3)
+    }
+    if !self.connectorSecret.isEmpty {
+      try visitor.visitSingularStringField(value: self.connectorSecret, fieldNumber: 4)
+    }
+    if !self.deliverySecret.isEmpty {
+      try visitor.visitSingularStringField(value: self.deliverySecret, fieldNumber: 5)
+    }
+    try unknownFields.traverse(visitor: &visitor)
+  }
+
+  public static func ==(lhs: Computer_V1_WhatsAppConnectResponse, rhs: Computer_V1_WhatsAppConnectResponse) -> Bool {
+    if lhs.acct != rhs.acct {return false}
+    if lhs.jid != rhs.jid {return false}
+    if lhs.connectorID != rhs.connectorID {return false}
+    if lhs.connectorSecret != rhs.connectorSecret {return false}
+    if lhs.deliverySecret != rhs.deliverySecret {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }

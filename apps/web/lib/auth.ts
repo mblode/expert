@@ -2,6 +2,7 @@ import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { customSession, emailOTP } from "better-auth/plugins";
 
+import { hasComputerInvitation } from "./computer-enrollment";
 import { getOrCreateComputerSeat } from "./computer-seat";
 import { isProductionRuntime, siteConfig, trimSlashes } from "./config";
 import { db } from "./db";
@@ -98,7 +99,7 @@ export const auth = betterAuth({
     user: {
       create: {
         before: async (user) => {
-          if (!isAllowed(user.email)) {
+          if (!isAllowed(user.email) && !(await hasComputerInvitation(user.email))) {
             throw new APIError("FORBIDDEN", {
               message: "This computer is private. Ask its owner for access.",
             });
@@ -111,7 +112,7 @@ export const auth = betterAuth({
   plugins: [
     emailOTP({
       sendVerificationOTP: async ({ email, otp, type }) => {
-        if (!isAllowed(email)) {
+        if (!isAllowed(email) && !(await hasComputerInvitation(email))) {
           return;
         }
         await sendOtpEmail({ email, otp, type });

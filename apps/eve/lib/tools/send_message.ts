@@ -19,6 +19,20 @@ export default defineTool({
     }>("sendMessage", input, typeof turn === "string" ? turn : undefined);
   },
   inputSchema: z.object({
+    routine: z
+      .object({
+        operation: z.enum(["list", "save", "pause", "resume"]),
+        id: z.string().optional(),
+        base_revision: z.number().int().nonnegative().optional(),
+        cron: z.string().optional(),
+        timezone: z.string().optional(),
+        prompt: z.string().max(4000).optional(),
+      })
+      .strict()
+      .optional()
+      .describe(
+        "kind=routine. List before changing a routine; save a five-field cron, IANA timezone and instruction. Read pending and next_local before claiming activation. Pause prevents future runs.",
+      ),
     configuration: z
       .object({
         operation: z.enum(["read", "replace", "undo"]),

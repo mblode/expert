@@ -193,6 +193,9 @@ public protocol Computer_V1_SeatClientInterface: Sendable {
     func `whatsAppAccounts`(request: Computer_V1_WhatsAppAccountsRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_WhatsAppAccountsResponse>
 
     @available(iOS 13, *)
+    func `whatsAppConnect`(request: Computer_V1_WhatsAppConnectRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_WhatsAppConnectResponse>
+
+    @available(iOS 13, *)
     func `whatsAppLink`(request: Computer_V1_WhatsAppLinkRequest, headers: Connect.Headers) async -> ResponseMessage<Computer_V1_WhatsAppLinkState>
 
     @available(iOS 13, *)
@@ -319,6 +322,11 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
     }
 
     @available(iOS 13, *)
+    public func `whatsAppConnect`(request: Computer_V1_WhatsAppConnectRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_WhatsAppConnectResponse> {
+        return await self.client.unary(path: "/computer.v1.Seat/WhatsAppConnect", idempotencyLevel: .unknown, request: request, headers: headers)
+    }
+
+    @available(iOS 13, *)
     public func `whatsAppLink`(request: Computer_V1_WhatsAppLinkRequest, headers: Connect.Headers = [:]) async -> ResponseMessage<Computer_V1_WhatsAppLinkState> {
         return await self.client.unary(path: "/computer.v1.Seat/WhatsAppLink", idempotencyLevel: .unknown, request: request, headers: headers)
     }
@@ -361,6 +369,7 @@ public final class Computer_V1_SeatClient: Computer_V1_SeatClientInterface, Send
             public static let revoke = Connect.MethodSpec(name: "Revoke", service: "computer.v1.Seat", type: .unary)
             public static let issue = Connect.MethodSpec(name: "Issue", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppAccounts = Connect.MethodSpec(name: "WhatsAppAccounts", service: "computer.v1.Seat", type: .unary)
+            public static let whatsAppConnect = Connect.MethodSpec(name: "WhatsAppConnect", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppLink = Connect.MethodSpec(name: "WhatsAppLink", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppGroups = Connect.MethodSpec(name: "WhatsAppGroups", service: "computer.v1.Seat", type: .unary)
             public static let whatsAppJoinGroup = Connect.MethodSpec(name: "WhatsAppJoinGroup", service: "computer.v1.Seat", type: .unary)

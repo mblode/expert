@@ -1,4 +1,4 @@
-import { accessibleComputers } from "@/lib/computers";
+import { accountComputers } from "@/lib/computer-seat";
 import { createTemplate, listTemplates } from "@/lib/bot-template-store";
 import { templateView } from "@/lib/bot-template";
 import { getSessionCached } from "@/lib/session";
@@ -46,7 +46,7 @@ export async function POST(request: Request): Promise<Response> {
   if (typeof botId !== "string" || !botId.trim()) {
     return Response.json({ error: "Say which Bot this came from." }, { status: 400 });
   }
-  const allowed = accessibleComputers(session.user.email, process.env);
+  const allowed = await accountComputers(session.user.id, session.user.email);
   const computer = allowed.find((row) => row.id === computerId);
   if (!computer) {
     return Response.json({ error: "That computer is not yours." }, { status: 403 });

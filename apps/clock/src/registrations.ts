@@ -48,7 +48,10 @@ export class Registrations {
       !Number.isFinite(until) ||
       until > now + 40 * 60_000 ||
       (at !== undefined &&
-        (typeof at !== "number" || !Number.isFinite(at) || at < 0 || at > now + 15 * 60_000))
+        (typeof at !== "number" ||
+          !Number.isFinite(at) ||
+          at < 0 ||
+          at > now + 367 * 24 * 60 * 60_000))
     )
       throw new Error("invalid registration");
     const expected = this.secrets[tenant];

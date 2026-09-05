@@ -1,0 +1,293 @@
+{
+  "audit": {
+    "ranAt": "2026-09-05",
+    "skill": "ui-design",
+    "mode": "audit",
+    "scope": {
+      "mode": "diff",
+      "diffBase": "HEAD",
+      "files": [
+        "apps/web/components/onboarding/setup.tsx",
+        "apps/web/components/onboarding/whatsapp.tsx",
+        "apps/web/app/start/page.tsx"
+      ],
+      "filesAudited": 3
+    },
+    "featuresDetected": ["onboarding", "form", "error state", "loading state"],
+    "rulesPlanned": 18,
+    "rulesRun": 15,
+    "selfCheck": {
+      "passed": false,
+      "failures": ["rules-not-fully-executed"]
+    }
+  },
+  "verdict": "INCOMPLETE",
+  "summary": {
+    "found": {
+      "releaseBlockers": 3,
+      "fixThisSprint": 3,
+      "backlog": 0,
+      "total": 6
+    },
+    "applied": {
+      "releaseBlockers": 3,
+      "fixThisSprint": 3,
+      "backlog": 0,
+      "total": 6
+    },
+    "remaining": {
+      "releaseBlockers": 0,
+      "fixThisSprint": 0,
+      "backlog": 0,
+      "total": 0
+    },
+    "outOfScope": 0,
+    "unknown": 1,
+    "suppressed": 0
+  },
+  "consideredAndRejected": [
+    {
+      "candidate": "Invitation fields cleared after an error",
+      "rule": "forms-lost-data-on-error",
+      "guard": "form.reset runs only after response.ok; errors preserve the existing DOM fields."
+    },
+    {
+      "candidate": "Touch actions require hover",
+      "rule": "mobile-hover-only-affordance",
+      "guard": "No setup action is hidden behind hover; shared hover rules only change colors."
+    }
+  ],
+  "deferredTo": [
+    {
+      "concern": "Desktop and mobile rendering, keyboard traversal, console and network checks",
+      "tool": "Chrome via CUA",
+      "reason": "Debugger unattached; concurrent Chrome activity prevents a stable session."
+    }
+  ],
+  "findings": [
+    {
+      "rule": "states-no-error-state",
+      "category": "states",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "file": "apps/web/components/onboarding/whatsapp.tsx",
+      "line": 20,
+      "result": "fail",
+      "defaultTier": "release-blocker",
+      "assignedTier": "release-blocker",
+      "tierReason": "Onboarding path uses the rule default.",
+      "severity": "HIGH",
+      "observed": "Status failures had no reliable recovery; enrollment requests had no timeout.",
+      "fix": "Added inline retry and bounded requests that restore actionable controls.",
+      "applied": true,
+      "appliedChange": "apps/web/components/onboarding/whatsapp.tsx:20-45: Added inline retry and bounded requests that restore actionable controls.",
+      "suppressed": false
+    },
+    {
+      "rule": "async-out-of-order-responses",
+      "category": "async",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "file": "apps/web/components/onboarding/whatsapp.tsx",
+      "line": 16,
+      "result": "fail",
+      "defaultTier": "release-blocker",
+      "assignedTier": "release-blocker",
+      "tierReason": "Onboarding path uses the rule default.",
+      "severity": "HIGH",
+      "observed": "Status polling could race connection mutations.",
+      "fix": "Serialized polls and aborts stale reads before connection mutations.",
+      "applied": true,
+      "appliedChange": "apps/web/components/onboarding/whatsapp.tsx:16-47: Serialized polls and aborts stale reads before connection mutations.",
+      "suppressed": false
+    },
+    {
+      "rule": "focus-on-dynamic-content",
+      "category": "focus",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "file": "apps/web/components/onboarding/whatsapp.tsx",
+      "line": 86,
+      "result": "fail",
+      "defaultTier": "fix-this-sprint",
+      "assignedTier": "fix-this-sprint",
+      "tierReason": "Onboarding path uses the rule default.",
+      "severity": "MEDIUM",
+      "observed": "Detected phone and connection updates were not announced.",
+      "fix": "Added a polite live region and alert semantics for failures.",
+      "applied": true,
+      "appliedChange": "apps/web/components/onboarding/whatsapp.tsx:82-94: Added a polite live region and alert semantics for failures.",
+      "suppressed": false
+    },
+    {
+      "rule": "forms-labels-and-autocomplete",
+      "category": "forms",
+      "detect": "static",
+      "feature": "form",
+      "surface": "ComputerInvitation",
+      "file": "apps/web/components/onboarding/setup.tsx",
+      "line": 105,
+      "result": "fail",
+      "defaultTier": "release-blocker",
+      "assignedTier": "fix-this-sprint",
+      "tierReason": "Internal operator form reduces the default tier.",
+      "severity": "MEDIUM",
+      "observed": "Invitation labels wrapped Input, whose own root is a label, producing nested labels.",
+      "fix": "Moved explicit labels beside Input while preserving htmlFor associations.",
+      "applied": true,
+      "appliedChange": "apps/web/components/onboarding/setup.tsx:105-134: Moved explicit labels beside Input while preserving htmlFor associations.",
+      "suppressed": false
+    },
+    {
+      "rule": "microcopy-leaked-error-message",
+      "category": "microcopy",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "file": "apps/web/components/onboarding/whatsapp.tsx",
+      "line": 71,
+      "result": "fail",
+      "defaultTier": "release-blocker",
+      "assignedTier": "release-blocker",
+      "tierReason": "Onboarding path uses the rule default.",
+      "severity": "HIGH",
+      "observed": "Network and JSON parsing error messages could reach the setup UI.",
+      "fix": "Display controlled recovery copy for unexpected errors; retain sanitized API responses.",
+      "applied": true,
+      "appliedChange": "apps/web/components/onboarding/whatsapp.tsx:60-74: Display controlled recovery copy for unexpected errors; retain sanitized API responses.",
+      "suppressed": false
+    },
+    {
+      "rule": "interaction-target-size",
+      "category": "interaction",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ClaimComputer",
+      "file": "apps/web/components/onboarding/setup.tsx",
+      "line": 51,
+      "result": "fail",
+      "defaultTier": "fix-this-sprint",
+      "assignedTier": "fix-this-sprint",
+      "tierReason": "Onboarding path uses the rule default.",
+      "severity": "MEDIUM",
+      "observed": "Setup used shared default buttons with 40px height and compact navigation links.",
+      "fix": "Added min-h-12 to setup actions and links, plus stable names for loading buttons.",
+      "applied": true,
+      "appliedChange": "apps/web/components/onboarding/setup.tsx:51-58: Added min-h-12 to setup actions and links, plus stable names for loading buttons.",
+      "suppressed": false
+    },
+    {
+      "rule": "states-no-empty-state",
+      "category": "states",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "file": "apps/web/components/onboarding/whatsapp.tsx",
+      "line": 128,
+      "result": "pass",
+      "evidence": [
+        "Unconnected state offers a connection code; unavailable state keeps workspace navigation."
+      ],
+      "suppressed": false
+    },
+    {
+      "rule": "forms-lost-data-on-error",
+      "category": "forms",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ComputerInvitation",
+      "file": "apps/web/components/onboarding/setup.tsx",
+      "line": 90,
+      "result": "pass",
+      "evidence": ["Form reset occurs only after an OK response."],
+      "suppressed": false
+    },
+    {
+      "rule": "forms-no-disable-while-submitting",
+      "category": "forms",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ComputerInvitation",
+      "file": "apps/web/components/onboarding/setup.tsx",
+      "line": 140,
+      "result": "pass",
+      "evidence": ["Shared Button disables while loading; handler guards pending."],
+      "suppressed": false
+    },
+    {
+      "rule": "forms-mobile-input-font-size",
+      "category": "forms",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ComputerInvitation",
+      "file": "apps/web/components/onboarding/setup.tsx",
+      "line": 107,
+      "result": "pass",
+      "evidence": ["Shared Input uses text-base without a smaller override."],
+      "suppressed": false
+    },
+    {
+      "rule": "mobile-hover-only-affordance",
+      "category": "mobile",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "file": "apps/web/components/onboarding/whatsapp.tsx",
+      "line": 102,
+      "result": "pass",
+      "evidence": ["All actions are visible independently of hover."],
+      "suppressed": false
+    },
+    {
+      "rule": "a11y-semantic-html-first",
+      "category": "a11y",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ComputerInvitation",
+      "file": "apps/web/components/onboarding/setup.tsx",
+      "line": 68,
+      "result": "pass",
+      "evidence": ["Native form, labels, buttons and output; no clickable div."],
+      "suppressed": false
+    },
+    {
+      "rule": "interaction-keyboard-operable",
+      "category": "interaction",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "file": "apps/web/components/onboarding/whatsapp.tsx",
+      "line": 102,
+      "result": "pass",
+      "evidence": [
+        "Native buttons and links provide keyboard activation; rendered traversal still pending."
+      ],
+      "suppressed": false
+    },
+    {
+      "rule": "interaction-focus-visible",
+      "category": "interaction",
+      "detect": "static",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "file": "apps/web/components/onboarding/whatsapp.tsx",
+      "line": 102,
+      "result": "pass",
+      "evidence": ["Shared Button supplies focus-visible rings; scope removes no outlines."],
+      "suppressed": false
+    },
+    {
+      "rule": "states-layout-shift",
+      "category": "states",
+      "detect": "rendered",
+      "feature": "onboarding",
+      "surface": "ConnectWhatsApp",
+      "result": "unknown",
+      "reason": "no-rendered-check: Chrome debugger was unattached and native Chrome changed to unrelated pages; desktop/mobile state measurements unavailable.",
+      "suppressed": false
+    }
+  ]
+}

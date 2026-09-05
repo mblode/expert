@@ -1,3 +1,6 @@
+import type { WhatsAppOwner } from "./service/whatsapp-owner.ts";
+import { RoutineService } from "./service/routines.ts";
+import { runEveTurn } from "./service/eve-turn.ts";
 import { AssistantState } from "./service/assistant.ts";
 import { workLink } from "./service/work-links.ts";
 import type { ClockClient } from "./service/clock.ts";
@@ -85,7 +88,9 @@ export interface HubOptions {
   turnStorePath?: string;
   inboundStorePath?: string;
   assistantStorePath?: string;
+  routineStorePath?: string;
   paOwner?: { acct: string; jid: string };
+  sharedWhatsApp?: { owner: WhatsAppOwner; deliverySecret: string };
   clock?: ClockClient;
   paRepos?: string[];
   /** The supervisor's status file (init writes it). Absent = /healthz reports the hub alone. */
@@ -267,12 +272,68 @@ export function createHub(opts: HubOptions): Hub {
     return await res.json();
   };
 
+  const routines =
+    opts.clock && opts.paOwner
+      ? new RoutineService({
+          path: opts.routineStorePath,
+          clock: opts.clock,
+          notify: async (_bot, key, text) => {
+            await inbound.publish(key, opts.paOwner!, text, opts.clock!);
+          },
+          run: async (routine, key) => {
+            const owner = opts.paOwner!;
+            const bot = bots.byId(routine.bot);
+            await opts.wake?.(bot.id, bot.display);
+            const conversation = conversations.resolve(bot.id, { kind: "whatsapp", ...owner }, [
+              { bot: bot.id, kind: "bot" },
+              { kind: "human", ref: owner.jid },
+            ]);
+            const turn = turns.mint({ bot: bot.id, conversation_id: conversation.id, owner });
+            const message = `Scheduled owner routine ${routine.id} (revision ${routine.revision}):\n${routine.prompt}`;
+            conversations.append(
+              conversation.id,
+              { kind: "human", ref: `routine:${routine.id}` },
+              { kind: "human", text: message },
+              { turn_id: turn.id },
+            );
+            const body = Buffer.from(
+              JSON.stringify({
+                acct: owner.acct,
+                token: owner.jid,
+                sender: owner.jid,
+                senderName: "Scheduled routine",
+                surface: "dm",
+                message,
+                messageId: key,
+              }),
+            );
+            const result = await inbound.execute(`routine:${key}`, body, () =>
+              runEveTurn({
+                url: `${eveUrl(bot.id, bot.display)}/eve/v1/whatsapp/message`,
+                secret: eveSecret,
+                body,
+                bot: bot.id,
+                turn: turn.id,
+                conversation: conversation.id,
+                conversations,
+                turns,
+              }),
+            );
+            if (result.status !== 200) throw new Error("routine execution failed");
+            const text = (JSON.parse(result.body) as { reply: string }).reply;
+            if (text.trim())
+              await inbound.publish(`routine:${key}:result`, owner, text, opts.clock!);
+          },
+        })
+      : undefined;
+
   registerAgent(router, {
     bots,
     conversations,
     turns,
     coding,
     paOwner: opts.paOwner,
+    routines,
     assistant,
     paRepos: opts.paRepos,
     wake: opts.wake,
@@ -291,7 +352,7 @@ export function createHub(opts: HubOptions): Hub {
     vncUrl: opts.vncUrl,
     wake: opts.wake,
   });
-  registerWhatsApp(router, { bots, bridge: opts.bridge, connectors });
+  registerWhatsApp(router, { bots, bridge: opts.bridge, connectors, shared: opts.sharedWhatsApp });
 
   router.extra("GET", "/spec", "public", async () => loadSpecJson());
   // Honest health: the supervisor's view of desk, Eve and bridge beside the
@@ -401,6 +462,7 @@ export function createHub(opts: HubOptions): Hub {
   // Release what nobody has touched. A minute is often enough to be timely
   // and rare enough to cost nothing; the keeper decides what is idle.
   let sweeper: NodeJS.Timeout | undefined;
+  let routineTimer: NodeJS.Timeout | undefined;
   const delivery =
     opts.bridge && opts.paOwner
       ? setInterval(() => {
@@ -457,6 +519,7 @@ export function createHub(opts: HubOptions): Hub {
     close: () =>
       new Promise((resolveClose) => {
         clearInterval(sweeper);
+        clearInterval(routineTimer);
         clearInterval(delivery);
         clearInterval(codingPoll);
         wss.close();
@@ -467,6 +530,12 @@ export function createHub(opts: HubOptions): Hub {
     server,
     start: async () => {
       await provision.start();
+      if (routines) {
+        routineTimer = setInterval(() => {
+          void routines.tick().catch(() => console.error("routine wake publication is pending"));
+        }, 10_000);
+        routineTimer.unref();
+      }
       if (screens) {
         sweeper = setInterval(() => {
           void screens.sweep();

@@ -1,3 +1,4 @@
+import type { RoutineService } from "../service/routines.ts";
 import type { AssistantState } from "../service/assistant.ts";
 import type { CodingService, CodingSession } from "../service/coding.ts";
 import { AgentMethods } from "@computer/proto";
@@ -26,6 +27,7 @@ interface AgentDeps {
   turns: TurnService;
   coding: CodingService;
   assistant: AssistantState;
+  routines?: RoutineService;
   paOwner?: { acct: string; jid: string };
   paRepos?: string[];
   /**
@@ -66,6 +68,22 @@ export function registerAgent(router: ConnectRouter, deps: AgentDeps): void {
     const b = bot(ctx);
     const input = requireObject(ctx.body);
     const bound = ctx.turn ? deps.turns.verify(ctx.turn, b.id) : undefined;
+    if (input.kind === "routine") {
+      if (
+        !bound?.owner ||
+        !deps.paOwner ||
+        bound.owner.acct !== deps.paOwner.acct ||
+        bound.owner.jid !== deps.paOwner.jid
+      )
+        throw new ComputerError("DENIED", "routines require the verified personal assistant owner");
+      if (!deps.routines)
+        throw new ComputerError("DAEMON_DOWN", "routines need the durable wake clock");
+      return {
+        routines: await deps.routines.configure(b.id, requireObject(input.routine)),
+        turn_ended: false,
+        conversation_id: bound.conversation_id,
+      };
+    }
     if (input.kind === "configure") {
       if (
         !bound?.owner ||
