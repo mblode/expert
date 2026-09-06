@@ -39,7 +39,7 @@ dockerfile = "deploy/clock/Dockerfile"
 # are not in this repo and not in this image: waking it on Blode's schedule
 # would wake it at the wrong minutes and still miss its own. Adding it here
 # means getting its manifests into this image first.
-CLOCK_TARGETS = "mblode-computer=https://mblode-computer.fly.dev"
+CLOCK_TARGETS = "mblode-computer=https://mblode-computer.fly.dev,vcmc-computer=https://vcmc-computer.fly.dev"
 CLOCK_BOTS = "/opt/clock/apps/eve/bots"
 CLOCK_PORT = "8080"
 # Fly private DNS resolves to IPv6; loopback-only IPv4 testing misses this path.

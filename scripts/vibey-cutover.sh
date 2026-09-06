@@ -8,7 +8,8 @@
 #   scripts/vibey-cutover.sh secrets     # 1. tenant secrets onto vcmc-computer, then restart
 #   scripts/vibey-cutover.sh test        # 2. one turn through the connector door, from the box
 #   scripts/vibey-cutover.sh route       # 3. Railway: Matt's DMs to vcmc-computer
-#   scripts/vibey-cutover.sh kill-blode  # 4. snapshot, rebind hello.expert, destroy mblode-computer
+#   scripts/vibey-cutover.sh pa          # 4. the personal-assistant config Blode holds, onto vcmc-computer
+#   scripts/vibey-cutover.sh kill-blode  # 5. snapshot, rebind hello.expert, destroy mblode-computer
 set -euo pipefail
 
 VCMC_APP=vcmc-computer
@@ -80,6 +81,45 @@ route() {
   echo "Matt's DMs (+61456455551) now reach Vibey on $VCMC_APP. Send one and check the bridge logs for target=expert."
 }
 
+# Slice 4's second half: the durable 202 path, coding sessions and hello.expert
+# work links need what docs/DEPLOY.md "WhatsApp PA pilot" put on Blode. The
+# clock already lists vcmc-computer (fly.clock.toml, and its registration
+# secret is in CLOCK_REGISTRATION_SECRETS on expert-clock since 2026-09-06);
+# this reads that secret back off the clock and the bridge admin secret off
+# Blode, adds the plain values, and restarts vcmc-computer once. The hub
+# refuses to boot with a partial PA config, which is why it is one import.
+pa() {
+  local tmp
+  tmp=$(mktemp)
+  trap 'rm -f "$tmp"' RETURN
+  local clock
+  clock=$(fly ssh console -a expert-clock -C "printenv CLOCK_REGISTRATION_SECRETS" 2>/dev/null |
+    grep -v '^Connecting' | tr -d '\r' | tail -1 |
+    python3 -c 'import json,sys; print(json.load(sys.stdin).get("vcmc-computer",""))')
+  [ ${#clock} -ge 32 ] || { echo "expert-clock has no registration secret for vcmc-computer" >&2; exit 1; }
+  curl -s -m 90 -o /dev/null "https://$BLODE_APP.fly.dev/healthz" || true
+  local bridge
+  bridge=$(guest_env "$BLODE_APP" WHATSAPP_BRIDGE_SECRET)
+  [ -n "$bridge" ] || { echo "could not read WHATSAPP_BRIDGE_SECRET off $BLODE_APP (is it awake?)" >&2; exit 1; }
+  {
+    printf 'WHATSAPP_BRIDGE_SECRET=%s\n' "$bridge"
+    printf 'COMPUTER_CLOCK_SECRET=%s\n' "$clock"
+    cat <<'PLAIN'
+COMPUTER_CLOCK_URL=http://expert-clock.internal:8080
+COMPUTER_CLOCK_TENANT=vcmc-computer
+COMPUTER_PA_ACCOUNT=vcmc
+COMPUTER_PA_OWNER_JID=61456455551@s.whatsapp.net
+COMPUTER_SHARED_WHATSAPP=on
+COMPUTER_BRIDGE_URL=https://vcmc-bridge-production.up.railway.app
+COMPUTER_WEB_URL=https://hello.expert
+COMPUTER_PUBLIC_URL=https://vcmc-computer.fly.dev
+PLAIN
+  } > "$tmp"
+  echo "setting: $(cut -d= -f1 "$tmp" | tr '\n' ' ')"
+  fly secrets import -a "$VCMC_APP" < "$tmp"
+  echo "vcmc-computer is restarting in personal-assistant mode; wait for /healthz, then DM Vibey: the reply should be a 202 on the bridge and a WhatsApp message back."
+}
+
 kill_blode() {
   echo "snapshotting Blode's volume"
   fly volumes snapshots create vol_vly9o35g2m8ln3m4 -a "$BLODE_APP"
@@ -96,6 +136,7 @@ case "${1:-}" in
   secrets) secrets ;;
   test) test_turn ;;
   route) route ;;
+  pa) pa ;;
   kill-blode) kill_blode ;;
-  *) sed -n 2,12p "$0"; exit 1 ;;
+  *) sed -n 2,13p "$0"; exit 1 ;;
 esac

@@ -149,6 +149,17 @@ serving before the redeploy. With it in place the door answered "I'm
 `vcmc-computer` (`route`), and the bridge logged "expert route enabled for
 owner DMs". **Slice 4 is live as of 2026-09-06 14:07 AEST.**
 
+Second half, same day: `vcmc-computer` runs Machine version 10 (widget
+removed, turn deadline, smaller image) and answered the door naming its
+computer. The clock now lists `vcmc-computer` as a target and holds its
+registration secret. What is left is one import on the tenant, which the
+agent session's tooling refused to write: `scripts/vibey-cutover.sh pa`
+(reads the clock secret back off `expert-clock` and the bridge admin secret
+off Blode, adds the plain PA values, restarts `vcmc-computer` once). After
+it, a DM from Matt's number should answer 202 on the bridge and come back as
+a WhatsApp message through the durable path, and coding sessions and work
+links work from Vibey. That is the precondition for slice 5.
+
 Follow-up found on the way: a conversation whose first turn failed
 terminally (`session.failed`) never starts another run, so every later
 message to that token hangs the hub's upstream fetch until the bridge's
