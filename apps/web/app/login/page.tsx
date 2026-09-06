@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   alternates: { canonical: "/login" },
+  description: `Sign in to Expert with a code from your private WhatsApp chat, or by email. New sign-ups join the waitlist.`,
+  // Crawlable so the directive is seen, but not worth a result of its own.
+  robots: { follow: true, index: false },
   title: "Sign in",
 };
 

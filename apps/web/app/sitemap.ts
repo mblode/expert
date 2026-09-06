@@ -1,11 +1,13 @@
 import type { MetadataRoute } from "next";
 
 import { siteConfig } from "@/lib/config";
+import { HOME_LAST_MODIFIED } from "@/lib/site";
 
-/** The public pages: the front door and the sign-in. Everything else is behind an account or a link. */
+/**
+ * The one public page. `/login` is `noindex` and stays out. Google ignores
+ * priority and change frequency, and a build-time `lastModified` would mark
+ * the page changed on every deploy, so the date is the copy's, kept by hand.
+ */
 export default function sitemap(): MetadataRoute.Sitemap {
-  return [
-    { changeFrequency: "weekly", priority: 1, url: siteConfig.url },
-    { changeFrequency: "monthly", priority: 0.3, url: `${siteConfig.url}/login` },
-  ];
+  return [{ lastModified: HOME_LAST_MODIFIED, url: siteConfig.url }];
 }

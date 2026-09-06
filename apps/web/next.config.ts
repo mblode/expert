@@ -16,6 +16,12 @@ const securityHeaders = [
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
   { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+  // The one CSP directive that is safe to enforce without a report-only
+  // rollout. A full policy needs the hub origin, its WebSockets, Vercel Blob
+  // and PostHog enumerated and watched in report-only first; that is a
+  // separate change. `X-Frame-Options: DENY` above says the same thing to
+  // older browsers.
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
 ];
 
 const nextConfig: NextConfig = {
@@ -30,7 +36,8 @@ const nextConfig: NextConfig = {
     optimizePackageImports: ["blode-icons-react"],
     turbopackRustReactCompiler: true,
   },
-  headers: async () => [{ source: "/(.*)", headers: securityHeaders }],
+  headers: async () => [{ source: "/:path*", headers: securityHeaders }],
+  poweredByHeader: false,
   reactCompiler: true,
   ...(isDev
     ? {

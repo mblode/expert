@@ -237,6 +237,8 @@ export const HowItWorksSection = () => {
 
   return (
     <section className="relative" ref={sectionRef} style={{ height: isMobile ? "600vh" : "500vh" }}>
+      {/* The four steps are h3s; without this the outline jumps from the h1 to them. */}
+      <h2 className="sr-only">How it works</h2>
       <div className="sticky top-0 h-svh overflow-hidden">
         <div
           className={cn(

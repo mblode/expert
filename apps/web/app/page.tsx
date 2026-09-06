@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { App } from "@/app-shell";
 import { MarketingHome } from "@/components/marketing/home-page";
@@ -6,6 +7,9 @@ import { readOnboarding } from "@/lib/onboarding-store";
 import { getSessionCached } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
+
+// The front door is the one indexable page; its canonical is the bare origin.
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 export default async function Page() {
   const session = await getSessionCached();
