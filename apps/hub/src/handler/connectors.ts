@@ -329,6 +329,7 @@ interface Bound {
 interface WhatsAppInbound {
   token?: unknown;
   sender?: unknown;
+  senderName?: unknown;
   acct?: unknown;
   message?: unknown;
 }
@@ -365,11 +366,17 @@ function routeFor(
   // of many, so this is one speaker rather than the roster. `resolve` unions
   // it into the record, which is how a group thread accumulates its members.
   const ref = typeof parsed.sender === "string" && parsed.sender ? parsed.sender : jid;
+  // The name WhatsApp shows for them, when the bridge knows one. Carried on
+  // the participant rather than the message because it names the person, not
+  // the sentence. It is set when they join the roster and not rewritten
+  // afterwards, so a later rename does not propagate: the ref is the identity
+  // and this is only what to call it.
+  const name = typeof parsed.senderName === "string" ? parsed.senderName.trim() : "";
   return {
     human: typeof parsed.message === "string" ? parsed.message : undefined,
     participants: [
       { bot: botId, kind: "bot" },
-      { kind: "human", ref },
+      { kind: "human", ref, ...(name ? { display_name: name } : {}) },
     ],
     route: { acct, jid, kind: "whatsapp" },
     speaker: ref,

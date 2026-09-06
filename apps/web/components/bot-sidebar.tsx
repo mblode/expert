@@ -7,15 +7,22 @@ import { useMemo, useState } from "react";
 import { BotMark } from "@/components/bot-mark";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import type { BotProfile, Screen, SeatState } from "@/lib/seat";
+import type { BotProfile, Screen, SeatState, WorkConversation } from "@/lib/seat";
+import type { ThreadRow } from "@/lib/threads";
+import { threadRows, threadTime } from "@/lib/threads";
 import { cn } from "@/lib/utils";
 
 /**
  * What the seat is doing on that screen, in the sidebar's words.
  *
- * This is the row's only subtitle, and it is deliberately the truth the hub
- * reports rather than a preview of the last message: the roster is screens and
- * seat states, and a message preview would have to be invented.
+ * This used to be the row's only subtitle, because the roster was screens and
+ * seat states and a message preview would have had to be invented. The hub
+ * reports the tail of every conversation now, so the last thing said is the
+ * subtitle and this is the fallback for a thread with nothing in it yet.
+ *
+ * The dot stays either way: `WAITING` is a Bot stopped in front of a screen
+ * waiting for a person, and that must not be hidden behind whatever it said
+ * before it stopped.
  *
  * `AGENT` says who holds the seat, which is not the same as who is running.
  * It read "Working" back when every Bot's Eve started at boot, so the two were
@@ -37,47 +44,72 @@ const STATE_DOT: Record<SeatState, string> = {
   WAITING: "bg-amber-400",
 };
 
+/**
+ * The left column is a chat list: every thread on this computer, most recent
+ * first, the way the phone this Bot answers on shows the same threads.
+ *
+ * A Bot has one thread per route it speaks on — its own, the WhatsApp DM it
+ * answers, the group it is tagged in — and they are all conversations on the
+ * same computer, so listing screens hid two of the three. The rows a screen
+ * backs still carry its number and its seat state, because opening one is
+ * still how you get to that screen.
+ */
 export function BotSidebar({
   computerId,
   computers,
+  conversations,
   display,
   loading,
-  onDisplayChange,
   onNewBot,
+  onSelectThread,
   onSignOut,
   onSwitchComputer,
   profiles,
   screens,
+  selectedKey,
   userEmail,
 }: {
   computerId: string;
   computers: { id: string; label: string }[];
+  /** From the hub. Empty on a seat that may not list them, which degrades to
+      one row per screen rather than to an empty column. */
+  conversations: WorkConversation[];
   display: number;
   /** The roster has not answered yet, which is not the same as having none. */
   loading?: boolean;
-  onDisplayChange: (display: number) => void;
   /** Absent on a hub that cannot make one (an older build, or no owner seat). */
   onNewBot?: () => void;
+  onSelectThread: (row: ThreadRow) => void;
   onSignOut: () => void;
   onSwitchComputer: (id: string) => void;
   /** By Bot id, from the roster. Empty until it answers. */
   profiles: Record<string, BotProfile>;
   screens: Screen[];
+  /** The open thread, when it is one the screen number does not identify. */
+  selectedKey?: string;
   userEmail?: string;
 }): React.ReactElement {
   const [query, setQuery] = useState("");
 
+  const rows = useMemo(
+    () => threadRows(conversations, screens, profiles),
+    [conversations, profiles, screens],
+  );
+
   const matches = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) {
-      return screens;
+      return rows;
     }
-    // The name is what the row says, so it is what a search has to match; the
-    // id still does too, because that is what the computer calls the Bot.
-    return screens.filter((s) =>
-      `${s.bot_id} ${profiles[s.bot_id]?.name ?? ""}`.toLowerCase().includes(needle),
+    // What the row says is what a search has to match: the name of whoever it
+    // is with, what was last said, and still the Bot's id, because that is
+    // what the computer calls it.
+    return rows.filter((row) =>
+      `${row.title} ${row.preview ?? ""} ${row.botId}`.toLowerCase().includes(needle),
     );
-  }, [profiles, query, screens]);
+  }, [query, rows]);
+
+  const stateOf = useMemo(() => new Map(screens.map((s) => [s.bot_id, s.state])), [screens]);
 
   const current = computers.find((c) => c.id === computerId);
 
@@ -123,7 +155,7 @@ export function BotSidebar({
         <div className="relative">
           <SearchIcon className="-translate-y-1/2 pointer-events-none absolute top-1/2 left-3 size-4 text-muted-foreground" />
           <Input
-            aria-label="Search bots"
+            aria-label="Search threads"
             className="h-9 rounded-lg pl-9"
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Search"
@@ -133,12 +165,18 @@ export function BotSidebar({
         </div>
       </div>
 
-      <nav aria-label="Bots" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+      <nav aria-label="Threads" className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         <ul className="flex flex-col gap-0.5">
-          {matches.map((screen) => {
-            const active = screen.display === display;
+          {matches.map((row) => {
+            // With nothing else open the screen is the selection, which keeps
+            // the highlight right when the rail changes it from beside here.
+            const active = selectedKey
+              ? row.key === selectedKey
+              : row.live && row.display === display;
+            const state = stateOf.get(row.botId);
+            const when = threadTime(row.at);
             return (
-              <li key={screen.display}>
+              <li key={row.key}>
                 <button
                   aria-current={active ? "true" : undefined}
                   className={cn(
@@ -147,35 +185,38 @@ export function BotSidebar({
                       ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-sidebar-foreground hover:bg-sidebar-accent/60",
                   )}
-                  onClick={() => onDisplayChange(screen.display)}
+                  onClick={() => onSelectThread(row)}
                   type="button"
                 >
-                  <BotMark botId={screen.bot_id} profile={profiles[screen.bot_id]} size="xl" />
+                  <BotMark botId={row.botId} profile={profiles[row.botId]} size="xl" />
                   <span className="grid min-w-0 flex-1 gap-0.5">
                     <span className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-semibold text-[15px] leading-tight">
-                        {profiles[screen.bot_id]?.name || screen.bot_id}
+                        {row.title}
                       </span>
-                      {/* The Bot's own label, as a chip: on a roster of eight
-                          specialists "SEO and growth" is what tells them
-                          apart, and it is already in the profile. Capped and
-                          shrinkable, because the label runs to 64 characters
-                          and an unshrinkable chip pushed the screen number out
-                          of the row rather than truncating itself. */}
-                      {profiles[screen.bot_id]?.title && (
+                      {/* The Bot's own label, as a chip, and only on its own
+                          thread: on a roster of eight specialists "SEO and
+                          growth" is what tells them apart, and on a thread
+                          with someone else it is not what the row is about.
+                          Capped and shrinkable, because the label runs to 64
+                          characters and an unshrinkable chip pushed the rest
+                          of the row out rather than truncating itself. */}
+                      {row.live && profiles[row.botId]?.title && (
                         <span className="min-w-0 max-w-24 truncate rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground">
-                          {profiles[screen.bot_id]?.title}
+                          {profiles[row.botId]?.title}
                         </span>
                       )}
                       <span className="ml-auto shrink-0 text-[11px] text-muted-foreground">
-                        screen {screen.display}
+                        {when || (row.display ? `screen ${row.display}` : "")}
                       </span>
                     </span>
                     <span className="flex items-center gap-1.5 text-muted-foreground text-xs">
-                      <span
-                        className={cn("size-1.5 shrink-0 rounded-full", STATE_DOT[screen.state])}
-                      />
-                      <span className="truncate">{STATE_LABEL[screen.state]}</span>
+                      {state && (
+                        <span className={cn("size-1.5 shrink-0 rounded-full", STATE_DOT[state])} />
+                      )}
+                      <span className="truncate">
+                        {row.preview ?? (state ? STATE_LABEL[state] : "No messages yet")}
+                      </span>
                     </span>
                   </span>
                 </button>
@@ -190,11 +231,11 @@ export function BotSidebar({
             <p className="text-muted-foreground text-sm">
               {loading
                 ? "Reading the roster from the computer…"
-                : screens.length === 0
+                : rows.length === 0
                   ? "No bots on this computer yet."
-                  : `No bot matches “${query}”.`}
+                  : `No thread matches “${query}”.`}
             </p>
-            {screens.length > 0 && (
+            {rows.length > 0 && (
               <Button onClick={() => setQuery("")} size="xs" type="button" variant="ghost">
                 Clear search
               </Button>

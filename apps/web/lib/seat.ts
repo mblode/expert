@@ -293,12 +293,55 @@ function rpc<T>(hubUrl: string, method: string, body: unknown, token: string): P
 
 export type Seat = ReturnType<typeof createSeat>;
 
-interface WorkConversation {
+export interface ConversationParticipant {
+  kind: string;
+  bot?: string;
+  ref?: string;
+  display_name?: string;
+}
+
+/**
+ * One line of the tail, which is what makes a list of threads renderable as
+ * one. An older hub does not send it and the row shows a title alone.
+ */
+export interface ConversationPreview {
+  text: string;
+  at: number;
+  author: { kind: string; bot?: string; ref?: string };
+}
+
+/**
+ * One line of a thread as the hub flattens it: the body's fields beside who
+ * said it and when. `kind` is `human`, `text` or `secret_request`.
+ */
+export interface ConversationEntry {
+  id: string;
+  seq: number;
+  at: number;
+  kind: string;
+  author: { kind: string; bot?: string; ref?: string };
+  text?: string;
+  images?: string[];
+  prompt?: string;
+  label?: string;
+  provided?: boolean;
+}
+
+export interface WorkConversation {
   id: string;
   bot: string;
   updated_at: string;
   last_seq: number;
-  route: { kind: string; repo?: string; agent?: string; jid?: string };
+  participants?: ConversationParticipant[];
+  preview?: ConversationPreview;
+  route: {
+    kind: string;
+    repo?: string;
+    agent?: string;
+    acct?: string;
+    jid?: string;
+    bot?: string;
+  };
 }
 export interface CodingSession {
   conversation_id: string;
@@ -319,10 +362,11 @@ export function createSeat(hubUrl: string, token: string) {
     conversations: (display?: number) =>
       call<{ conversations: WorkConversation[] }>("Conversations", { display }),
     occurrences: (conversation_id: string, cursor?: string) =>
-      call<{ entries: { id: string; kind: string; text?: string; prompt?: string }[] }>(
-        "Occurrences",
-        { conversation_id, cursor, limit: 100 },
-      ),
+      call<{ entries: ConversationEntry[]; next_cursor: string | null }>("Occurrences", {
+        conversation_id,
+        cursor,
+        limit: 100,
+      }),
     startCoding: (input: {
       source_conversation_id?: string;
       display: number;

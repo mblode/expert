@@ -62,6 +62,64 @@ describe("conversations", () => {
     expect(conv.resolve("main", chat("g@g.us"), [BOT, second]).participants).toHaveLength(3);
   });
 
+  it("mirrors one line of the tail into the index, for a list of threads", () => {
+    const store = new MemoryConversationStore();
+    const conv = new ConversationRegistry(store, new MemoryMessageLog());
+    const record = conv.resolve("main", chat("g@g.us"), [BOT, HUMAN]);
+    const listed = () => conv.list().find((c) => c.id === record.id);
+
+    // Nothing said yet: a row with no preview, not a row with an empty one.
+    expect(listed()?.preview).toBeUndefined();
+
+    conv.append(record.id, HUMAN, { kind: "human", text: "  hello\n  there  " });
+    // Collapsed to one line, because a row is one line.
+    expect(listed()?.preview).toMatchObject({ author: HUMAN, text: "hello there" });
+
+    // The tail, not the first thing said.
+    conv.append(record.id, BOT, { images: [], kind: "text", text: "on it" });
+    expect(listed()?.preview?.text).toBe("on it");
+    expect(listed()?.preview?.author).toEqual(BOT);
+
+    // An image with no caption has nothing to quote and still has to read as
+    // a thread with something in it.
+    conv.append(record.id, BOT, { images: ["a.png"], kind: "text", text: "" });
+    expect(listed()?.preview?.text).toBe("Photo");
+
+    // A question the person has to answer previews as the question.
+    conv.append(record.id, BOT, {
+      kind: "secret_request",
+      label: "OPENAI_API_KEY",
+      prompt: "What is the key?",
+      provided: false,
+    });
+    expect(listed()?.preview?.text).toBe("What is the key?");
+
+    // Clipped: the index is rewritten whole on every append.
+    conv.append(record.id, HUMAN, { kind: "human", text: "x".repeat(500) });
+    expect(listed()?.preview?.text).toHaveLength(140);
+  });
+
+  it("keeps the preview across a reload, and drops one that will not render", () => {
+    const dir = mkdtempSync(join(tmpdir(), "conv-"));
+    dirs.push(dir);
+    const path = join(dir, "conversations.json");
+    const log = new FileMessageLog(dir);
+    const first = new ConversationRegistry(new FileConversationStore(path), log);
+    const record = first.resolve("main", chat("g@g.us"), [BOT, HUMAN]);
+    first.append(record.id, HUMAN, { kind: "human", text: "hello" });
+
+    const reopened = new ConversationRegistry(new FileConversationStore(path), log);
+    expect(reopened.list()[0]?.preview?.text).toBe("hello");
+
+    // Half a preview is a row that throws where none is a row that renders.
+    const rows = JSON.parse(readFileSync(path, "utf-8")) as { preview: unknown }[];
+    rows[0]!.preview = { text: "hello" };
+    writeFileSync(path, JSON.stringify(rows));
+    expect(new ConversationRegistry(new FileConversationStore(path), log).list()[0]?.preview).toBe(
+      undefined,
+    );
+  });
+
   it("appends in order, and last_seq matches the tail of the log", () => {
     const store = new MemoryConversationStore();
     const log = new MemoryMessageLog();

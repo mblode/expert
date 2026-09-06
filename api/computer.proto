@@ -553,6 +553,25 @@ message ConversationParticipant {
   string display_name = 4;
 }
 
+// Who wrote a message. `system` carries hop notices and route failures.
+message ConversationAuthor {
+  string kind = 1; // bot | human | system
+  string bot = 2;
+  string ref = 3;
+}
+
+// One line of the tail, so a list of threads reads like one: the last thing
+// said, when, and who said it. Not a read: bodies, images and the secret
+// request's own state stay in Occurrences. Absent until something is said.
+message ConversationPreview {
+  // Already flattened and clipped by the hub: a message's text, a secret
+  // request's prompt, "Photo" for an image with no caption. A row should not
+  // have to know the body kinds.
+  string text = 1;
+  int64 at = 2;
+  ConversationAuthor author = 3;
+}
+
 // No message bodies: this is the list, Occurrences is the read.
 message Conversation {
   string id = 1;
@@ -561,6 +580,10 @@ message Conversation {
   // The log tail, so a client knows there is something new without paging.
   int32 last_seq = 4;
   string updated_at = 5;
+  // Whose voice speaks here. On the wire since Conversations shipped; declared
+  // here from 2026-09-07.
+  string bot = 6;
+  ConversationPreview preview = 7;
 }
 
 message ConversationsResponse {

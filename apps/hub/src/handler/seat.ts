@@ -297,6 +297,9 @@ export function registerSeat(router: ConnectRouter, deps: SeatDeps): void {
           bot: c.bot,
           last_seq: c.last_seq,
           participants: c.participants,
+          // One line of the tail, so a client can draw a list of threads
+          // without an Occurrences page per thread. Absent until one is said.
+          ...(c.preview ? { preview: c.preview } : {}),
           route: c.route,
           updated_at: c.updated_at,
         })),

@@ -5,6 +5,7 @@ import { CONVERSATION_ROUTE_KINDS, ComputerError } from "@computer/shared";
 import type {
   Author,
   Conversation,
+  ConversationPreview,
   ConversationRouteKind,
   Message,
   MessageBody,
@@ -186,6 +187,20 @@ function parseLog(raw: string): Message[] {
 
 const ID_RE = /^conv_[A-Za-z0-9_-]{1,64}$/;
 
+/** A stored preview that will render: anything else is dropped on load. */
+function isPreview(value: unknown): value is ConversationPreview {
+  const p = value as ConversationPreview | undefined;
+  return (
+    typeof p === "object" &&
+    p !== null &&
+    typeof p.text === "string" &&
+    typeof p.at === "number" &&
+    typeof p.author === "object" &&
+    p.author !== null &&
+    typeof (p.author as Author).kind === "string"
+  );
+}
+
 function conversationFrom(entry: unknown, path: string): Conversation {
   if (!entry || typeof entry !== "object") {
     throw new Error(`conversations ${path} must be a JSON array of conversation records`);
@@ -210,6 +225,11 @@ function conversationFrom(entry: unknown, path: string): Conversation {
     ...(typeof r.imported_from === "string" ? { imported_from: r.imported_from } : {}),
     last_seq: typeof r.last_seq === "number" ? r.last_seq : 0,
     participants: Array.isArray(r.participants) ? (r.participants as Participant[]) : [],
+    // Carried by hand for the same reason, and dropped rather than repaired
+    // when it does not read: a row with no preview is a row that renders,
+    // where half a preview is a row that throws. Records written before it
+    // existed have none, and get one on their next message.
+    ...(isPreview(r.preview) ? { preview: r.preview } : {}),
     route: r.route as Route,
     updated_at: typeof r.updated_at === "string" ? r.updated_at : "1970-01-01T00:00:00.000Z",
   };
@@ -220,6 +240,35 @@ function conversationFrom(entry: unknown, path: string): Conversation {
  * one is never truncated, small enough that the index file stays rewritable.
  */
 const MAX_PARTICIPANTS = 2048;
+
+/**
+ * How much of the tail the index carries. A row shows one line, and the index
+ * is the file that has to stay small enough to rewrite whole on every append.
+ */
+const PREVIEW_CHARS = 140;
+
+/**
+ * The row's line, from the body the log stores.
+ *
+ * An image with no caption is the one case with nothing to quote, and a row
+ * that rendered it as blank would read as a thread with nothing in it, so it
+ * says what arrived instead. Newlines collapse because a row is one line and
+ * the alternative is a preview that changes the height of the list.
+ */
+function previewOf(message: Message): ConversationPreview {
+  const { body } = message;
+  const text =
+    body.kind === "secret_request"
+      ? body.prompt
+      : body.kind === "text" && !body.text && body.images.length
+        ? "Photo"
+        : body.text;
+  return {
+    at: message.at,
+    author: message.author,
+    text: text.replaceAll(/\s+/gu, " ").trim().slice(0, PREVIEW_CHARS),
+  };
+}
 
 /** Same person on the route: the ref is the identity, a display name is not. */
 const sameParticipant =
@@ -429,7 +478,7 @@ export class ConversationRegistry {
     };
     this.log.append(message);
     this.seqs.set(record.id, seq);
-    this.bumpIndex(record.id, seq);
+    this.bumpIndex(record.id, seq, previewOf(message));
     if (isRequest(message)) {
       this.turnEnded.set(record.id, true);
     }
@@ -529,12 +578,13 @@ export class ConversationRegistry {
     }
     let tail = this.nextSeq(record) - 1;
     let written = 0;
+    let last: Message | undefined;
     for (const entry of entries) {
       if (!Number.isInteger(entry.seq) || entry.seq <= tail) {
         continue;
       }
       const { at, id, seq, ...body } = entry;
-      this.log.append({
+      last = {
         at: typeof at === "number" ? at : Date.now(),
         // The occurrence log recorded no author, so it is derived from the
         // kind, which is what it always meant: `human` is the person at the
@@ -547,13 +597,16 @@ export class ConversationRegistry {
         conversation_id: record.id,
         id,
         seq,
-      });
+      };
+      this.log.append(last);
       tail = seq;
       written++;
     }
     this.seqs.set(record.id, tail);
     this.turnEnded.delete(record.id);
-    this.markImported(record.id, source, tail);
+    // An imported thread is years of a Bot's history and would otherwise be
+    // the one row in the list with nothing on it.
+    this.markImported(record.id, source, tail, last && previewOf(last));
     return written;
   }
 
@@ -600,15 +653,21 @@ export class ConversationRegistry {
     return Math.max(record.last_seq, tail) + 1;
   }
 
-  private bumpIndex(id: string, seq: number): void {
-    this.patch(id, (record) => ({ ...record, last_seq: seq }));
+  private bumpIndex(id: string, seq: number, preview: ConversationPreview): void {
+    this.patch(id, (record) => ({ ...record, last_seq: seq, preview }));
   }
 
-  private markImported(id: string, source: string, seq: number): void {
+  private markImported(
+    id: string,
+    source: string,
+    seq: number,
+    preview?: ConversationPreview,
+  ): void {
     this.patch(id, (record) => ({
       ...record,
       imported_from: source,
       last_seq: Math.max(record.last_seq, seq),
+      ...(preview ? { preview } : {}),
     }));
   }
 

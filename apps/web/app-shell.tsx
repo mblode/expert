@@ -11,6 +11,7 @@ import { ChatPane } from "./components/chat-pane";
 import { ConnectError } from "./components/connect-error";
 import { DesktopPane } from "./components/desktop-pane";
 import { ScreenRail } from "./components/screen-rail";
+import { ThreadTranscript } from "./components/thread-transcript";
 import { CodingWork } from "./components/coding-work";
 import { InvitePlugins } from "./components/invite-plugins";
 import type { WorkTarget } from "./lib/work-target";
@@ -28,10 +29,18 @@ import { captureEvent, identifyUser, resetPostHog } from "./lib/posthog-client";
 import { reconnect, selectComputer } from "./lib/reconnect";
 import type { BoundSeat } from "./lib/reconnect";
 import { createSeat, SeatError } from "./lib/seat";
-import type { BotProfile, BoxStatus } from "./lib/seat";
+import type { BotProfile, BoxStatus, WorkConversation } from "./lib/seat";
 import { clearSessions } from "./lib/storage";
+import type { ThreadRow } from "./lib/threads";
 
 const POLL_MS = 2000;
+
+/**
+ * The thread list refreshes slower than the seat does. Seat state is what the
+ * screen beside this is showing right now; a chat list is read at the speed
+ * someone glances at it, and this read walks every conversation on the box.
+ */
+const THREADS_MS = 5000;
 
 /**
  * Sign-out ends the seat on the hub too. Before scopes a seat token lived
@@ -162,6 +171,9 @@ function Workspace({
   const [targetReady, setTargetReady] = useState(!initialTarget);
   const [targetError, setTargetError] = useState<string | null>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [conversations, setConversations] = useState<WorkConversation[]>([]);
+  /** The open thread when it is not a Bot's own; `null` means the screen's. */
+  const [thread, setThread] = useState<ThreadRow | null>(null);
 
   useEffect(() => {
     captureEvent(connectEvent, { computer_id: computerId });
@@ -272,12 +284,70 @@ function Workspace({
     };
   }, [display, recoverSeat, seat]);
 
+  /**
+   * Every thread on this computer, which is what the left column is.
+   *
+   * Fails soft to none: `Seat.Conversations` is owner-only, so a guest seat
+   * gets UNAUTHENTICATED here and the list falls back to one row per screen,
+   * which is what it was before this read existed.
+   */
+  useEffect(() => {
+    let live = true;
+    let inFlight = false;
+    const tick = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
+      try {
+        const { conversations: rows } = await seat.conversations();
+        if (live) {
+          setConversations(rows);
+        }
+      } catch {
+        // A hub that will not list them costs the previews, not the workspace.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void tick();
+    const id = window.setInterval(() => void tick(), THREADS_MS);
+    return () => {
+      live = false;
+      window.clearInterval(id);
+    };
+  }, [seat]);
+
   const screens = status?.screens ?? [];
   const botId = screens.find((s) => s.display === display)?.bot_id ?? "main";
+  // The record behind the open row. The row is enough to draw a list and not
+  // enough to draw a thread: the transcript needs the participants, to name
+  // whoever spoke, and the route, to know whether that could be anyone.
+  const openThread = thread?.conversationId
+    ? conversations.find((c) => c.id === thread.conversationId)
+    : undefined;
   const waitingElsewhere = screens.some((s) => s.state === "WAITING" && s.display !== display);
 
+  /** Showing a screen shows its Bot's own thread, not whatever was open. */
   const pickDisplay = useCallback((next: number) => {
     setDisplay(next);
+    setThread(null);
+    setBotsOpen(false);
+  }, []);
+
+  /**
+   * Open a thread from the list.
+   *
+   * A Bot's own thread is the conversation this seat can speak into, so it is
+   * the chat pane on that Bot's screen and the selection is the screen. Any
+   * other route is a transcript, and still selects the screen underneath it:
+   * the rail beside it is what that Bot is looking at while it answers.
+   */
+  const pickThread = useCallback((row: ThreadRow) => {
+    if (row.display !== undefined) {
+      setDisplay(row.display);
+    }
+    setThread(row.live ? null : row);
     setBotsOpen(false);
   }, []);
 
@@ -285,23 +355,25 @@ function Workspace({
     <BotSidebar
       computerId={computerId}
       computers={computers}
+      conversations={conversations}
       display={display}
       // Undefined until the first poll answers. An empty roster and a roster
       // that has not arrived yet are different sentences in the sidebar, and
       // on a suspended Machine the wake is seconds long, so the wrong one is
       // what an operator sees on most cold loads.
       loading={status === undefined}
-      onDisplayChange={pickDisplay}
       // Same gate as the settings sheet: a hub that cannot serve the roster
       // read cannot serve the write either, so the button is not offered.
       // `profiles` and not `status`: the roster is owner-only, so its rows are
       // what prove this seat may also write. `status` would offer the button
       // to a seat whose `CreateBot` comes back UNAUTHENTICATED.
       onNewBot={Object.keys(profiles).length > 0 ? () => setNewBotOpen(true) : undefined}
+      onSelectThread={pickThread}
       onSignOut={onSignOut}
       onSwitchComputer={switchComputer}
       profiles={profiles}
       screens={screens}
+      selectedKey={thread?.key}
       userEmail={userEmail}
     />
   );
@@ -309,7 +381,7 @@ function Workspace({
   const rail = (
     <ScreenRail
       display={display}
-      onDisplayChange={setDisplay}
+      onDisplayChange={pickDisplay}
       onStatus={setStatus}
       profiles={profiles}
       seat={seat}
@@ -365,26 +437,37 @@ function Workspace({
 
       {/* The conversation owns the only header on a phone too: the drawers open
           from its own bar rather than a second one that repeats the Bot's name. */}
-      <ChatPane
-        botId={botId}
-        display={display}
-        key={botId}
-        offline={offline}
-        onOpenBots={() => setBotsOpen(true)}
-        onOpenScreen={() => setScreenOpen(true)}
-        // Only when this hub actually serves profiles. hello.expert is
-        // deployed ahead of the Machines it talks to, so a browser on the new
-        // web app routinely meets an older hub; offering a settings gear there
-        // would open a form whose Save is a 404. No gear is the honest answer,
-        // and the workspace is unchanged otherwise.
-        onOpenSettings={profiles[botId] ? () => setSettingsOpen(true) : undefined}
-        onRetry={() => void recoverSeat()}
-        profile={profiles[botId]}
-        screenNeedsYou={waitingElsewhere}
-        seat={seat}
-        seatState={screens.find((s) => s.display === display)?.state}
-        tools={tools}
-      />
+      {openThread ? (
+        <ThreadTranscript
+          conversation={openThread}
+          key={openThread.id}
+          onOpenBots={() => setBotsOpen(true)}
+          seat={seat}
+          subtitle={`${profiles[openThread.bot]?.name || openThread.bot} answers here`}
+          title={thread?.title ?? ""}
+        />
+      ) : (
+        <ChatPane
+          botId={botId}
+          display={display}
+          key={botId}
+          offline={offline}
+          onOpenBots={() => setBotsOpen(true)}
+          onOpenScreen={() => setScreenOpen(true)}
+          // Only when this hub actually serves profiles. hello.expert is
+          // deployed ahead of the Machines it talks to, so a browser on the new
+          // web app routinely meets an older hub; offering a settings gear there
+          // would open a form whose Save is a 404. No gear is the honest answer,
+          // and the workspace is unchanged otherwise.
+          onOpenSettings={profiles[botId] ? () => setSettingsOpen(true) : undefined}
+          onRetry={() => void recoverSeat()}
+          profile={profiles[botId]}
+          screenNeedsYou={waitingElsewhere}
+          seat={seat}
+          seatState={screens.find((s) => s.display === display)?.state}
+          tools={tools}
+        />
+      )}
 
       <div className="hidden min-h-0 border-border border-l lg:block">{rail}</div>
 
@@ -480,7 +563,7 @@ function Workspace({
           <DesktopPane
             display={display}
             layout="phone"
-            onDisplayChange={setDisplay}
+            onDisplayChange={pickDisplay}
             onStatus={setStatus}
             readable
             seat={seat}

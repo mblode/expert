@@ -333,8 +333,12 @@ longer makes the next WhatsApp reply `CONFLICT`. A `secret_request`'s
 log is append-only, so a line is never rewritten.
 
 `Seat.Conversations { display? }` lists them:
-`{ id, route, participants, last_seq, updated_at }[]`, no message bodies,
-`Seat.Occurrences` is still the read. Owner seat only, and contained by the
+`{ id, bot, route, participants, last_seq, updated_at, preview? }[]`.
+`preview` is one line of the tail, `{ text, at, author }`, already flattened
+and clipped by the hub: it is what makes a list of threads renderable as one,
+rather than a list of ids each needing a page of its own. It is not a read.
+Bodies, images and a request's own state stay in `Seat.Occurrences`, which is
+still the read. Owner seat only, and contained by the
 screen the seat was minted for, exactly as `Occurrences` is: a seat bound to
 display N must not learn that another display's Bot has a conversation, let
 alone read it.

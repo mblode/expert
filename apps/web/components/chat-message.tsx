@@ -58,7 +58,7 @@ const truncate = (text: string): string =>
  * browser can render safely are allowed into `href`/`src`; a `javascript:`
  * attachment is a click-to-XSS with the seat token on the other side.
  */
-function safeUrl(url: string | undefined, allowImage = false): string | undefined {
+export function safeUrl(url: string | undefined, allowImage = false): string | undefined {
   if (!url) {
     return undefined;
   }

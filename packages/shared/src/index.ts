@@ -904,6 +904,25 @@ export interface Message {
   resolves?: string;
 }
 
+/**
+ * The tail of the log, flattened for a list of threads.
+ *
+ * Enough to render a row, never enough to be a read: one line of text, when,
+ * and who said it. It is mirrored into the index for the same reason
+ * `last_seq` is, so a client can draw every thread it has without a file read
+ * per thread and without paging each one. Absent until something is said.
+ */
+export interface ConversationPreview {
+  /**
+   * One line, already flattened from the body and clipped: a message's text,
+   * a secret request's prompt, `Photo` for an image with no caption. The body
+   * kinds are the hub's and a row should not have to know them.
+   */
+  text: string;
+  at: number;
+  author: Author;
+}
+
 export interface Conversation {
   /** `conv_<base64url>`. */
   id: string;
@@ -913,6 +932,8 @@ export interface Conversation {
   participants: Participant[];
   /** Mirrors the log tail, so a list needs no file read. */
   last_seq: number;
+  /** Mirrors the log tail for the same reason, one line of it. */
+  preview?: ConversationPreview;
   created_at: string;
   updated_at: string;
   /**
