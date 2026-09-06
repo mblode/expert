@@ -87,6 +87,38 @@ Done when `/healthz` shows `eve-main` up from the image, and a `curl` to the con
 
 ### Slice 4: Matt's DMs to Vibey, with a computer
 
+**Where it stopped on 2026-09-06.** The expert image is deployed on
+`vcmc-computer` (Machine version 6), the overlay is retired to
+`/workspace/eve-overlay-retired-2026-09-06`, the content is under
+`/workspace/.bots/main/data/`, and the `whatsapp-vcmc` connector for `main`
+exists in `connectors.json` (its secret is also at
+`/workspace/.computer/connector-whatsapp-vcmc.secret`, hub-owned). The first
+test turn through the door failed: the `AI_GATEWAY_API_KEY` on this app
+answers 401 to chat completions, so every model call fails and the turn
+times out after three retries. Two things only Matt can do, in this order:
+
+1. Set a working gateway key and the tenant secrets on `vcmc-computer`
+   (`fly secrets import -a vcmc-computer` from a `KEY=VALUE` file; the
+   values come from a fresh AI Gateway key and `vercel env pull` in
+   `vcmc-agent`), then `fly machine restart`. Test from the box:
+
+   ```bash
+   fly ssh console -a vcmc-computer -C "sh -c 'S=\$(cat /workspace/.computer/connector-whatsapp-vcmc.secret); curl -sS -m 170 -X POST http://127.0.0.1:8080/connectors/whatsapp-vcmc/message -H content-type:application/json -H \"x-connector-secret: \$S\" -d \"{\\\"token\\\":\\\"61400000000@s.whatsapp.net\\\",\\\"sender\\\":\\\"61400000000@s.whatsapp.net\\\",\\\"surface\\\":\\\"dm\\\",\\\"message\\\":\\\"who are you, one line?\\\"}\"'"
+   ```
+
+   A Vibey-voiced reply means the identity file, the archive and the model
+   are all live.
+
+2. Point the Railway bridge at it. `EXPERT_URL=https://vcmc-computer.fly.dev`,
+   `EXPERT_CONNECTOR_ID=whatsapp-vcmc` (unchanged), and
+   `EXPERT_CONNECTOR_SECRET` set to the contents of the secret file above
+   (`railway variables --set-from-stdin`). `EXPERT_DM_JIDS` stays
+   `+61456455551`. The bridge reads `reply` out of a 200, so this works
+   before any personal-assistant mode is configured on the hub; the durable
+   202 path, coding sessions and hello.expert work links need the PA and
+   clock configuration from `docs/DEPLOY.md` "WhatsApp PA pilot" mirrored
+   onto `vcmc-computer`, with the clock registry taught the `vcmc` tenant.
+
 Secrets first. The Vercel project's env is the source (`vercel env pull` in
 `vcmc-agent`); on `vcmc-computer` they are `BLOB_READ_WRITE_TOKEN`,
 `FIRECRAWL_API_KEY`, `BRIDGE_URL`, `VIBEY_BRIDGE_SECRET` (the Railway

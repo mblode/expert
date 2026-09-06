@@ -202,13 +202,25 @@ Same image, different app and volume.
 fly deploy -c fly.vcmc.toml -a vcmc-computer --wait-timeout 900
 ```
 
-Vibey's Eve is not `apps/eve/bots/main`. It lives on that Machine's volume at
-`/workspace/eve/bots`, and the guest prefers that overlay when it looks like an
-Eve project, so a deploy of this repo does not replace it. Check it survived:
+Since 2026-09-06 Vibey's Eve **is** `apps/eve/bots/main`: the same image as
+every computer. What makes it Vibey is `/workspace/.bots/main/data/` on the
+volume (`instructions.md`, `skills/*.md`, `chat-archive.b64`, `members.json`,
+`group-history.json`; `apps/eve/README.md` has the table), which a deploy never
+touches. The old `vcmc-agent` overlay is parked at
+`/workspace/eve-overlay-retired-2026-09-06` and the guest prefers an overlay
+at `/workspace/eve/bots` only when one exists, so do not recreate that path.
+Check the content survived:
 
 ```bash
-fly ssh console -a vcmc-computer -C "sh -lc 'ls /workspace/eve/bots/main/agent/channels'"
+fly ssh console -a vcmc-computer -C "sh -lc 'ls /workspace/.bots/main/data /workspace/.bots/main/data/skills'"
 ```
+
+Tenant secrets on this app, besides `COMPUTER_SETUP_CODE` and a working
+`AI_GATEWAY_API_KEY`: `BLOB_READ_WRITE_TOKEN`, `FIRECRAWL_API_KEY`,
+`BRIDGE_URL` and `VIBEY_BRIDGE_SECRET` (the Railway bridge), and the digest
+and memory configuration (`DIGEST_SUBSCRIBERS`, `REFRESH_GROUP_JID`,
+`MEMORY_ALERT_JID`). The order of work and its status is
+`docs/plans/vibey-on-expert.md`.
 
 If that Machine holds a linked WhatsApp number, a deploy drops the socket for
 the restart. It suspends when idle, so check whether one is even running before
