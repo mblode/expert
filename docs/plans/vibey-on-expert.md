@@ -144,7 +144,17 @@ tenant skills, never hit it and the runtime check never did either. Fix:
 `apps/eve/prewarm.mjs`, run by each Bot's `build` script after `eve build`,
 so the image ships the template (its key is a pure function of the build);
 the same call was run by hand on `vcmc-computer` to get the current image
-serving before the redeploy.
+serving before the redeploy. With it in place the door answered "I'm
+@Vibey, resident agent for VCMC" with HTTP 200, Railway was pointed at
+`vcmc-computer` (`route`), and the bridge logged "expert route enabled for
+owner DMs". **Slice 4 is live as of 2026-09-06 14:07 AEST.**
+
+Follow-up found on the way: a conversation whose first turn failed
+terminally (`session.failed`) never starts another run, so every later
+message to that token hangs the hub's upstream fetch until the bridge's
+timeout. The test token `61400000000` is in that state on `vcmc-computer`;
+a fresh token works. Matt's number never had a failed turn there. Worth a
+hub-side guard (or an eve issue) before the group moves in slice 6.
 
 Secrets first. The Vercel project's env is the source (`vercel env pull` in
 `vcmc-agent`); on `vcmc-computer` they are `BLOB_READ_WRITE_TOKEN`,
