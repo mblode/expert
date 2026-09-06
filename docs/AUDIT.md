@@ -125,10 +125,9 @@ A FAT Agent audit (`spruikco/fat-agent-skill`, run from a temp clone against the
 
 Left open, with an owner:
 
-- **A full Content-Security-Policy** needs the hub origin, its WebSockets, Vercel Blob and PostHog enumerated and run report-only first. Owner: whoever next touches `next.config.ts` headers.
+- **Content-Security-Policy** runs report-only since 2026-09-06 (hub origin and sockets, Vercel Blob, PostHog, Next inline) with violations logged at `/api/csp-report`; `frame-ancestors 'none'` is enforced. Promote to enforced once the function logs have been quiet through a full session, including the VNC page and an image upload. Owner: whoever next touches `next.config.ts` headers.
 - **Search Console has the property; the PostHog warehouse does not.** Matt's pull on 2026-09-06 shows only brand queries, zero clicks, and the exact brand phrase at position 55.9. Connect hello.expert to the PostHog Google Search Console source so monitoring can read it. Owner: Matt.
-- **Brand-led home title.** The checklist wants the non-brand keyword to lead; the proposed title is in `docs/seo/2026-09-06-ai-team-with-its-own-computer.md`. A copy decision, not made here.
-- **Stale copy on the front door**: the roster still lists eight Bots and the FAQ says "Eight"; the build ships one since 2026-09-06. The iPhone FAQ names the removed iOS app. Not an SEO edit; `copywriting` or the owner.
+- **Done later the same day on Matt's "fix all"**: the home title leads with the product phrase and ends with the name, the description is the brief's, and the roster and FAQ say one Bot with the specialists' skills folded in (the iPhone answer already said WhatsApp and the web). `CURSOR_API_KEY` and `COMPUTER_PA_REPOS` are unset on `vcmc-computer`, staged until its next deploy.
 - **FAT's remaining medium findings** are UI: three non-interactive elements styled as clickable, and 27 script tags against its budget of 15 (Next chunks, not third parties). `ui-design` Audit mode if wanted.
 - **No keyword or prompt-volume tool is bound** in this environment, so the brief's numbers table says No data throughout. Bind one and rerun the pipeline as a new brief.
 
