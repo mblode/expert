@@ -77,10 +77,11 @@ export const whatYouGet = [
 ];
 
 /**
- * Who arrives with the computer, in the order a person meets them: the desk
- * first, then front of house, then the specialists.
+ * Who arrives with the computer: one Bot since 2026-09-06, when the seven
+ * specialists were folded into it as skills (`docs/plans/vibey-on-expert.md`).
+ * More are made from the page, each on its own screen and thread.
  *
- * Every line here is that Bot's own `agent/profile.json` and the "Owns" column
+ * The line here is that Bot's own `agent/profile.json` and the "Owns" column
  * of `docs/BOTS.md`, shortened. The marks are the real ones too, so a Bot on
  * this page is the same mark in the sidebar a minute later, and a Bot that is
  * renamed or recoloured has to be renamed here as well. The two palettes are
@@ -98,58 +99,9 @@ export const roster: {
   {
     color: "#0091ff",
     name: "Main",
-    owns: "The screen, the files and the terminal. The one you reach first.",
+    owns: "The screen, the files, the terminal and the browser, plus the calendar, mail-draft, research, QA and shipping skills the old specialists carried. The one you reach first, and the only one that arrives.",
     shape: "circle",
     title: "Desk agent",
-  },
-  {
-    color: "#9159fe",
-    name: "Chief of Staff",
-    owns: "Calendar, mail drafts, the morning brief. Never sends.",
-    shape: "blob",
-    title: "Front of house",
-  },
-  {
-    color: "#00c972",
-    name: "Software Engineer",
-    owns: "Writes and lands code. One PR per run.",
-    shape: "tablet",
-    title: "Engineer",
-  },
-  {
-    color: "#ff6700",
-    name: "QA",
-    owns: "Incidents, CI failures, browser testing. Draft fixes only.",
-    shape: "wedge",
-    title: "QA and bug fixer",
-  },
-  {
-    color: "#000000",
-    name: "Designer",
-    owns: "Product, UI and brand. Designs, not code.",
-    shape: "blob",
-    title: "Product, UI and brand",
-  },
-  {
-    color: "#1084fe",
-    name: "PM",
-    owns: "Drop-offs, opportunities, A/B tests. One experiment at a time.",
-    shape: "blob",
-    title: "Self-driving CRO",
-  },
-  {
-    color: "#777777",
-    name: "GTM",
-    owns: "Campaigns, listings, founder emails. Nothing sends without you.",
-    shape: "tablet",
-    title: "Outbound operator",
-  },
-  {
-    color: "#777777",
-    name: "SEO",
-    owns: "Demand research, Search Console, writer briefs. Not the article.",
-    shape: "squircle",
-    title: "Search and answer engines",
   },
 ];
 
@@ -194,12 +146,13 @@ export const faqs = [
     question: "How do I start?",
   },
   {
-    answer: "Eight, each with its own screen and thread. You can make more.",
+    answer:
+      "One arrives with the computer and carries every skill. Make more from the page when you want separate threads; each gets its own screen, up to sixteen.",
     question: "How many Bots do I get?",
   },
   {
     answer:
-      "Front of house passes a job to the specialist and tells you where it went. They cannot message each other yet.",
+      "One Bot does the whole job, so there is nothing to hand off. Bots you make later each keep their own thread and cannot message each other yet.",
     question: "Do the Bots work together?",
   },
   {

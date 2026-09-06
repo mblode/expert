@@ -23,7 +23,9 @@ const emilioLight = localFont({
   weight: "300",
 });
 
-const siteTitle = `${siteConfig.name} | A team of Bots with a computer of their own`;
+// Non-brand lead, brand suffix: the product phrase is what a stranger searches
+// for; the name already wins the navigational queries (`docs/seo/`).
+const siteTitle = `A team of Bots with a computer of their own | ${siteConfig.name}`;
 
 export const metadata: Metadata = {
   authors: [{ name: AUTHOR.name, url: AUTHOR.url }],

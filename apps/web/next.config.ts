@@ -22,6 +22,30 @@ const securityHeaders = [
   // separate change. `X-Frame-Options: DENY` above says the same thing to
   // older browsers.
   { key: "Content-Security-Policy", value: "frame-ancestors 'none'" },
+  // The full policy, report-only until the console and /api/csp-report have
+  // been quiet for a while. The hub is cross-origin (JSON RPCs, the Eve
+  // stream, the noVNC socket and page), PostHog lazy-loads its own chunks and
+  // compresses in a worker, Blob holds uploaded images, and Next needs inline
+  // scripts and styles. Promote to enforced only after the reports agree.
+  {
+    key: "Content-Security-Policy-Report-Only",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' https://*.i.posthog.com https://*.posthog.com",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com https://*.fly.dev https://*.posthog.com",
+      "font-src 'self' data:",
+      "connect-src 'self' https://*.fly.dev wss://*.fly.dev https://*.i.posthog.com https://*.posthog.com https://*.public.blob.vercel-storage.com",
+      "frame-src 'self' https://*.fly.dev",
+      "worker-src 'self' blob:",
+      "media-src 'self' blob: https://*.public.blob.vercel-storage.com",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "report-uri /api/csp-report",
+    ].join("; "),
+  },
 ];
 
 const nextConfig: NextConfig = {

@@ -1,6 +1,6 @@
 export const siteConfig = {
   description:
-    "A team of Bots with a computer of their own. Always on, and you can take the mouse whenever you want.",
+    "Give an AI assistant a real Linux computer with a browser, files and a terminal. Watch it work, take the mouse when you want, and hand it back.",
   installCommand: "npx skills add https://hello.expert",
   links: {
     author: "https://blode.co",

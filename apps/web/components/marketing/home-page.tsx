@@ -90,8 +90,9 @@ export function MarketingHome(): React.ReactElement {
               <Reveal>
                 <h2 className="font-display text-2xl font-light tracking-tight">Who you get</h2>
                 <p className="mt-3 max-w-[62ch] text-pretty text-sm text-white/70">
-                  Eight Bots arrive with the computer, each on its own screen and in its own thread.
-                  What separates them is what they own and what they refuse to do.
+                  One Bot arrives with the computer, on its own screen and in its own thread,
+                  carrying every skill. Make more when you want separate threads; what separates
+                  them is what they own and what they refuse to do.
                 </p>
               </Reveal>
               <ul className="mt-10 grid gap-4 sm:grid-cols-2">
