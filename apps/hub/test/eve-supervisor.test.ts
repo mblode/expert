@@ -420,7 +420,8 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(blode).toContain('source = "computer_workspace"');
     expect(vibey).toContain('primary_region = "syd"');
     expect(vibey).toContain('dockerfile = "deploy/fly/Dockerfile"');
-    expect(vibey).toContain("/workspace/eve/bots");
+    // Where Vibey's content lives is documented in the file itself.
+    expect(vibey).toContain("/workspace/.bots/main/data");
     expect(vibey).not.toMatch(/volumes create/);
     expect(vibey).not.toMatch(/--size 20/);
     for (const guest of [blode, vibey]) {

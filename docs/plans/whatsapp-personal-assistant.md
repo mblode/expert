@@ -157,7 +157,7 @@ Do not start with a generic task engine, provider framework or configuration das
 
 Volatile interfaces first:
 
-- Wire/types: api/DESIGN.md, api/spec.json, packages/shared/src/index.ts, api/computer.proto and packages/proto/computer.proto. Generate packages/proto/gen, never hand-edit it.
+- Wire/types: api/DESIGN.md, api/spec.json, packages/shared/src/index.ts, api/computer.proto. Generate packages/proto/gen, never hand-edit it.
 - Conversation/action lifecycle: apps/hub/src/service/conversations.ts, turns.ts, voice.ts, policy.ts; apps/hub/src/handler/agent.ts and connectors.ts; apps/eve/lib/tools/send_message.ts and channels/whatsapp.ts.
 - Coding: apps/hub/src/service/coding.ts, handler/seat.ts; existing code-route conversation records. Add the polling owner alongside current supervision, not in the web request.
 - Behavior: apps/hub/src/service/state.ts, files.ts, bots.ts; new small validated configuration service if state.ts cannot own the revision lifecycle cleanly; apps/eve shared dynamic resolvers and main/template project re-exports.

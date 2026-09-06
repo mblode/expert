@@ -48,7 +48,7 @@ npm run bot -- rm night    # frees the screen
 - **Watch the agent work:** the screen streams live over VNC; the model sees screenshots, clicks by pixel, types, scrolls, zooms.
 - **Take the seat:** one click makes the screen yours, with a local cursor, keyboard, and clipboard both ways. The agent's next action waits until you tap I'm done.
 - **Let it ask:** passwords, 2FA, captchas and payments are the human's job. The agent hands the desk over, or asks for a masked secret that goes straight to the box clipboard and never reaches the model.
-- **Run several Bots:** one shared box, one screen per Bot, up to eight. Bots share files and browser sessions and are not security boundaries.
+- **Run several Bots:** one shared box, one screen per Bot, up to sixteen. Bots share files and browser sessions and are not security boundaries.
 - **Keep your files:** `/workspace` and the Chromium profiles survive restarts and image rebuilds, the same boundary Grok Bot draws. Installed packages do not; keep the list in `/workspace/packages.md`.
 
 ## Deploy

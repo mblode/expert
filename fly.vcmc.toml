@@ -6,8 +6,9 @@
 #
 # Pairing code is this Machine's secret, not Blode's. Volume is this app's
 # existing `vcmc_workspace` (10 GB, syd). Do not create a second volume.
-# A later Eve tree (vcmc-agent) goes on the volume at /workspace/eve/bots
-# (standalone Eve app or bots/main). Do not copy that source into this repo.
+# The Bot is the image's `main`; what makes it Vibey is the tenant content
+# under /workspace/.bots/main/data (docs/plans/vibey-on-expert.md). The old
+# vcmc-agent overlay is retired under /workspace/eve-overlay-retired-2026-09-06.
 #
 # CPU can idle to $0. Disk cannot. Same suspend size as Blode.
 
@@ -40,7 +41,6 @@ COMPUTER_DESK = "local"
 COMPUTER_DATA = "/workspace/.computer/bots.json"
 COMPUTER_VNC_HOST = "127.0.0.1"
 COMPUTER_VNC_PORT = "5900"
-# Image default until /workspace/eve/bots is populated; then the overlay wins.
 COMPUTER_EVE_BOTS = "/opt/computer/apps/eve/bots"
 
 [http_service]

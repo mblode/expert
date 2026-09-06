@@ -7,7 +7,10 @@ dist/
 coverage/
 *.log
 .idea/
-data/
+# The hub's local roster and seat tokens at the repo root, not every
+# directory called data: a parser under apps/eve/lib/vibey/data and a test
+# fixture were silently uncommitted by the broader rule (2026-09-06).
+/data/
 
 # built web assets
 apps/web/.next/
