@@ -28,16 +28,18 @@ secrets() {
   tmp=$(mktemp)
   trap 'rm -f "$tmp"' RETURN
   # Blode's working gateway key (the one on vcmc-computer answers 401), the
-  # Cursor key and the repo allowlist for coding sessions.
+  # Cursor key and the repo allowlist for coding sessions. Blode suspends
+  # between messages and `fly ssh console` refuses a suspended Machine, so
+  # the read silently returns nothing unless a request through the public
+  # hostname has just woken it (the same reason the clock uses that URL).
+  curl -s -m 90 -o /dev/null "https://$BLODE_APP.fly.dev/healthz" || true
   for k in AI_GATEWAY_API_KEY CURSOR_API_KEY COMPUTER_PA_REPOS; do
     v=$(guest_env "$BLODE_APP" "$k" || true)
     [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> "$tmp"
   done
-  # On 2026-09-06 the read above came back empty for all three from an agent
-  # session, and the key on vcmc-computer answers 401, so a run without it
-  # would restart the Machine into the same failure. Take it at the prompt
-  # instead (a fresh key from vercel.com/ai-gateway is fine); a blank line
-  # keeps the deployed one.
+  # If the read still came back empty, a run without the key would restart
+  # the Machine into the same 401. Take it at the prompt instead (a fresh key
+  # from vercel.com/ai-gateway is fine); a blank line keeps the deployed one.
   if ! grep -q '^AI_GATEWAY_API_KEY=' "$tmp"; then
     read -rs -p "AI_GATEWAY_API_KEY could not be read off $BLODE_APP; paste a working key (blank to keep the deployed one): " v; echo
     [ -n "$v" ] && printf 'AI_GATEWAY_API_KEY=%s\n' "$v" >> "$tmp"

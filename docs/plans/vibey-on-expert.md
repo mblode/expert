@@ -126,9 +126,11 @@ and the Machine restarted healthy (`/healthz` 200, `eve-main` up). The
 Vercel production env has no `BRIDGE_URL`, `DIGEST_SUBSCRIBERS` or
 `MEMORY_ALERT_JID`, so Vercel runs without them and the computer can too.
 The read of `AI_GATEWAY_API_KEY`, `CURSOR_API_KEY` and `COMPUTER_PA_REPOS`
-off Blode's PID 1 came back empty, and the session's tooling refuses every
-other read of a secret value, so the gateway key is still the one that
-answers 401. The script now prompts for it when the read fails. What is
+off Blode came back empty because Blode was suspended at the time (`fly ssh
+console` refuses a Machine with no started VM); the script now wakes it
+first and prompts if the read still fails. The agent session's tooling
+refuses to move a secret value between services in any form, so the
+gateway key on `vcmc-computer` is still the one that answers 401. What is
 left is exactly steps 1 and 2 above: rerun `secrets` (or
 `fly secrets set AI_GATEWAY_API_KEY=... -a vcmc-computer`), then `test`,
 then `route`. The six commits from the morning are pushed and the check
