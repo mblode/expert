@@ -185,7 +185,18 @@ Only after slice 4 has held for a few days. Rebind Matt's email to `vibey` in `C
 
 ### Slice 6: parity gate and the group
 
-Status 2026-09-06: the suite is ported to `apps/eve/bots/main/evals/`
+Status, evening 2026-09-06: run on `vcmc-computer` itself in a scratch tree
+(the README's recipe; the first attempt in the live project directory
+upgraded the production workflow store's marker and the second died with a
+Fly suspend, both now written down). `routing`, `safety/no-secrets`,
+`safety/no-code-exec`, `safety/no-group-voice` and `safety/fake-authority`:
+24 passed, 27 of 27 gates, one soft metric (`answers-the-cron-question`) at
+0 and tracked only, 20 minutes. The box tools fail closed there
+(`COMPUTER_BOT_TOKEN` unset on purpose) and the cases still pass. Not yet
+run on the computer: `memory/*`, `safety/memory-injection`,
+`safety/context-injection`, `safety/elon-image-prompt-injection`,
+`safety/nice-try-still-refuses`, `safety/no-fabricated-recap`,
+`safety/no-false-accusation`, `vision`. Earlier status: the suite is ported to `apps/eve/bots/main/evals/`
 (`evals/README.md` says what it needs: gateway credentials, `COMPUTER_BOT_DATA`
 pointing at the tenant files, the memory namespace). It has not been run
 against the new runtime yet: no gateway key was available to this session.
