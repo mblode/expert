@@ -70,6 +70,7 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 
 - The Bot this computer ships, its skills, routines and doors, and how a second is made: `docs/BOTS.md`
 - One Bot, Vibey on the Expert runtime; Blode destroyed 2026-09-06: `docs/plans/vibey-on-expert.md`
+- Who may reach a shared computer: guest links, the WhatsApp group as the roster, many Bots per member: `docs/plans/vcmc-members.md`
 - Deploying the four surfaces (web, the computers, the clock), and how to tell each step worked: `docs/DEPLOY.md`
 - Audit and open findings: `docs/AUDIT.md`
 - Grok Bot research, gap analysis, roadmap: `docs/GROK-BOT.md`
