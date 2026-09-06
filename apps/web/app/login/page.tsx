@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { WhatsAppLoginForm } from "@/components/whatsapp-login-form";
-import { Navbar } from "@/components/shared/navbar";
+import Link from "next/link";
 import { socialProvidersAvailable } from "@/lib/social-providers";
 import { getSessionCached } from "@/lib/session";
 import { workReturnTo } from "@/lib/work-target";
@@ -47,13 +47,21 @@ export default async function LoginPage({
 
   return (
     <div className="marketing min-h-full">
-      <Navbar />
-      <main className="flex min-h-svh items-center justify-center px-4 pt-20 pb-16">
-        <div className="w-full max-w-sm space-y-5">
+      <header className="mx-auto w-full max-w-md px-6 pt-6">
+        <Link
+          className="inline-flex min-h-11 items-center font-display text-xl"
+          href="/"
+          aria-label="Expert home"
+        >
+          Expert
+        </Link>
+      </header>
+      <main className="mx-auto flex w-full max-w-md flex-col px-6 pt-8 pb-12 sm:pt-16">
+        <div className="w-full space-y-6">
           <div>
             <h1 className="font-display text-3xl font-light tracking-tight">Sign in</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              Use a code from your private WhatsApp chat.
+              Welcome back. Sign in with WhatsApp or email.
             </p>
           </div>
           <WhatsAppLoginForm

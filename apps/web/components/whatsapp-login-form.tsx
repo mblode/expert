@@ -4,7 +4,7 @@ import { useState } from "react";
 import { isPossiblePhoneNumber } from "react-phone-number-input";
 import { LoginForm } from "./login-form";
 import { Button } from "./ui/button";
-import { Input } from "./ui/input";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
 import { PhoneInput } from "./ui/phone-input";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field";
 
@@ -55,17 +55,34 @@ export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>)
         }
       }}
     >
-      <p className="text-sm text-muted-foreground">
-        Message Vibey <strong className="text-foreground">sign in</strong> to get your code.
-      </p>
-      <a
-        className="text-sm font-medium underline underline-offset-4"
-        href="https://wa.me/message/O7KCFC6HSFCPM1"
-        target="_blank"
-        rel="noreferrer"
+      <section
+        aria-labelledby="get-code-title"
+        className="flex flex-col gap-3 rounded-xl border border-border p-4"
       >
-        Open WhatsApp
-      </a>
+        <div className="space-y-1">
+          <h2 id="get-code-title" className="text-sm font-medium">
+            Need a sign-in code?
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Open your private chat with Vibey and send{" "}
+            <strong className="text-foreground">sign in</strong>. Then return here with the code.
+          </p>
+        </div>
+        <Button
+          render={
+            <a
+              aria-label="Get a code in WhatsApp"
+              href="https://wa.me/message/O7KCFC6HSFCPM1"
+              target="_blank"
+              rel="noreferrer"
+            />
+          }
+          variant="outline"
+          size="input"
+        >
+          Get a code in WhatsApp
+        </Button>
+      </section>
       <FieldGroup>
         <Field data-invalid={phoneInvalid || undefined}>
           <FieldLabel htmlFor="whatsapp-phone">WhatsApp number</FieldLabel>
@@ -95,19 +112,32 @@ export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>)
           )}
         </Field>
         <Field>
-          <FieldLabel htmlFor="whatsapp-code">One-time code</FieldLabel>
-          <Input
+          <FieldLabel htmlFor="whatsapp-code">Sign-in code</FieldLabel>
+          <InputOTP
             id="whatsapp-code"
             inputMode="numeric"
             autoComplete="one-time-code"
-            placeholder="6-digit code"
             maxLength={6}
-            pattern="[0-9]{6}"
+            pattern="[0-9]*"
+            containerClassName="w-full"
+            aria-describedby="whatsapp-code-description"
             value={code}
-            onChange={(event) => setCode(event.target.value.replaceAll(/\D/gu, ""))}
+            onChange={(value) => {
+              setCode(value);
+              setError(undefined);
+            }}
             required
             disabled={pending}
-          />
+          >
+            <InputOTPGroup className="w-full">
+              {Array.from({ length: 6 }, (_, index) => (
+                <InputOTPSlot className="min-w-0 flex-1" index={index} key={index} />
+              ))}
+            </InputOTPGroup>
+          </InputOTP>
+          <FieldDescription id="whatsapp-code-description">
+            Enter the 6-digit code from Vibey. It expires after 5 minutes.
+          </FieldDescription>
         </Field>
       </FieldGroup>
       {error && (
@@ -121,7 +151,7 @@ export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>)
         disabled={!phone.trim() || code.length !== 6}
         size="input"
       >
-        Verify and sign in
+        {pending ? "Signing in…" : "Sign in"}
       </Button>
       <Button type="button" variant="link" disabled={pending} onClick={() => setEmail(true)}>
         Use email instead

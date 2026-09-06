@@ -100,6 +100,7 @@ export function App({
           if (next) {
             setRecovered(next);
           }
+          return Boolean(next);
         }}
         onSignOut={() => signOut()}
       />
