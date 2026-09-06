@@ -16,11 +16,12 @@ BLODE_APP=mblode-computer
 VCMC_AGENT_DIR="${VCMC_AGENT_DIR:-../vcmc-agent}"
 CONNECTOR_SECRET_FILE=/workspace/.computer/connector-whatsapp-vcmc.secret
 
-# Read one variable out of a running Machine's PID 1 environment. Fly does
-# not read secrets back, but root on the guest can, and PID 1 is init.
+# Read one variable out of a running Machine. Fly does not read secrets
+# back, but the ssh session on the guest inherits the Machine's env (PID 1's
+# environ is empty of them, checked 2026-09-06). The Machine must be started:
+# `fly ssh console` refuses a suspended one.
 guest_env() { # app name
-  fly ssh console -a "$1" -C "sh -c 'tr \"\\0\" \"\\n\" < /proc/1/environ | grep \"^$2=\"'" 2>/dev/null |
-    grep "^$2=" | cut -d= -f2-
+  fly ssh console -a "$1" -C "printenv $2" 2>/dev/null | grep -v '^Connecting' | tr -d '\r' | tail -1
 }
 
 secrets() {
