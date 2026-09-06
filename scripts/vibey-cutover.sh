@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # What is left of the Vibey cutover (docs/plans/vibey-on-expert.md) after
-# Blode was destroyed on 2026-09-06: the steps that move a secret between
-# Matt's services, so an operator runs them in one sitting. Nothing here is
+# Blode was destroyed on 2026-09-06. vcmc-computer runs Vibey's agent, the
+# group's Bot, and Matt's number is routed to it as one of its users; there
+# is no personal-assistant mode on it and nothing left to mirror. Nothing here is
 # a secret; every value is read from the service that already holds it and
 # written to the one that needs it. Run from the repo root with fly, railway
 # and vercel signed in.
 #
 #   scripts/vibey-cutover.sh test        # one turn through the connector door, from the box
-#   scripts/vibey-cutover.sh pa          # the personal-assistant config onto vcmc-computer (one import)
 #   scripts/vibey-cutover.sh route       # Railway: Matt's DMs to vcmc-computer (done 2026-09-06; idempotent)
 set -euo pipefail
 
@@ -34,47 +34,8 @@ route() {
   echo "Matt's DMs (+61456455551) now reach Vibey on $VCMC_APP. Send one and check the bridge logs for target=expert."
 }
 
-# The durable 202 path, coding sessions and hello.expert work links need what
-# docs/DEPLOY.md "WhatsApp PA pilot" describes. The clock lists vcmc-computer
-# and holds its registration secret (2026-09-06); this reads that secret back
-# off the clock and the bridge admin secret off Railway, where it lives as
-# EXPERT_DELIVERY_SECRET (the same value Blode held as WHATSAPP_BRIDGE_SECRET),
-# adds the plain values, and restarts vcmc-computer once. The hub refuses to
-# boot with a partial PA config, which is why it is one import.
-pa() {
-  local tmp
-  tmp=$(mktemp)
-  trap 'rm -f "$tmp"' RETURN
-  local clock
-  clock=$(fly ssh console -a expert-clock -C "printenv CLOCK_REGISTRATION_SECRETS" 2>/dev/null |
-    grep -v '^Connecting' | tr -d '\r' | tail -1 |
-    python3 -c 'import json,sys; print(json.load(sys.stdin).get("vcmc-computer",""))')
-  [ ${#clock} -ge 32 ] || { echo "expert-clock has no registration secret for vcmc-computer" >&2; exit 1; }
-  local bridge
-  bridge=$(cd "$VCMC_AGENT_DIR/bridge" && railway variables --kv 2>/dev/null | grep '^EXPERT_DELIVERY_SECRET=' | cut -d= -f2-)
-  [ -n "$bridge" ] || { echo "Railway has no EXPERT_DELIVERY_SECRET; the bridge's admin secret is what the hub must present" >&2; exit 1; }
-  {
-    printf 'WHATSAPP_BRIDGE_SECRET=%s\n' "$bridge"
-    printf 'COMPUTER_CLOCK_SECRET=%s\n' "$clock"
-    cat <<'PLAIN'
-COMPUTER_CLOCK_URL=http://expert-clock.internal:8080
-COMPUTER_CLOCK_TENANT=vcmc-computer
-COMPUTER_PA_ACCOUNT=vcmc
-COMPUTER_PA_OWNER_JID=61456455551@s.whatsapp.net
-COMPUTER_SHARED_WHATSAPP=on
-COMPUTER_BRIDGE_URL=https://vcmc-bridge-production.up.railway.app
-COMPUTER_WEB_URL=https://hello.expert
-COMPUTER_PUBLIC_URL=https://vcmc-computer.fly.dev
-PLAIN
-  } > "$tmp"
-  echo "setting: $(cut -d= -f1 "$tmp" | tr '\n' ' ')"
-  fly secrets import -a "$VCMC_APP" < "$tmp"
-  echo "vcmc-computer is restarting in personal-assistant mode; wait for /healthz, then DM Vibey: the reply should be a 202 on the bridge and a WhatsApp message back."
-}
-
 case "${1:-}" in
   test) test_turn ;;
   route) route ;;
-  pa) pa ;;
-  *) sed -n 2,11p "$0"; exit 1 ;;
+  *) sed -n 2,10p "$0"; exit 1 ;;
 esac

@@ -152,13 +152,15 @@ owner DMs". **Slice 4 is live as of 2026-09-06 14:07 AEST.**
 Second half, same day: `vcmc-computer` runs Machine version 10 (widget
 removed, turn deadline, smaller image) and answered the door naming its
 computer. The clock now lists `vcmc-computer` as a target and holds its
-registration secret. What is left is one import on the tenant, which the
-agent session's tooling refused to write: `scripts/vibey-cutover.sh pa`
-(reads the clock secret back off `expert-clock` and the bridge admin secret
-off Blode, adds the plain PA values, restarts `vcmc-computer` once). After
-it, a DM from Matt's number should answer 202 on the bridge and come back as
-a WhatsApp message through the durable path, and coding sessions and work
-links work from Vibey. That is the precondition for slice 5.
+registration secret. **Corrected the same evening, in Matt's words: "vcmc-computer is more like
+a mirror of vcmc-agent eve agent. No personal assistant."** So there is no
+PA configuration to mirror, the `pa` step is deleted from the script, and
+Matt's DMs are answered by Vibey through the same synchronous reply path the
+group uses. The durable 202 path, coding sessions and work links were
+Blode's personal-assistant features and went with Blode. `CURSOR_API_KEY`
+and `COMPUTER_PA_REPOS` sit unused on `vcmc-computer` and can be removed by
+hand. The clock target stays: Vibey's own routines (digest, consolidation,
+box health) still need the Machine woken.
 
 Follow-up found on the way: a conversation whose first turn failed
 terminally (`session.failed`) never starts another run, so every later
@@ -193,9 +195,9 @@ one `fly.toml` (the old `fly.vcmc.toml`), one computer in
 Vercel, they named the dead host), `INVITE_MINT_COMPUTER_ID=vibey`, the clock's
 targets and registration map down to `vcmc-computer`, and the cutover script
 down to `test`, `pa`, `route`. The `channels.json` aliases were already gone
-from this repo. Still to run: `scripts/vibey-cutover.sh pa` (the PA config,
-now sourcing the bridge admin secret from Railway since Blode cannot be read),
-and `COMPUTER_SETUP_CODE` (Blode's) can be removed from Vercel by hand.
+from this repo. Nothing left to run: the `pa` step was a
+misreading and is gone (see slice 4). `COMPUTER_SETUP_CODE` (Blode's) can be
+removed from Vercel by hand.
 
 ### Slice 6: parity gate and the group
 

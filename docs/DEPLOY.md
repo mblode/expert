@@ -374,6 +374,10 @@ rollback. A connector secret minted in step 4 survives too.
 
 ## WhatsApp PA pilot, opt-in
 
+> Retired 2026-09-06 with Blode. vcmc-computer runs Vibey's agent for the group
+> and for Matt alike, with no personal-assistant mode; this section is kept as the
+> record of what Blode ran.
+
 The PA path is off until the operator supplies both `COMPUTER_PA_ACCOUNT` and
 `COMPUTER_PA_OWNER_JID` on the tenant. Use the exact dedicated account id and
 owner JID read from the bridge, not a number suffix or group participant list.
