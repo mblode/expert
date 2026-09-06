@@ -1,5 +1,7 @@
 import { siteConfig } from "./config";
 
+export const CONTACT_EMAIL = "m@blode.co";
+
 /**
  * The entities every page's structured data refers to, defined once with
  * stable ids so search engines resolve one graph rather than a snippet per
@@ -18,6 +20,19 @@ export const AUTHOR = {
 /** The date the front door's copy last changed: `lib/content.ts` and the marketing components. Move it when they move. */
 export const HOME_LAST_MODIFIED = new Date("2026-09-05");
 
+export function breadcrumbList(items: { name: string; href: string }[]): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: items.map((item, i) => ({
+      "@type": "ListItem",
+      item: `${siteConfig.url}${item.href === "/" ? "" : item.href}`,
+      name: item.name,
+      position: i + 1,
+    })),
+  };
+}
+
 export function siteGraph(): Record<string, unknown> {
   return {
     "@context": "https://schema.org",
@@ -28,6 +43,12 @@ export function siteGraph(): Record<string, unknown> {
         // What people type: Search Console shows the brand searched as "hello
         // expert" and its run-together forms, with the site not yet tied to it.
         alternateName: ["Hello Expert", "hello.expert"],
+        contactPoint: {
+          "@type": "ContactPoint",
+          contactType: "customer support",
+          email: CONTACT_EMAIL,
+          url: `${siteConfig.url}/contact`,
+        },
         founder: { "@id": personId },
         name: siteConfig.name,
         sameAs: [siteConfig.links.github],

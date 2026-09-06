@@ -44,6 +44,18 @@ export function Navbar(): React.ReactElement {
         </Link>
         <div className="flex items-center gap-4">
           <Link
+            className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline"
+            href="/guides"
+          >
+            Guides
+          </Link>
+          <Link
+            className="hidden text-sm text-muted-foreground transition-colors hover:text-foreground sm:inline"
+            href="/about"
+          >
+            About
+          </Link>
+          <Link
             className="text-sm text-muted-foreground transition-colors hover:text-foreground"
             href={siteConfig.links.login}
           >

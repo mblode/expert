@@ -24,7 +24,22 @@ export function Footer(): React.ReactElement {
           Matthew Blode
         </a>
       </div>
-      <div className="flex items-center gap-3 text-muted-foreground/30">
+      <div className="flex flex-wrap items-center justify-center gap-3 text-muted-foreground/30">
+        {[
+          { href: "/guides", label: "Guides" },
+          { href: "/about", label: "About" },
+          { href: "/contact", label: "Contact" },
+          { href: "/privacy", label: "Privacy" },
+        ].map((item) => (
+          <Link
+            className="text-muted-foreground transition-colors hover:text-foreground"
+            href={item.href}
+            key={item.href}
+          >
+            {item.label}
+          </Link>
+        ))}
+        <span>&middot;</span>
         <Link
           className="text-muted-foreground transition-colors hover:text-foreground"
           href={siteConfig.links.login}

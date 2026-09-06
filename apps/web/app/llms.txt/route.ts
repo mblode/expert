@@ -14,7 +14,12 @@ ${siteConfig.name} gives a person a team of Bots that share one persistent Linux
 ## Pages
 
 - [Home](${siteConfig.url}): what you get, who you get, how to reach it, and the FAQ
+- [Guides](${siteConfig.url}/guides): the seat, passwords and codes, getting a computer
+- [About](${siteConfig.url}/about), [Contact](${siteConfig.url}/contact), [Privacy](${siteConfig.url}/privacy)
 - [Sign in](${siteConfig.url}/login): existing accounts; new sign-ups join a waitlist
+
+Every page above also answers \`Accept: text/markdown\` with a Markdown twin.
+The agent skill is at ${siteConfig.url}/skill.md.
 
 ## Source
 
