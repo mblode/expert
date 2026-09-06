@@ -119,6 +119,21 @@ times out after three retries. Two things only Matt can do, in this order:
    clock configuration from `docs/DEPLOY.md` "WhatsApp PA pilot" mirrored
    onto `vcmc-computer`, with the clock registry taught the `vcmc` tenant.
 
+**Update, later on 2026-09-06.** `scripts/vibey-cutover.sh secrets` ran
+from an agent session: `BLOB_READ_WRITE_TOKEN`, `FIRECRAWL_API_KEY`,
+`REFRESH_GROUP_JID` and `VIBEY_BRIDGE_SECRET` are now on `vcmc-computer`
+and the Machine restarted healthy (`/healthz` 200, `eve-main` up). The
+Vercel production env has no `BRIDGE_URL`, `DIGEST_SUBSCRIBERS` or
+`MEMORY_ALERT_JID`, so Vercel runs without them and the computer can too.
+The read of `AI_GATEWAY_API_KEY`, `CURSOR_API_KEY` and `COMPUTER_PA_REPOS`
+off Blode's PID 1 came back empty, and the session's tooling refuses every
+other read of a secret value, so the gateway key is still the one that
+answers 401. The script now prompts for it when the read fails. What is
+left is exactly steps 1 and 2 above: rerun `secrets` (or
+`fly secrets set AI_GATEWAY_API_KEY=... -a vcmc-computer`), then `test`,
+then `route`. The six commits from the morning are pushed and the check
+was green.
+
 Secrets first. The Vercel project's env is the source (`vercel env pull` in
 `vcmc-agent`); on `vcmc-computer` they are `BLOB_READ_WRITE_TOKEN`,
 `FIRECRAWL_API_KEY`, `BRIDGE_URL`, `VIBEY_BRIDGE_SECRET` (the Railway

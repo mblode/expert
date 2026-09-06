@@ -33,6 +33,15 @@ secrets() {
     v=$(guest_env "$BLODE_APP" "$k" || true)
     [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> "$tmp"
   done
+  # On 2026-09-06 the read above came back empty for all three from an agent
+  # session, and the key on vcmc-computer answers 401, so a run without it
+  # would restart the Machine into the same failure. Take it at the prompt
+  # instead (a fresh key from vercel.com/ai-gateway is fine); a blank line
+  # keeps the deployed one.
+  if ! grep -q '^AI_GATEWAY_API_KEY=' "$tmp"; then
+    read -rs -p "AI_GATEWAY_API_KEY could not be read off $BLODE_APP; paste a working key (blank to keep the deployed one): " v; echo
+    [ -n "$v" ] && printf 'AI_GATEWAY_API_KEY=%s\n' "$v" >> "$tmp"
+  fi
   # The Vercel project's env is the source for everything Vibey's tools use.
   (cd "$VCMC_AGENT_DIR" && vercel env pull "$tmp.vercel" --environment=production --yes >/dev/null)
   for k in BLOB_READ_WRITE_TOKEN FIRECRAWL_API_KEY BRIDGE_URL DIGEST_SUBSCRIBERS REFRESH_GROUP_JID MEMORY_ALERT_JID; do
