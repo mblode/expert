@@ -14,5 +14,6 @@ export default defineConfig({
     "./db/invite.ts",
     "./db/bot-template.ts",
     "./db/onboarding.ts",
+    "./db/waitlist.ts",
   ],
 });

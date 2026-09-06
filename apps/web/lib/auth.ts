@@ -3,6 +3,7 @@ import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { customSession, emailOTP } from "better-auth/plugins";
 
+import { allowedEmailSet, isAllowedEmail } from "./allowed-emails";
 import { hasComputerInvitation } from "./computer-enrollment";
 import { getOrCreateComputerSeat } from "./computer-seat";
 import { isProductionRuntime, siteConfig, trimSlashes } from "./config";
@@ -56,14 +57,8 @@ if (!secret && isProductionRuntime) {
  * Comma-separated; unset means open, which is only right for a private
  * deployment.
  */
-const allowedEmails = new Set(
-  (process.env.AUTH_ALLOWED_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean),
-);
-const isAllowed = (email: string): boolean =>
-  allowedEmails.size === 0 || allowedEmails.has(email.toLowerCase());
+const allowedEmails = allowedEmailSet();
+const isAllowed = (email: string): boolean => isAllowedEmail(email);
 if (allowedEmails.size === 0 && isProductionRuntime) {
   console.warn(
     "[auth] AUTH_ALLOWED_EMAILS is unset: anyone who can receive email can sign in and take a seat",

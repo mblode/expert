@@ -7,6 +7,7 @@ import { computer } from "../db/computer";
 import { computerSeat } from "../db/computer-seat";
 import { invite } from "../db/invite";
 import { onboarding } from "../db/onboarding";
+import { waitlist } from "../db/waitlist";
 import { whatsappConnection } from "../db/whatsapp-connection";
 import * as schema from "../db/schema";
 
@@ -38,6 +39,7 @@ export const db = drizzle(client, {
     computerSeat,
     invite,
     onboarding,
+    waitlist,
     whatsappConnection,
   },
 });

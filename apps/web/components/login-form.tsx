@@ -22,7 +22,7 @@ const OTP_LENGTH = 6;
 const RESEND_COOLDOWN_SECONDS = 30;
 const NETWORK_ERROR = "Couldn't reach the server. Check your connection and try again.";
 
-type Step = "email" | "otp";
+type Step = "email" | "otp" | "waitlist";
 
 export function LoginForm({
   appleEnabled = false,
@@ -43,7 +43,7 @@ export function LoginForm({
   const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
   const verifyingRef = useRef(false);
 
@@ -61,10 +61,29 @@ export function LoginForm({
       type: "sign-in",
     });
     if (sendError) {
-      setError(sendError.message ?? "Could not send a code. Try again.");
+      setFormError(sendError.message ?? "Could not send a code. Try again.");
       return false;
     }
     return true;
+  };
+
+  // Sign-up is gated. An address that may not make an account is put on the
+  // waitlist by this call and told so here, instead of being moved to the
+  // code step for a code that would never come.
+  const requestAccess = async (): Promise<"allowed" | "waitlisted"> => {
+    const response = await fetch("/api/waitlist", {
+      body: JSON.stringify({ email: email.trim().toLowerCase(), source: "login" }),
+      headers: { "content-type": "application/json" },
+      method: "POST",
+    });
+    const result = (await response.json().catch(() => null)) as {
+      status?: string;
+      error?: string;
+    } | null;
+    if (!response.ok) {
+      throw new Error(result?.error ?? NETWORK_ERROR);
+    }
+    return result?.status === "waitlisted" ? "waitlisted" : "allowed";
   };
 
   const requestOtp = async (event: FormEvent<HTMLFormElement>) => {
@@ -73,14 +92,18 @@ export function LoginForm({
       return;
     }
     setPending(true);
-    setError(null);
+    setFormError(null);
     try {
+      if ((await requestAccess()) === "waitlisted") {
+        setStep("waitlist");
+        return;
+      }
       if (await sendCode()) {
         setStep("otp");
         setCooldown(RESEND_COOLDOWN_SECONDS);
       }
-    } catch {
-      setError(NETWORK_ERROR);
+    } catch (error) {
+      setFormError(error instanceof Error && error.message ? error.message : NETWORK_ERROR);
     } finally {
       setPending(false);
     }
@@ -91,13 +114,13 @@ export function LoginForm({
       return;
     }
     setPending(true);
-    setError(null);
+    setFormError(null);
     try {
       if (await sendCode()) {
         setCooldown(RESEND_COOLDOWN_SECONDS);
       }
     } catch {
-      setError(NETWORK_ERROR);
+      setFormError(NETWORK_ERROR);
     } finally {
       setPending(false);
     }
@@ -109,7 +132,7 @@ export function LoginForm({
     }
     verifyingRef.current = true;
     setPending(true);
-    setError(null);
+    setFormError(null);
     let data: unknown;
     try {
       const { data: signInData, error: verifyError } = await authClient.signIn.emailOtp({
@@ -117,14 +140,14 @@ export function LoginForm({
         otp: code,
       });
       if (verifyError) {
-        setError(verifyError.message ?? "That code did not work. Try again.");
+        setFormError(verifyError.message ?? "That code did not work. Try again.");
         verifyingRef.current = false;
         setPending(false);
         return;
       }
       data = signInData;
     } catch {
-      setError(NETWORK_ERROR);
+      setFormError(NETWORK_ERROR);
       verifyingRef.current = false;
       setPending(false);
       return;
@@ -150,18 +173,18 @@ export function LoginForm({
       return;
     }
     setPending(true);
-    setError(null);
+    setFormError(null);
     try {
       await authClient.signIn.social({ callbackURL: next, provider });
     } catch {
-      setError(NETWORK_ERROR);
+      setFormError(NETWORK_ERROR);
       setPending(false);
     }
   };
 
-  const errorAlert = error ? (
+  const errorAlert = formError ? (
     <Alert variant="destructive">
-      <AlertDescription>{error}</AlertDescription>
+      <AlertDescription>{formError}</AlertDescription>
     </Alert>
   ) : null;
 
@@ -195,6 +218,31 @@ export function LoginForm({
         <FieldSeparator>or</FieldSeparator>
       </>
     ) : null;
+
+  if (step === "waitlist") {
+    return (
+      <div className="flex flex-col gap-5">
+        <Alert>
+          <AlertDescription>
+            You are on the list. We will email {email.trim().toLowerCase()} when your computer is
+            ready. Nothing to do until then.
+          </AlertDescription>
+        </Alert>
+        <Button
+          className="w-full"
+          onClick={() => {
+            setStep("email");
+            setFormError(null);
+          }}
+          size="input"
+          type="button"
+          variant="outline"
+        >
+          Use a different email
+        </Button>
+      </div>
+    );
+  }
 
   if (step === "otp") {
     return (
@@ -255,7 +303,7 @@ export function LoginForm({
             onClick={() => {
               setStep("email");
               setOtp("");
-              setError(null);
+              setFormError(null);
               setCooldown(0);
             }}
             size="input"

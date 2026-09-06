@@ -71,9 +71,11 @@ The product web is `apps/web` on Vercel with Root Directory `apps/web`. It is th
 | ---------------------------------------- | ----------------------------------------------------------------------------- |
 | `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it             |
 | `BETTER_AUTH_URL`                        | `https://hello.expert`                                                        |
-| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                     |
+| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Anyone else joins the waitlist. Unset: open sign-up          |
 | `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                        |
-| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                                |
+| `RESEND_API_KEY`                         | Sign-in codes and waitlist mail; required in production                       |
+| `WAITLIST_NOTIFY_EMAIL`                  | Who hears when an address joins the waitlist. Default `m@blode.co`            |
+| `RESEND_AUDIENCE_ID`                     | Optional. Waitlist addresses are added to this Resend audience                |
 | `COMPUTER_SETUP_CODE_VCMC`               | The computer's Fly hub setup code; server-only                                |
 | `COMPUTER_HUB_URL_VIBEY`                 | Overrides the hub URL; otherwise `https://vcmc-computer.fly.dev`              |
 | `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers and mint invites. Unset: nobody                      |
