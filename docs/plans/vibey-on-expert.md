@@ -52,6 +52,23 @@ The Railway bridge is the one WhatsApp socket and it already routes per JID. So 
 
 Each slice has one demonstrable outcome. Do not merge two.
 
+Status on 2026-09-06: slices 1 and 2 are committed (`c7c1fc9`, `622f9b5`),
+slice 3's code is committed (`746db47`) and its content is on the volume; the
+deploy and the tenant secrets are in flight. Two things the day taught:
+
+- **The hub's runtime instructions cap at 10,000 characters**, sized for an
+  owner's notes. Vibey's persona is 27,000. So the identity is a file on the
+  volume (`data/instructions.md`, read by `instructions/identity.ts`) beside
+  the archive and the roster, and the runtime layer stays what hello.expert
+  edits on top. The three lore skills are eve dynamic skills with the same
+  file-or-nothing rule (`lib/skills/tenant-skill.ts`).
+- **This repository is public**, so nothing that names a VCMC member may
+  land in it: the archive, `members.json`, `group-history.json`, the persona
+  and the skills all live only on `vcmc-computer`'s volume and in the private
+  `vcmc-agent` repo, which is where they are edited and re-exported from
+  (`/tmp/vibey-export*.mts` on 2026-09-06 was the one-off; a script in
+  `vcmc-agent/scripts/` should replace it before the repo is archived).
+
 ### Slice 1: roster to one Bot
 
 Move the seven specialists' skills into `main/agent/skills/`, then delete the seven directories, their `COPY` lines, their `docs/BOTS.md` rows and the clock's manifests for them. `npm run check` green, the guest image builds by hand (`docker build -f deploy/fly/Dockerfile`), and the clock's `/healthz` lists only `main`'s routines.
@@ -69,6 +86,14 @@ Remove the 2026-09-02 overlay at `/workspace/eve/bots` so the image's `main` run
 Done when `/healthz` shows `eve-main` up from the image, and a `curl` to the connector ingress with a DM payload gets a Vibey-voiced reply that cites the archive.
 
 ### Slice 4: Matt's DMs to Vibey, with a computer
+
+Secrets first. The Vercel project's env is the source (`vercel env pull` in
+`vcmc-agent`); on `vcmc-computer` they are `BLOB_READ_WRITE_TOKEN`,
+`FIRECRAWL_API_KEY`, `BRIDGE_URL`, `VIBEY_BRIDGE_SECRET` (the Railway
+bridge's `WHATSAPP_BRIDGE_SECRET`, under the name the supervisor lets
+through), `DIGEST_SUBSCRIBERS`, `REFRESH_GROUP_JID`, `MEMORY_ALERT_JID`.
+`fly secrets import -a vcmc-computer` from a `KEY=VALUE` file, then a deploy
+or `fly machine restart`.
 
 Mint a `whatsapp` connector for `main` on `vcmc-computer` (the `DEPLOY.md` section 5 recipe), then on Railway set `EXPERT_URL=https://vcmc-computer.fly.dev` and the new connector id and secret. `EXPERT_DM_JIDS` stays `+61456455551`. Copy `CURSOR_API_KEY` and `COMPUTER_PA_REPOS` across if coding sessions are wanted from Vibey.
 
