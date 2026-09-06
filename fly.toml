@@ -1,12 +1,16 @@
-# Blode computer. One Fly Machine in syd. Eve, desk, and hub share it.
-# Eve is a child of this guest (loopback), not a Vercel app and not a
-# second Fly process group.
+# The computer: Vibey, one Fly Machine in syd. Eve, desk and hub share it.
+# This was fly.vcmc.toml beside a second file for the Blode computer until
+# that computer was destroyed on 2026-09-06; `fly deploy` from the repo root
+# now targets this app and there is no second file to confuse it with.
 #
-# A second tenant is a second app: see fly.vcmc.toml. `fly deploy` without
-# `-c` targets this file only and must not be pointed at vcmc-computer.
-# One computer Machine. Volumes do not replicate; do not scale the guest out.
+# Pairing code is this Machine's secret. Volume is this app's existing
+# `vcmc_workspace` (10 GB, syd). Do not create a second volume. The Bot is
+# the image's `main`; what makes it Vibey is the tenant content under
+# /workspace/.bots/main/data (docs/plans/vibey-on-expert.md).
+#
+# CPU can idle to $0. Disk cannot.
 
-app = "mblode-computer"
+app = "vcmc-computer"
 primary_region = "syd"
 
 [build]
@@ -42,15 +46,11 @@ processes = ["computer"]
 internal_port = 8080
 force_https = true
 # Suspend (not stop): faster wake; CPU/RAM bill $0 while suspended.
-# 2 GB is Fly's max for machine suspend.
-# A suspended Machine has no clock, so routines are woken from outside: the
-# `expert-clock` app (fly.clock.toml) GETs /healthz here a few minutes before
-# any routine minute, and Fly Proxy serves that by starting this Machine.
-# Turning auto_stop off would make that app pointless and the bill ~5x.
+# Railway WhatsApp bridge POST starts it again.
 # A linked WhatsApp number needs the socket up, so linking one on this
 # tenant means auto_stop_machines off and min_machines_running 1:
 # suspend-to-zero is gone for that tenant, and that is the price of the
-# socket living here rather than on a second host. Blode keeps suspending
+# socket living here rather than on a second host. This Machine keeps suspending
 # until a number is linked.
 auto_stop_machines = "suspend"
 auto_start_machines = true
@@ -68,18 +68,13 @@ method = "GET"
 path = "/healthz"
 timeout = "5s"
 
-# One volume: /workspace (desk files, .computer roster/tokens, Eve secret).
 [[mounts]]
-source = "computer_workspace"
+source = "vcmc_workspace"
 destination = "/workspace"
 processes = ["computer"]
 
-# shared-cpu-2x / 2 GB, and 2 GB is Fly's ceiling for a Machine that can
-# suspend, so this number is the reason Bots sleep rather than a budget to
-# raise. A roster of eight awake would be about 5 GB (224 MB per Eve, 430 per
-# claimed screen, measured), so only the primary Bot runs at boot and the rest
-# are woken by use: `host/wake.ts` and `service/screens.ts`. 1 vCPU stutters
-# VNC when a Bot drives the desk, so two.
+# shared-cpu-2x / 2 GB, Fly's ceiling for a Machine that can suspend, so this
+# number is the reason Bots sleep rather than a budget to raise.
 [[vm]]
 processes = ["computer"]
 cpu_kind = "shared"

@@ -10,7 +10,7 @@ There is a shared control plane and there are single-tenant computers, and almos
 
 The control plane is `apps/web`, a Next.js app on Vercel serving hello.expert. It holds identity (Better Auth over a Drizzle adapter in `apps/web/lib/auth.ts`), the database (libSQL/Turso in `apps/web/lib/db.ts`, with `user`, `session`, `computer`, `computer_seat` and `invite` tables), the catalog of which computers exist, and the setup code for each one. It holds no pixels, no files, no agent and no model call. It is a directory and a credential broker.
 
-A computer is one Fly Machine with one volume, one hub, one desk, one Eve process per Bot and one WhatsApp bridge. Blode is `mblode-computer` (`fly.toml`), Vibey is `vcmc-computer` (`fly.vcmc.toml`), both shared-cpu-2x with 2 GB, both suspending to zero when idle. The Machine is the unit of isolation, the unit of billing, the unit of failure and the unit of deploy, all at once, and that coincidence is the reason the architecture stays this simple.
+A computer is one Fly Machine with one volume, one hub, one desk, one Eve process per Bot and one WhatsApp bridge. Blode is `mblode-computer` (`fly.toml`), Vibey is `vcmc-computer` (`fly.toml`), both shared-cpu-2x with 2 GB, both suspending to zero when idle. The Machine is the unit of isolation, the unit of billing, the unit of failure and the unit of deploy, all at once, and that coincidence is the reason the architecture stays this simple.
 
 PID 1 on the guest is `apps/hub/src/host/init.ts` running under tini via `deploy/fly/guest-entrypoint.sh`. It is the only process on the box that changes uid: it fixes up the volume, mints or refuses to mint the setup code, writes the hub-owned secrets at 0600, then hands everything to `host/supervisor.ts`, which starts `desk-up` once as `box`, one `eve start` per roster Bot as `box`, the bridge as `hub` and the hub as `hub`, each with a restart backoff (1 s to 30 s, reset after 60 s stable) and an optional health probe. The supervisor mirrors its view to `/run/computer/status.json` and `GET /healthz` reports it, so a Machine with a dead X server no longer answers `ok`. Note the asymmetry in that health check: `ok` reflects every child, but the endpoint is always HTTP 200 while the hub itself answers, deliberately, so that a crash-looping Eve does not make Fly restart the whole Machine.
 
@@ -27,7 +27,7 @@ flowchart TB
     catalog["Catalog and binding<br/>lib/computers.ts, lib/computer-seat.ts"]
   end
 
-  subgraph machine["One Fly Machine per tenant (fly.toml, fly.vcmc.toml)"]
+  subgraph machine["One Fly Machine per tenant (fly.toml)"]
     init["PID 1: host/init.ts + host/supervisor.ts"]
     hub["hub :8080<br/>handler to service to desk"]
     eve["eve start :2000 per Bot<br/>apps/eve"]
@@ -122,7 +122,7 @@ Senses 1 and 2 still line up by convention (`kind: "whatsapp"` finds `channels/w
 - `FileConnectorStore` reads `connectors.json`, falling back to `channels.json` when there is none. It writes only the new name, so the first mutation migrates the content forward, and nothing deletes the old file: a destructive step on deploy is exactly what the fallback exists to avoid, and it leaves a rollback artifact.
 - The bridge's `accounts.json` still parses `channel_id` / `channel_secret` alongside `connector_id` / `connector_secret`, for the same reason: a parse error there is a bridge that will not start, which is every linked number down.
 
-The bridge itself sends only the new names, so once Blode and Vibey are both redeployed all three aliases are dead weight rather than load-bearing, and go. On the wire, `WhatsAppAccount.channel_id` became `connector_id`; no client in this repository read it.
+The bridge itself sends only the new names; Blode is gone (2026-09-06) and the aliases in this repo's code went with the audit pass, so what remains is the bridge's own tolerance of the old keys. On the wire, `WhatsAppAccount.channel_id` became `connector_id`; no client in this repository read it.
 
 ## 6. The model's voice, and where it actually comes out
 

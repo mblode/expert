@@ -138,7 +138,7 @@ Read-only survey (codebase-architecture Deepen mode) followed by the fixes, all 
 
 - **Conversations versus voice (finding 4)**: decided the same day, see the closed entry above. `widget` removed, `secret_request` answerable from the web.
 - **The in-repo bridge**: decided the same day. It is the gateway of `docs/plans/gateway.md` and the Railway fork is interim, because `vcmc-agent` is scheduled for archive once the group moves. The migration of a live socket with a hundred people on it is a planned cutover, not a cleanup; the banner in `apps/whatsapp-bridge/src/index.ts` says so.
-- **Blode-only configuration** (`fly.toml`, the `blode` row and `matt` alias in `apps/web/lib/computers.ts`, `COMPUTER_SETUP_CODE_VCMC`): decided to keep until slice 5 of `docs/plans/vibey-on-expert.md`, because Blode still holds the durable-delivery and coding-session configuration that `vcmc-computer` lacks; destroying it first would lose features, not just a row.
+- **Blode-only configuration**: gone with slice 5, 2026-09-06 (Matt's call to destroy the same day). One `fly.toml`, one computer in `computers.ts`, `COMPUTER_SETUP_CODE_VCMC` stays as the env name the deployment has.
 - **Eight shared exports nothing outside the package imports** (`PixelX`, `PixelY`, `OCCURRENCE_KINDS`, `ERROR_HTTP_STATUS`, `UnavailableReason`, `UnavailablePhase`, `ApiError`, `ScreenStatus`) are parts of exported wire types, so they stay exported: un-exporting a type a consumer's own declaration needs is churn, not a deletion.
 - **Splitting `apps/web`**, collapsing `screens.ts` with `pixels.ts`, and the dormant self-serve provisioning path: no current requirement, or the platform direction itself.
 

@@ -409,33 +409,20 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(commands).not.toContain('COMPUTER_SETUP_CODE="$COMPUTER_SETUP_CODE"');
   });
 
-  it("Vibey Fly config is a separate app and volume from Blode, same suspend size", () => {
-    const blode = readFileSync(resolve(import.meta.dirname, "../../../fly.toml"), "utf-8");
-    const vibey = readFileSync(resolve(import.meta.dirname, "../../../fly.vcmc.toml"), "utf-8");
-    expect(blode).toMatch(/^app = "mblode-computer"$/m);
-    expect(vibey).toMatch(/^app = "vcmc-computer"$/m);
-    expect(vibey).not.toMatch(/app = "mblode-computer"/);
-    expect(vibey).toContain('source = "vcmc_workspace"');
-    expect(vibey).not.toContain('source = "computer_workspace"');
-    expect(blode).toContain('source = "computer_workspace"');
-    expect(vibey).toContain('primary_region = "syd"');
-    expect(vibey).toContain('dockerfile = "deploy/fly/Dockerfile"');
+  it("the one Fly config is the Vibey computer, suspendable, on its own volume", () => {
+    const guest = readFileSync(resolve(import.meta.dirname, "../../../fly.toml"), "utf-8");
+    expect(guest).toContain('app = "vcmc-computer"');
+    expect(guest).toContain('source = "vcmc_workspace"');
+    expect(guest).not.toContain("mblode-computer");
+    expect(guest).not.toContain('source = "computer_workspace"');
+    expect(guest).toContain('primary_region = "syd"');
+    expect(guest).toContain('dockerfile = "deploy/fly/Dockerfile"');
     // Where Vibey's content lives is documented in the file itself.
-    expect(vibey).toContain("/workspace/.bots/main/data");
-    expect(vibey).not.toMatch(/volumes create/);
-    expect(vibey).not.toMatch(/--size 20/);
-    for (const guest of [blode, vibey]) {
-      expect(guest).toMatch(/auto_stop_machines = "suspend"/);
-      expect(guest).toMatch(/min_machines_running = 0/);
-      expect(guest).toMatch(/auto_start_machines = true/);
-      expect(guest).toMatch(/cpus = 2/);
-      expect(guest).toMatch(/memory = "2gb"/);
-      expect(guest).toMatch(/COMPUTER_IDLE_SUSPEND_SEC = "1200"/);
-      expect(guest).not.toMatch(/auto_stop_machines = "off"/);
-      expect(guest).not.toMatch(/min_machines_running = 1/);
-      expect(guest).not.toMatch(/cpus = 4/);
-      expect(guest).not.toMatch(/memory = "4gb"/);
-    }
+    expect(guest).toContain("/workspace/.bots/main/data");
+    expect(guest).not.toMatch(/volumes create/);
+    expect(guest).toMatch(/auto_stop_machines = "suspend"/);
+    expect(guest).toMatch(/min_machines_running = 0/);
+    expect(guest).toMatch(/auto_start_machines = true/);
   });
 
   it("eve bot apps declare just-bash so eve start can init the guest sandbox", () => {

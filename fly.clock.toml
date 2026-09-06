@@ -34,12 +34,11 @@ dockerfile = "deploy/clock/Dockerfile"
 # and only the proxy starts a suspended Machine, so a private-network request
 # reaches a sleeping tenant as a connection error rather than a wake.
 #
-# Blode only, deliberately. Vibey runs the same guest image but its Eve is an
-# overlay on that Machine's volume (`/workspace/eve/bots`), so its routines
-# are not in this repo and not in this image: waking it on Blode's schedule
-# would wake it at the wrong minutes and still miss its own. Adding it here
-# means getting its manifests into this image first.
-CLOCK_TARGETS = "mblode-computer=https://mblode-computer.fly.dev,vcmc-computer=https://vcmc-computer.fly.dev"
+# The tenants it wakes, by app name and public hostname. One today: Blode
+# (`mblode-computer`) was destroyed on 2026-09-06. Every computer runs the
+# same image and the same routine manifests, so a second tenant is another
+# entry here plus a registration secret in CLOCK_REGISTRATION_SECRETS.
+CLOCK_TARGETS = "vcmc-computer=https://vcmc-computer.fly.dev"
 CLOCK_BOTS = "/opt/clock/apps/eve/bots"
 CLOCK_PORT = "8080"
 # Fly private DNS resolves to IPv6; loopback-only IPv4 testing misses this path.

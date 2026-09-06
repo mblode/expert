@@ -144,7 +144,7 @@ describe("a stored Bot template", () => {
   it("counts what is in it, and says whether the link is live", () => {
     const record = {
       botId: "cos",
-      computerId: "blode",
+      computerId: "vibey",
       createdAt: 1,
       id: "abc",
       installs: 3,

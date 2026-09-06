@@ -13,78 +13,57 @@ import {
   VIBEY_HUB_URL,
 } from "./computers";
 
-const blodeCode = "blode-setup";
 const vibeyCode = "vibey-setup";
 
 function env(extra: Record<string, string | undefined> = {}): Record<string, string | undefined> {
   return {
-    COMPUTER_SETUP_CODE: blodeCode,
     COMPUTER_SETUP_CODE_VCMC: vibeyCode,
     ...extra,
   };
 }
 
 describe("computer catalog", () => {
-  it("seeds blode and vibey as distinct hubs", () => {
+  it("seeds one computer, Vibey, on its own hub", () => {
     const computers = computersFromEnv({});
-    expect(computers.map((c) => c.id)).toEqual(["blode", "vibey"]);
-    expect(computers.map((c) => c.label)).toEqual(["Blode", "Vibey"]);
-    expect(computerById("blode", {})?.hubUrl).toBe(DEFAULT_HUB_URL);
+    expect(computers.map((c) => c.id)).toEqual(["vibey"]);
+    expect(computers.map((c) => c.label)).toEqual(["Vibey"]);
     expect(computerById("vibey", {})?.hubUrl).toBe(VIBEY_HUB_URL);
-    expect(computerById("blode", {})?.hubUrl).not.toBe(computerById("vibey", {})?.hubUrl);
-    expect(computerById("blode", {})?.setupCodeEnv).toBe("COMPUTER_SETUP_CODE");
+    expect(VIBEY_HUB_URL).toBe(DEFAULT_HUB_URL);
     expect(computerById("vibey", {})?.setupCodeEnv).toBe("COMPUTER_SETUP_CODE_VCMC");
   });
 
-  it("lets env override each hub without collapsing them", () => {
-    const computers = computersFromEnv({
-      COMPUTER_HUB_URL: "https://blode-override.example",
-      COMPUTER_HUB_URL_VCMC: "https://vibey-override.example",
-      NEXT_PUBLIC_HUB_URL: "https://should-not-win.example",
-    });
-    expect(computers[0]?.hubUrl).toBe("https://blode-override.example");
-    expect(computers[1]?.hubUrl).toBe("https://vibey-override.example");
-  });
-
-  it("prefers COMPUTER_HUB_URL_BLODE, then COMPUTER_HUB_URL_MATT, over the generic fallback", () => {
+  it("prefers COMPUTER_HUB_URL_VIBEY, then COMPUTER_HUB_URL_VCMC, and ignores the generic names", () => {
     expect(
       computersFromEnv({
-        COMPUTER_HUB_URL: "https://generic.example",
-        COMPUTER_HUB_URL_MATT: "https://matt-alias.example",
-        NEXT_PUBLIC_HUB_URL: "https://public.example",
+        COMPUTER_HUB_URL: "https://dead-blode.example",
+        NEXT_PUBLIC_HUB_URL: "https://dead-blode.example",
       })[0]?.hubUrl,
-    ).toBe("https://matt-alias.example");
-    expect(
-      computersFromEnv({
-        COMPUTER_HUB_URL: "https://generic.example",
-        COMPUTER_HUB_URL_BLODE: "https://blode-named.example",
-        COMPUTER_HUB_URL_MATT: "https://matt-alias.example",
-        NEXT_PUBLIC_HUB_URL: "https://public.example",
-      })[0]?.hubUrl,
-    ).toBe("https://blode-named.example");
-  });
-
-  it("prefers COMPUTER_HUB_URL_VIBEY, then COMPUTER_HUB_URL_VCMC", () => {
+    ).toBe(VIBEY_HUB_URL);
     expect(
       computersFromEnv({
         COMPUTER_HUB_URL_VCMC: "https://vcmc-alias.example",
-      })[1]?.hubUrl,
+      })[0]?.hubUrl,
     ).toBe("https://vcmc-alias.example");
     expect(
       computersFromEnv({
         COMPUTER_HUB_URL_VCMC: "https://vcmc-alias.example",
         COMPUTER_HUB_URL_VIBEY: "https://vibey-named.example",
-      })[1]?.hubUrl,
+      })[0]?.hubUrl,
     ).toBe("https://vibey-named.example");
+  });
+
+  it("no longer knows blode or matt", () => {
+    expect(computerById("blode", {})).toBeUndefined();
+    expect(computerById("matt", {})).toBeUndefined();
   });
 });
 
 describe("computer binding", () => {
   it("parses email:id bindings and ignores junk", () => {
     const map = parseComputerBindings(
-      "m@blode.co:blode, vibey@example.com:vibey, nope, :empty, bad:",
+      "m@blode.co:vibey, vibey@example.com:vibey, nope, :empty, bad:",
     );
-    expect(map.get("m@blode.co")).toBe("blode");
+    expect(map.get("m@blode.co")).toBe("vibey");
     expect(map.get("vibey@example.com")).toBe("vibey");
     expect(map.size).toBe(2);
   });
@@ -107,12 +86,11 @@ describe("computer binding", () => {
     expect(boundComputerId("a@b.co", env({ DEFAULT_COMPUTER_ID: "ghost" }))).toBeUndefined();
   });
 
-  it("maps leftover matt/vcmc bindings onto blode/vibey", () => {
-    expect(boundComputerId("a@b.co", env({ COMPUTER_BINDINGS: "a@b.co:matt" }))).toBe("blode");
+  it("maps a leftover vcmc binding onto vibey, and a blode one onto nothing", () => {
     expect(boundComputerId("ops@vcmc.org", env({ COMPUTER_BINDINGS: "ops@vcmc.org:vcmc" }))).toBe(
       "vibey",
     );
-    expect(computerById("matt", {})?.id).toBe("blode");
+    expect(boundComputerId("a@b.co", env({ COMPUTER_BINDINGS: "a@b.co:blode" }))).toBeUndefined();
     expect(computerById("vcmc", {})?.id).toBe("vibey");
   });
 
@@ -132,7 +110,7 @@ describe("computer binding", () => {
   it("restricts a non-operator to their bound computer", () => {
     const locked = env({ COMPUTER_OPERATOR_EMAILS: "m@blode.co" });
     expect(isComputerOperator("m@blode.co", locked)).toBe(true);
-    expect(accessibleComputers("m@blode.co", locked).map((c) => c.id)).toEqual(["blode", "vibey"]);
+    expect(accessibleComputers("m@blode.co", locked).map((c) => c.id)).toEqual(["vibey"]);
     expect(isComputerOperator("other@example.com", locked)).toBe(false);
     expect(accessibleComputers("other@example.com", locked)).toEqual([]);
     expect(
@@ -154,30 +132,22 @@ describe("pairComputer", () => {
     const vibey = computerById("vibey", env());
     expect(vibey).toBeDefined();
     await expect(pairComputer(vibey!, env(), fetchImpl)).resolves.toEqual({ token: "seat_vibey" });
-    expect(setupCodeFor(computerById("blode", env())!, env())).toBe(blodeCode);
     expect(setupCodeFor(vibey!, env())).toBe(vibeyCode);
-    expect(setupCodeFor(vibey!, env())).not.toBe(
-      setupCodeFor(computerById("blode", env())!, env()),
-    );
   });
 
-  it("does not send Blode's setup code to the Vibey hub", async () => {
+  it("does not read the retired COMPUTER_SETUP_CODE for the Vibey hub", async () => {
+    const stale = { COMPUTER_SETUP_CODE: "blode-setup", COMPUTER_SETUP_CODE_VCMC: vibeyCode };
     const fetchImpl = vi.fn<typeof fetch>(async (_input, init) => {
       expect(JSON.parse(String(init?.body))).toEqual({ code: vibeyCode });
-      expect(JSON.parse(String(init?.body)).code).not.toBe(blodeCode);
       return Response.json({ token: "seat_vibey" }, { status: 200 });
     });
-    await pairComputer(computerById("vibey", env())!, env(), fetchImpl);
+    await pairComputer(computerById("vibey", stale)!, stale, fetchImpl);
     expect(fetchImpl).toHaveBeenCalledOnce();
   });
 
   it("refuses to pair when that computer's setup code is missing", async () => {
     const fetchImpl = vi.fn<typeof fetch>();
-    const result = await pairComputer(
-      computerById("vibey", { COMPUTER_SETUP_CODE: blodeCode })!,
-      { COMPUTER_SETUP_CODE: blodeCode },
-      fetchImpl,
-    );
+    const result = await pairComputer(computerById("vibey", {})!, {}, fetchImpl);
     expect(result).toEqual({
       error:
         "The web server is missing COMPUTER_SETUP_CODE_VCMC, so it cannot attach to the Vibey computer.",

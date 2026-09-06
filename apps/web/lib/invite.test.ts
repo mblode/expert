@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_HUB_URL } from "./config";
 import { computerById, issueSeat, VIBEY_HUB_URL } from "./computers";
 import type { IssueSeatFn } from "./computers";
 import {
@@ -198,10 +197,9 @@ describe("grantInviteSeat", () => {
       role: "guest",
       seatToken: "seat_guest",
     });
-    // Vibey's hub, and no setup code anywhere in the exchange: not Vibey's,
-    // not Blode's. The one credential in play is the stored issuer.
+    // The computer's hub, and no setup code anywhere in the exchange: the one
+    // credential in play is the stored issuer.
     expect(calls.every((call) => call.url.startsWith(VIBEY_HUB_URL))).toBe(true);
-    expect(calls.every((call) => !call.url.includes(new URL(DEFAULT_HUB_URL).host))).toBe(true);
     expect(JSON.stringify(calls)).not.toContain(blodeCode);
     expect(JSON.stringify(calls)).not.toContain(vibeyCode);
 

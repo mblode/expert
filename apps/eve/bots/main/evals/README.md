@@ -54,4 +54,3 @@ runuser -u box -- sh -c 'cd /tmp/eve-copy/bots/main && HOME=/home/box COMPUTER_E
   EVE_DOCKER_PATH=/usr/bin/false nohup npx eve eval --strict > /tmp/evals.log 2>&1 &'
 # from your laptop, until it finishes: curl -s https://vcmc-computer.fly.dev/healthz every 20s
 ```
-

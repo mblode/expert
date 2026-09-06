@@ -17,7 +17,7 @@ export const MAX_INVITE_TTL_MINUTES = 240;
  * operator may mint for is already decided by `accessibleComputers`. A mint
  * secret is not an account: it is one shared string on a Bot, and until this it
  * read `computerId` straight off the request body, so Vibey's Eve could mint a
- * desk link on Blode and redeem a seat there. `INVITE_MINT_COMPUTER_ID` moves
+ * desk link on another computer and redeem a seat there. `INVITE_MINT_COMPUTER_ID` moves
  * that decision to the deployment; unset means the computer the secret was
  * introduced for.
  */
@@ -228,8 +228,8 @@ function seatPlanFor(purpose: InvitePurpose, invite: InviteRecord, remainingMs: 
 }
 
 /**
- * Hand this invite a seat on its own computer. A Vibey link never talks to
- * Blode, even when the web server's default tenant is Blode.
+ * Hand this invite a seat on its own computer, never the web server's default
+ * one: the two were different machines until 2026-09-06 and may be again.
  *
  * `issue` is passed in rather than imported: the caller is what holds this
  * control plane's grant on that computer (`issueSeatAsIssuer`), and a test

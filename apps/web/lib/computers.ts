@@ -3,10 +3,10 @@ import { DEFAULT_HUB_URL, trimSlashes } from "./config";
 /** Process env or a test fixture. Avoids requiring NODE_ENV on every call. */
 export type EnvMap = Record<string, string | undefined>;
 
-export const VIBEY_HUB_URL = "https://vcmc-computer.fly.dev";
+export const VIBEY_HUB_URL = DEFAULT_HUB_URL;
 
-/** Live COMPUTER_BINDINGS and stored seats may still say matt/vcmc. */
-const COMPUTER_ID_ALIASES: Record<string, string> = { matt: "blode", vcmc: "vibey" };
+/** Stored seats and bindings may still say vcmc; blode/matt named a computer that no longer exists. */
+const COMPUTER_ID_ALIASES: Record<string, string> = { vcmc: "vibey" };
 
 function canonicalComputerId(id: string): string {
   return COMPUTER_ID_ALIASES[id] ?? id;
@@ -25,20 +25,18 @@ export interface ComputerChoice {
   label: string;
 }
 
-/** Seeded tenants. Hub URLs can be overridden per id; setup codes stay in env. */
+/**
+ * Seeded tenants: one, since Blode was destroyed on 2026-09-06. The hub URL
+ * can be overridden by its own named variable only, never by the generic
+ * `COMPUTER_HUB_URL` or `NEXT_PUBLIC_HUB_URL`, which named Blode for a year and
+ * would silently point the only computer at a dead host. The setup code stays
+ * in env under the name the deployment already has.
+ */
 export function computersFromEnv(env: EnvMap): ComputerRecord[] {
-  const blodeHub = trimSlashes(
-    env.COMPUTER_HUB_URL_BLODE ??
-      env.COMPUTER_HUB_URL_MATT ??
-      env.COMPUTER_HUB_URL ??
-      env.NEXT_PUBLIC_HUB_URL ??
-      DEFAULT_HUB_URL,
-  );
   const vibeyHub = trimSlashes(
     env.COMPUTER_HUB_URL_VIBEY ?? env.COMPUTER_HUB_URL_VCMC ?? VIBEY_HUB_URL,
   );
   return [
-    { hubUrl: blodeHub, id: "blode", label: "Blode", setupCodeEnv: "COMPUTER_SETUP_CODE" },
     { hubUrl: vibeyHub, id: "vibey", label: "Vibey", setupCodeEnv: "COMPUTER_SETUP_CODE_VCMC" },
   ];
 }
@@ -81,7 +79,7 @@ function parseEmailList(raw: string | undefined): Set<string> {
 /**
  * The computer this account is bound to, or nothing.
  *
- * Fail closed. This used to fall back to the hardcoded "blode" when an email
+ * Fail closed. This used to fall back to a hardcoded computer when an email
  * had no binding, which was harmless while one person had one computer and is
  * not harmless now: an account is the tenant boundary here, so an allowed
  * email nobody remembered to bind would land on someone else's machine and

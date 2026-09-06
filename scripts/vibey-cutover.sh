@@ -1,66 +1,19 @@
 #!/usr/bin/env bash
-# The steps of docs/plans/vibey-on-expert.md slices 4 and 5 that move a
-# secret from one of Matt's services to another, so an operator runs them
-# in one sitting. Nothing here is a secret; every value is read from the
-# service that already holds it and written to the one that needs it. Run
-# from the expert repo root with fly, railway and vercel signed in.
+# What is left of the Vibey cutover (docs/plans/vibey-on-expert.md) after
+# Blode was destroyed on 2026-09-06: the steps that move a secret between
+# Matt's services, so an operator runs them in one sitting. Nothing here is
+# a secret; every value is read from the service that already holds it and
+# written to the one that needs it. Run from the repo root with fly, railway
+# and vercel signed in.
 #
-#   scripts/vibey-cutover.sh secrets     # 1. tenant secrets onto vcmc-computer, then restart
-#   scripts/vibey-cutover.sh test        # 2. one turn through the connector door, from the box
-#   scripts/vibey-cutover.sh route       # 3. Railway: Matt's DMs to vcmc-computer
-#   scripts/vibey-cutover.sh pa          # 4. the personal-assistant config Blode holds, onto vcmc-computer
-#   scripts/vibey-cutover.sh kill-blode  # 5. snapshot, rebind hello.expert, destroy mblode-computer
+#   scripts/vibey-cutover.sh test        # one turn through the connector door, from the box
+#   scripts/vibey-cutover.sh pa          # the personal-assistant config onto vcmc-computer (one import)
+#   scripts/vibey-cutover.sh route       # Railway: Matt's DMs to vcmc-computer (done 2026-09-06; idempotent)
 set -euo pipefail
 
 VCMC_APP=vcmc-computer
-BLODE_APP=mblode-computer
 VCMC_AGENT_DIR="${VCMC_AGENT_DIR:-../vcmc-agent}"
 CONNECTOR_SECRET_FILE=/workspace/.computer/connector-whatsapp-vcmc.secret
-
-# Read one variable out of a running Machine. Fly does not read secrets
-# back, but the ssh session on the guest inherits the Machine's env (PID 1's
-# environ is empty of them, checked 2026-09-06). The Machine must be started:
-# `fly ssh console` refuses a suspended one.
-guest_env() { # app name
-  fly ssh console -a "$1" -C "printenv $2" 2>/dev/null | grep -v '^Connecting' | tr -d '\r' | tail -1
-}
-
-secrets() {
-  local tmp
-  tmp=$(mktemp)
-  trap 'rm -f "$tmp"' RETURN
-  # Blode's working gateway key (the one on vcmc-computer answers 401), the
-  # Cursor key and the repo allowlist for coding sessions. Blode suspends
-  # between messages and `fly ssh console` refuses a suspended Machine, so
-  # the read silently returns nothing unless a request through the public
-  # hostname has just woken it (the same reason the clock uses that URL).
-  curl -s -m 90 -o /dev/null "https://$BLODE_APP.fly.dev/healthz" || true
-  for k in AI_GATEWAY_API_KEY CURSOR_API_KEY COMPUTER_PA_REPOS; do
-    v=$(guest_env "$BLODE_APP" "$k" || true)
-    [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> "$tmp"
-  done
-  # If the read still came back empty, a run without the key would restart
-  # the Machine into the same 401. Take it at the prompt instead (a fresh key
-  # from vercel.com/ai-gateway is fine); a blank line keeps the deployed one.
-  if ! grep -q '^AI_GATEWAY_API_KEY=' "$tmp"; then
-    read -rs -p "AI_GATEWAY_API_KEY could not be read off $BLODE_APP; paste a working key (blank to keep the deployed one): " v; echo
-    [ -n "$v" ] && printf 'AI_GATEWAY_API_KEY=%s\n' "$v" >> "$tmp"
-  fi
-  # The Vercel project's env is the source for everything Vibey's tools use.
-  (cd "$VCMC_AGENT_DIR" && vercel env pull "$tmp.vercel" --environment=production --yes >/dev/null)
-  for k in BLOB_READ_WRITE_TOKEN FIRECRAWL_API_KEY BRIDGE_URL DIGEST_SUBSCRIBERS REFRESH_GROUP_JID MEMORY_ALERT_JID; do
-    v=$(grep "^$k=" "$tmp.vercel" | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//' || true)
-    [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> "$tmp"
-  done
-  # The Railway bridge's secret, under the name the supervisor lets through to
-  # the Eve child (WHATSAPP_BRIDGE_SECRET is denied there: apps/eve/lib/vibey/bridge-client.ts).
-  v=$(grep '^WHATSAPP_BRIDGE_SECRET=' "$tmp.vercel" | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//')
-  printf 'VIBEY_BRIDGE_SECRET=%s\n' "$v" >> "$tmp"
-  rm -f "$tmp.vercel"
-  echo "setting: $(cut -d= -f1 "$tmp" | tr '\n' ' ')"
-  fly secrets import -a "$VCMC_APP" < "$tmp"
-  echo "vcmc-computer is restarting with the new secrets; wait for /healthz, then: $0 test"
-}
 
 test_turn() {
   curl -s -m 60 -o /dev/null https://$VCMC_APP.fly.dev/healthz
@@ -81,13 +34,13 @@ route() {
   echo "Matt's DMs (+61456455551) now reach Vibey on $VCMC_APP. Send one and check the bridge logs for target=expert."
 }
 
-# Slice 4's second half: the durable 202 path, coding sessions and hello.expert
-# work links need what docs/DEPLOY.md "WhatsApp PA pilot" put on Blode. The
-# clock already lists vcmc-computer (fly.clock.toml, and its registration
-# secret is in CLOCK_REGISTRATION_SECRETS on expert-clock since 2026-09-06);
-# this reads that secret back off the clock and the bridge admin secret off
-# Blode, adds the plain values, and restarts vcmc-computer once. The hub
-# refuses to boot with a partial PA config, which is why it is one import.
+# The durable 202 path, coding sessions and hello.expert work links need what
+# docs/DEPLOY.md "WhatsApp PA pilot" describes. The clock lists vcmc-computer
+# and holds its registration secret (2026-09-06); this reads that secret back
+# off the clock and the bridge admin secret off Railway, where it lives as
+# EXPERT_DELIVERY_SECRET (the same value Blode held as WHATSAPP_BRIDGE_SECRET),
+# adds the plain values, and restarts vcmc-computer once. The hub refuses to
+# boot with a partial PA config, which is why it is one import.
 pa() {
   local tmp
   tmp=$(mktemp)
@@ -97,10 +50,9 @@ pa() {
     grep -v '^Connecting' | tr -d '\r' | tail -1 |
     python3 -c 'import json,sys; print(json.load(sys.stdin).get("vcmc-computer",""))')
   [ ${#clock} -ge 32 ] || { echo "expert-clock has no registration secret for vcmc-computer" >&2; exit 1; }
-  curl -s -m 90 -o /dev/null "https://$BLODE_APP.fly.dev/healthz" || true
   local bridge
-  bridge=$(guest_env "$BLODE_APP" WHATSAPP_BRIDGE_SECRET)
-  [ -n "$bridge" ] || { echo "could not read WHATSAPP_BRIDGE_SECRET off $BLODE_APP (is it awake?)" >&2; exit 1; }
+  bridge=$(cd "$VCMC_AGENT_DIR/bridge" && railway variables --kv 2>/dev/null | grep '^EXPERT_DELIVERY_SECRET=' | cut -d= -f2-)
+  [ -n "$bridge" ] || { echo "Railway has no EXPERT_DELIVERY_SECRET; the bridge's admin secret is what the hub must present" >&2; exit 1; }
   {
     printf 'WHATSAPP_BRIDGE_SECRET=%s\n' "$bridge"
     printf 'COMPUTER_CLOCK_SECRET=%s\n' "$clock"
@@ -120,23 +72,9 @@ PLAIN
   echo "vcmc-computer is restarting in personal-assistant mode; wait for /healthz, then DM Vibey: the reply should be a 202 on the bridge and a WhatsApp message back."
 }
 
-kill_blode() {
-  echo "snapshotting Blode's volume"
-  fly volumes snapshots create vol_vly9o35g2m8ln3m4 -a "$BLODE_APP"
-  # hello.expert: Matt's email binds to vibey now. The value is emails, not a secret.
-  (cd apps/web && current=$(vercel env pull /dev/stdout --environment=production --yes 2>/dev/null | grep '^COMPUTER_BINDINGS=' | cut -d= -f2- | tr -d '"') && echo "COMPUTER_BINDINGS was: $current" &&
-    printf '%s' "${current//:blode/:vibey}" | vercel env add COMPUTER_BINDINGS production --force >/dev/null && echo "rebound to vibey; redeploy hello.expert for it to take effect")
-  read -r -p "destroy $BLODE_APP and its 20 GB volume? type the app name to confirm: " answer
-  [ "$answer" = "$BLODE_APP" ] || { echo "not destroyed"; exit 1; }
-  fly apps destroy "$BLODE_APP" --yes
-  echo "Blode is gone. Remove its row from apps/web/lib/computers.ts and the channels.json aliases (docs/WHATSAPP-PARITY.md Phase 2 follow-up)."
-}
-
 case "${1:-}" in
-  secrets) secrets ;;
   test) test_turn ;;
   route) route ;;
   pa) pa ;;
-  kill-blode) kill_blode ;;
-  *) sed -n 2,13p "$0"; exit 1 ;;
+  *) sed -n 2,11p "$0"; exit 1 ;;
 esac

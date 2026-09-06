@@ -11,8 +11,11 @@ export const siteConfig = {
   url: "https://hello.expert",
 };
 
-/** Blode Fly computer. Fallback when a session has no bound hub yet. */
-export const DEFAULT_HUB_URL = "https://mblode-computer.fly.dev";
+/**
+ * The one computer, Vibey on Fly. Fallback when a session has no bound hub
+ * yet. Blode (`mblode-computer`) was destroyed on 2026-09-06.
+ */
+export const DEFAULT_HUB_URL = "https://vcmc-computer.fly.dev";
 
 /**
  * True when serving real traffic in production. `next build` also runs with

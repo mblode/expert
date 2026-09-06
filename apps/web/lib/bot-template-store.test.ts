@@ -34,7 +34,7 @@ const DOC = {
 async function draftFor(ownerId: string): Promise<string> {
   const created = await createTemplate({
     botId: "cos",
-    computerId: "blode",
+    computerId: "vibey",
     ownerId,
     template: DOC,
   });
@@ -116,7 +116,7 @@ describe("a shared template's link", () => {
     expect(
       await createTemplate({
         botId: "cos",
-        computerId: "blode",
+        computerId: "vibey",
         ownerId: "owner-8",
         template: { name: "   " },
       }),

@@ -157,12 +157,15 @@ describe("what a mint secret may open", () => {
     return { body: (await res.json()) as Record<string, unknown>, status: res.status };
   };
 
-  it("refuses a secret-minted link for another tenant's computer", async () => {
-    // The secret lives on Vibey's Eve. Before this it could name any id in the
-    // catalog, and redeeming that link is a seat on someone else's machine.
+  it("refuses a secret-minted link for a computer the secret was not introduced for", async () => {
+    // The secret lives on one computer's Eve. Before this it could name any id
+    // in the catalog, and redeeming that link is a seat on someone else's
+    // machine. One computer today, so the deployment names a different one.
     const res = await mint(
-      { computerId: "blode", kind: "desk" },
+      { computerId: "vibey", kind: "desk" },
       { [INVITE_SECRET_HEADER]: secret },
+      undefined,
+      { INVITE_MINT_COMPUTER_ID: "other-tenant" },
     );
     expect(res.status).toBe(403);
     expect(res.body.computerId).toBeUndefined();
@@ -181,10 +184,10 @@ describe("what a mint secret may open", () => {
 
   it("follows INVITE_MINT_COMPUTER_ID when the deployment moves the secret", async () => {
     const res = await mint({ kind: "desk" }, { [INVITE_SECRET_HEADER]: secret }, undefined, {
-      INVITE_MINT_COMPUTER_ID: "blode",
+      INVITE_MINT_COMPUTER_ID: "vibey",
     });
     expect(res.status).toBe(200);
-    expect(res.body.computerId).toBe("blode");
+    expect(res.body.computerId).toBe("vibey");
   });
 
   it("caps a Bot and not an operator, and reports the cap as 429", async () => {
@@ -210,10 +213,10 @@ describe("what a mint secret may open", () => {
   });
 
   it("leaves an operator free to mint on any computer they can open", async () => {
-    const res = await mint({ computerId: "blode", kind: "desk" }, {}, "m@blode.co", {
+    const res = await mint({ computerId: "vibey", kind: "desk" }, {}, "m@blode.co", {
       COMPUTER_OPERATOR_EMAILS: "m@blode.co",
     });
     expect(res.status).toBe(200);
-    expect(res.body.computerId).toBe("blode");
+    expect(res.body.computerId).toBe("vibey");
   });
 });

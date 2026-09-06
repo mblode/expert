@@ -181,7 +181,21 @@ Done when Matt DMs Vibey, asks it to open a page in its browser and report back,
 
 ### Slice 5: kill Blode
 
-Only after slice 4 has held for a few days. Rebind Matt's email to `vibey` in `COMPUTER_BINDINGS`, drop the Blode row from `lib/computers.ts`, cancel Blode's clock registrations, `fly volumes snapshot` the workspace, then `fly apps destroy mblode-computer` on Matt's word. Remove the `channels.json` compatibility aliases the Phase 2 follow-up left for Blode at the same time.
+**Done 2026-09-06, on Matt's word the same day slice 4 went live** (the plan
+said a few days; he chose not to wait). In order: a volume snapshot requested,
+`/workspace/.computer` and `/workspace/.bots` archived to
+`~/Code/mblode/expert-backups/blode-hub-state-2026-09-06.tgz` (the volume held
+nothing else), `COMPUTER_BINDINGS` on hello.expert rewritten to bind both of
+Matt's emails to `vibey`, `fly apps destroy mblode-computer`. Then the code:
+one `fly.toml` (the old `fly.vcmc.toml`), one computer in
+`apps/web/lib/computers.ts` with the `matt` alias gone and the generic
+`COMPUTER_HUB_URL` / `NEXT_PUBLIC_HUB_URL` no longer read (both removed from
+Vercel, they named the dead host), `INVITE_MINT_COMPUTER_ID=vibey`, the clock's
+targets and registration map down to `vcmc-computer`, and the cutover script
+down to `test`, `pa`, `route`. The `channels.json` aliases were already gone
+from this repo. Still to run: `scripts/vibey-cutover.sh pa` (the PA config,
+now sourcing the bridge admin secret from Railway since Blode cannot be read),
+and `COMPUTER_SETUP_CODE` (Blode's) can be removed from Vercel by hand.
 
 ### Slice 6: parity gate and the group
 

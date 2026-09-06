@@ -8,12 +8,11 @@ ship first because it degrades against an older hub on purpose; the hub is what
 switches new features on. The clock goes after the computers, because it wakes
 them for routines they have to be carrying already.
 
-| Surface        | Where      | Deployed by                    |
-| -------------- | ---------- | ------------------------------ |
-| Control plane  | Vercel     | `git push origin main`         |
-| Blode computer | Fly, `syd` | `fly deploy -c fly.toml`       |
-| Vibey computer | Fly, `syd` | `fly deploy -c fly.vcmc.toml`  |
-| The clock      | Fly, `syd` | `fly deploy -c fly.clock.toml` |
+| Surface       | Where      | Deployed by                    |
+| ------------- | ---------- | ------------------------------ |
+| Control plane | Vercel     | `git push origin main`         |
+| The computer  | Fly, `syd` | `fly deploy`                   |
+| The clock     | Fly, `syd` | `fly deploy -c fly.clock.toml` |
 
 ## 0. Before anything: build the guest image
 
@@ -56,16 +55,18 @@ As verified on 2026-09-05, `blode/expert` serves `hello.expert`. Earlier notes
 named `expert-computer`; that project name no longer resolves. Check the
 production alias landed on the deployment you just made.
 
-## 2. The Blode computer
+## 2. The computer
+
+Vibey on `vcmc-computer`, the only one since Blode (`mblode-computer`) was
+destroyed on 2026-09-06 (volume snapshotted, hub state archived under
+`~/Code/mblode/expert-backups/`). `fly.toml` is its config and `fly deploy`
+from the repo root targets it; there is no second file.
 
 ```bash
-fly deploy -c fly.toml -a mblode-computer --wait-timeout 900
+fly deploy --wait-timeout 900
 ```
 
-`fly deploy` without `-c` targets `mblode-computer`. Never rely on that when
-you mean Vibey.
-
-Both Machines suspend when idle, so the first request after a deploy wakes one
+The Machine suspends when idle, so the first request after a deploy wakes it
 and takes ~20s. Expect empty replies until it is up; that is the wake, not a
 failure.
 
@@ -184,10 +185,9 @@ fly logs -a mblode-computer       # "routine <id> is due: waking <bot>"
 ```
 
 Adding a computer to the fleet means adding it to `CLOCK_TARGETS` and
-redeploying the clock; nothing else on either side changes. Vibey is
-deliberately not a target: its Eve is an overlay on that Machine's volume, so
-its routines are not in this repo and not in the clock's image, and waking it
-on Blode's schedule would wake it at the wrong minutes and still miss its own.
+redeploying the clock, plus a registration secret for it in
+`CLOCK_REGISTRATION_SECRETS`. Every computer runs the image's own routine
+manifests, so the clock's schedule is right for all of them.
 
 One Machine runs the clock, so it is a single point of failure for every
 routine on every computer, and a routine whose minute passes while it is down
@@ -199,7 +199,7 @@ one writer; do not scale it to two independent registries.
 Same image, different app and volume.
 
 ```bash
-fly deploy -c fly.vcmc.toml -a vcmc-computer --wait-timeout 900
+fly deploy --wait-timeout 900
 ```
 
 Since 2026-09-06 Vibey's Eve **is** `apps/eve/bots/main`: the same image as
@@ -296,11 +296,11 @@ Expert route is additive and touches nothing @vibey uses.
 | `EXPERT_CONNECTOR_ID`     | `whatsapp`                                       |
 | `EXPERT_DM_JIDS`          | `+61456455551`                                   |
 
-Blode's computer, not Vibey's. @vibey's own Eve already runs on
-`vcmc-computer` and the bridge's `EVE_URL` points there, so sending the owner
-to that machine routes their DMs to the group agent. This route replaces the
-retired personal second-brain agent, and the owner's personal Bot is `main` on
-their own Machine.
+Since 2026-09-06 that is `https://vcmc-computer.fly.dev` with connector
+`whatsapp-vcmc`: the owner's DMs and the group's Bot are the same `main` on
+the same Machine, told apart by the conversation the hub binds. The old
+Vercel `vcmc-agent` still answers the group until slice 6 of
+`docs/plans/vibey-on-expert.md`.
 
 Confirm from the bridge logs: every forwarded message logs a `target`, `vcmc`
 or `expert`.
@@ -315,12 +315,10 @@ member's phone (`apps/eve/lib/tools/expert_invite.ts`, `POST /api/invite`).
 ```bash
 # The control plane. Either name works; the same value goes on the computer.
 vercel env add EXPERT_INVITE_SECRET production   # a fresh random string
-# Which computer that secret may mint for. Unset means `vibey`, and the Bot
-# that hands links out is `main` on Blode, so unset is the wrong answer here:
-# a mint would return a link to the other tenant's computer rather than fail.
-vercel env add INVITE_MINT_COMPUTER_ID production   # blode
+# Which computer that secret may mint for: `vibey`, the only one.
+vercel env add INVITE_MINT_COMPUTER_ID production   # vibey
 
-# The computer whose Bot hands the link out. `main` on Blode is the only Bot
+# The computer whose Bot hands the link out. `main` on vcmc-computer is the only Bot
 # in the image with both `expert_invite` and a `whatsapp` channel, so it is
 # the one that needs the secret. `EXPERT_ORIGIN` only needs setting if the
 # control plane is not https://hello.expert.

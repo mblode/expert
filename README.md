@@ -55,40 +55,31 @@ npm run bot -- rm night    # frees the screen
 
 Step by step, with the check that proves each step worked: [docs/DEPLOY.md](docs/DEPLOY.md). The shape of it:
 
-The cloud path is one Fly Machine per tenant in `syd` running the desk, one agent process per Bot, and the hub. Blode is [fly.toml](fly.toml). Vibey is a second app and volume, same guest image, from [fly.vcmc.toml](fly.vcmc.toml). Both guests are shared-cpu-2x / 2 GB and suspend when idle. Do not `fly deploy` without `-c` when you mean Vibey: that command targets `mblode-computer`.
+The cloud path is one Fly Machine per tenant in `syd` running the desk, one agent process per Bot, and the hub. There is one tenant today, Vibey, in [fly.toml](fly.toml); a second is another app on the same image ([docs/plans/gateway.md](docs/plans/gateway.md)).
 
 ```bash
-# Blode (existing)
 fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)"
 fly secrets set AI_GATEWAY_API_KEY="…"
 fly deploy
-
-# Vibey (separate app, existing 10 GB `vcmc_workspace` in syd, setup code)
-# Both suspend when idle: CPU/RAM go to $0; the volume still bills. Do not
-# create a new volume. `fly deploy` without `-c` still targets Blode.
-fly secrets set COMPUTER_SETUP_CODE="$(openssl rand -hex 16)" -c fly.vcmc.toml
-fly secrets set AI_GATEWAY_API_KEY="…" -c fly.vcmc.toml
-fly deploy -c fly.vcmc.toml
 ```
 
-A later Eve tree that is not `apps/eve/bots/main` (the Vibey agent lives in its own repo) goes on that tenant's volume at `/workspace/eve/bots`. The guest prefers that overlay when it looks like an Eve project.
+It suspends when idle: CPU and RAM go to $0; the volume still bills. Do not create a second volume. What makes the computer Vibey is the tenant content on its volume under `/workspace/.bots/main/data`, not a different build.
 
 The product web is `apps/web` on Vercel with Root Directory `apps/web`. It is the control plane: a signed-in user is bound to a computer. Required variables:
 
-| Variable                                 | Notes                                                                               |
-| ---------------------------------------- | ----------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it                   |
-| `BETTER_AUTH_URL`                        | `https://hello.expert`                                                              |
-| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                           |
-| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                              |
-| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                                      |
-| `COMPUTER_SETUP_CODE`                    | Blode Fly hub secret; server-only                                                   |
-| `COMPUTER_SETUP_CODE_VCMC`               | Vibey Fly hub secret; server-only. Not Blode's code                                 |
-| `NEXT_PUBLIC_HUB_URL`                    | Blode's hub when no `COMPUTER_HUB_URL_BLODE`. Not a fallback for an unbound account |
-| `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers and mint invites. Unset: nobody                            |
-| `COMPUTER_BINDINGS`                      | `email:blode,email:vibey`. An email with no binding gets no computer                |
-| `INVITE_MINT_SECRET`                     | Mint secret for `/desk` and `/plugins` links. Alias of `EXPERT_INVITE_SECRET`       |
-| `EXPERT_INVITE_SECRET`                   | Same mint secret. Eve sends it as `x-invite-secret` (WhatsApp)                      |
+| Variable                                 | Notes                                                                         |
+| ---------------------------------------- | ----------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`                     | `openssl rand -base64 32`; production refuses to start without it             |
+| `BETTER_AUTH_URL`                        | `https://hello.expert`                                                        |
+| `AUTH_ALLOWED_EMAILS`                    | Comma-separated. Unset means open sign-up                                     |
+| `TURSO_DATABASE_URL`, `TURSO_AUTH_TOKEN` | libSQL                                                                        |
+| `RESEND_API_KEY`                         | Sign-in codes by email; required in production                                |
+| `COMPUTER_SETUP_CODE_VCMC`               | The computer's Fly hub setup code; server-only                                |
+| `COMPUTER_HUB_URL_VIBEY`                 | Overrides the hub URL; otherwise `https://vcmc-computer.fly.dev`              |
+| `COMPUTER_OPERATOR_EMAILS`               | Who may switch computers and mint invites. Unset: nobody                      |
+| `COMPUTER_BINDINGS`                      | `email:vibey,...`. An email with no binding gets no computer                  |
+| `INVITE_MINT_SECRET`                     | Mint secret for `/desk` and `/plugins` links. Alias of `EXPERT_INVITE_SECRET` |
+| `EXPERT_INVITE_SECRET`                   | Same mint secret. Eve sends it as `x-invite-secret` (WhatsApp)                |
 
 A WhatsApp tap opens a short-lived invite: `/desk/<token>` is the phone desk (take/yield seat, pointer, keyboard). `/plugins/<token>` adds an Eve connection file under `agent/connections/` on the guest. Plugins are files, not a database table. Skills stay as files too.
 
