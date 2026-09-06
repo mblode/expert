@@ -25,6 +25,9 @@ export function siteGraph(): Record<string, unknown> {
       {
         "@id": organizationId,
         "@type": "Organization",
+        // What people type: Search Console shows the brand searched as "hello
+        // expert" and its run-together forms, with the site not yet tied to it.
+        alternateName: ["Hello Expert", "hello.expert"],
         founder: { "@id": personId },
         name: siteConfig.name,
         sameAs: [siteConfig.links.github],
@@ -33,6 +36,7 @@ export function siteGraph(): Record<string, unknown> {
       {
         "@id": websiteId,
         "@type": "WebSite",
+        alternateName: ["Hello Expert", "hello.expert"],
         description: siteConfig.description,
         name: siteConfig.name,
         publisher: { "@id": organizationId },

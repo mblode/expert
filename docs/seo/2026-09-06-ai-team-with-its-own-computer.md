@@ -93,16 +93,29 @@ them to the accordion.
 
 ## Evidence table
 
-| Keyword                                    | Search volume | Exact prompt volume | Source, scope, window                                                                                                                                                                                                                              |
-| ------------------------------------------ | ------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ai agent with its own computer             | No data       | No data             | No keyword or prompt tool is bound in this environment (no Ahrefs, Semrush or Profound connector); pulled 2026-09-06                                                                                                                               |
-| always-on ai assistant                     | No data       | No data             | same                                                                                                                                                                                                                                               |
-| computer use agent                         | No data       | No data             | same                                                                                                                                                                                                                                               |
-| whatsapp ai assistant that uses a computer | No data       | No data             | same                                                                                                                                                                                                                                               |
-| brand: "hello.expert", "expert bots"       | No data       | No data             | same; brand search volume is the one number content will not move                                                                                                                                                                                  |
-| Search performance, hello.expert           | No data       | n/a                 | Google Search Console via the PostHog warehouse (project Blode.co) holds properties for blode.co subdomains only, latest row 2026-09-03; hello.expert is not a property. Add it in Search Console and connect it before the first monitoring check |
+| Keyword                                                                                                   | Search volume                                                                  | Exact prompt volume | Source, scope, window                                                                                                                                                                                |
+| --------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ai agent with its own computer                                                                            | No data                                                                        | No data             | No keyword or prompt tool is bound in this environment (no Ahrefs, Semrush or Profound connector); pulled 2026-09-06                                                                                 |
+| always-on ai assistant                                                                                    | No data                                                                        | No data             | same                                                                                                                                                                                                 |
+| computer use agent                                                                                        | No data                                                                        | No data             | same                                                                                                                                                                                                 |
+| whatsapp ai assistant that uses a computer                                                                | No data                                                                        | No data             | same                                                                                                                                                                                                 |
+| brand: "hello expert"                                                                                     | 12 impressions, 0 clicks, position 55.9                                        | No data             | Google Search Console, hello.expert property, top queries as pasted by Matt on 2026-09-06 (default window, not stated); brand search volume is the one number content will not move                  |
+| brand variants: "hello experts", "helloexperts", "hello experts login", "helloexpert", "hello expert.com" | 6, 5, 4, 3, 1 impressions; 0 clicks; positions 53 to 85 (the .com form at 8.0) | No data             | same pull                                                                                                                                                                                            |
+| "ondemand ai expert"                                                                                      | 10 impressions, 0 clicks, position 93.3                                        | No data             | same pull; the one non-brand query, and it is a different product category                                                                                                                           |
+| Search performance, hello.expert                                                                          | see the rows above                                                             | n/a                 | The property exists in Search Console. The PostHog warehouse (project Blode.co) does not carry it, so monitoring cannot read it yet: add hello.expert to the Google Search Console source in PostHog |
 
-What to do about the gaps, in order: add hello.expert as a Search Console
-property (DNS verification, then `metadata.verification` needs nothing);
-bind a keyword tool; rerun this table and write the next brief as a new
-file rather than editing this one.
+What the pull says. Every query with impressions is the brand or a
+misspelling of it, plus one navigational form ("hello experts login") and
+one unrelated category ("ondemand ai expert"). Zero clicks across all of
+them, and the exact brand phrase at position 55.9, means Google has not yet
+tied the domain to its own name: the site had no canonical, no structured
+data and no robots policy until 2026-09-06, and the property is new. The
+first thing to watch is that one row moving toward the top after the
+metadata and schema land; content cannot move it, indexing can. "Hello
+Expert" is now an `alternateName` on the WebSite and Organization for the
+same reason.
+
+What to do about the gaps, in order: connect the hello.expert property to
+the PostHog Search Console source so monitoring can read it; bind a keyword
+tool; rerun this table and write the next brief as a new file rather than
+editing this one.

@@ -126,7 +126,7 @@ A FAT Agent audit (`spruikco/fat-agent-skill`, run from a temp clone against the
 Left open, with an owner:
 
 - **A full Content-Security-Policy** needs the hub origin, its WebSockets, Vercel Blob and PostHog enumerated and run report-only first. Owner: whoever next touches `next.config.ts` headers.
-- **Search Console has no hello.expert property.** The PostHog warehouse holds blode.co subdomains only. Add the property (DNS verification) and connect it; until then every search-performance number is No data. Owner: Matt.
+- **Search Console has the property; the PostHog warehouse does not.** Matt's pull on 2026-09-06 shows only brand queries, zero clicks, and the exact brand phrase at position 55.9. Connect hello.expert to the PostHog Google Search Console source so monitoring can read it. Owner: Matt.
 - **Brand-led home title.** The checklist wants the non-brand keyword to lead; the proposed title is in `docs/seo/2026-09-06-ai-team-with-its-own-computer.md`. A copy decision, not made here.
 - **Stale copy on the front door**: the roster still lists eight Bots and the FAQ says "Eight"; the build ships one since 2026-09-06. The iPhone FAQ names the removed iOS app. Not an SEO edit; `copywriting` or the owner.
 - **FAT's remaining medium findings** are UI: three non-interactive elements styled as clickable, and 27 script tags against its budget of 15 (Next chunks, not third parties). `ui-design` Audit mode if wanted.
