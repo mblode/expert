@@ -215,6 +215,20 @@ function conversationFrom(entry: unknown, path: string): Conversation {
   };
 }
 
+/**
+ * A group thread's roster, bounded. Larger than any WhatsApp group so a real
+ * one is never truncated, small enough that the index file stays rewritable.
+ */
+const MAX_PARTICIPANTS = 2048;
+
+/** Same person on the route: the ref is the identity, a display name is not. */
+const sameParticipant =
+  (p: Participant) =>
+  (other: Participant): boolean =>
+    p.kind === "bot"
+      ? other.kind === "bot" && other.bot === p.bot
+      : other.kind === "human" && other.ref === p.ref;
+
 /** Two routes are the same conversation when every field of the route matches. */
 function sameRoute(a: Route, b: Route): boolean {
   if (a.kind !== b.kind) {
@@ -291,15 +305,30 @@ export class ConversationRegistry {
   /**
    * The conversation for a route, created on first sight.
    *
-   * `participants` is only used when the record is created: an existing
-   * conversation is never rewritten from an inbound message, because the
-   * inbound names one sender and a group has many, and the record is the
-   * hub's, not the transport's.
+   * `participants` grows and is never rewritten. An inbound names one sender
+   * and a group has many, so the first message cannot be the roster: taking it
+   * as one left the VCMC thread claiming a single member out of a hundred and
+   * twenty two, for as long as the record lived. Adding the speaker is the
+   * transport reporting who it saw, which it is the authority on; replacing
+   * the list would be the transport deciding who is in the hub's record, which
+   * it is not. So this is a union, order preserved, and no one already there
+   * is dropped or renamed.
+   *
+   * The cap bounds a transport that lies rather than a group that is large:
+   * WhatsApp's own ceiling is under it, and `conversations.json` is the index
+   * that is supposed to stay small enough to rewrite whole.
    */
   resolve(bot: string, route: Route, participants: Participant[]): Conversation {
     const records = this.store.load();
     const existing = records.find((c) => c.bot === bot && sameRoute(c.route, route));
     if (existing) {
+      const added = participants.filter(
+        (p) => p.kind === "human" && !existing.participants.some(sameParticipant(p)),
+      );
+      if (added.length && existing.participants.length < MAX_PARTICIPANTS) {
+        existing.participants = [...existing.participants, ...added].slice(0, MAX_PARTICIPANTS);
+        this.store.save(records);
+      }
       return existing;
     }
     const now = new Date().toISOString();

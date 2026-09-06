@@ -361,9 +361,9 @@ function routeFor(
   // number, so its id names the account when the payload does not, which
   // keeps the route stable rather than collapsing two numbers into one.
   const acct = typeof parsed.acct === "string" && parsed.acct ? parsed.acct : record.id;
-  // In a DM the sender is the chat; in a group the first message names one
-  // member of many. The participant list is what the record was created
-  // with and is never rewritten from a later inbound, see `resolve`.
+  // In a DM the sender is the chat; in a group each message names one member
+  // of many, so this is one speaker rather than the roster. `resolve` unions
+  // it into the record, which is how a group thread accumulates its members.
   const ref = typeof parsed.sender === "string" && parsed.sender ? parsed.sender : jid;
   return {
     human: typeof parsed.message === "string" ? parsed.message : undefined,

@@ -302,6 +302,11 @@ owns. The route is where messages leave for, `{ kind: "seat" }`,
 on a route that already exists, by a coding session, or by an owner. There
 is no create-a-route path from the model, in any phase.
 
+`participants` is append-only. A group is one conversation with many people
+in it, and an inbound names one speaker, so each new speaker joins the list
+and nobody already on it is dropped or renamed. A DM converges on one human;
+a group converges on its members.
+
 Messages are append-only, `seq` monotonic per conversation, each with an
 `author` (`bot`, `human` or `system`) and the same four bodies the Voice
 section lists. The index is `/workspace/.computer/conversations.json` and

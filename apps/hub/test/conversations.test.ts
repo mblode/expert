@@ -47,16 +47,19 @@ describe("conversations", () => {
     expect(conv.resolve("night", chat("g@g.us"), [BOT]).id).not.toBe(first.id);
   });
 
-  it("does not rewrite an existing record's participants from a later inbound", () => {
+  it("grows an existing record's participants without rewriting them", () => {
     const conv = registry();
     const created = conv.resolve("main", chat("g@g.us"), [BOT, HUMAN]);
-    const seenAgain = conv.resolve("main", chat("g@g.us"), [
-      BOT,
-      { kind: "human", ref: "2@s.whatsapp.net" },
-    ]);
-    // A group has many members and one message names one of them. The record
-    // is the hub's, not the transport's.
-    expect(seenAgain.participants).toEqual(created.participants);
+    const second = { kind: "human", ref: "2@s.whatsapp.net" } as const;
+    const seenAgain = conv.resolve("main", chat("g@g.us"), [BOT, second]);
+    // A group has many members and one message names one of them, so the
+    // first sender is not the roster. The second speaker joins it; the first
+    // is still there, and the Bot is not duplicated.
+    expect(seenAgain.id).toBe(created.id);
+    expect(seenAgain.participants).toEqual([BOT, HUMAN, second]);
+    // Speaking again adds nobody, so a busy group does not rewrite the index
+    // once per message.
+    expect(conv.resolve("main", chat("g@g.us"), [BOT, second]).participants).toHaveLength(3);
   });
 
   it("appends in order, and last_seq matches the tail of the log", () => {

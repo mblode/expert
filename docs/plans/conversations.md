@@ -107,7 +107,7 @@ Additive only. No new Agent RPC, no new model tool.
 **One WhatsApp turn's reply is served out of a conversation, end to end, with nothing else changed.**
 
 - `ConversationStore`: the index JSON plus one append-only JSONL log, hub-owned, with the restore-then-write discipline `VoiceService.restore` already has.
-- One conversation auto-created on the first inbound from a given `{ acct, jid }`, participants `[{ bot: "main" }, { human: <sender jid> }]`.
+- One conversation auto-created on the first inbound from a given `{ acct, jid }`, participants `[{ bot: "main" }, { human: <sender jid> }]`, and each later speaker on that route joins the list rather than replacing it, so a group thread converges on its members instead of on whoever spoke first.
 - The ingress mints a turn token bound to it; the Eve WhatsApp channel carries it; `send_message` returns it; `Agent.SendMessage` appends there instead of to the seat log.
 - The channel's `{ reply }` is still built by `drainStream` and still returned synchronously. Unchanged.
 - `Seat.Occurrences { conversation_id }` returns the turn's messages with `author.kind === "bot"`.

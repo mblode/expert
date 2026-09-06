@@ -228,18 +228,25 @@ describe("connector ingress", () => {
         token: "g@g.us",
       };
       const first = await post(inbound);
-      const second = await post({ ...inbound, message: "again" });
+      const second = await post({
+        ...inbound,
+        message: "again",
+        sender: "2@s.whatsapp.net",
+      });
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
 
-      // One conversation for the route, participants from the first sight.
-      // Beside it, every Bot's `seat` conversation, which provisioning makes.
+      // One conversation for the route however many members speak into it,
+      // and each of them joins its roster: a group thread is one thread with
+      // many people in it. Beside it, every Bot's `seat` conversation, which
+      // provisioning makes.
       expect(routed(h)).toEqual([
         expect.objectContaining({
           bot: "main",
           participants: [
             { bot: "main", kind: "bot" },
             { kind: "human", ref: "1@s.whatsapp.net" },
+            { kind: "human", ref: "2@s.whatsapp.net" },
           ],
           route: { acct: "main", jid: "g@g.us", kind: "whatsapp" },
         }),
