@@ -28,6 +28,9 @@
     },
     "apps/eve/bots/*": {
       "entry": ["agent/**/*.ts"]
+    },
+    "apps/eve/bots/main": {
+      "entry": ["agent/**/*.ts", "evals/**/*.ts"]
     }
   },
   "ignoreIssues": {

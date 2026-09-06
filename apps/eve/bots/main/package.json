@@ -10,7 +10,8 @@
     "build": "eve build",
     "dev": "eve dev",
     "start": "eve start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:evals": "EVE_DOCKER_PATH=/usr/bin/false eve eval --strict"
   },
   "dependencies": {
     "ai": "^7.0.87",

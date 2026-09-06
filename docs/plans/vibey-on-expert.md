@@ -137,6 +137,18 @@ Only after slice 4 has held for a few days. Rebind Matt's email to `vibey` in `C
 
 ### Slice 6: parity gate and the group
 
+Status 2026-09-06: the suite is ported to `apps/eve/bots/main/evals/`
+(`evals/README.md` says what it needs: gateway credentials, `COMPUTER_BOT_DATA`
+pointing at the tenant files, the memory namespace). It has not been run
+against the new runtime yet: no gateway key was available to this session.
+The group stays on the old runtime until Matt says otherwise; his decision on
+2026-09-06 was that only his own number moves for now.
+
+The steps that move a secret between services are collected in
+`scripts/vibey-cutover.sh` (`secrets`, `test`, `route`, `kill-blode`), written
+because the session's tooling refused to handle secret values; each reads a
+value from the service that holds it and writes it to the one that needs it.
+
 Port `vcmc-agent/evals` and run the full suite against `vcmc-computer` (the memory fixtures under `MEMORY_BLOB_PREFIX=eval`). Then route a test group to Expert, then the VCMC group, in `bridge/routing.ts`. The group is the one surface with a hundred people on it, so it goes last and after a week of Matt's DMs.
 
 Done when every eval that is green on Vercel is green on the computer and the Vercel project has had no inbound for a week. Then archive `vcmc-agent` after correcting its `CLAUDE.md`.
