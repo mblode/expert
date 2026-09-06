@@ -341,9 +341,8 @@ describe("eve supervisor: N Eves from the roster", () => {
 
   it("init's repoRoot reaches the real repo, not a directory above the workspaces", () => {
     // It resolved one level short, to `<root>/apps`, and everything built on
-    // it degraded in silence: `bridgeDir` became `apps/apps/whatsapp-bridge`,
-    // whose `existsSync` guard reads a missing directory as "no bridge on
-    // this image", so the WhatsApp bridge never started on the guest.
+    // it degraded in silence: `imageBots` read a missing directory as "no
+    // Bots in this image", which only a populated volume overlay hid.
     const host = resolve(import.meta.dirname, "../src/host");
     const init = readFileSync(join(host, "init.ts"), "utf-8");
     const ups = /const repoRoot = resolve\(import\.meta\.dirname, "([^"]+)"\)/.exec(init)?.[1];
@@ -352,12 +351,11 @@ describe("eve supervisor: N Eves from the roster", () => {
 
     const pkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
     expect(pkg.workspaces, `${repoRoot} is not the workspace root`).toBeTruthy();
-    // The two paths that were silently wrong. Both must resolve to real dirs.
-    expect(existsSync(join(repoRoot, "apps/whatsapp-bridge/package.json"))).toBe(true);
+    // The path that was silently wrong must resolve to a real dir.
     expect(existsSync(join(repoRoot, "apps/eve/bots"))).toBe(true);
   });
 
-  it("guest entrypoint hands off to the root init, which supervises desk, Eves, bridge and hub", () => {
+  it("guest entrypoint hands off to the root init, which supervises desk, Eves and hub", () => {
     const script = readFileSync(
       resolve(import.meta.dirname, "../../../deploy/fly/guest-entrypoint.sh"),
       "utf-8",
@@ -367,7 +365,9 @@ describe("eve supervisor: N Eves from the roster", () => {
     expect(script).not.toContain("boot-eves");
     expect(script).not.toContain("runuser");
     const init = readFileSync(resolve(import.meta.dirname, "../src/host/init.ts"), "utf-8");
-    expect(init).toMatch(/desk-up[\s\S]*eve[\s\S]*whatsapp-bridge[\s\S]*--workspace=apps\/hub/);
+    expect(init).toMatch(/desk-up[\s\S]*eve[\s\S]*--workspace=apps\/hub/);
+    // The in-repo bridge never ran on a Machine; init no longer knows it.
+    expect(init).not.toContain("apps/whatsapp-bridge");
     // Secrets reach children as env objects, never on argv, and the ones a
     // box child must never hold are named in the deny set. Read out of the
     // declaration rather than matched as a literal line, so adding a name

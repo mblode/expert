@@ -47,6 +47,11 @@ const env = {
   COMPUTER_BOT_ID: "main",
   COMPUTER_BOT_TOKEN: "fixture-bot",
   COMPUTER_EVE_SECRET: "fixture-hub-secret",
+  // Tenant content, the way a computer's volume carries it. The fixture
+  // ships one skill file so the first turn resolves a dynamic skill and
+  // writes it into the sandbox: the production path that needs the
+  // template `apps/eve/prewarm.mjs` provisions after `eve build`.
+  COMPUTER_BOT_DATA: join(directory, "data"),
   EVE_TELEMETRY_DISABLED: "1",
 };
 async function stop() {
@@ -114,6 +119,14 @@ try {
       `export { default } from "../../lib/${file}";\n`,
     );
   }
+  // A dynamic skill whose body is a file under COMPUTER_BOT_DATA, the way
+  // every tenant skill on a computer is. Written here like the shims above,
+  // because its import only resolves in this copied layout.
+  mkdirSync(join(directory, "agent", "skills"), { recursive: true });
+  writeFileSync(
+    join(directory, "agent", "skills", "fixture-skill.ts"),
+    'import { tenantSkill } from "../../lib/skills/tenant-skill.ts";\n\nexport default tenantSkill("fixture-skill");\n',
+  );
   const executable = resolve(
     root,
     "node_modules/eve",
@@ -132,9 +145,27 @@ try {
   });
   const [exitCode] = await once(build, "exit");
   assert.equal(exitCode, 0, "Eve fixture build failed");
+  // What each Bot's `build` script runs after `eve build`, because the built
+  // server is spawned directly here as in production and never prewarms.
+  const prewarm = spawn(process.execPath, [join(root, "apps/eve/prewarm.mjs")], {
+    cwd: directory,
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  prewarm.stdout.on("data", (data) => {
+    output = (output + data).slice(-20_000);
+  });
+  prewarm.stderr.on("data", (data) => {
+    output = (output + data).slice(-20_000);
+  });
+  const [prewarmExit] = await once(prewarm, "exit");
+  assert.equal(prewarmExit, 0, "Eve fixture sandbox prewarm failed");
   await start();
   const first = await send("first-unique-message");
   assert.match(first, /fixture-alpha/);
+  // The tenant skill was announced to the model, so it resolved through the
+  // sandbox: the template was there. Without the prewarm this turn is a 500.
+  assert.match(first, /fixture-skill/);
   runtime = { ...runtime, revision: 2, instructions: "fixture-beta" };
   const second = await send("second-unique-message");
   assert.match(second, /first-unique-message/);
@@ -151,7 +182,7 @@ try {
   assert.match(resumed, /after-restart-message/);
   assert.match(resumed, /fixture-beta/);
   console.log(
-    "Eve runtime: current turn, account isolation, configuration reload and restart continuity passed",
+    "Eve runtime: current turn, tenant skill through the sandbox, account isolation, configuration reload and restart continuity passed",
   );
 } catch (error) {
   console.error(output);

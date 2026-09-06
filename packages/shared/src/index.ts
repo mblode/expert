@@ -1126,3 +1126,10 @@ export {
   WORKSPACE_PATH,
 } from "./fly-computer.ts";
 export type { ComputerSpec } from "./fly-computer.ts";
+
+/**
+ * The header the hub presents to a Bot's Eve on loopback, and the one Eve
+ * checks. One literal, because the two sides used to each define it and no
+ * compiler kept them equal.
+ */
+export const EVE_HUB_SECRET_HEADER = "x-computer-eve-secret";

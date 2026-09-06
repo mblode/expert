@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { defineChannel, POST } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
-import { EVE_HUB_SECRET_HEADER, eveHubSecretFromEnv, eveHubSecretMatches } from "../auth.ts";
+import { EVE_HUB_SECRET_HEADER } from "@computer/shared";
+import { eveHubSecretFromEnv, eveHubSecretMatches } from "../auth.ts";
 import { TURN_HEADER } from "../hub.ts";
 import { neutraliseFence } from "./fence.ts";
 

@@ -1,36 +1,16 @@
 #!/usr/bin/env node
 /**
  * proto:check: api/computer.proto is the source of truth.
- * 1. packages/proto/computer.proto stays a byte-identical copy
- * 2. buf lint
- * 3. buf generate
- * 4. committed gen/ matches generate output
- * 5. spec.json display is 1280×800
+ * 1. buf lint
+ * 2. buf generate
+ * 3. committed gen/ matches generate output
+ * 4. spec.json display is 1280x800
  */
-import { readFileSync, existsSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { execSync } from "node:child_process";
 
 const root = resolve(import.meta.dirname, "..");
-const src = resolve(root, "api/computer.proto");
-const copy = resolve(root, "packages/proto/computer.proto");
-
-if (!existsSync(src) || !existsSync(copy)) {
-  console.error("proto:check: missing api/computer.proto or packages/proto/computer.proto");
-  process.exit(1);
-}
-
-const a = readFileSync(src);
-const b = readFileSync(copy);
-const ha = createHash("sha256").update(a).digest("hex");
-const hb = createHash("sha256").update(b).digest("hex");
-if (ha !== hb) {
-  console.error(
-    "proto:check: packages/proto/computer.proto is not identical to api/computer.proto",
-  );
-  process.exit(1);
-}
 
 const spec = JSON.parse(readFileSync(resolve(root, "api/spec.json"), "utf-8"));
 if (spec.id !== "computer.v1") {

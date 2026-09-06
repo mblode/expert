@@ -17,7 +17,8 @@ interface PixelGrant {
 /**
  * Short-lived VNC / noVNC tokens. Pairing still uses the durable seat
  * token for Seat RPCs; Status/Pair stamp a pixel token into `vnc_url`.
- * The seat token remains accepted on `/vnc` so an old iOS pair URL works.
+ * The seat token remains accepted on `/vnc` so an old pair URL (the removed
+ * iOS client minted them) works.
  *
  * Status must reuse a still-valid grant: minting on every poll rotates
  * `vnc_url` and remounts the control-panel iframe.

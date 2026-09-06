@@ -5,7 +5,8 @@ import type { AuthRegistry } from "./auth.ts";
 import { firstHeader, tokenFromRequest } from "./auth.ts";
 import { writeJson } from "./router.ts";
 import type { BotRegistry } from "../service/bots.ts";
-import { EVE_HUB_SECRET_HEADER, pickEveBotId } from "../host/eve.ts";
+import { EVE_HUB_SECRET_HEADER } from "@computer/shared";
+import { pickEveBotId } from "../host/eve.ts";
 
 const PREFIX = "/eve/v1/";
 

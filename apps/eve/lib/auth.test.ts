@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { eveHubSecretMatches, hubLoopbackAuth } from "../../eve/lib/auth.ts";
+import { eveHubSecretMatches, hubLoopbackAuth } from "./auth.ts";
 
 describe("Eve channel: hub loopback auth", () => {
   it("accepts the shared secret header", async () => {

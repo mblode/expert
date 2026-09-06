@@ -10,7 +10,6 @@ export const DEFAULT_EVE_OVERLAY = "/workspace/eve/bots";
 const EVE_BASE_PORT = 2000;
 
 /** Header the hub injects so `eve start` will accept the proxied request. */
-export const EVE_HUB_SECRET_HEADER = "x-computer-eve-secret";
 
 /** Optional client hint: which Bot's Eve to talk to. Absent = primary. */
 const EVE_BOT_HEADER = "x-computer-bot";

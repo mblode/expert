@@ -2,7 +2,8 @@ import { generateObject } from "ai";
 import { defineChannel, POST } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
 import { z } from "zod";
-import { EVE_HUB_SECRET_HEADER, eveHubSecretFromEnv, eveHubSecretMatches } from "../auth.ts";
+import { EVE_HUB_SECRET_HEADER } from "@computer/shared";
+import { eveHubSecretFromEnv, eveHubSecretMatches } from "../auth.ts";
 
 /**
  * Making this Bot's setup generic, done by this Bot's own model.

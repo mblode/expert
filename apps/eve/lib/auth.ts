@@ -1,9 +1,9 @@
+import { EVE_HUB_SECRET_HEADER } from "@computer/shared";
 import { timingSafeEqual } from "node:crypto";
 import { UnauthenticatedError, withAuthChallenges } from "eve/channels/auth";
 import type { AuthFn } from "eve/channels/auth";
 
 /** Header the hub injects on loopback `/eve/v1` proxy requests. */
-export const EVE_HUB_SECRET_HEADER = "x-computer-eve-secret";
 
 /**
  * An env secret, or undefined when the variable is unset, empty, or blank.

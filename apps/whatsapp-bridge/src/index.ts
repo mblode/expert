@@ -1,3 +1,10 @@
+// NOT DEPLOYED. The WhatsApp socket that serves Vibey and Matt's DMs is
+// mblode/vcmc-agent/bridge on Railway, a fork of this package that has
+// drifted from it (expert.ts, platform.ts there; per-account secrets and
+// account.ts here). This package is the candidate for the always-on gateway
+// in docs/plans/gateway.md and is kept building and tested for that; it is
+// not copied into the guest image and the hub no longer starts it. Do not
+// add a feature here expecting it to reach a phone.
 /**
  * WhatsApp bridge: the process entry.
  *

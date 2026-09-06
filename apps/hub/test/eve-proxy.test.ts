@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
-import { EVE_HUB_SECRET_HEADER } from "../src/host/eve.ts";
+import { EVE_HUB_SECRET_HEADER } from "@computer/shared";
 import { startHub } from "./helper.ts";
 
 type Opened = Awaited<ReturnType<typeof startHub>>;

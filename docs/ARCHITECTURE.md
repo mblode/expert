@@ -31,7 +31,7 @@ flowchart TB
     init["PID 1: host/init.ts + host/supervisor.ts"]
     hub["hub :8080<br/>handler to service to desk"]
     eve["eve start :2000 per Bot<br/>apps/eve"]
-    bridge["whatsapp-bridge :2100<br/>apps/whatsapp-bridge"]
+    bridge["whatsapp-bridge (Railway)<br/>vcmc-agent/bridge"]
     desk["desk: Xvfb, x11vnc, Chromium<br/>hub/src/desk/docker.ts"]
   end
 

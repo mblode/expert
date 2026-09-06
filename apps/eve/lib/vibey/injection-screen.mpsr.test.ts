@@ -7,8 +7,12 @@ import {
   INJECTION_CORPUS,
   ON_DOMAIN_ATTACK_FAMILIES,
   windowFor,
-} from "./injection-corpus.js";
-import type { AttackFamily, InjectionCase, SourceScenario } from "./injection-corpus.js";
+} from "../../test-fixtures/injection-corpus.js";
+import type {
+  AttackFamily,
+  InjectionCase,
+  SourceScenario,
+} from "../../test-fixtures/injection-corpus.js";
 import { screenProposal } from "./injection-screen.js";
 import { screenWrite } from "./provenance.js";
 

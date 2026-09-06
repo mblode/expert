@@ -1,12 +1,8 @@
 import type { ChannelSource } from "eve/channels";
 import { defineChannel, POST } from "eve/channels";
 import { createUnauthorizedResponse } from "eve/channels/auth";
-import {
-  EVE_HUB_SECRET_HEADER,
-  eveHubSecretFromEnv,
-  eveHubSecretMatches,
-  secretFromEnv,
-} from "../auth.ts";
+import { EVE_HUB_SECRET_HEADER } from "@computer/shared";
+import { eveHubSecretFromEnv, eveHubSecretMatches, secretFromEnv } from "../auth.ts";
 import { TURN_HEADER } from "../hub.ts";
 import { outboundReply } from "../format-reply.ts";
 import { parseBridgePayload } from "./bridge-protocol.ts";

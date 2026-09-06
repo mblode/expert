@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { generaliseTemplate, parseRewrite } from "../src/service/template-generic.ts";
-import type { AskEveFn } from "../src/service/template-generic.ts";
+import { generaliseTemplate, parseRewrite } from "../src/service/templates.ts";
+import type { AskEveFn } from "../src/service/templates.ts";
 import { rpc, startHub } from "./helper.ts";
 
 const MINE = {

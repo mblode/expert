@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
-import bash from "../../eve/lib/tools/bash.ts";
-import computer from "../../eve/lib/tools/computer.ts";
-import readFile from "../../eve/lib/tools/read_file.ts";
-import sendMessage from "../../eve/lib/tools/send_message.ts";
-import shell from "../../eve/lib/tools/shell.ts";
-import writeFile from "../../eve/lib/tools/write_file.ts";
+import bash from "./bash.ts";
+import computer from "./computer.ts";
+import readFile from "./read_file.ts";
+import sendMessage from "./send_message.ts";
+import shell from "./shell.ts";
+import writeFile from "./write_file.ts";
 
 type ApprovalPolicy = (ctx: Record<string, unknown>) => unknown | Promise<unknown>;
 

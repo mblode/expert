@@ -1,8 +1,9 @@
 import { ComputerError } from "@computer/shared";
 
 /**
- * The hub's view of the WhatsApp bridge it supervises on this Machine
- * (`apps/whatsapp-bridge`, loopback, `x-bridge-secret`). hello.expert never
+ * The hub's view of the WhatsApp bridge, reached at `COMPUTER_BRIDGE_URL`
+ * with `x-bridge-secret` (today the Railway bridge; `apps/whatsapp-bridge`
+ * is the same protocol and is not deployed). hello.expert never
  * talks to the bridge; it talks to the hub, which owns the account's connector
  * record and secret, and forwards the linking, groups and config calls here.
  *

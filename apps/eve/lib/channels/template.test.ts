@@ -4,7 +4,7 @@ const generateObject = vi.hoisted(() => vi.fn());
 vi.mock("ai", () => ({ generateObject }));
 
 const { templateChannel } = await import("./template.ts");
-const { EVE_HUB_SECRET_HEADER } = await import("../auth.ts");
+const { EVE_HUB_SECRET_HEADER } = await import("@computer/shared");
 
 /**
  * The door and the shape, not the model's taste.

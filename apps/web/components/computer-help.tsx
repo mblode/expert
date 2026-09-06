@@ -14,7 +14,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 /**
- * What the gestures are, in the words the iOS client uses.
+ * What the gestures are, in the words the removed iOS client used.
  *
  * None of this is discoverable: a two-finger tap for the right button and a
  * pinch that magnifies the desk rather than the page are conventions, not

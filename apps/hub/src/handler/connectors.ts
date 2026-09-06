@@ -2,15 +2,14 @@ import type { ClockClient } from "../service/clock.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { Readable } from "node:stream";
 import type { ReadableStream as WebReadableStream } from "node:stream/web";
-import { runEveTurn } from "../service/eve-turn.ts";
-import { ComputerError } from "@computer/shared";
+import { EVE_TURN_TIMEOUT_MS, runEveTurn } from "../service/turns.ts";
+import { ComputerError, EVE_HUB_SECRET_HEADER } from "@computer/shared";
 import type { Participant, Route } from "@computer/shared";
 import type { BotRegistry } from "../service/bots.ts";
 import type { ConnectorRecord, ConnectorRegistry } from "../service/connectors.ts";
 import type { ConversationRegistry } from "../service/conversations.ts";
 import type { InboundService } from "../service/inbound.ts";
 import type { TurnService } from "../service/turns.ts";
-import { EVE_HUB_SECRET_HEADER } from "../host/eve.ts";
 import { firstHeader } from "./auth.ts";
 import { TURN_HEADER, writeError } from "./router.ts";
 
@@ -185,7 +184,8 @@ export async function handleConnectorIngress(
         },
         method: "POST",
         redirect: "manual",
-        signal: abort.signal,
+        // The client going away or the turn deadline, whichever first.
+        signal: AbortSignal.any([abort.signal, AbortSignal.timeout(EVE_TURN_TIMEOUT_MS)]),
       });
     } catch {
       throw daemonDown(bot.id);

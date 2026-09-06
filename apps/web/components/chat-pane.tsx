@@ -309,7 +309,7 @@ export function ChatPane({
         </MessageScroller>
       </MessageScrollerProvider>
 
-      {/* What the iOS client shows as a Computer card in the thread: the Bot
+      {/* What the removed iOS client showed as a Computer card in the thread: the Bot
           has stopped and is waiting for a person on its screen. On a phone the
           screen is a drawer, so the card is how you know to open it; on a wide
           screen the rail is already showing the same thing beside this. */}

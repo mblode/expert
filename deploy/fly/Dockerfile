@@ -63,24 +63,24 @@ COPY --chown=box:box apps/eve/bots/main/package.json apps/eve/bots/main/
 # no directory of its own. `eveProjectIds` skips it, so it never gets a roster
 # row; it still has to be built like every other project here.
 COPY --chown=box:box apps/eve/bots/template/package.json apps/eve/bots/template/
-COPY --chown=box:box apps/whatsapp-bridge/package.json apps/whatsapp-bridge/
 COPY --chown=box:box packages/shared/package.json packages/shared/
 COPY --chown=box:box packages/proto/package.json packages/proto/
 # LEFTHOOK=0: no git hooks in an image, so `prepare` is a no-op here.
 ENV LEFTHOOK=0
-# Product web is Vercel-only and excluded by .dockerignore. Root workspaces
-# still lists apps/web; drop it so npm ci does not need that package.json
-# or pull Next. Do not COPY the Next tree into the guest.
+# Product web is Vercel-only and excluded by .dockerignore, and the in-repo
+# WhatsApp bridge does not run on a Machine (the live socket is the Railway
+# bridge; apps/whatsapp-bridge is the gateway candidate, docs/plans/gateway.md).
+# Root workspaces still lists both; drop them so npm ci does not need their
+# package.json or pull Next and Baileys into the guest.
 RUN node --input-type=module -e '\
 const { readFileSync, writeFileSync } = await import("node:fs");\
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));\
-pkg.workspaces = pkg.workspaces.filter((w) => w !== "apps/web");\
+pkg.workspaces = pkg.workspaces.filter((w) => w !== "apps/web" && w !== "apps/whatsapp-bridge");\
 writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");\
 ' && npm ci --no-audit --no-fund
 
 COPY --chown=box:box apps/hub apps/hub
 COPY --chown=box:box apps/eve apps/eve
-COPY --chown=box:box apps/whatsapp-bridge apps/whatsapp-bridge
 COPY --chown=box:box packages packages
 COPY --chown=box:box api api
 # `eve build` per Bot here, so the guest runs the built server rather than the

@@ -24,7 +24,7 @@
       "ignoreDependencies": ["postcss"]
     },
     "apps/eve": {
-      "entry": ["test-fixtures/runtime/agent/agent.ts"]
+      "entry": ["test-fixtures/runtime/agent/**/*.ts"]
     },
     "apps/eve/bots/*": {
       "entry": ["agent/**/*.ts"]

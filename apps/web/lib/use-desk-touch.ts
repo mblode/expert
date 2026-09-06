@@ -8,7 +8,7 @@ import type { DeskViewController } from "./use-desk-view";
  * Fingers, turned into the four things a desk understands.
  *
  * A phone has no hover, no wheel, no right button and no keyboard, so every
- * one of them is a gesture here, and the set is the one the iOS client
+ * one of them is a gesture here, and the set is the one the removed iOS client
  * teaches: tap to click where you tapped, one finger drags, two fingers
  * scroll, two fingers tap or one finger holds for the right button, pinch to
  * magnify, and two fingers pan once magnified. Nothing about it is discovered

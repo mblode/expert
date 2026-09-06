@@ -15,7 +15,7 @@ import type {
   MessageLog,
 } from "../src/service/conversations.ts";
 import type { BridgeClient } from "../src/service/whatsapp.ts";
-import type { AskEveFn } from "../src/service/template-generic.ts";
+import type { AskEveFn } from "../src/service/templates.ts";
 
 const SETUP_CODE = "setup-code-test";
 const AGENT_TOKEN = "agent-token-test";

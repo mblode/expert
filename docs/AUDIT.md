@@ -119,6 +119,28 @@ These two were found while moving the invite path off owner seats (`apps/web/lib
 19. **Closed 2026-09-03. Mobile layout** of `apps/web`. The chat is the page and the roster and the screen are drawers off its header (the Bots pass), and the screen drawer now opens the same full-bleed pane the invite link does: a bar at the bottom for the clipboard, the seat and the keyboard, the touch gestures in `lib/use-desk-touch.ts` (tap to click, one finger drags, two fingers scroll, two-finger tap or press-and-hold for the right button, pinch to magnify, two fingers pan once magnified), a trackpad mode for a pointer, and `ComputerHelp` saying so in the words the iOS client uses. Pinch magnifies the desk rather than the page, which is what the invite viewport's `userScalable: false` always intended. Still open around it: no notification when a screen goes `WAITING` in a background tab.
 20. **`Reveal` renders children at `opacity: 0` on the server** and ignores `prefers-reduced-motion`.
 
+## Third pass: deletion and simplification, 2026-09-06
+
+Read-only survey (codebase-architecture Deepen mode) followed by the fixes, all in one branch. Sizes were measured, not estimated; the ranking is in the session that produced this section and the reasons are repeated here so the next audit does not re-derive them.
+
+### Changed
+
+- **The in-repo WhatsApp bridge is quarantined, not deleted.** `apps/whatsapp-bridge` never ran on a Machine (`COMPUTER_WHATSAPP=on` was set nowhere) while the Dockerfile copied it into every guest image and init carried a child for it. The live socket is the Railway fork in `vcmc-agent/bridge`, and the two have diverged. The package stays in the workspace, typechecked and tested, as the gateway candidate (`docs/plans/gateway.md`); it is no longer copied into the image, init no longer knows it, and a banner at the top of its `src/index.ts` says so.
+- **One proto file.** `packages/proto/computer.proto` was a byte-identical copy of `api/computer.proto` kept equal by `proto-check`. The copy and that step are gone; buf already read only `api/`.
+- **Template and turn modules folded.** `service/template-generic.ts` is now the second half of `service/templates.ts`; `service/eve-turn.ts` is now `runEveTurn` in `service/turns.ts`, with one `EVE_TURN_TIMEOUT_MS` that the connector ingress's plain path also uses. That path had no deadline of its own: an Eve conversation whose first turn failed terminally never starts another run, and the hub held the request open until the bridge gave up.
+- **One `EVE_HUB_SECRET_HEADER`**, in `packages/shared`, where finding 15 wanted it. The two hub tests that imported `apps/eve` moved into `apps/eve` beside the code they test, and the hub tsconfig `exclude` that hid them from the compiler is gone.
+- **Test data out of source.** `injection-corpus.ts` (887 lines, one test importer) lives under `apps/eve/test-fixtures`.
+- **iOS residue.** The six screenshots under `docs/reference` are deleted, `GROK-BOT.md` describes those surfaces in prose, and four code comments that spoke of "the iOS client" as a live peer say it was removed.
+- **Two checks that were not checking.** CI now builds the Fly guest image (`guest-image` job): both production incidents recorded in `AGENTS.md` were invisible to `npm run check` and visible to that build. The runtime check now ships a static skill and a tenant skill in its fixture and runs the same prewarm the Bot build runs, so it fails the way production failed on 2026-09-06 when the prewarm is skipped (verified by neutering the step and watching the turn time out).
+
+### Deferred, with reasons
+
+- **Conversations versus voice (finding 4)** is still the one product decision the code is waiting on. iOS is gone and the web reads `Conversations` and `Occurrences` only for the work page. Deciding it either deletes most of `service/voice.ts` or gives `conversations.ts` its first real reader. Not made here because it changes what a person sees.
+- **Making the in-repo bridge the live one** (moving Railway onto it) is the gateway plan, not a cleanup.
+- **Blode-only configuration** (`fly.toml`, the `blode` row and `matt` alias in `apps/web/lib/computers.ts`, `COMPUTER_SETUP_CODE_VCMC`) goes with slice 5 of `docs/plans/vibey-on-expert.md`, not before.
+- **Eight shared exports nothing outside the package imports** (`PixelX`, `PixelY`, `OCCURRENCE_KINDS`, `ERROR_HTTP_STATUS`, `UnavailableReason`, `UnavailablePhase`, `ApiError`, `ScreenStatus`) are parts of exported wire types, so they stay exported: un-exporting a type a consumer's own declaration needs is churn, not a deletion.
+- **Splitting `apps/web`**, collapsing `screens.ts` with `pixels.ts`, and the dormant self-serve provisioning path: no current requirement, or the platform direction itself.
+
 ## Second pass: house standards and AX
 
 The repository was then measured against the conventions in [mblode/agent-skills](https://github.com/mblode/agent-skills) (`agents-md`, `codebase-architecture` Harden mode, `readme-creator`, `pr-creator`, `tidy`, `ax-audit`).

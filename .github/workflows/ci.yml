@@ -74,3 +74,16 @@ jobs:
           docker exec desk /usr/local/bin/desk-shot > shot.png
           file shot.png | grep -q 'PNG image data, 1280 x 800'
           docker rm -f desk
+
+  # The guest image, built the way `fly deploy` builds it. Two production
+  # incidents (AGENTS.md: the Bot workspace guard, the sandbox template) were
+  # invisible to `npm run check` and visible to this build; the desk job above
+  # never exercised it. Build only, no run: the guest needs a volume and Fly
+  # secrets to boot.
+  guest-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build the Fly guest image
+        run: docker build -f deploy/fly/Dockerfile -t expert-guest .

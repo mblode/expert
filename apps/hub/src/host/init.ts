@@ -4,7 +4,7 @@ import { ensureWorkflowState } from "./workflow-state.ts";
  * changes uid. It owns the volume fixups, the secrets, the roster, and the
  * supervisor that runs everything else as the right user:
  *
- *   desk-up (box, once) → Eve per Bot (box) → the WhatsApp bridge (hub) → the hub (hub)
+ *   desk-up (box, once) → Eve per Bot (box) → the hub (hub)
  *
  * The hub is no longer `box` (AUDIT P0 #2): what the model's `shell` can read
  * is what box can read, and the roster, seat tokens, connector secrets and
@@ -37,19 +37,17 @@ import { Supervisor } from "./supervisor.ts";
  * Four levels up from `apps/hub/src/host`, and checked rather than trusted.
  *
  * This was three, which resolved to `<root>/apps`, and every use of it below
- * degrades in silence when it is wrong: `bridgeDir` pointed at
- * `apps/apps/whatsapp-bridge`, so the `existsSync` guard read a missing
- * directory as "no bridge on this image" and the WhatsApp bridge never
- * started on the guest at all. `imageBots` missed the same way, which only
- * stayed invisible because a populated volume overlay wins first. A wrong
- * root is a boot failure now, not a quieter computer.
+ * degrades in silence when it is wrong: `imageBots` missed the Bots the
+ * build shipped, which only stayed invisible because a populated volume
+ * overlay wins first. A wrong root is a boot failure now, not a quieter
+ * computer.
  */
 const repoRoot = resolve(import.meta.dirname, "../../../..");
 const { env } = process;
 
 if (!existsSync(join(repoRoot, "package.json"))) {
   console.error(
-    `computer init: no package.json at ${repoRoot}, so this build's layout is not what init expects. Refusing to boot a computer that would silently skip the bridge and the image Bots.`,
+    `computer init: no package.json at ${repoRoot}, so this build's layout is not what init expects. Refusing to boot a computer that would silently skip the image Bots.`,
   );
   process.exit(1);
 }
@@ -67,7 +65,6 @@ const statusFile = env.COMPUTER_STATUS_FILE ?? join(runDir, "status.json");
 const wakeDir = env.COMPUTER_WAKE_DIR ?? join(runDir, "wake");
 const logDir = env.COMPUTER_LOG_DIR ?? join(dataDir, "logs");
 const bridgePort = env.COMPUTER_BRIDGE_PORT ?? "2100";
-const bridgeDir = join(repoRoot, "apps/whatsapp-bridge");
 const workspace = "/workspace";
 
 const box = ids(env.COMPUTER_BOX_USER ?? "box");
@@ -106,9 +103,6 @@ for (const sub of ["whatsapp", "logs", "vnc-tokens"]) {
   mkdirSync(p, { mode: 0o700, recursive: true });
   own(p, hub, 0o700);
 }
-const bridgeData = join(workspace, "whatsapp");
-mkdirSync(bridgeData, { mode: 0o755, recursive: true });
-own(bridgeData, hub, 0o755);
 if (existsSync("/home/box")) {
   spawnSync("chown", ["-R", `${box.uid}:${box.gid}`, "/home/box"]);
 }
@@ -311,37 +305,6 @@ const stopWatchingRoster = watchRoster({
 });
 if (eves.length === 0) {
   console.warn(`computer init: no Eve project under ${botsRoot}; chat will report DAEMON_DOWN`);
-}
-
-// Opt-in, not opt-out. Fixing `repoRoot` above makes this directory
-// reachable for the first time, so a default-on bridge would start
-// unannounced on the next deploy, and `/healthz` reports the supervisor's
-// view while fly.toml health-checks the guest on it every 30s. A bridge that
-// cannot come up would take the Machine down with it. Set
-// COMPUTER_WHATSAPP=on once it has been watched starting on a guest.
-if (env.COMPUTER_WHATSAPP === "on" && existsSync(join(bridgeDir, "package.json"))) {
-  sup.start({
-    args: ["run", "start", "--workspace=apps/whatsapp-bridge"],
-    cmd: "npm",
-    cwd: repoRoot,
-    env: childEnv(
-      {
-        COMPUTER_URL: hubUrl,
-        HOST: "127.0.0.1",
-        PORT: bridgePort,
-        USER: hub.name,
-        WHATSAPP_BRIDGE_SECRET: bridgeSecret,
-        WHATSAPP_DATA_DIR: bridgeData,
-        WHATSAPP_STATE_DIR: join(dataDir, "whatsapp"),
-      },
-      join(dataDir, "home"),
-    ),
-    gid: hub.gid,
-    healthUrl: `http://127.0.0.1:${bridgePort}/health`,
-    id: "whatsapp-bridge",
-    log: join(logDir, "whatsapp-bridge.log"),
-    uid: hub.uid,
-  });
 }
 
 sup.start({
