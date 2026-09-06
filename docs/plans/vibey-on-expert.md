@@ -127,14 +127,24 @@ Vercel production env has no `BRIDGE_URL`, `DIGEST_SUBSCRIBERS` or
 `MEMORY_ALERT_JID`, so Vercel runs without them and the computer can too.
 The read of `AI_GATEWAY_API_KEY`, `CURSOR_API_KEY` and `COMPUTER_PA_REPOS`
 off Blode came back empty because Blode was suspended at the time (`fly ssh
-console` refuses a Machine with no started VM); the script now wakes it
-first and prompts if the read still fails. The agent session's tooling
-refuses to move a secret value between services in any form, so the
-gateway key on `vcmc-computer` is still the one that answers 401. What is
-left is exactly steps 1 and 2 above: rerun `secrets` (or
-`fly secrets set AI_GATEWAY_API_KEY=... -a vcmc-computer`), then `test`,
-then `route`. The six commits from the morning are pushed and the check
-was green.
+console` refuses a Machine with no started VM) and because PID 1's environ
+does not carry the secrets; the script now wakes Blode and reads with
+`printenv` over ssh, and all seven secrets are on `vcmc-computer`.
+
+**The 401 diagnosis was wrong.** With Blode's key in place the gateway
+answers 200 from the box, and the turn still failed. The stored error
+(zstd in `eve-state/workflow-data/steps`) is
+`SandboxTemplateNotProvisionedError` for the just-bash backend: the hub
+spawns `.output/server/index.mjs` directly, which skips the
+`prewarmBuiltAppSandboxes` call `eve start` makes first, `eve build` only
+prewarms on Vercel, and a bundled server never provisions on demand. The
+turn that trips it is the dynamic tenant skill (`skills/*.md` on the
+volume) writing itself into the sandbox, which is why Blode, with no
+tenant skills, never hit it and the runtime check never did either. Fix:
+`apps/eve/prewarm.mjs`, run by each Bot's `build` script after `eve build`,
+so the image ships the template (its key is a pure function of the build);
+the same call was run by hand on `vcmc-computer` to get the current image
+serving before the redeploy.
 
 Secrets first. The Vercel project's env is the source (`vercel env pull` in
 `vcmc-agent`); on `vcmc-computer` they are `BLOB_READ_WRITE_TOKEN`,

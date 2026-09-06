@@ -7,7 +7,7 @@
     "#*": "./agent/*"
   },
   "scripts": {
-    "build": "eve build",
+    "build": "eve build && node ../../prewarm.mjs",
     "dev": "eve dev",
     "start": "eve start",
     "typecheck": "tsc --noEmit"

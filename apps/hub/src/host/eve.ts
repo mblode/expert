@@ -226,9 +226,14 @@ const BUILT_SERVER = join(".output", "server", "index.mjs");
  * requests (224 MB), measured idle on the built QA project. Running the
  * server the CLI would have run is 224 MB and boots in about 0.7s, so a
  * roster of eight costs 1.8 GB instead of 5.5 GB, and the guest has 2 GB.
- * Nothing is lost with it: schedules are compiled into that server (croner
- * and the `eve*.schedule` modules are in the bundle) and fire there, which
- * was checked against a one minute cron before this was written, not assumed.
+ * Schedules are not lost with it: croner and the `eve*.schedule` modules are
+ * in the bundle and fire there, which was checked against a one minute cron
+ * before this was written, not assumed. Sandbox templates are: `eve start`
+ * runs `prewarmBuiltAppSandboxes` before it spawns this same file, and a
+ * bundled server never provisions one on demand, so each Bot's `build` script
+ * runs `apps/eve/prewarm.mjs` after `eve build` to ship the template in the
+ * image (found 2026-09-06, when the first tenant-skill turn died with
+ * SandboxTemplateNotProvisionedError and looked like a model timeout).
  *
  * The fallback is for a dev who has not run `eve build`: `npm run up` on a
  * fresh checkout still works, one process heavier. The guest image builds
