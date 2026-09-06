@@ -2,5 +2,13 @@
   {
     "cron": "0 20 * * *",
     "id": "box-health"
+  },
+  {
+    "cron": "0 * * * *",
+    "id": "daily-digest"
+  },
+  {
+    "cron": "0 * * * *",
+    "id": "memory-consolidation"
   }
 ]

@@ -16,7 +16,9 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@ai-sdk/gateway": "^4.0.72",
     "@computer/shared": "1.0.0",
+    "@vercel/blob": "^2.6.1",
     "ai": "^7.0.87",
     "eve": "^0.49.0",
     "zod": "4.5.4"

@@ -21,7 +21,7 @@ A persistent Linux computer that agents drive and a human can take the seat of. 
 ## Gotchas
 
 - Hub layering is `handler -> service -> desk`; `scripts/lint-layers.mjs` fails the build on an upward import. Put HTTP parsing in `handler`, rules in `service`, `docker exec`/XTEST in `desk`.
-- The model's five tools (`send_message`, `computer`, `shell`, `read_file`, `write_file`) are the whole model surface. Clipboard, `vnc_url`, pointer and provisioning are Seat RPCs only; adding them to the model is the injection path `api/DESIGN.md` refuses.
+- The model's five box tools (`send_message`, `computer`, `shell`, `read_file`, `write_file`) are the whole surface onto the computer; the tools ported from `vcmc-agent` on 2026-09-06 (`apps/eve/lib/tools/`) read the web, the chat bridge and Vercel Blob and never touch the box. Clipboard, `vnc_url`, pointer and provisioning are Seat RPCs only; adding them to the model is the injection path `api/DESIGN.md` refuses.
 - Coordinates are integer pixels of the last full 1280x800 screenshot, origin top-left, and `zoom` does not change that space. Never introduce normalised 0..999 coordinates.
 - A `computer` batch is validated whole before anything runs; a limit violation is a 400 for the request. Do not move per-action limits back into the execution loop, or a partially-run batch becomes unretryable under its `request_id`.
 - Human input is never RFB: x11vnc runs `-viewonly`, and every pointer/keystroke goes through `Seat.Pointer`/`Seat.Type` so the seat FSM can refuse it.

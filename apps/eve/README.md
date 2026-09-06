@@ -9,9 +9,40 @@ loopback. See [eve.dev](https://eve.dev): the directory is the agent.
 
 ```
 apps/eve/lib/                    shared tools, hub RPC, channels, hubLoopbackAuth
-apps/eve/bots/main/              the desk agent (display 1, :2000)
+apps/eve/lib/vibey/              the agent ported from vcmc-agent on 2026-09-06: memory
+                                 store and screens, chat archive search, roster, digest,
+                                 consolidation, bridge client. Generic code; the community
+                                 it serves is data on the volume (below).
+apps/eve/lib/tools/              every model tool; bots re-export the ones they carry
+apps/eve/bots/main/              the one shipped Bot (display 1, :2000)
 apps/eve/bots/<id>/              one directory per Bot, and that is the Bot
 ```
+
+## One build, every computer
+
+The same image runs Vibey's computer and a stranger's. What makes one of
+them Vibey is `/workspace/.bots/<id>/data/` on its volume, read by
+`lib/vibey/chat-archive-source.ts` (`COMPUTER_BOT_DATA` overrides the path):
+
+| File                 | What                                                       | Read by                                                                     |
+| -------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `chat-archive.b64`   | the group's history, gzip then base64, one file            | `search-chat`, `who-is`, `get-group-stats`, `get-reactions`, `audit-memory` |
+| `members.json`       | the member overlay, `[{ phone, name, aliases?, tags, … }]` | `who-is`, the roster, the stale-fact scan                                   |
+| `group-history.json` | `{ context: {…}, timeline: [{ date, summary, people? }] }` | `group-history`                                                             |
+
+Absent files are an empty community: every one of those tools answers
+`{ available: false }` and the instructions tell the Bot to say so. The
+files are never in this repository (it is public and they name real
+people); `docs/plans/vibey-on-expert.md` says where they come from. The
+Bot's identity is the same shape: `agent/instructions.md` is the generic
+default, and the runtime instructions the hub holds (edited from
+hello.expert) are what make a computer Vibey.
+
+The memory suite still lives on Vercel Blob (`BLOB_READ_WRITE_TOKEN`), the
+bridge tools reach the community bridge at `BRIDGE_URL` with
+`VIBEY_BRIDGE_SECRET`, and `read-url` wants `FIRECRAWL_API_KEY`. All three
+are Fly secrets on the tenant and reach the Eve child through the
+supervisor; none is on argv.
 
 Each bot is its own eve.dev project: `agent/profile.json`,
 `agent/instructions.md`, `agent/skills/`, `agent/schedules/`, and

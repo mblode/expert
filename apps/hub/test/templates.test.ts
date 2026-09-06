@@ -238,8 +238,12 @@ describe("a Bot template", () => {
     expect(calendar?.body).toContain("# Calendar");
     // Two files declare a routine and both are read: the cron out of
     // routines.json, the prompt out of the schedule module beside it.
-    expect(source?.routines).toMatchObject([{ cron: "0 20 * * *", id: "box-health" }]);
-    expect(source?.routines[0]?.prompt).toContain("A daily check on my own computer");
+    const health = source?.routines.find((r) => r.id === "box-health");
+    expect(health).toMatchObject({ cron: "0 20 * * *", id: "box-health" });
+    expect(health?.prompt).toContain("A daily check on my own computer");
+    // A handler-form schedule (`run`, no `markdown`) declares its cron and has
+    // no prompt to lift; it still comes across as a routine.
+    expect(source?.routines.map((r) => r.id)).toContain("daily-digest");
     // A connection that is only wiring, with no address of its own, is not a
     // service a person installing this would have to connect.
     expect(source?.plugins).toEqual([]);
