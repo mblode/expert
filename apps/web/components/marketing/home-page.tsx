@@ -33,21 +33,21 @@ export function MarketingHome(): React.ReactElement {
               <h1 className="text-balance font-display text-5xl font-light tracking-tight sm:text-6xl sm:tracking-[-0.03em]">
                 A team of Bots with a computer of their own.
               </h1>
-              <Reveal delay={0.35}>
+              <Reveal delay={0.35} eager>
                 <p className="mx-auto mt-4 max-w-[48ch] text-pretty text-lg text-muted-foreground">
                   They work inside your tools the way you do, keep going while you are away, and
                   hand you the mouse when they get stuck. Reach them from the web, WhatsApp, or your
                   own CLI.
                 </p>
               </Reveal>
-              <Reveal delay={0.5}>
+              <Reveal delay={0.5} eager>
                 <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
                   <Button render={<Link href={siteConfig.links.login} />} size="lg">
                     Get started
                   </Button>
                 </div>
               </Reveal>
-              <Reveal delay={0.6}>
+              <Reveal delay={0.6} eager>
                 <div className="mt-4 flex items-center justify-center gap-4">
                   <a
                     className="text-sm text-muted-foreground transition-colors hover:text-foreground"
