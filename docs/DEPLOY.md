@@ -115,7 +115,7 @@ curl -s https://mblode-computer.fly.dev/roster -H "authorization: Bearer $SEAT" 
 curl -s https://mblode-computer.fly.dev/healthz
 ```
 
-**The guest stays at 2 GB.** Eight Bots do not fit awake: a Bot's Eve is
+**The guest stays at 2 GB.** A roster of Bots does not fit awake: a Bot's Eve is
 224 MB and a claimed screen (Xvfb, openbox, x11vnc, Chromium) is about 430,
 so they sleep instead. Only the primary Bot runs at boot; every other Bot's
 Eve is registered and stopped, and its window is claimed the first time

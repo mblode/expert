@@ -223,14 +223,14 @@ describe("a Bot template", () => {
 
   /**
    * A Bot that came with the build keeps its brief, its skills and its
-   * schedule in git, so without the project reader the eight Bots this
+   * schedule in git, so without the project reader the one Bot this
    * computer ships would export as a name and a paragraph. Read against the
-   * real projects: what makes this honest is that it is the same tree the
+   * real project: what makes this honest is that it is the same tree the
    * guest image builds.
    */
   it("reads what a shipped Bot's Eve project holds", () => {
     const root = join(import.meta.dirname, "../../eve/bots");
-    const source = templateSources(root)("chief-of-staff");
+    const source = templateSources(root)("main");
     expect(source?.instructions).toContain("#");
     expect(source?.skills.map((s) => s.id)).toContain("calendar");
     const calendar = source?.skills.find((s) => s.id === "calendar");
@@ -238,8 +238,8 @@ describe("a Bot template", () => {
     expect(calendar?.body).toContain("# Calendar");
     // Two files declare a routine and both are read: the cron out of
     // routines.json, the prompt out of the schedule module beside it.
-    expect(source?.routines).toMatchObject([{ cron: "0 20 * * 0-4", id: "morning-brief" }]);
-    expect(source?.routines[0]?.prompt).toContain("Write today's brief.");
+    expect(source?.routines).toMatchObject([{ cron: "0 20 * * *", id: "box-health" }]);
+    expect(source?.routines[0]?.prompt).toContain("A daily check on my own computer");
     // A connection that is only wiring, with no address of its own, is not a
     // service a person installing this would have to connect.
     expect(source?.plugins).toEqual([]);

@@ -20,8 +20,8 @@ Each bot is its own eve.dev project: `agent/profile.json`,
 `lib/` and are re-exported from the bot.
 
 One **process** per bot, while that bot is awake. `COMPUTER_BOT_TOKEN` is its
-identity and its screen; the port is `2000 + (display - 1)`. The roster ships seven specialists
-beside `main`; [`docs/BOTS.md`](../../docs/BOTS.md) says who owns what.
+identity and its screen; the port is `2000 + (display - 1)`. The build ships one Bot, `main`;
+[`docs/BOTS.md`](../../docs/BOTS.md) says what it owns and how a second is made.
 
 ## Add a bot
 
@@ -51,7 +51,7 @@ beside `main`; [`docs/BOTS.md`](../../docs/BOTS.md) says who owns what.
    rest are started when something asks for them and stopped when they go
    quiet.
 
-Eight screens is the ceiling (`MAX_DISPLAYS`), so a ninth project boots with
+Sixteen screens is the ceiling (`MAX_DISPLAYS`), so a project past that boots with
 a warning and no screen. Deleting a Bot whose project is still in the image
 frees its screen only until the next boot: removing one for good means
 removing its directory.

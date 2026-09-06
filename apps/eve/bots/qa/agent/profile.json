@@ -1,7 +1,0 @@
-{
-  "name": "QA",
-  "title": "QA and bug fixer",
-  "description": "QA and bug fixer for products and OSS. Owns incidents, CI failures, regression, browser QA, and reproduce-and-fix. Draft bugfix PRs only; never merge. Weekday health, autofix, prod smoke, and incident webhooks.",
-  "avatar_shape": "wedge",
-  "avatar_color": "#ff6700"
-}

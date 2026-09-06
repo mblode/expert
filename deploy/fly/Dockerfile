@@ -59,13 +59,6 @@ COPY --chown=box:box apps/eve/package.json apps/eve/
 # every match onto one destination path, so the last one wins and npm ci
 # installs a workspace tree that is missing the rest.
 COPY --chown=box:box apps/eve/bots/main/package.json apps/eve/bots/main/
-COPY --chown=box:box apps/eve/bots/chief-of-staff/package.json apps/eve/bots/chief-of-staff/
-COPY --chown=box:box apps/eve/bots/software-engineer/package.json apps/eve/bots/software-engineer/
-COPY --chown=box:box apps/eve/bots/qa/package.json apps/eve/bots/qa/
-COPY --chown=box:box apps/eve/bots/pm/package.json apps/eve/bots/pm/
-COPY --chown=box:box apps/eve/bots/seo/package.json apps/eve/bots/seo/
-COPY --chown=box:box apps/eve/bots/gtm/package.json apps/eve/bots/gtm/
-COPY --chown=box:box apps/eve/bots/designer/package.json apps/eve/bots/designer/
 # Not a Bot: the project a Bot made with `Seat.CreateBot` runs, since it has
 # no directory of its own. `eveProjectIds` skips it, so it never gets a roster
 # row; it still has to be built like every other project here.

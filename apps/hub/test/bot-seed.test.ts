@@ -102,8 +102,11 @@ describe("the profiles this build ships", () => {
     expect(existsSync(join(BOTS_ROOT, "template", "agent", "profile.json"))).toBe(false);
   });
 
+  // One Bot ships since 2026-09-06 (`docs/BOTS.md`); the guard is that the
+  // list is read from the tree, so a Bot added later is covered without
+  // anyone editing this file.
   it("covers every Bot in the tree", () => {
-    expect(ids.length).toBeGreaterThan(1);
+    expect(ids).toEqual(["main"]);
   });
 
   it.each(ids)("%s has a valid mark and fits the caps", (id) => {

@@ -1,6 +1,0 @@
-[
-  {
-    "cron": "0 22 * * 0",
-    "id": "search-console"
-  }
-]
