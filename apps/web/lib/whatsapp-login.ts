@@ -2,6 +2,7 @@ import { createHmac, randomInt } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { db } from "./db";
 import { phoneAccount } from "./phone-account";
+import { whatsappLoginLink } from "./whatsapp-login-link";
 import { connectionForSender } from "./whatsapp-connection";
 
 let ready: Promise<void> | undefined;
@@ -47,7 +48,7 @@ export async function issueWhatsAppCode(jid: string) {
       expires_at = excluded.expires_at, issued_at = excluded.issued_at, attempts = 0
     WHERE whatsapp_login.issued_at <= ${now - 30_000}`);
   return result.rowsAffected === 1
-    ? `Your Expert sign-in code is ${code}. Enter it at https://hello.expert/login. It expires in 5 minutes. Only enter it if you are signing in. Never share it.`
+    ? `Your Expert sign-in code is ${code}. Open this link, then tap Sign in:\n${whatsappLoginLink(jid.split("@")[0]!, code)}\nIt expires in 5 minutes. Only use it if you are signing in. Never share this link or code.`
     : "Please wait 30 seconds before requesting another sign-in code.";
 }
 /** Atomic consumption prevents concurrent replay; every incorrect guess uses an attempt. */

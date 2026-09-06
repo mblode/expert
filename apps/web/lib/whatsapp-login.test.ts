@@ -35,7 +35,11 @@ describe("WhatsApp sign-in", () => {
   });
   it("hashes codes, binds them to the phone and consumes once concurrently", async () => {
     const row = await readyPhone();
-    const code = codeFrom(await issueWhatsAppCode(row.jid));
+    const reply = await issueWhatsAppCode(row.jid);
+    const code = codeFrom(reply);
+    expect(reply).toContain(
+      `https://hello.expert/login#phone=${row.jid.split("@")[0]}&code=${code}`,
+    );
     const stored = await db.all<{ code_hash: string }>(
       sql`SELECT code_hash FROM whatsapp_login WHERE jid = ${row.jid}`,
     );

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isPossiblePhoneNumber } from "react-phone-number-input";
+import { readWhatsAppLoginLink } from "@/lib/whatsapp-login-link";
 import { LoginForm } from "./login-form";
 import { Button } from "./ui/button";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "./ui/input-otp";
@@ -15,6 +16,25 @@ export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>)
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
+  const [fromLink, setFromLink] = useState(false);
+  useEffect(() => {
+    const { hash } = window.location;
+    if (!new URLSearchParams(hash.slice(1)).has("code")) return;
+    const credentials = readWhatsAppLoginLink(hash);
+    // Remove credentials from the current history entry after reading them.
+    window.history.replaceState(
+      window.history.state,
+      "",
+      window.location.pathname + window.location.search,
+    );
+    if (credentials) {
+      // oxlint-disable-next-line react/set-state-in-effect -- hydrate from the browser-only URL fragment after SSR
+      setPhone(credentials.phone);
+      setCode(credentials.code);
+      setFromLink(true);
+    }
+  }, []);
+
   if (email)
     return (
       <div className="flex flex-col gap-5">
@@ -44,6 +64,7 @@ export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>)
           });
           if (!response.ok) {
             const result = await response.json();
+            setFromLink(false);
             setError(result.message ?? "Could not sign in. Request a new code and try again.");
             setPending(false);
             return;
@@ -55,34 +76,40 @@ export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>)
         }
       }}
     >
-      <section
-        aria-labelledby="get-code-title"
-        className="flex flex-col gap-3 rounded-xl border border-border p-4"
-      >
-        <div className="space-y-1">
-          <h2 id="get-code-title" className="text-sm font-medium">
-            Need a sign-in code?
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Open your private chat with Vibey and send{" "}
-            <strong className="text-foreground">sign in</strong>. Then return here with the code.
-          </p>
-        </div>
-        <Button
-          render={
-            <a
-              aria-label="Get a code in WhatsApp"
-              href="https://wa.me/message/O7KCFC6HSFCPM1"
-              target="_blank"
-              rel="noreferrer"
-            />
-          }
-          variant="outline"
-          size="input"
+      {fromLink ? (
+        <output className="text-sm text-muted-foreground">
+          Your code is filled in. Check your number below, then tap Sign in.
+        </output>
+      ) : (
+        <section
+          aria-labelledby="get-code-title"
+          className="flex flex-col gap-3 rounded-xl border border-border p-4"
         >
-          Get a code in WhatsApp
-        </Button>
-      </section>
+          <div className="space-y-1">
+            <h2 id="get-code-title" className="text-sm font-medium">
+              Need a sign-in code?
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Open your private chat with Vibey and send{" "}
+              <strong className="text-foreground">sign in</strong>. Then return here with the code.
+            </p>
+          </div>
+          <Button
+            render={
+              <a
+                aria-label="Get a code in WhatsApp"
+                href="https://wa.me/message/O7KCFC6HSFCPM1"
+                target="_blank"
+                rel="noreferrer"
+              />
+            }
+            variant="outline"
+            size="input"
+          >
+            Get a code in WhatsApp
+          </Button>
+        </section>
+      )}
       <FieldGroup>
         <Field data-invalid={phoneInvalid || undefined}>
           <FieldLabel htmlFor="whatsapp-phone">WhatsApp number</FieldLabel>

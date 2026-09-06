@@ -40,7 +40,9 @@ export default async function LoginPage({
     typeof query.returnTo === "string" ? workReturnTo(query.returnTo) : safeNext(query.next);
   const session = await getSessionCached();
   if (session) {
-    redirect(next);
+    // An explicit fragment prevents a browser from carrying login credentials
+    // through the redirect when this device is already signed in.
+    redirect(next.includes("#") ? next : `${next}#`);
   }
 
   const social = socialProvidersAvailable();
