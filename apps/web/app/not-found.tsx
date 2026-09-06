@@ -1,6 +1,18 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
+
+/**
+ * Next only injects `noindex` when the response is a real 404. `/_not-found`,
+ * the route it reserves for this boundary, answers 200 and so inherited the
+ * layout's `index, follow` — an indexable soft 404. Declaring it here covers
+ * that route as well as the 404s.
+ */
+export const metadata: Metadata = {
+  robots: { follow: true, index: false },
+  title: "Not found",
+};
 
 /**
  * A real 404 with somewhere to go next, for people and for agents that read
