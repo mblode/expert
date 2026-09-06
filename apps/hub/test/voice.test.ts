@@ -40,46 +40,18 @@ describe("the voice", () => {
     expect(first.conversation_id).toBe(v.conversationId());
   });
 
-  it("a widget ends the turn and a second send is rejected", () => {
+  it("a secret request ends the turn and a second send is rejected", () => {
     const { v } = voice();
-    const r = v.send({ kind: "widget", options: ["a", "b"], prompt: "Which?" });
+    const r = v.send({ kind: "secret_request", label: "2FA code", prompt: "Which?" });
     expect(r.turn_ended).toBe(true);
     expect(() => v.send({ kind: "text", text: "and another thing" })).toThrow(ComputerError);
     expect(() => v.send({ kind: "text", text: "and another thing" })).toThrow(/turn ended/);
   });
 
-  it("answering the widget re-opens the turn and records the choice", () => {
+  it("a request needs a prompt and a label", () => {
     const { v } = voice();
-    const { occurrence_id } = v.send({ kind: "widget", options: ["a", "b"], prompt: "Which?" });
-    v.answerWidget(occurrence_id, "b");
-    const w = v.page().entries.find((o) => o.id === occurrence_id);
-    // The widget's own line is never rewritten: `answer` is derived from the
-    // message that closed it, which is what an append-only log can promise.
-    expect(w?.kind === "widget" && w.answer).toBe("b");
-    expect(() => v.send({ kind: "text", text: "ok, b" })).not.toThrow();
-  });
-
-  it("rejects a widget answer that was never offered", () => {
-    const { v } = voice();
-    const { occurrence_id } = v.send({ kind: "widget", options: ["a"], prompt: "Which?" });
-    expect(() => v.answerWidget(occurrence_id, "z")).toThrow(/one of the offered options/);
-  });
-
-  it("only the open widget can be answered, so an old one cannot re-open a turn", () => {
-    const { v } = voice();
-    const first = v.send({ kind: "widget", options: ["a", "b"], prompt: "First?" });
-    v.answerWidget(first.occurrence_id, "a");
-    v.send({ kind: "widget", options: ["c", "d"], prompt: "Second?" });
-    expect(() => v.answerWidget(first.occurrence_id, "b")).toThrow(/no open widget/);
-    // And the turn the second widget ended is still ended.
-    expect(() => v.send({ kind: "text", text: "moving on" })).toThrow(/turn ended/);
-  });
-
-  it("enforces 1..6 widget options", () => {
-    const { v } = voice();
-    expect(() => v.send({ kind: "widget", options: [], prompt: "p" })).toThrow(/1\.\.6/);
-    const seven = ["1", "2", "3", "4", "5", "6", "7"];
-    expect(() => v.send({ kind: "widget", options: seven, prompt: "p" })).toThrow(/1\.\.6/);
+    expect(() => v.send({ kind: "secret_request", label: "x", prompt: "" })).toThrow(/prompt/);
+    expect(() => v.send({ kind: "secret_request", label: "", prompt: "p" })).toThrow(/label/);
   });
 
   it("a secret goes to the clipboard and nowhere the model can read it", async () => {
@@ -166,14 +138,14 @@ describe("the voice", () => {
     expect(last.next_cursor).toBeNull();
   });
 
-  it("a widget on the seat thread does not block a send on a WhatsApp conversation", () => {
+  it("a request on the seat thread does not block a send on a WhatsApp conversation", () => {
     const { conversations, v } = voice();
     const chat = conversations.resolve("main", { acct: "main", jid: "g@g.us", kind: "whatsapp" }, [
       { bot: "main", kind: "bot" },
     ]);
 
     // The human on hello.expert is being waited on.
-    v.send({ kind: "widget", options: ["a", "b"], prompt: "Which?" });
+    v.send({ kind: "secret_request", label: "2FA code", prompt: "Which?" });
     expect(() => v.send({ kind: "text", text: "and another thing" })).toThrow(/turn ended/);
 
     // A WhatsApp message arrives and gets its answer. Before conversations
@@ -190,7 +162,7 @@ describe("the voice", () => {
     // The seat thread is still waiting, which is the half that must not change.
     expect(() => v.send({ kind: "text", text: "still?" })).toThrow(/turn ended/);
     // And the two logs are separate files, so nothing crossed over.
-    expect(v.page().entries.map((e) => e.kind)).toEqual(["widget"]);
+    expect(v.page().entries.map((e) => e.kind)).toEqual(["secret_request"]);
     expect(conversations.page(chat.id).entries.map((e) => e.kind)).toEqual(["text"]);
   });
 
@@ -200,9 +172,7 @@ describe("the voice", () => {
       kind: "text",
       text: "hi",
     });
-    expect(() => parseSendBody({ kind: "shout", text: "hi" })).toThrow(
-      /text, widget or secret_request/,
-    );
+    expect(() => parseSendBody({ kind: "shout", text: "hi" })).toThrow(/text or secret_request/);
     expect(() => parseSendBody("hi")).toThrow(/must be an object/);
   });
 });

@@ -235,9 +235,14 @@ function sameRoute(a: Route, b: Route): boolean {
   return true;
 }
 
-/** A `widget` or a `secret_request`: the two bodies that end a turn. */
+/**
+ * A `secret_request`: the one body that ends a turn. Logs written before
+ * 2026-09-06 may hold a `widget` line; it is an ordinary entry now and no
+ * longer holds a turn shut, which is the right reading of a question nothing
+ * could ever answer.
+ */
 function isRequest(message: Message | undefined): boolean {
-  return message?.body.kind === "widget" || message?.body.kind === "secret_request";
+  return message?.body.kind === "secret_request";
 }
 
 /** What an append carries beyond the body: both are optional and both are the hub's. */
@@ -259,7 +264,7 @@ interface AppendMeta {
  * between the two leaves the index behind, never ahead, and reading both
  * back is what keeps a cursor meaning what it meant. `turnEnded` is the same
  * rule `VoiceService` used to hold on its own, now held here per
- * conversation, which is why a widget on the seat thread no longer blocks
+ * conversation, which is why a request on the seat thread no longer blocks
  * the next WhatsApp reply.
  */
 export class ConversationRegistry {
@@ -364,7 +369,6 @@ export class ConversationRegistry {
     return messages
       .map(({ body }) => {
         if (body.kind === "text") return body.text;
-        if (body.kind === "widget") return [body.prompt, ...body.options].join("\n");
         if (body.kind === "secret_request") return body.prompt;
         return "";
       })
@@ -424,7 +428,7 @@ export class ConversationRegistry {
     if (this.ended(record)) {
       throw new ComputerError(
         "CONFLICT",
-        "the turn ended, a widget or secret_request is waiting on the human",
+        "the turn ended, a secret_request is waiting on the human",
       );
     }
     const message = this.append(record.id, author, body, { turn_id: turnId });
@@ -435,7 +439,7 @@ export class ConversationRegistry {
     };
   }
 
-  /** The `widget` or `secret_request` waiting on the human, if there is one. */
+  /** The `secret_request` waiting on the human, if there is one. */
   pendingRequest(conversationId: string): Message | undefined {
     const record = this.byId(conversationId);
     // An open request is always the tail: closing one appends after it.
@@ -460,26 +464,6 @@ export class ConversationRegistry {
       throw new ComputerError("CONFLICT", `secret request ${occurrenceId} was already provided`);
     }
     throw new ComputerError("VALIDATION", `no open secret request ${occurrenceId}`);
-  }
-
-  /**
-   * The seat answers the open widget. Re-opens the turn and records the
-   * choice, which in an append-only log means the answering message names
-   * the widget it closes rather than the widget's own line being rewritten.
-   *
-   * Only the open one, which is stricter than the log the voice used to
-   * keep: answering an old widget was a way to re-open a turn that had
-   * ended on a newer one.
-   */
-  answerWidget(conversationId: string, occurrenceId: string, answer: string): Message {
-    const open = this.pendingRequest(conversationId);
-    if (open?.id !== occurrenceId || open.body.kind !== "widget") {
-      throw new ComputerError("VALIDATION", `no open widget ${occurrenceId}`);
-    }
-    if (!open.body.options.includes(answer)) {
-      throw new ComputerError("VALIDATION", "answer must be one of the offered options");
-    }
-    return this.close(conversationId, occurrenceId, answer);
   }
 
   /** Append the human message that closes a request. Re-opens the turn. */
@@ -553,8 +537,8 @@ export class ConversationRegistry {
     }
     const n = Math.min(Math.max(limit, 1), 500);
     const all = this.log.load(record.id);
-    // Built over the whole log, not the page: the message that answers a
-    // widget can sit past the window the caller asked for.
+    // Built over the whole log, not the page: the message that closes a
+    // request can sit past the window the caller asked for.
     const closed = resolutions(all);
     const rest = all.filter((m) => m.seq > after);
     const entries = rest.slice(0, n);
@@ -613,12 +597,11 @@ export class ConversationRegistry {
 /**
  * Which requests have been closed, and with what.
  *
- * A widget's `answer` and a secret_request's `provided` are resolution state
- * over an append-only log, so they are derived on read from the message that
- * closed them rather than stored on a line that would have to be rewritten.
- * Deriving them from "a human spoke next" instead would be wrong: a person
- * typing something unrelated after a widget re-opens the turn without
- * answering it.
+ * A secret_request's `provided` is resolution state over an append-only
+ * log, so it is derived on read from the message that closed it rather than
+ * stored on a line that would have to be rewritten. Deriving it from "a
+ * human spoke next" instead would be wrong: a person typing something
+ * unrelated after a request re-opens the turn without answering it.
  */
 function resolutions(messages: Message[]): Map<string, string> {
   const out = new Map<string, string>();
@@ -632,11 +615,9 @@ function resolutions(messages: Message[]): Map<string, string> {
 
 function flatten(m: Message, closed: Map<string, string>): ConversationEntry {
   const body =
-    m.body.kind === "widget"
-      ? { ...m.body, answer: closed.get(m.id) ?? m.body.answer }
-      : m.body.kind === "secret_request"
-        ? { ...m.body, provided: closed.has(m.id) || m.body.provided }
-        : m.body;
+    m.body.kind === "secret_request"
+      ? { ...m.body, provided: closed.has(m.id) || m.body.provided }
+      : m.body;
   return {
     ...body,
     at: m.at,

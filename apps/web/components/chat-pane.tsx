@@ -29,7 +29,7 @@ import type { BotProfile, Seat, SeatState } from "../lib/seat";
 import { loadSession, saveSession } from "../lib/storage";
 import { ChatComposer } from "./chat-composer";
 import { ChatMessage } from "./chat-message";
-import type { Answer } from "./chat-message";
+import type { Answer, SecretAnswer } from "./chat-message";
 
 /** Openers, not a menu: past three the empty state is a form to fill in. */
 const OPENERS = 3;
@@ -60,6 +60,7 @@ function eveIsDown(message: string | undefined): boolean {
  */
 export function ChatPane({
   botId,
+  display,
   offline,
   onOpenBots,
   onOpenScreen,
@@ -72,6 +73,8 @@ export function ChatPane({
   tools,
 }: {
   botId: string;
+  /** This Bot's screen, which is how the hub knows whose request a secret answers. */
+  display?: number;
   /** The hub is unreachable. Reported here, not over the composer. */
   offline?: string | null;
   /** Phone only: the roster and the screen are drawers rather than rails. */
@@ -126,6 +129,12 @@ export function ChatPane({
   const send = (text: string) => {
     setLastSent(text);
     void agent.send(text).catch(() => {});
+  };
+
+  // The masked value goes to the hub and on to the box clipboard, never
+  // through the Eve stream: it must not appear in the session the model reads.
+  const provideSecret = async ({ occurrenceId, value }: SecretAnswer) => {
+    await seat.provideSecret(occurrenceId, value, display);
   };
 
   const answer = ({ optionId, requestId, text }: Answer) => {
@@ -283,7 +292,12 @@ export function ChatPane({
                   messageId={message.id}
                   scrollAnchor={message.role === "user"}
                 >
-                  <ChatMessage disabled={busy} message={message} onAnswer={answer} />
+                  <ChatMessage
+                    disabled={busy}
+                    message={message}
+                    onAnswer={answer}
+                    onSecret={provideSecret}
+                  />
                 </MessageScrollerItem>
               ))}
 

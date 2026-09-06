@@ -1,4 +1,4 @@
-import { ComputerError, MAX_WIDGET_OPTIONS } from "@computer/shared";
+import { ComputerError } from "@computer/shared";
 import type { MessageBody, OccurrenceKind } from "@computer/shared";
 import type { Desk } from "../desk/types.ts";
 import type { ConversationEntry, ConversationPage, ConversationRegistry } from "./conversations.ts";
@@ -13,25 +13,24 @@ import type { ConversationEntry, ConversationPage, ConversationRegistry } from "
  * Two rules are enforced rather than asked for in a prompt, because a prompt
  * is a request and this is the product guarantee:
  *
- *   1. `widget` and `secret_request` END the turn. Stop and wait.
+ *   1. `secret_request` ENDS the turn. Stop and wait.
  *   2. A second send after the turn ended is rejected.
  *
- * A turn re-opens when the human speaks again, a message, a widget answer,
- * or a delivered secret. That is the same boundary in all three cases: the
- * person did something, so the agent may talk again.
+ * A turn re-opens when the human speaks again, a message or a delivered
+ * secret. That is the same boundary in both cases: the person did
+ * something, so the agent may talk again.
  *
  * All of that now lives in `ConversationRegistry`, applied to whichever
  * conversation the turn belongs to, and this class is what is left: the seat
  * route's end of it, plus the clipboard, which is the one part of a turn
  * that is a fact about a screen rather than about a log. There is deliberately
  * no second copy of the rules here. There used to be, and it was the bug: one
- * Bot had one `turnEnded` flag, so a widget on hello.expert made the next
+ * Bot had one `turnEnded` flag, so a request on hello.expert made the next
  * WhatsApp reply `CONFLICT`.
  */
 
 type SendBody =
   | { kind: "text"; text: string; images?: string[] }
-  | { kind: "widget"; prompt: string; options: string[] }
   | { kind: "secret_request"; prompt: string; label: string };
 
 /**
@@ -76,11 +75,6 @@ export class VoiceService {
       { bot: this.bot, kind: "bot" },
       buildBody(body),
     );
-  }
-
-  /** Seat answers a widget. Re-opens the turn and records the choice. */
-  answerWidget(occurrenceId: string, answer: string): void {
-    this.conversations.answerWidget(this.conversationId(), occurrenceId, answer);
   }
 
   /**
@@ -164,19 +158,6 @@ export function buildBody(body: SendBody): MessageBody {
       }
       return { images: body.images ?? [], kind: "text", text: body.text };
     }
-    case "widget": {
-      if (!body.prompt) {
-        throw new ComputerError("VALIDATION", "widget prompt is required");
-      }
-      const options = body.options ?? [];
-      if (options.length < 1 || options.length > MAX_WIDGET_OPTIONS) {
-        throw new ComputerError("VALIDATION", `widget needs 1..${MAX_WIDGET_OPTIONS} options`);
-      }
-      if (options.some((o) => !o)) {
-        throw new ComputerError("VALIDATION", "widget options must be non-empty");
-      }
-      return { answer: null, kind: "widget", options, prompt: body.prompt };
-    }
     case "secret_request": {
       if (!body.prompt) {
         throw new ComputerError("VALIDATION", "secret prompt is required");
@@ -204,13 +185,6 @@ export function parseSendBody(body: unknown): SendBody {
         images: Array.isArray(o.images) ? (o.images as string[]).map(String) : undefined,
       };
     }
-    case "widget": {
-      return {
-        kind: "widget",
-        prompt: String(o.prompt ?? ""),
-        options: Array.isArray(o.options) ? (o.options as unknown[]).map(String) : [],
-      };
-    }
     case "secret_request": {
       return {
         kind: "secret_request",
@@ -219,7 +193,7 @@ export function parseSendBody(body: unknown): SendBody {
       };
     }
     default: {
-      throw new ComputerError("VALIDATION", "kind must be text, widget or secret_request");
+      throw new ComputerError("VALIDATION", "kind must be text or secret_request");
     }
   }
 }

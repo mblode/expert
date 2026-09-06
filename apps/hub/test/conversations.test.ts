@@ -114,14 +114,14 @@ describe("conversations", () => {
     const a = conv.resolve("main", chat("a@g.us"), [BOT, HUMAN]);
     const b = conv.resolve("main", chat("b@g.us"), [BOT, HUMAN]);
 
-    const widget = conv.send(a.id, BOT, {
-      answer: null,
-      kind: "widget",
-      options: ["yes", "no"],
+    const request = conv.send(a.id, BOT, {
+      kind: "secret_request",
+      label: "2FA code",
       prompt: "Which?",
+      provided: false,
     });
-    expect(widget.turn_ended).toBe(true);
-    expect(widget.conversation_id).toBe(a.id);
+    expect(request.turn_ended).toBe(true);
+    expect(request.conversation_id).toBe(a.id);
     expect(() => conv.send(a.id, BOT, { images: [], kind: "text", text: "more" })).toThrow(
       /turn ended/,
     );
@@ -201,12 +201,12 @@ describe("conversations", () => {
     const seat = conv.resolveSeat("main");
     conv.importSeatLog(seat.id, TRANSCRIPT, [
       {
-        answer: null,
         at: 1,
         id: "occ_w",
-        kind: "widget",
-        options: ["a"],
+        kind: "secret_request",
+        label: "2FA code",
         prompt: "Which?",
+        provided: false,
         seq: 1,
       },
     ]);

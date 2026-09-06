@@ -158,7 +158,7 @@ describe("per-Bot state on the box", () => {
     await rpc(
       first.url,
       "/computer.v1.Agent/SendMessage",
-      { kind: "widget", options: ["a", "b"], prompt: "Which?" },
+      { kind: "secret_request", label: "2FA code", prompt: "Which?" },
       first.agent,
     );
     await first.close();
@@ -317,12 +317,12 @@ describe("the one-shot transcript import", () => {
   it("carries a turn that ended in the old log across the import", async () => {
     const { desks } = boxWith([
       {
-        answer: null,
         at: 1,
         id: "occ_w",
-        kind: "widget",
-        options: ["a", "b"],
+        kind: "secret_request",
+        label: "2FA code",
         prompt: "Which?",
+        provided: false,
         seq: 1,
       },
     ]);

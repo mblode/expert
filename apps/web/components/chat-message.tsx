@@ -13,6 +13,7 @@ import {
   ShieldCheckIcon,
   SquareCursorIcon,
 } from "blode-icons-react";
+import { useState } from "react";
 import type {
   EveDynamicToolPart,
   EveMessage,
@@ -22,6 +23,7 @@ import type {
 
 import { Bubble, BubbleContent } from "@/components/ui/bubble";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker";
 import { Message, MessageContent } from "@/components/ui/message";
 import {
@@ -486,7 +488,131 @@ function MessagePart({
 
 type Item =
   | { kind: "single"; key: string; part: EveMessagePart }
+  | { kind: "secret"; key: string; part: EveDynamicToolPart; request: SecretRequest }
   | { kind: "tools"; key: string; parts: EveDynamicToolPart[] };
+
+/** What the seat answers: the open request's id and the masked value. */
+export interface SecretAnswer {
+  occurrenceId: string;
+  value: string;
+}
+
+interface SecretRequest {
+  prompt: string;
+  label: string;
+  /** From the tool's result; absent while the call is still streaming. */
+  occurrenceId?: string;
+}
+
+/**
+ * A `send_message` whose kind is `secret_request` is the one voice part that
+ * renders: it ended the Bot's turn and waits on a person, and this pane is
+ * the only client that can answer it (`Seat.ProvideSecret`). The value goes
+ * to the box clipboard and never through the model, which is the whole
+ * reason it is a masked field here and not a chat reply.
+ */
+function secretRequestOf(part: EveDynamicToolPart): SecretRequest | null {
+  const input = part.input as { kind?: unknown; prompt?: unknown; label?: unknown } | undefined;
+  if (input?.kind !== "secret_request") {
+    return null;
+  }
+  const output = part.output as { occurrence_id?: unknown } | undefined;
+  return {
+    label: typeof input.label === "string" && input.label ? input.label : "the value",
+    occurrenceId: typeof output?.occurrence_id === "string" ? output.occurrence_id : undefined,
+    prompt: typeof input.prompt === "string" ? input.prompt : "",
+  };
+}
+
+function SecretRequestCard({
+  disabled,
+  onSecret,
+  request,
+}: {
+  disabled: boolean;
+  onSecret?: (answer: SecretAnswer) => Promise<void>;
+  request: SecretRequest;
+}): React.ReactElement {
+  const [value, setValue] = useState("");
+  const [state, setState] = useState<"open" | "sending" | "done" | "error">("open");
+  const [failure, setFailure] = useState<string | null>(null);
+  const ready = onSecret !== undefined && request.occurrenceId !== undefined;
+
+  if (state === "done") {
+    return (
+      <Marker variant="border">
+        <MarkerIcon>
+          <KeyIcon />
+        </MarkerIcon>
+        <MarkerContent>{request.label} is on the computer clipboard for two minutes.</MarkerContent>
+      </Marker>
+    );
+  }
+
+  const submit = async () => {
+    if (!(ready && value) || state === "sending") {
+      return;
+    }
+    setState("sending");
+    setFailure(null);
+    try {
+      await onSecret({ occurrenceId: request.occurrenceId as string, value });
+      setValue("");
+      setState("done");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      // Already answered, from another tab or before a reload: that is done,
+      // not a failure to show as one.
+      if (/already provided/i.test(message)) {
+        setState("done");
+        return;
+      }
+      setFailure(message);
+      setState("error");
+    }
+  };
+
+  return (
+    <fieldset
+      aria-label="Secret requested"
+      className={`w-full rounded-xl border border-border bg-card p-3 ${
+        disabled ? "pointer-events-none opacity-60" : ""
+      }`}
+      disabled={disabled}
+    >
+      <div className="flex items-center gap-1.5 pb-2 text-muted-foreground text-xs">
+        <KeyIcon className="size-3.5 shrink-0" />
+        <span className="font-medium text-foreground">{request.label}</span>
+      </div>
+      {request.prompt && <p className="text-sm leading-6">{request.prompt}</p>}
+      <form
+        className="flex flex-wrap items-center gap-2 pt-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submit();
+        }}
+      >
+        <Input
+          aria-label={request.label}
+          autoComplete="off"
+          className="min-w-48 flex-1"
+          disabled={!ready || state === "sending"}
+          onChange={(event) => setValue(event.target.value)}
+          placeholder={request.label}
+          type="password"
+          value={value}
+        />
+        <Button disabled={!(ready && value) || state === "sending"} size="sm" type="submit">
+          Put on the clipboard
+        </Button>
+      </form>
+      <p className="pt-2 text-muted-foreground text-xs">
+        {failure ??
+          "Goes straight to the computer clipboard. The Bot pastes it and never reads it."}
+      </p>
+    </fieldset>
+  );
+}
 
 const toolNameOf = (part: EveDynamicToolPart): string =>
   part.toolMetadata?.eve?.name ?? part.toolName;
@@ -529,7 +655,14 @@ function buildItems(parts: readonly EveMessagePart[]): Item[] {
   for (const [index, part] of parts.entries()) {
     if (isPlainTool(part)) {
       // The voice renders nothing here, and must not break a run in two.
+      // The exception is a secret request: the one send that waits on the
+      // person reading this pane.
       if (isVoice(part)) {
+        const request = secretRequestOf(part);
+        if (request) {
+          flush();
+          items.push({ key: `secret-${index}`, kind: "secret", part, request });
+        }
         continue;
       }
       if (run.length === 0) {
@@ -563,10 +696,13 @@ export function ChatMessage({
   disabled,
   message,
   onAnswer,
+  onSecret,
 }: {
   disabled: boolean;
   message: EveMessage;
   onAnswer: (answer: Answer) => void;
+  /** Answers an open `secret_request`; absent where no seat can (the invite desk). */
+  onSecret?: (answer: SecretAnswer) => Promise<void>;
 }): React.ReactElement {
   const align = message.role === "user" ? "end" : "start";
   const items = buildItems(
@@ -579,6 +715,13 @@ export function ChatMessage({
         {items.map((item) =>
           item.kind === "tools" ? (
             <ToolSteps key={item.key} parts={item.parts} />
+          ) : item.kind === "secret" ? (
+            <SecretRequestCard
+              disabled={disabled}
+              key={item.key}
+              onSecret={onSecret}
+              request={item.request}
+            />
           ) : (
             <MessagePart
               disabled={disabled}

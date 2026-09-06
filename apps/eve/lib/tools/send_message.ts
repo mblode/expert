@@ -5,7 +5,7 @@ import { hubRpc } from "../hub.ts";
 
 export default defineTool({
   description:
-    "Say something to the human. Reply briefly before work and with the result. kind=link opens owner-authenticated computer control, plugin setup or cloud coding. Repeat the returned URL in a WhatsApp final reply; it grants no access without sign-in. A widget or secret_request ENDS the turn; stop and wait. Never ask for credentials in chat.",
+    "Say something to the human. Reply briefly before work and with the result. kind=link opens owner-authenticated computer control, plugin setup or cloud coding. Repeat the returned URL in a WhatsApp final reply; it grants no access without sign-in. A secret_request ENDS the turn; stop and wait. Ask a question as text. Never ask for credentials in chat.",
   // `ctx.session.auth.current` is the verified inbound principal, which is
   // route auth and not a prompt: eve's own multi-tenant guidance is that a
   // prompt asking for another tenant cannot change it. Absent (the eve TUI,
@@ -68,11 +68,7 @@ export default defineTool({
       .array(z.string())
       .optional()
       .describe("kind=text. Base64 PNGs shown beside the text."),
-    prompt: z.string().optional().describe("kind=widget or secret_request. The question."),
-    options: z
-      .array(z.string())
-      .optional()
-      .describe("kind=widget. 1-6 real choices. Ends the turn."),
+    prompt: z.string().optional().describe("kind=secret_request. The question."),
     label: z
       .string()
       .optional()

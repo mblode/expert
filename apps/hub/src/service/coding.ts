@@ -239,8 +239,8 @@ export class CodingService {
       ],
     );
     // `append`, not `send`: the model's turn rules are about the model's
-    // voice, and nothing here is the model speaking. A widget waiting on the
-    // human in this thread must not stop a run's status from being recorded.
+    // voice, and nothing here is the model speaking. A secret request waiting
+    // on the human in this thread must not stop a run's status from being recorded.
     if (conversation.last_seq === 0)
       this.conversations.append(
         conversation.id,

@@ -337,6 +337,13 @@ export function createSeat(hubUrl: string, token: string) {
       call<unknown>("Pointer", { type: "click", button, display }),
     clipboardGet: (display?: number) => call<{ text: string }>("ClipboardGet", { display }),
     /**
+     * Answer an open `secret_request`. The value goes to the box clipboard and
+     * nowhere else: not the thread, not the reply, not the model. Once per
+     * request; the hub refuses a replay.
+     */
+    provideSecret: (occurrence_id: string, value: string, display?: number) =>
+      call<{ provided: boolean }>("ProvideSecret", { display, occurrence_id, value }),
+    /**
      * Make a Bot on the computer. Owner-only, and the id is what the box
      * calls it forever: the name a person typed is the profile, written
      * straight after this with `setBotProfile`.

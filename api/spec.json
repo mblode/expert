@@ -115,7 +115,7 @@
   "tools": [
     {
       "name": "send_message",
-      "description": "Say something to the human. This is the ONLY thing they see — your other text is a private scratchpad, so a turn that ends without a send is silence. Reply with a short text send before you start work, and send again when the work is done: acknowledging is not delivering. A widget or secret_request ENDS the turn — stop and wait for the answer; a second send after one is rejected with CONFLICT. Use kind=link with destination=computer, plugins or code for an owner-authenticated breakout. It does not end the turn or grant access. kind=code launches one cloud coding session for this verified owner turn. It requires an enabled repo and a text brief; retrying with changed input is a conflict. kind=configure reads or replaces approved instructions, memory and procedures for the bound PA owner. Supply configuration.operation and the current base_revision when editing; undo creates another revision. Changes apply on the next turn, never grant tools or permissions. kind=routine lists, saves, pauses or resumes a durable owner routine. Read its current revision first. Activation is pending until wake publication succeeds.",
+      "description": "Say something to the human. This is the ONLY thing they see — your other text is a private scratchpad, so a turn that ends without a send is silence. Reply with a short text send before you start work, and send again when the work is done: acknowledging is not delivering. A secret_request ENDS the turn — stop and wait for the answer; a second send after one is rejected with CONFLICT. A question with choices is plain text. Use kind=link with destination=computer, plugins or code for an owner-authenticated breakout. It does not end the turn or grant access. kind=code launches one cloud coding session for this verified owner turn. It requires an enabled repo and a text brief; retrying with changed input is a conflict. kind=configure reads or replaces approved instructions, memory and procedures for the bound PA owner. Supply configuration.operation and the current base_revision when editing; undo creates another revision. Changes apply on the next turn, never grant tools or permissions. kind=routine lists, saves, pauses or resumes a durable owner routine. Read its current revision first. Activation is pending until wake publication succeeds.",
       "input": {
         "type": "object",
         "required": ["kind"],
@@ -123,7 +123,7 @@
         "properties": {
           "kind": {
             "type": "string",
-            "enum": ["text", "widget", "secret_request", "link", "code", "configure", "routine"]
+            "enum": ["text", "secret_request", "link", "code", "configure", "routine"]
           },
           "text": {
             "type": "string",
@@ -140,17 +140,7 @@
           "prompt": {
             "type": "string",
             "minLength": 1,
-            "description": "kind=widget or secret_request. The question."
-          },
-          "options": {
-            "type": "array",
-            "minItems": 1,
-            "maxItems": 6,
-            "items": {
-              "type": "string",
-              "minLength": 1
-            },
-            "description": "kind=widget. 1-6 real choices."
+            "description": "kind=secret_request. The question."
           },
           "label": {
             "type": "string",

@@ -264,17 +264,15 @@ until the human releases.
 
 Plain model text is a private scratchpad. The human sees exactly the
 occurrences `Agent.SendMessage` writes into the Bot's thread, and
-nothing else. Three kinds:
+nothing else. Two kinds:
 
 | `kind`           | Human sees                                   | Ends the turn? |
 | ---------------- | -------------------------------------------- | -------------- |
 | `text`           | a bubble, optional base64 PNG `images`       | no             |
-| `widget`         | `prompt` and 1–6 `options`                   | **yes**        |
 | `secret_request` | `prompt` and a masked field labelled `label` | **yes**        |
 
 A turn that ended waits on the human; a second send is `CONFLICT`. The
-turn re-opens when the human speaks: a message, a widget answer, or a
-delivered secret. `Seat.ProvideSecret { occurrence_id, value }` puts the
+turn re-opens when the human speaks: a message or a delivered secret. `Seat.ProvideSecret { occurrence_id, value }` puts the
 value on the box clipboard and nowhere else, not the thread, not the
 response, not the model's context, and clears it after two minutes if
 it is still there. It works once per request.
@@ -287,8 +285,12 @@ Bot's; with one it is that conversation, below. Entries carry an additive
 `conversation_id` and `author`, and the `cursor` / `next_cursor` / `seq`
 contract is untouched.
 
-There is no Seat RPC to answer a `widget` yet: a client re-opens the turn
-by sending a new message through its harness. That is a known gap.
+`widget` (a prompt with 1–6 options) was removed on 2026-09-06. No client
+ever rendered one and no RPC could answer it, so a Bot that sent one ended
+its turn against a wall; a question with choices is plain text. hello.expert
+answers a `secret_request` with a masked field that calls
+`Seat.ProvideSecret`; a log written before the removal may still hold a
+`widget` line, which reads as an ordinary entry and holds nothing shut.
 
 ## Conversations
 
@@ -320,10 +322,10 @@ conversation id addresses a human's route, so letting the model name one is
 the injection path the five-tool rule refuses.
 
 The turn rules are unchanged and are now per conversation, enforced in one
-place for every route, which is why a `widget` waiting on hello.expert no
-longer makes the next WhatsApp reply `CONFLICT`. A `widget`'s `answer` and a
-`secret_request`'s `provided` are derived on read from the message that
-closed the request: the log is append-only, so a line is never rewritten.
+place for every route, which is why a request waiting on hello.expert no
+longer makes the next WhatsApp reply `CONFLICT`. A `secret_request`'s
+`provided` is derived on read from the message that closed the request: the
+log is append-only, so a line is never rewritten.
 
 `Seat.Conversations { display? }` lists them:
 `{ id, route, participants, last_seq, updated_at }[]`, no message bodies,

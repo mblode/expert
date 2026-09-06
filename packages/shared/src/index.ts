@@ -395,11 +395,8 @@ export const TOOLS = ["send_message", "computer", "shell", "read_file", "write_f
 export const WORK_DESTINATIONS = ["computer", "plugins", "code"] as const;
 export type WorkDestination = (typeof WORK_DESTINATIONS)[number];
 
-/** Widget options the seat will render. 1..6, per the 0.18 card contract. */
-export const MAX_WIDGET_OPTIONS = 6 as const;
-
 /** Occurrence kinds in the per-Bot log the human actually sees. */
-export const OCCURRENCE_KINDS = ["human", "text", "widget", "secret_request"] as const;
+export const OCCURRENCE_KINDS = ["human", "text", "secret_request"] as const;
 export type OccurrenceKind = (typeof OCCURRENCE_KINDS)[number];
 
 export type SeatState = "AGENT" | "WAITING" | "HUMAN";
@@ -875,13 +872,14 @@ export type Author =
 
 /**
  * Exactly today's occurrence bodies with `id`, `seq` and `at` lifted out.
- * Not one new kind: the turn rules that hang off `widget` and
- * `secret_request` are unchanged, they just become per conversation.
+ * Not one new kind: the turn rule that hangs off `secret_request` is
+ * unchanged, it just becomes per conversation. `widget` was removed on
+ * 2026-09-06: no client rendered one and nothing could answer it, and a
+ * text question does the same job on every surface.
  */
 export type MessageBody =
   | { kind: "human"; text: string }
   | { kind: "text"; text: string; images: string[] }
-  | { kind: "widget"; prompt: string; options: string[]; answer: string | null }
   | { kind: "secret_request"; prompt: string; label: string; provided: boolean };
 
 export interface Message {
@@ -896,13 +894,12 @@ export interface Message {
   /** Set for anything a turn produced. */
   turn_id?: string;
   /**
-   * The id of the `widget` or `secret_request` this message closes.
+   * The id of the `secret_request` this message closes.
    *
-   * A widget's `answer` and a secret_request's `provided` are resolution
-   * state, and the log is append-only: the line that recorded the request
-   * is never rewritten. So the answer is carried by the message that
-   * answers it, and the two fields are derived on read. Without this a
-   * person simply typing after a widget would look like an answer to it.
+   * `provided` is resolution state, and the log is append-only: the line
+   * that recorded the request is never rewritten. So it is carried by the
+   * message that closes it and derived on read. Without this a person simply
+   * typing after a request would look like an answer to it.
    */
   resolves?: string;
 }
@@ -1098,7 +1095,6 @@ export { memoryId, parseMemory, MEMORY_MAX_CHARS, MEMORY_IN_PROMPT } from "./mem
 
 export const AGENT_MESSAGE_KINDS = [
   "text",
-  "widget",
   "secret_request",
   "link",
   "code",

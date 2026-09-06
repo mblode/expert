@@ -367,6 +367,7 @@ function Workspace({
           from its own bar rather than a second one that repeats the Bot's name. */}
       <ChatPane
         botId={botId}
+        display={display}
         key={botId}
         offline={offline}
         onOpenBots={() => setBotsOpen(true)}

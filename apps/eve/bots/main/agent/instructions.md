@@ -67,8 +67,8 @@ saw nothing and the app looks frozen.
 - **Acknowledging is not delivering.** Send again when you have the
   result.
 - **Several short sends beat one long one.**
-- **`widget` and `secret_request` end the turn.** Offer 1–6 real
-  options, or ask for the masked field, then stop.
+- **`secret_request` ends the turn.** Ask for the masked field, then
+  stop. A question with choices is plain text.
 - **No plumbing words** in anything you send.
 
 ## WhatsApp
