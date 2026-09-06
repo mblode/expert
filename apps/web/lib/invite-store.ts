@@ -101,36 +101,81 @@ export function mintedInviteFromDraft(
 }
 
 /**
- * How many links one computer may hand out in ten minutes when the caller is
- * a Bot rather than an operator.
+ * How many links may be handed out in ten minutes when the caller is a Bot
+ * rather than an operator: one bound per sender, one for the computer they
+ * share.
  *
  * Anyone who can @mention the Bot can ask it for the desk, which is the
  * product (`docs/WHATSAPP-PARITY.md` decision 5), and each link redeems to a
  * seat on a screen that other people are also on. A cap is what stops one
  * member, or one model in a loop, turning that into an unbounded supply of
- * them. Eight is more than a real conversation needs and far fewer than a loop
- * produces. An operator is an account with its own computer and is not counted.
+ * them. Three is more than one conversation needs; forty is a busy group and
+ * still far fewer than a loop produces. An operator is an account with its own
+ * computer and is not counted.
  */
 const MINT_WINDOW_MS = 10 * 60_000;
-const MINT_WINDOW_MAX = 8;
+const MINT_WINDOW_MAX = 40;
+const SENDER_WINDOW_MAX = 3;
 
 /**
- * Links minted for this computer inside the window. Fails open: the row store
- * is the same one the insert below needs, so a database that cannot answer
- * this is about to refuse the mint anyway, and guessing "over the limit" from
- * an error would turn a blip into a refusal a member cannot understand.
+ * Links minted inside the window, for one computer or for one sender on it.
+ * Fails open: the row store is the same one the insert below needs, so a
+ * database that cannot answer this is about to refuse the mint anyway, and
+ * guessing "over the limit" from an error would turn a blip into a refusal a
+ * member cannot understand.
  */
-async function mintsInWindow(computerId: string, since: number): Promise<number> {
+async function mintsInWindow(
+  computerId: string,
+  since: number,
+  senderHash?: string,
+): Promise<number> {
   try {
     await ensureInviteTable();
     const [row] = await db
       .select({ minted: count() })
       .from(invite)
-      .where(and(eq(invite.computerId, computerId), gte(invite.createdAt, new Date(since))));
+      .where(
+        and(
+          eq(invite.computerId, computerId),
+          gte(invite.createdAt, new Date(since)),
+          ...(senderHash ? [eq(invite.senderHash, senderHash)] : []),
+        ),
+      );
     return row?.minted ?? 0;
   } catch {
     return 0;
   }
+}
+
+/**
+ * Whether this mint is over a cap, and which one.
+ *
+ * The per-computer cap used to be the only one, at eight, on the reasoning
+ * that eight is more than a conversation needs. That was true of one
+ * conversation. Every member of the WhatsApp group may ask for the desk, so a
+ * single number shared across 122 people is a starvation bug waiting for a
+ * busy afternoon: eight members ask, the ninth is refused, and nothing tells
+ * them why. The tighter cap belongs on the sender, because the runaway this
+ * exists to stop — a model in a loop — is one sender by definition.
+ *
+ * A mint with no sender is still counted against the computer. The control
+ * plane cannot tell those apart, so they share the looser bound rather than
+ * escaping both.
+ */
+async function overMintCap(planned: InviteDraft, now: number): Promise<RedeemFailure | undefined> {
+  const since = now - MINT_WINDOW_MS;
+  if (
+    planned.senderHash &&
+    (await mintsInWindow(planned.computerId, since, planned.senderHash)) >= SENDER_WINDOW_MAX
+  ) {
+    return {
+      error: "You already have a link open. Use that one, or try again shortly.",
+      status: 429,
+    };
+  }
+  return (await mintsInWindow(planned.computerId, since)) >= MINT_WINDOW_MAX
+    ? { error: "Too many links for this computer just now. Try again shortly.", status: 429 }
+    : undefined;
 }
 
 export async function mintStoredInvite(
@@ -151,11 +196,9 @@ export async function mintStoredInvite(
   if ("error" in planned) {
     return planned;
   }
-  if (
-    limited &&
-    (await mintsInWindow(planned.computerId, now - MINT_WINDOW_MS)) >= MINT_WINDOW_MAX
-  ) {
-    return { error: "Too many links for this computer just now. Try again shortly.", status: 429 };
+  const capped = limited ? await overMintCap(planned, now) : undefined;
+  if (capped) {
+    return capped;
   }
   try {
     await ensureInviteTable();
