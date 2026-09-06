@@ -28,3 +28,27 @@ Judge criteria only see the last turn's prompt and reply, never earlier
 turns, so a multi-turn case asserts on `requireToolCall(...).input` rather than
 on a judge. The suite is the parity gate for cutting the VCMC group over from
 the old runtime: every case green on Vercel has to be green here first.
+
+## Running them on the computer
+
+The credentials and the tenant content are already on `vcmc-computer`, so the
+suite can run there. Two things bite. **Never run it in the live project
+directory**: `.eve/.workflow-data` is a symlink to the production workflow
+store and `eve eval` upgrades that store's format marker on open (it did, on
+2026-09-06). **Fly suspends the Machine** after about five minutes without
+inbound traffic and the run dies with it.
+
+```sh
+# on the box, as root via fly ssh console: a scratch tree with no .eve
+rm -rf /tmp/eve-copy && mkdir -p /tmp/eve-copy/bots
+cp -R /opt/computer/apps/eve/lib /tmp/eve-copy/lib
+cp -R /opt/computer/apps/eve/bots/main /tmp/eve-copy/bots/main
+rm -rf /tmp/eve-copy/bots/main/.eve /tmp/eve-copy/bots/main/.output
+ln -s /opt/computer/node_modules /tmp/eve-copy/node_modules
+chown -R box:box /tmp/eve-copy
+runuser -u box -- sh -c 'cd /tmp/eve-copy/bots/main && HOME=/home/box \
+  COMPUTER_BOT_DATA=/workspace/.bots/main/data EVE_EVAL_FIXTURES=1 MEMORY_BLOB_PREFIX=eval \
+  EVE_DOCKER_PATH=/usr/bin/false nohup npx eve eval --strict > /tmp/evals.log 2>&1 &'
+# from your laptop, until it finishes: curl -s https://vcmc-computer.fly.dev/healthz every 20s
+```
+
