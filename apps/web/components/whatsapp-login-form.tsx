@@ -1,20 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { isPossiblePhoneNumber } from "react-phone-number-input";
 import { LoginForm } from "./login-form";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Field, FieldLabel } from "./ui/field";
+import { PhoneInput } from "./ui/phone-input";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "./ui/field";
 
 export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>) {
   const [email, setEmail] = useState(false);
   const [phone, setPhone] = useState("");
+  const [phoneInvalid, setPhoneInvalid] = useState(false);
   const [code, setCode] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   if (email)
     return (
-      <div className="space-y-5">
+      <div className="flex flex-col gap-5">
         <LoginForm {...props} />
         <Button className="w-full" variant="link" onClick={() => setEmail(false)}>
           Use WhatsApp instead
@@ -27,8 +30,12 @@ export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>)
       onSubmit={async (event) => {
         event.preventDefault();
         if (pending) return;
-        setPending(true);
         setError(undefined);
+        if (!isPossiblePhoneNumber(phone)) {
+          setPhoneInvalid(true);
+          return;
+        }
+        setPending(true);
         try {
           const response = await fetch("/api/auth/sign-in/whatsapp", {
             method: "POST",
@@ -59,34 +66,50 @@ export function WhatsAppLoginForm(props: React.ComponentProps<typeof LoginForm>)
       >
         Open WhatsApp
       </a>
-      <Field>
-        <FieldLabel htmlFor="whatsapp-phone">WhatsApp number</FieldLabel>
-        <Input
-          id="whatsapp-phone"
-          type="tel"
-          autoComplete="tel"
-          placeholder="+61 412 345 678"
-          value={phone}
-          onChange={(event) => setPhone(event.target.value)}
-          required
-          disabled={pending}
-        />
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="whatsapp-code">One-time code</FieldLabel>
-        <Input
-          id="whatsapp-code"
-          inputMode="numeric"
-          autoComplete="one-time-code"
-          placeholder="6-digit code"
-          maxLength={6}
-          pattern="[0-9]{6}"
-          value={code}
-          onChange={(event) => setCode(event.target.value.replaceAll(/\D/gu, ""))}
-          required
-          disabled={pending}
-        />
-      </Field>
+      <FieldGroup>
+        <Field data-invalid={phoneInvalid || undefined}>
+          <FieldLabel htmlFor="whatsapp-phone">WhatsApp number</FieldLabel>
+          <PhoneInput
+            id="whatsapp-phone"
+            name="phone"
+            autoComplete="tel"
+            defaultCountry="AU"
+            placeholder="Phone number"
+            value={phone}
+            onChange={(value) => {
+              setPhone(value);
+              setPhoneInvalid(false);
+            }}
+            aria-invalid={phoneInvalid || undefined}
+            aria-describedby={phoneInvalid ? "whatsapp-phone-error" : "whatsapp-phone-description"}
+            required
+            disabled={pending}
+          />
+          <FieldDescription id="whatsapp-phone-description">
+            Use the number you messaged Vibey from.
+          </FieldDescription>
+          {phoneInvalid && (
+            <FieldError id="whatsapp-phone-error">
+              Enter your WhatsApp number and select its country code.
+            </FieldError>
+          )}
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="whatsapp-code">One-time code</FieldLabel>
+          <Input
+            id="whatsapp-code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="6-digit code"
+            maxLength={6}
+            pattern="[0-9]{6}"
+            value={code}
+            onChange={(event) => setCode(event.target.value.replaceAll(/\D/gu, ""))}
+            required
+            disabled={pending}
+          />
+        </Field>
+      </FieldGroup>
       {error && (
         <p role="alert" className="text-sm text-destructive">
           {error}

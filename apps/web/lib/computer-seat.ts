@@ -13,6 +13,7 @@ import {
 } from "./computers";
 import { db } from "./db";
 import { ownedComputer } from "./computer-enrollment";
+import { ensureIssuerColumns } from "./issuer";
 
 /** Every seat call here resolves to one, so a route can name what it holds. @public */
 export interface ComputerSeat {
@@ -56,6 +57,7 @@ export async function ensureComputerCatalog(): Promise<void> {
     id TEXT PRIMARY KEY NOT NULL, hub_url TEXT NOT NULL, label TEXT NOT NULL,
     setup_code_env TEXT NOT NULL, issuer_token TEXT, issuer_updated_at INTEGER
   )`);
+  await ensureIssuerColumns();
   await db.run(sql`CREATE TABLE IF NOT EXISTS computer_seat (
     user_id TEXT PRIMARY KEY NOT NULL, computer_id TEXT NOT NULL,
     hub_url TEXT NOT NULL, seat_token TEXT NOT NULL, updated_at INTEGER NOT NULL

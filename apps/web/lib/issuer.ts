@@ -68,17 +68,13 @@ const dbIssuerStore: IssuerStore = {
   },
 };
 
-/**
- * The catalog table predates these two columns and SQLite has no
- * ADD COLUMN IF NOT EXISTS, so a duplicate-column error here is the normal
- * path on every deploy after the first. Same shape as `ensureInviteTable`,
- * including the memo: both statements throw every time and both ran in front
- * of every issuer read and write, so redeeming one invite spent four round
- * trips catching the same two errors.
+/** Upgrade legacy catalogs before any query that uses the current Drizzle schema.
+ * Cache only a verified upgrade. A missing table or failed migration must be
+ * retried on the next request, not remembered as a successful initialization.
  */
 let issuerColumnsReady: Promise<void> | undefined;
 
-function ensureIssuerColumns(): Promise<void> {
+export function ensureIssuerColumns(): Promise<void> {
   issuerColumnsReady ??= addIssuerColumns().catch((error: unknown) => {
     issuerColumnsReady = undefined;
     throw error;
@@ -87,11 +83,25 @@ function ensureIssuerColumns(): Promise<void> {
 }
 
 async function addIssuerColumns(): Promise<void> {
-  // Independent statements against the same table, so one round trip, not two.
-  await Promise.all([
-    db.run(sql`ALTER TABLE computer ADD COLUMN issuer_token TEXT`).catch(() => undefined),
-    db.run(sql`ALTER TABLE computer ADD COLUMN issuer_updated_at INTEGER`).catch(() => undefined),
-  ]);
+  const columns = await db.all<{ name: string }>(sql`PRAGMA table_info(computer)`);
+  for (const [name, statement] of [
+    ["issuer_token", sql`ALTER TABLE computer ADD COLUMN issuer_token TEXT`],
+    ["issuer_updated_at", sql`ALTER TABLE computer ADD COLUMN issuer_updated_at INTEGER`],
+  ] as const) {
+    if (columns.some((column) => column.name === name)) {
+      continue;
+    }
+    try {
+      await db.run(statement);
+    } catch (error) {
+      // Another server instance may have added it after our initial read.
+      // Verify that outcome instead of hiding every database failure.
+      const current = await db.all<{ name: string }>(sql`PRAGMA table_info(computer)`);
+      if (!current.some((column) => column.name === name)) {
+        throw error;
+      }
+    }
+  }
 }
 
 /** The options both issuer entry points take. @public */
